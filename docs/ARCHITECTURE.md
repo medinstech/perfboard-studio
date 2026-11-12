@@ -3067,7 +3067,7 @@ an edit. Every way a file is opened makes its bus in `_new_bus` with its path al
 that is the one place it comes back; a board no longer in the file is forgotten, not refused,
 and Save As takes it to the new name.
 
-## The update check decides nothing on the network and installs nothing at all
+## The update check decides nothing on the network and installs only on a click, on one platform
 
 `updates.py` is an engine module and follows the engine's rule: **no network, no clock, no
 disk.** Which release is newer, which of the three assets suits this machine, when to look
@@ -3093,13 +3093,68 @@ Four decisions here are load-bearing and each is pinned by a test:
 - **A response that is not a release feed is an error, never an answer.** A hotel wi-fi
   login page must read as "could not check", not as "you are up to date".
 
-**It stops at the download.** The file is verified against the `SHA256SUMS` `release.yml`
-attaches to every release, put in the user's Downloads folder and revealed in their file
-manager. Running it needs elevation on Windows, a bundle swap in `/Applications` on macOS
-and overwriting a running AppImage on Linux; doing that on somebody's behalf with an
-installer nobody has signed (PLAN.md §12) is indistinguishable from malware and has no way
-back. The checksum is worth exactly what it is worth, too: same host, same connection, so
-it proves the download arrived intact and not who built it.
+**It downloads, and on ONE platform it installs -- only on a click.** The file is verified
+against the `SHA256SUMS` `release.yml` attaches to every release and put in the user's
+Downloads folder. macOS (a bundle swap in `/Applications`), an AppImage (overwriting a running
+file) and a `pip` install (whose update is `pip install -U`) still stop there and reveal the
+file: doing more on somebody's behalf has no way back. The Windows `Setup.exe` build is
+different, because its installer already knows how to replace the application, so the strip
+offers **Install and Restart** once the checksum matched. The first version of this section
+said "installs nothing at all", and why that changed is what follows.
+
+- **The click is the only trigger, and the question comes first.** `MainWindow._on_update_install`
+  asks about unsaved work exactly as the close button does (`_offer_to_save`; Cancel ends it),
+  refuses while `_planner_running`, and only then starts the installer. Starting it is
+  `updater.start_install`, whose single call that runs anything is `_run_elevated`
+  (`os.startfile(path, "runas", "/S /UPDATE=<pid>")`). A test replaces that one function; no test
+  runs an installer, and `test_the_one_call_that_runs_an_installer_is_called_from_nowhere_else`
+  reads the source to keep it the only one.
+- **The window closes AFTER the installer started, never before.** A refused Windows prompt
+  (`winerror` 1223) leaves a window that is still open, with its work saved and the download
+  kept, so it can be tried again. The close goes through `closeEvent` with
+  `_closing_for_update` set, which skips only the second unsaved-work question; saving the
+  session, stopping the autosave and the planner pool are the close path as ever.
+- **The file is hashed again right before it is run.** The checksum taken at download time proves
+  the transfer; the Downloads folder is writable by anything the user ever ran, and the next
+  thing that happens is an administrator prompt. A file that no longer matches
+  `UpdateChecker.verified_digest` is **deleted** (as a failed download is), the strip says so,
+  and the download can be made again.
+- **Only where it can work:** `updates.installs_in_place` -- Windows, a frozen build, and the
+  running executable's folder is the `Install_Dir` the installer registered
+  (`HKLM\Software\Medinstech\Perfboard Studio`, 64-bit view). A copy unzipped somewhere else
+  keeps the old behaviour, since an installer would put a second copy beside the one running.
+  An unverified download (no published checksum) never gets the button either.
+- **The installer, not the application, does the replacing** (`packaging/perfboard-studio.nsi`).
+  `/UPDATE=<pid>` makes it wait for that process to end and then for the executable to be free,
+  so its silent `AssertExeClosed` -- whose answer is Cancel -- never races a window that is still
+  closing; after a successful silent install it asks **explorer** to open the new executable,
+  because anything the installer starts inherits its administrator token and an editor that saves
+  with administrator rights writes files its user cannot change. `.onInstFailed` gives the old
+  copy back while it still exists. Plain `/S` (winget) never sees any of this: with no
+  `/UPDATE` every new branch is skipped. A PowerShell helper that waited, copied and relaunched
+  was the other option; an installer that replaces itself through a script is what antivirus
+  products look for, and copying the Qt bundle while it is loaded fails on the locked files.
+- **The checksum is worth exactly what it is worth.** Same host, same connection: it proves the
+  download arrived intact, not who built it. An unsigned installer shows "Unknown publisher" at
+  the prompt (PLAN.md §12) -- which is the user's one chance to say no, and the reason the
+  prompt is Windows' own and is never suppressed.
+
+**The release notes are read in the window.** `ReleaseNotesDialog` shows the release body with
+`QTextBrowser.setMarkdown` and follows no link itself (`setOpenLinks(False)`): the text arrived
+over a network, so a link goes to `open_url` only if `updates.is_web_link` says it is
+`http(s)`, and a `file:` link in it is not for this window to open. It is not modal -- the news
+can sit beside the board -- and carries the strip's action, so reading is not a dead end. The
+notes are English: the release body is built from `CHANGELOG.md`, which stays English with
+`docs/`; a Turkish section in the release body would be one hand translation per release.
+
+**An available update shows in three places, and the strip is where it happens.** The header's
+pill (`HeaderBar.set_update`, beside the search) and Home's card (`Home.set_update`) say a newer
+release exists and open the notes or press the same button; progress, the checksum result,
+problems and Install itself are the strip's. They all follow one function,
+`MainWindow._update_action` (`"download"`, `"install"` or none while a download runs or this
+build cannot install itself), so they cannot disagree about what a press does. Hide removes all
+three and remembers the version; closing the strip after a download removes only the strip, so
+the way to install stays.
 
 **Nothing runs by itself and nothing runs from a constructor.** The check starts from
 `main()` through `QTimer.singleShot` after the window is shown, or from the Help menu —
