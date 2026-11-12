@@ -19770,6 +19770,49 @@ def test_wire_on_both_faces_reaches_the_router_and_is_remembered() -> None:
         _close(single)
 
 
+def test_auto_wire_says_when_wire_on_both_faces_laid_nothing_on_the_component_side() -> None:
+    """On every example board the router finds nothing shorter on the component side, so
+    Wire on Both Faces turned on gave the same board and not a word. Now the status line
+    says it laid nothing there and what does put a net there; off, or with a net that
+    asked for the face and a face note to say why, it says nothing of the kind."""
+    from perfboard_studio.ui.i18n import t
+
+    unused = t(
+        "Wire on Both Faces laid nothing on the component side, where no net came out "
+        "shorter: a net's Face set to Component Side puts it there"
+    )
+    bare = dataclasses.replace(_example_document("ne555-astable"), conductors=())
+    for both in (False, True):
+        window = _window_on(bare)
+        try:
+            window.act_both_faces.setChecked(both)
+            window.on_autoroute_all()
+            assert window.bus.document.conductors
+            assert not any(c.side == "top" for c in window.bus.document.conductors)
+            assert (unused in window.statusBar().currentMessage()) is both
+        finally:
+            _close(window)
+
+    shield = _example_document("arduino-io-shield")
+    asked = dataclasses.replace(
+        shield,
+        conductors=(),
+        nets=tuple(
+            dataclasses.replace(n, preferred_side="top" if n.name == "GND" else None)
+            for n in shield.nets
+        ),
+    )
+    window = _window_on(asked)
+    try:
+        window.act_both_faces.setChecked(True)
+        window.on_autoroute_all()
+        said = window.statusBar().currentMessage()
+        assert unused not in said, "the face note says why, and one reason is enough"
+        assert "Problems" in said or t("Problems") in said
+    finally:
+        _close(window)
+
+
 def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() -> None:
     """The shield's GND set to the component side comes back wired underneath: every GND
     pin there is under J2's plastic. The window says so -- on the status line and in a

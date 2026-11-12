@@ -12138,6 +12138,7 @@ class MainWindow(QMainWindow):
             0,
         )
         self._report_unrouted(plan)
+        faces_said = faces_said or self._both_faces_unused(before)
         if faces_said:
             # After the unwired count, which takes the line when there is one: the face
             # is the lesser news, and both are in the drawer.
@@ -12212,6 +12213,25 @@ class MainWindow(QMainWindow):
                 t("{count} pads to measure for isolation"),
             )
         return said
+
+    def _both_faces_unused(self, before: set[str]) -> str:
+        """What Wire on Both Faces did, when it did nothing: none of the copper just laid is
+        on the component side. Counted from the document, so it is what is on the board.
+
+        The router puts a net on the component side only where that comes out cheaper, and
+        on every example board it never does -- so somebody who turned it on to see what it
+        does ran Auto-wire, got the same board, and was told nothing. The face notes say
+        why a net that ASKED for a face did not get it; this is the other half, said only
+        when there is no face note to say it."""
+        if not self._both_faces or not has_component_side_copper(self.bus.document.board):
+            return ""
+        laid = [c for c in self.bus.document.conductors if c.id not in before]
+        if not laid or any(c.side == "top" for c in laid):
+            return ""
+        return t(
+            "Wire on Both Faces laid nothing on the component side, where no net came out "
+            "shorter: a net's Face set to Component Side puts it there"
+        )
 
     def _far_side_note(self, before: set[str]) -> str:
         """Where the copper Auto-wire just laid went, when it is on the face not in view.

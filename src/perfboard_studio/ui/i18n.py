@@ -311,6 +311,11 @@ TURKISH: Mapping[str, str] = {
     "applies the next time you auto-wire": "bir sonraki otomatik kablolamada geçerli olur",
     "Lay Wires Along the &Grid": "Telleri &Izgara Boyunca Döşe",
     "Wire on Both &Faces": "İki Y&üzde Kablola",
+    "Wire on Both Faces laid nothing on the component side, where no net came out "
+    "shorter: a net's Face set to Component Side puts it there": (
+        "İki Yüzde Kablola parça yüzüne hiçbir şey döşemedi, orada daha kısa çıkan net "
+        "olmadı: bir netin Yüzünü Parça Yüzü yapmak onu oraya koyar"
+    ),
     "{count} via": "{count} via",
     "{count} vias": "{count} via",
     "Via": "Via",

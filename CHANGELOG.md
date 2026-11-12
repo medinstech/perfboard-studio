@@ -242,6 +242,10 @@ closed without a bump.
   rail it laid carried nothing and came back from DRC as a warning straight away; the
   default net is often one with no pin beside the fingers, so that was the first thing a
   click did. The button is off until a bridge is ticked, and the dialog says so.
+- **Wire on Both Faces says when it laid nothing on the component side.** The router puts a
+  net there only where that comes out shorter, and on every example board it never does, so
+  turning it on and running Auto-wire gave the same board and not a word. The status line
+  now says so, and that a net's Face set to Component Side is what puts a net there.
 - **A board opened while Home is showing comes to the front.** Home's own cards left Home
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying
