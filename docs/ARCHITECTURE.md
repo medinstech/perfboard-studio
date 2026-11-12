@@ -2041,6 +2041,17 @@ is followed by `MainWindow.ARRIVAL_HOLD_MS` (200 ms) and a step without one by t
 `ASSEMBLY_FRAME_MS`, through the one-shot `_assembly_timer`, which the animation's `finished`
 signal restarts.
 
+A step that fits a CONDUCTOR is laid from its first hole to its last the same way, but this
+one is rebuilt per frame -- its own solids only, a tube through a few points, about a
+millisecond -- because a line growing along a path has no cheaper form than the line:
+`build_conductor(reveal=)` draws the first part of it by length (`_laid_part` keeps the
+whole line's point indices, which is what `_trace_swell` reads the phase of a run's joints
+from), with the first joint but not the far end's joint or core, and at 1 it is the
+ordinary drawing. `populate_renderer(drawing=[DrawOn])` hands the animation the builder and
+the whole drawing it added, which `ArrivalAnimation.start_drawing` takes out and lays again;
+the time is 30 ms a millimetre, between 350 and 900 ms, so a two-hole link is a flick and a
+long wire is not a crawl. The spine of a wired trace appears when it is done.
+
 ## The words, the first start and help tell one story
 
 A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,

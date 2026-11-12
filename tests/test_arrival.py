@@ -270,3 +270,113 @@ def test_the_exploded_view_has_nothing_to_lower(monkeypatch) -> None:
     window.step_assembly(1)
     assert window._arrival is None or not window._arrival.running
     _close_stage(window)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: a run or a wire is laid from its first hole to its last
+# ---------------------------------------------------------------------------
+
+
+def _a_conductor_step(doc, lookup):
+    from perfboard_studio.guide import ConductorStep, all_steps, build_guide, step_focus
+
+    steps = all_steps(build_guide(doc, lookup))
+    index = next(i for i, s in enumerate(steps) if isinstance(s, ConductorStep))
+    return index, step_focus(steps[index]), steps
+
+
+def _span_x(actors) -> float:
+    lows = [a.GetBounds()[0] for a in actors]
+    highs = [a.GetBounds()[1] for a in actors]
+    return max(highs) - min(lows)
+
+
+def test_a_polyline_is_laid_by_length_and_keeps_its_point_indices() -> None:
+    from perfboard_studio.ui.view3d import _laid_part
+
+    line = [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 10.0, 0.0)]
+    assert _laid_part(line, 1.0) == line
+    assert _laid_part(line, 0.25) == [(0.0, 0.0, 0.0), (5.0, 0.0, 0.0)]
+    assert _laid_part(line, 0.75) == [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 5.0, 0.0)]
+
+
+def test_a_conductor_is_laid_a_little_more_each_time_and_all_of_it_at_the_end() -> None:
+    from perfboard_studio.ui import view3d
+
+    doc = _load_dense()
+    lookup = footprint_lookup()
+    _index, focus, _steps = _a_conductor_step(doc, lookup)
+    drawing: list = []
+    view3d.populate_renderer(vtk.vtkRenderer(), doc, lookup, highlight=focus, drawing=drawing)
+    (laid,) = drawing
+    assert laid.length_mm > 0 and laid.actors
+
+    assert laid.build(0.0) == [], "nothing is laid at the start"
+    whole = laid.build(1.0)
+    assert len(whole) == len(laid.actors), "at the end, the ordinary drawing"
+    half = laid.build(0.5)
+    assert _span_x(half) <= _span_x(whole)
+    assert [a.GetBounds() for a in laid.build(1.0)] == [a.GetBounds() for a in laid.actors]
+
+
+def test_only_the_step_conductor_can_be_laid() -> None:
+    from perfboard_studio.ui import view3d
+
+    doc = _load_dense()
+    lookup = footprint_lookup()
+    _index, _focus, _steps = _a_conductor_step(doc, lookup)
+    drawing: list = []
+    view3d.populate_renderer(vtk.vtkRenderer(), doc, lookup, drawing=drawing)
+    assert drawing == [], "no highlighted conductor, nothing to lay"
+
+
+def test_drawing_takes_the_whole_conductor_out_and_puts_it_back_a_piece_at_a_time() -> None:
+    from perfboard_studio.ui import view3d
+
+    doc = _load_dense()
+    lookup = footprint_lookup()
+    _index, focus, _steps = _a_conductor_step(doc, lookup)
+    ren = vtk.vtkRenderer()
+    drawing: list = []
+    view3d.populate_renderer(ren, doc, lookup, highlight=focus, drawing=drawing)
+    (laid,) = drawing
+    before = ren.GetActors().GetNumberOfItems()
+
+    drop = arrival.ArrivalAnimation()
+    assert drop.start_drawing(ren, laid, lambda: None)
+    assert all(not ren.HasViewProp(actor) for actor in laid.actors)
+    assert ren.GetActors().GetNumberOfItems() == before - len(laid.actors)
+    drop.show(0.5)
+    assert 0 < ren.GetActors().GetNumberOfItems() - (before - len(laid.actors)) <= len(laid.actors)
+    drop.show(1.0)
+    assert ren.GetActors().GetNumberOfItems() == before
+    drop.cancel()
+    # No length, nothing to draw: and the conductor is where it was.
+    empty = view3d.DrawOn(build=lambda _p: [], actors=list(laid.actors), length_mm=0.0)
+    for actor in laid.actors:
+        ren.AddActor(actor)
+    assert not drop.start_drawing(ren, empty, lambda: None)
+    assert all(ren.HasViewProp(actor) for actor in laid.actors)
+
+
+def test_a_longer_run_takes_longer_but_never_a_crawl_or_a_flick() -> None:
+    assert arrival.draw_duration_ms(1.0) == arrival.DRAW_MIN_MS
+    assert arrival.draw_duration_ms(100.0) == arrival.DRAW_MAX_MS
+    assert arrival.draw_duration_ms(10.0) < arrival.draw_duration_ms(20.0)
+
+
+def test_a_step_forward_onto_a_conductor_lays_it_and_redraws_it_whole(monkeypatch) -> None:
+    window, _, _ = _stage(monkeypatch)
+    steps = window._assembly_steps()
+    from perfboard_studio.guide import ConductorStep
+
+    first_wire = next(i for i, s in enumerate(steps) if isinstance(s, ConductorStep))
+    window._move_assembly(first_wire, arrive=False)  # standing on the step before it
+    window.step_assembly(1)
+    drop = window._arrival
+    assert drop is not None and drop.running
+    drop.show(0.5)
+    drop._span_ms = 10
+    _pump_until(lambda: not drop.running)
+    assert not drop.running
+    _close_stage(window)

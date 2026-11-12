@@ -6899,8 +6899,15 @@ def build_conductor(
     net_class: NetClass | None = None,
     signal_index: int = 0,
     cells: Mapping[str, FingerCell] | None = None,
+    reveal: float = 1.0,
 ) -> list[vtk.vtkActor]:
     """One conductor's solids.
+
+    ``reveal`` is how much of it is laid, from its first hole: the Play animation draws a
+    run or a wire end to end by asking for it again with a larger number. Below 1 only the
+    first joint is there, the far end is in mid-air and has no joint or core yet -- they
+    belong to the end that has been reached -- and at 1 this is exactly the ordinary
+    drawing. Nothing is laid at 0 or less.
 
     ``stack`` separates conductors that share a layer. Everything on the solder side used
     to sit at one z per ``layer_z``, so two bare wires crossing were drawn INTERSECTING --
@@ -6908,10 +6915,15 @@ def build_conductor(
     error because it was one. A small per-conductor offset makes one pass over the other,
     which is what the board actually looks like.
     """
+    if reveal <= 0:
+        return []
+    drawing = reveal < 1.0
     is_trace = contacts_every_path_hole(cond)
     z = conductor_z(cond, board, stack)
     joint_z = pad_z(board, cond.side)
     centreline = _conductor_centreline(cond, board, z, joint_z, is_trace, cells)
+    if drawing:
+        centreline = _laid_part(centreline, reveal)
     swell = _trace_swell(cond, centreline) if is_trace else None
 
     insulated = cond.kind in ("insulated-wire", "top-jumper")
@@ -6925,7 +6937,7 @@ def build_conductor(
         into_hole = [
             (x0, y0, joint_z + down * WIRE_IN_HOLE_MM),
             *centreline,
-            (x1, y1, joint_z + down * WIRE_IN_HOLE_MM),
+            *(() if drawing else ((x1, y1, joint_z + down * WIRE_IN_HOLE_MM),)),
         ]
     if insulated:
         # The sleeve stops short of each end and the copper core runs on into the hole:
@@ -6968,7 +6980,7 @@ def build_conductor(
     # A wire's two ends are fillets -- solder, on the ends of something that is not, and the
     # cone of it round each end is how you see where a wire is actually attached.
     ends = vtk.vtkPoints()
-    for hole in (cond.path[0], cond.path[-1]):
+    for hole in (cond.path[0],) if drawing else (cond.path[0], cond.path[-1]):
         x, y = _place_xy(board, hole, cells)
         # AT THE PAD, not at the conductor. A fillet is centred on the copper and wicks
         # into the hole; drawn at a lifted wire's own height it would hang in the air above
@@ -6999,11 +7011,34 @@ def build_conductor(
     # it are one piece of metal, and two finishes would draw a seam that is not there.
     _finish(beads.GetProperty(), SOLDER_MAT)
     actors.append(beads)
-    if cond.kind == "solder-trace-wired":
+    if cond.kind == "solder-trace-wired" and not drawing:
         spine = _spine_actor(cond, board, joint_z, cells)
         if spine is not None:
             actors.append(spine)
     return actors
+
+
+def _laid_part(
+    points: list[tuple[float, float, float]], fraction: float
+) -> list[tuple[float, float, float]]:
+    """The first ``fraction`` of a polyline by length: the points it has passed and then
+    the one on the segment it has got to, so the point INDICES of what was laid are those
+    of the whole line (``_trace_swell`` reads the phase from them) and the tip is the only
+    new point."""
+    if len(points) < 2 or fraction >= 1.0:
+        return points
+    lengths = [math.dist(a, b) for a, b in pairwise(points)]
+    left = sum(lengths) * max(0.0, fraction)
+    laid = [points[0]]
+    for index, length in enumerate(lengths):
+        if length >= left:
+            a, b = points[index], points[index + 1]
+            t = left / length if length else 1.0
+            laid.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t))
+            return laid
+        left -= length
+        laid.append(points[index + 1])
+    return laid
 
 
 def _spine_actor(
@@ -7572,6 +7607,42 @@ def _pick_out(actor: vtk.vtkActor) -> vtk.vtkActor:
     return actor
 
 
+@dataclass(frozen=True, slots=True)
+class DrawOn:
+    """A conductor that can be laid end to end: ``build(reveal)`` is its solids with that
+    much of it laid, picked out as the step's subject; ``actors`` are the whole thing as
+    ``populate_renderer`` already added it, which the animation takes out when it starts;
+    ``length_mm`` is how far it runs, which is how long drawing it takes."""
+
+    build: Callable[[float], list[vtk.vtkActor]]
+    actors: list[vtk.vtkActor]
+    length_mm: float
+
+
+def _laid_conductor(
+    cond: Conductor,
+    board: Board,
+    reveal: float,
+    *,
+    stack: int,
+    net_class: NetClass | None,
+    signal_index: int,
+    cells: Mapping[str, FingerCell] | None,
+) -> list[vtk.vtkActor]:
+    actors = build_conductor(
+        cond,
+        board,
+        stack=stack,
+        net_class=net_class,
+        signal_index=signal_index,
+        cells=cells,
+        reveal=reveal,
+    )
+    for actor in actors:
+        _pick_out(actor)
+    return actors
+
+
 def populate_renderer(
     ren: vtk.vtkRenderer,
     doc: PerfDocument,
@@ -7583,6 +7654,7 @@ def populate_renderer(
     board_notes: bool = True,
     subject_actors: list[vtk.vtkActor] | None = None,
     arriving: list[vtk.vtkActor] | None = None,
+    drawing: list[DrawOn] | None = None,
     owners: dict[vtk.vtkActor, ActorOwner] | None = None,
 ) -> dict[str, int]:
     """Rebuild the board's actors in an EXISTING renderer, leaving the camera alone.
@@ -7601,6 +7673,9 @@ def populate_renderer(
     is lowered into its holes (``ui/arrival.py``): its solids and the names printed on its
     own module, which rise with it. The part has no solder fillets then -- it has not
     reached the board -- so they appear when it lands and the view is drawn again.
+    ``drawing``, if given, is filled with how to lay the highlighted CONDUCTOR end to end
+    (:class:`DrawOn`); its full drawing is in the renderer as always, and the animation
+    takes it out when it starts.
 
     The BOARD is never dimmed, only the other parts and the copper. A step card says which
     holes a part goes in, and a reader who cannot see the holes has been given a picture
@@ -7720,6 +7795,7 @@ def populate_renderer(
     cells = finger_cells(doc)
     for cond in doc.conductors:
         subject = highlight is not None and cond.id == highlight
+        laid_actors: list[vtk.vtkActor] = []
         for actor in build_conductor(
             cond,
             board,
@@ -7732,9 +7808,30 @@ def populate_renderer(
                 (_pick_out if subject else _dim)(actor)
             if subject and subject_actors is not None:
                 subject_actors.append(actor)
+            if subject and drawing is not None:
+                laid_actors.append(actor)
             if owners is not None:
                 owners[actor] = ("conductor", cond.id)
             ren.AddActor(actor)
+        if subject and drawing is not None:
+            drawing.append(
+                DrawOn(
+                    build=functools.partial(
+                        _laid_conductor,
+                        cond,
+                        board,
+                        stack=layers.get(cond.id, cond.layer_z),
+                        net_class=net_class_by_id.get(cond.net_id or ""),
+                        signal_index=signal_index.get(cond.net_id or "", 0),
+                        cells=cells,
+                    ),
+                    actors=laid_actors,
+                    length_mm=sum(
+                        math.dist(_place_xy(board, a, cells), _place_xy(board, b, cells))
+                        for a, b in pairwise(cond.path)
+                    ),
+                )
+            )
     for actor in build_via_marks(board, board_vias(doc, build_occupancy(doc, lookup)), cells):
         if highlight is not None:
             _dim(actor)

@@ -272,6 +272,7 @@ from perfboard_studio.geometry import (
 )
 from perfboard_studio.guide import (
     Checkpoint,
+    ConductorStep,
     Guide,
     GuideOptions,
     GuideStep,
@@ -4682,16 +4683,26 @@ class MainWindow(QMainWindow):
         if self.act_play.isChecked():
             self._assembly_timer.start(self.ARRIVAL_HOLD_MS)
 
-    def _start_arrival(self, actors: list[Any], board_top_z: float) -> bool:
-        """Lower ``actors`` from above the board, if anything is there to lower."""
+    def _ensure_arrival(self) -> Any:
         from . import arrival
 
         if self._arrival is None:
             self._arrival = arrival.ArrivalAnimation(self)
             self._arrival.finished.connect(self._on_arrival_finished)
+        return self._arrival
+
+    def _start_drawing(self, drawing: Any) -> bool:
+        """Lay a conductor from its first hole to its last, if it has any length."""
+        render = self.vtk_widget.GetRenderWindow().Render
+        return bool(self._ensure_arrival().start_drawing(self._vtk_renderer, drawing, render))
+
+    def _start_arrival(self, actors: list[Any], board_top_z: float) -> bool:
+        """Lower ``actors`` from above the board, if anything is there to lower."""
+        from . import arrival
+
         lift = arrival.start_lift_mm(actors, board_top_z)
         render = self.vtk_widget.GetRenderWindow().Render
-        started = bool(self._arrival.start(actors, lift, render))
+        started = bool(self._ensure_arrival().start(actors, lift, render))
         if started:
             self._vtk_renderer.ResetCameraClippingRange()
         return started
@@ -4849,17 +4860,15 @@ class MainWindow(QMainWindow):
                 owners=self._3d_owners,
             )
         else:
-            # A part arriving is lowered, so its solids are asked for: only a step that
-            # fits a part, only on the board as it is (not exploded, where parts are
-            # already up in the air).
-            lowering = (
-                arrive
-                and index is not None
-                and 0 <= index < len(steps)
-                and isinstance(steps[index], PartStep)
-                and exploded_mm <= 0
-            )
+            # A part arriving is lowered and a conductor is laid, so what each needs is asked
+            # for: only on a step forward, and only on the board as it is (not exploded,
+            # where parts are already up in the air).
+            step = steps[index] if index is not None and 0 <= index < len(steps) else None
+            animate = arrive and exploded_mm <= 0
+            lowering = animate and isinstance(step, PartStep)
+            laying = animate and isinstance(step, ConductorStep)
             arriving: list[Any] = []
+            drawing: list[Any] = []
             view3d.populate_renderer(
                 self._vtk_renderer,
                 document,
@@ -4869,10 +4878,13 @@ class MainWindow(QMainWindow):
                 pin_names=self._pin_names_shown(),
                 board_notes=self._board_labels_shown(),
                 arriving=arriving if lowering else None,
+                drawing=drawing if laying else None,
                 owners=self._3d_owners,
             )
             if lowering:
                 self._start_arrival(arriving, view3d.pad_z(document.board, "top"))
+            elif laying and drawing:
+                self._start_drawing(drawing[0])
         if subject != self._3d_subject:
             # Something else is in front -- the System, another board: a request to look at
             # it, as opening the panel is, so it is framed. An edit never gets here.
