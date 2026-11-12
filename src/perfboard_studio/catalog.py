@@ -2021,6 +2021,81 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("MCP4725", "DAC", "digital to analog", "12 bit DAC", "analog output",
                          "dijital analog çevirici")),
+    CatalogPart("adafruit-tcs34725", "Adafruit TCS34725 RGB colour sensor (on a header)",
+                "sensor", "hdr-1x7",
+                "RGB colour and light sensor with an infrared filter, on I2C. Its cable plugs "
+                "into this 7-pin header: VIN GND 3V3 SCL SDA INT LED from pin 1",
+                _legs("VIN", "GND", "3V3", "SCL", "SDA", "INT", "LED"), value="TCS34725",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its TCS34725 breakout "
+                    "(github.com/adafruit/Adafruit-TCS34725-Color-Sensor-Breakout-PCB, "
+                    "'Adafruit TCS34725'), the 7-pin header JP1: pad 1 at VIN and every name "
+                    "read off its silkscreen, each pad's net checked against the board's nets. "
+                    "The silkscreen reads Vin 3.3-5V and Logic 5V safe"
+                ),
+                check=(
+                    "VIN takes 3.3 to 5 V by the board's silkscreen: a 3.3 V regulator makes "
+                    "the sensor's supply, and 3V3 is its output, not a second input. SCL and "
+                    "SDA go through level-shifting transistors, so the bus is safe at 5 V. "
+                    "LED is the gate of the transistor that switches the board's white LED, "
+                    "and a resistor holds it high, so the LED is on until LED is pulled low. "
+                    "INT comes straight from the sensor with no pull-up on the board, so "
+                    "leave it unwired unless the program uses it. Other TCS34725 boards carry "
+                    "a different header, so compare the names printed on yours with these. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("TCS34725", "TCS3472", "colour sensor", "color sensor", "RGB sensor",
+                         "renk sensörü")),
+    CatalogPart("adafruit-max31855", "Adafruit MAX31855 thermocouple amplifier (on a header)",
+                "sensor", "hdr-1x6",
+                "K-type thermocouple amplifier, -200 to 1350 C, on SPI. Its cable plugs into "
+                "this 6-pin header: Vin 3Vo GND DO CS CLK from pin 1",
+                _legs("Vin", "3Vo", "GND", "DO", "CS", "CLK"), value="MAX31855",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its MAX31855 breakout, version 2 "
+                    "(github.com/adafruit/Adafruit-MAX31855-breakout-board, "
+                    "'Adafruit_MAX31855 v2'), the 6-pin header JP1: pad 1 at Vin and every "
+                    "name read off its silkscreen, each pad's net checked against the board's "
+                    "nets. The silkscreen gives Vin 3-5 VDC, 3Vo 3.3 V out at 100 mA, logic "
+                    "3-5 V compatible, K-type wire only, range -200 to 1350 C"
+                ),
+                check=(
+                    "Vin takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes "
+                    "the chip's supply, and 3Vo is its output, up to 100 mA, not a second "
+                    "input. CS and CLK reach the chip through a diode and a pull-up to 3.3 V, "
+                    "which is what makes them 5 V compatible; DO is the chip's own output. "
+                    "The thermocouple itself goes to the screw terminal on the board, not to "
+                    "this header: the silkscreen marks yellow as + and red as -, and says "
+                    "K-type wire only. Other MAX31855 boards carry a different header, so "
+                    "compare the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("MAX31855", "thermocouple", "K-type", "K type thermocouple",
+                         "termokupl", "sıcaklık sensörü")),
+    CatalogPart("adafruit-hmc5883l", "Adafruit HMC5883L compass (on a header)", "sensor",
+                "hdr-1x6",
+                "3-axis magnetometer (compass), on I2C. Its cable plugs into this 6-pin "
+                "header: VIN GND 3Vo SDA SCL RDY from pin 1",
+                _legs("VIN", "GND", "3Vo", "SDA", "SCL", "RDY"), value="HMC5883L",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its HMC5883L breakout "
+                    "(github.com/adafruit/Adafruit-HMC5883-Mag-Compass-Sensor-PCB), the 6-pin "
+                    "header JP1: pad 1 at VIN and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets. The silkscreen reads VIN "
+                    "3.3-5V and Logic 5V safe"
+                ),
+                check=(
+                    "VIN takes 3.3 to 5 V by the board's silkscreen: a 3.3 V regulator makes "
+                    "the sensor's supply, and 3Vo is its output, not a second input. SDA and "
+                    "SCL go through level-shifting transistors, so the bus is safe at 5 V. "
+                    "RDY is the sensor's data-ready output, straight from the chip, and can "
+                    "stay unwired. Other HMC5883L boards carry a different header, so compare "
+                    "the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("HMC5883L", "HMC5883", "compass", "magnetometer", "pusula",
+                         "manyetometre")),
     CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",

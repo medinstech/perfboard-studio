@@ -3231,6 +3231,86 @@ TURKISH: Mapping[str, str] = {
         "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
         "bağlanmamıştır."
     ),
+    "Adafruit TCS34725 RGB colour sensor (on a header)": (
+        "Adafruit TCS34725 RGB renk sensörü (header üzerinde)"
+    ),
+    "RGB colour and light sensor with an infrared filter, on I2C. Its cable plugs into "
+    "this 7-pin header: VIN GND 3V3 SCL SDA INT LED from pin 1": (
+        "I2C üzerinden kızılötesi filtreli RGB renk ve ışık sensörü. Kablosu bu 7 pinli"
+        " header'a takılır: 1. pinden VIN GND 3V3 SCL SDA INT LED"
+    ),
+    "VIN takes 3.3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+    "sensor's supply, and 3V3 is its output, not a second input. SCL and SDA go through"
+    " level-shifting transistors, so the bus is safe at 5 V. LED is the gate of the "
+    "transistor that switches the board's white LED, and a resistor holds it high, so "
+    "the LED is on until LED is pulled low. INT comes straight from the sensor with no "
+    "pull-up on the board, so leave it unwired unless the program uses it. Other "
+    "TCS34725 boards carry a different header, so compare the names printed on yours "
+    "with these. Match each lead to the name printed beside the module's pins, not to "
+    "its place: sellers' boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3,3 ile 5 V alır: 3,3 V'luk bir regülatör sensörün "
+        "beslemesini üretir ve 3V3 onun çıkışıdır, ikinci bir giriş değildir. SCL ile "
+        "SDA seviye çeviren transistörlerden geçer, bu yüzden hat 5 V'ta güvenlidir. "
+        "LED, kartın beyaz LED'ini açıp kapatan transistörün gate ucudur ve bir direnç "
+        "onu yüksek tutar; LED düşük çekilene kadar LED yanar. INT doğrudan sensörden "
+        "gelir ve kartta yukarı çekme direnci yoktur, program kullanmıyorsa boş "
+        "bırakın. Başka TCS34725 kartlarının header'ı farklıdır: sizinkinin üzerinde "
+        "yazan adları bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit MAX31855 thermocouple amplifier (on a header)": (
+        "Adafruit MAX31855 termokupl yükselticisi (header üzerinde)"
+    ),
+    "K-type thermocouple amplifier, -200 to 1350 C, on SPI. Its cable plugs into this "
+    "6-pin header: Vin 3Vo GND DO CS CLK from pin 1": (
+        "SPI üzerinden K tipi termokupl yükselticisi, -200 ile 1350 C arası. Kablosu bu"
+        " 6 pinli header'a takılır: 1. pinden Vin 3Vo GND DO CS CLK"
+    ),
+    "Vin takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the chip's "
+    "supply, and 3Vo is its output, up to 100 mA, not a second input. CS and CLK reach "
+    "the chip through a diode and a pull-up to 3.3 V, which is what makes them 5 V "
+    "compatible; DO is the chip's own output. The thermocouple itself goes to the screw"
+    " terminal on the board, not to this header: the silkscreen marks yellow as + and "
+    "red as -, and says K-type wire only. Other MAX31855 boards carry a different "
+    "header, so compare the names printed on yours with these. Match each lead to the "
+    "name printed beside the module's pins, not to its place: sellers' boards are not "
+    "all wired in the same order.": (
+        "Vin, kartın baskısına göre 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin "
+        "beslemesini üretir ve 3Vo onun çıkışıdır, 100 mA'e kadar, ikinci bir giriş "
+        "değildir. CS ile CLK çipe bir diyot ve 3,3 V'a bir yukarı çekme direnci "
+        "üzerinden ulaşır, onları 5 V ile uyumlu yapan budur; DO çipin kendi çıkışıdır."
+        " Termokuplun kendisi bu header'a değil, kartın üzerindeki vidalı klemense "
+        "gider: baskı sarıyı + kırmızıyı - olarak işaretler ve yalnızca K tipi tel der."
+        " Başka MAX31855 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan "
+        "adları bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit HMC5883L compass (on a header)": (
+        "Adafruit HMC5883L pusula (header üzerinde)"
+    ),
+    "3-axis magnetometer (compass), on I2C. Its cable plugs into this 6-pin header: VIN"
+    " GND 3Vo SDA SCL RDY from pin 1": (
+        "I2C üzerinden 3 eksenli manyetometre (pusula). Kablosu bu 6 pinli header'a "
+        "takılır: 1. pinden VIN GND 3Vo SDA SCL RDY"
+    ),
+    "VIN takes 3.3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+    "sensor's supply, and 3Vo is its output, not a second input. SDA and SCL go through"
+    " level-shifting transistors, so the bus is safe at 5 V. RDY is the sensor's data-"
+    "ready output, straight from the chip, and can stay unwired. Other HMC5883L boards "
+    "carry a different header, so compare the names printed on yours with these. Match "
+    "each lead to the name printed beside the module's pins, not to its place: sellers'"
+    " boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3,3 ile 5 V alır: 3,3 V'luk bir regülatör sensörün "
+        "beslemesini üretir ve 3Vo onun çıkışıdır, ikinci bir giriş değildir. SDA ile "
+        "SCL seviye çeviren transistörlerden geçer, bu yüzden hat 5 V'ta güvenlidir. "
+        "RDY sensörün veri hazır çıkışıdır, doğrudan çipten gelir ve boş kalabilir. "
+        "Başka HMC5883L kartlarının header'ı farklıdır: sizinkinin üzerinde yazan "
+        "adları bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),
