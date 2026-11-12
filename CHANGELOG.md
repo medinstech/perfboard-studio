@@ -231,6 +231,17 @@ closed without a bump.
 
 ### Fixed
 
+- **A board opened while Home is showing comes to the front.** Home's own cards left Home
+  first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
+  command palette opened the board behind Home, which stayed in front with nothing saying
+  a board had arrived. Whatever brings a document now takes Home away.
+- **One word for each face in English.** The Face buttons, the Draw on bar and the face notes
+  said "component side" while the status bar, the Flip and 1:1 PDF menu items and the help
+  glossary said "parts side". It is "component side" everywhere now, which is what the
+  printed sheet already said; the Turkish was already one word.
+- **Counts read as words on the wiring path.** "beat 3 other style(s)", "2 out-of-date
+  conductor(s) removed first" and four more like them now say "styles", "conductors" or the
+  singular, as the rest of the window does.
 - **A long banner over the board wraps every time, clear of the tool rail.** Once wrapped
   to the room it came back on the next mouse move as one line cut off at both ends, and it
   lay over the tools down the left.

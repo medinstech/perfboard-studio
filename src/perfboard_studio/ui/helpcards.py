@@ -78,7 +78,7 @@ def panel_help() -> dict[str, str]:
         ),
         "dockBoard": card(
             t("Board"),
-            t("The board from the parts side (Ctrl+1). Flip shows the solder side, where the "
+            t("The board from the component side (Ctrl+1). Flip shows the solder side, where the "
               "traces and bare wires are. A hole is named like C7: column letter, row number."),
         ),
         "dockSchematic": card(
@@ -165,7 +165,7 @@ def tool_help() -> dict[str, str]:
         ),
         "draw:top-jumper": card(
             t("Jumper over the parts"),
-            t("An insulated wire on the parts' side, hopping over everything below. It takes "
+            t("An insulated wire on the component side, hopping over everything below. It takes "
               "room a part would use, so no part may stand on it."),
         ),
         "act_connect": card(
@@ -211,9 +211,9 @@ def glossary() -> list[tuple[str, str]]:
         (t("Reinforced solder trace"), t("A solder trace laid over a bare wire, for power and ground.")),
         (t("Bare wire"), t("Uninsulated wire on the underside. It may not cross other copper.")),
         (t("Insulated wire"), t("Wire with insulation, on the underside. It may cross anything.")),
-        (t("Jumper"), t("An insulated wire on the parts' side, over everything below.")),
+        (t("Jumper"), t("An insulated wire on the component side, over everything below.")),
         (t("Bent leg"), t("A part's own leg folded to a nearby hole: the cheapest connection.")),
-        (t("Parts side"), t("The side the parts stand on.")),
+        (t("Component side"), t("The side the parts stand on.")),
         (t("Solder side"), t("The side the joints, traces and bare wires are on.")),
         (t("Stripboard"), t("A board whose rows are joined strips of copper, cut where they must stop.")),
         (t("Breadboard"), t("A plug-in board for trying a circuit with no solder.")),

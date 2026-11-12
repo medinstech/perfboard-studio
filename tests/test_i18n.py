@@ -382,7 +382,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Open Recen&t", "Open E&xample", "&Save", "Save &As…", "Save Pro&ject",
                  "Autosave to the &File", "Reload from Dis&k", "&Import from KiCad…",
                  "&Export", "&Quit"],
-        "export": ["&Build Guide…", "&Schematic…", "1:1 &PDF (parts side + solder side)…",
+        "export": ["&Build Guide…", "&Schematic…", "1:1 &PDF (component side + solder side)…",
                    "3D S&napshot…", "3D &Model (STEP)…"],
         "help": ["Help for What's Under the &Pointer", "What's &This?", "&Glossary…",
                  "Getting Started T&our", "What &Moved in 0.23",

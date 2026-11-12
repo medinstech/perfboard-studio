@@ -141,7 +141,7 @@ TURKISH: Mapping[str, str] = {
     "Sho&w on the Board": "Kartta &Göster",
     "&Build Guide…": "Montaj &Rehberi…",
     "&Schematic…": "Ş&ema…",
-    "1:1 &PDF (parts side + solder side)…": "1:1 &PDF (parça + lehim yüzü)…",
+    "1:1 &PDF (component side + solder side)…": "1:1 &PDF (parça + lehim yüzü)…",
     "3D S&napshot…": "3D &Görüntü…",
     "3D &Model (STEP)…": "3D &Model (STEP)…",
     # -- file ----------------------------------------------------------------
@@ -156,8 +156,12 @@ TURKISH: Mapping[str, str] = {
     "Only a solderless breadboard's layout moves to a solderable one.": "Yalnızca lehimsiz bir breadboard'un yerleşimi lehimlenebilir bir karta taşınır.",
     "The same layout on a solderable breadboard: {parts} part(s) and {wires} wire(s), each on the holes it had.":
         "Aynı yerleşim lehimlenebilir bir breadboard'da: {parts} parça ve {wires} tel, her biri eski deliklerinde.",
-    "{count} part(s) waiting in the design: choose the board they go on.": "Tasarımda {count} parça bekliyor: hangi "
-                                                                           "karta gideceklerini seçin.",
+    "{count} part waiting in the design: choose the board it goes on.": (
+        "Tasarımda {count} parça bekliyor: hangi karta gideceğini seçin."
+    ),
+    "{count} parts waiting in the design: choose the board they go on.": (
+        "Tasarımda {count} parça bekliyor: hangi karta gideceklerini seçin."
+    ),
     "&Open…": "&Aç…",
     "&Save": "&Kaydet",
     "Save &As…": "&Farklı Kaydet…",
@@ -229,7 +233,7 @@ TURKISH: Mapping[str, str] = {
         "Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır. Başladığı ve döndüğü "
         "yerlere tıklayın; Enter, sağ tık ya da çift tık bitirir."
     ),
-    "An insulated wire on the parts' side, hopping over everything below. It takes room "
+    "An insulated wire on the component side, hopping over everything below. It takes room "
     "the parts would use.": (
         "Parça yüzünde, alttaki her şeyin üstünden atlayan izoleli tel. Parçaların "
         "kullanacağı yeri kaplar."
@@ -358,7 +362,7 @@ TURKISH: Mapping[str, str] = {
     "on": "açık",
     "off": "kapalı",
     # -- view ----------------------------------------------------------------
-    "Flip Board (parts side / solder side)": "Kartı Çevir (parça yüzü / lehim yüzü)",
+    "Flip Board (component side / solder side)": "Kartı Çevir (parça yüzü / lehim yüzü)",
     "&Fit Board": "Karta &Sığdır",
     "Zoom &In": "&Yakınlaştır",
     "Zoom &Out": "&Uzaklaştır",
@@ -534,10 +538,14 @@ TURKISH: Mapping[str, str] = {
     "Cannot open {path}: {reason}.": "{path} açılamıyor: {reason}.",
     "Cannot open {path}: not UTF-8 text. A .perf document is JSON.":
         "{path} açılamıyor: UTF-8 metin değil. Bir .perf belgesi JSON'dur.",
-    "{count} conductor(s) are now out of date; Ctrl+R clears and rewires them":
+    "{count} conductor is now out of date; Ctrl+R clears and rewires it":
         "{count} iletken eskidi; Ctrl+R temizler ve yeniden kablolar",
-    "{count} out-of-date conductor(s) removed first": "önce {count} eskimiş iletken kaldırıldı",
-    "“{style}” beat {count} other style(s)": "“{style}” diğer {count} stilden iyi çıktı",
+    "{count} conductors are now out of date; Ctrl+R clears and rewires them":
+        "{count} iletken eskidi; Ctrl+R temizler ve yeniden kablolar",
+    "{count} out-of-date conductor removed first": "önce {count} eskimiş iletken kaldırıldı",
+    "{count} out-of-date conductors removed first": "önce {count} eskimiş iletken kaldırıldı",
+    "“{style}” beat {count} other style": "“{style}” diğer {count} stilden iyi çıktı",
+    "“{style}” beat {count} other styles": "“{style}” diğer {count} stilden iyi çıktı",
     "Filter nets…  (gnd, power, U1)": "Netleri süz…  (gnd, güç, U1)",
     "Filter parts…  (resistor, dip, 5mm)": "Parçaları süz…  (direnç, dip, 5mm)",
     # -- toolbar ---------------------------------------------------------------
@@ -1013,7 +1021,7 @@ TURKISH: Mapping[str, str] = {
     "About Perfboard Studio": "Perfboard Studio Hakkında",
     # -- status bar ----------------------------------------------------------
     "hole": "delik",
-    "parts side": "parça yüzü",
+    "component side": "parça yüzü",
     "solder side": "lehim yüzü",
     "mirrored": "aynalanmış",
     # -- a part's own properties ----------------------------------------------
@@ -1879,7 +1887,8 @@ TURKISH: Mapping[str, str] = {
         "Bir yerleşim tamamlanmadan iptal edildi; kart olduğu gibi kaldı."
     ),
     "Cancelled before a board was tried; nothing changed.": "Hiçbir kart denenmeden iptal edildi; hiçbir şey değişmedi.",
-    "Trying boards was cancelled after {count} board(s).": "Kart denemesi {count} karttan sonra iptal edildi.",
+    "Trying boards was cancelled after {count} board.": "Kart denemesi {count} karttan sonra iptal edildi.",
+    "Trying boards was cancelled after {count} boards.": "Kart denemesi {count} karttan sonra iptal edildi.",
     "Select a net in the Nets panel, or a part on the board, then auto-wire.": (
         "Netler panelinden bir net ya da kart üzerinden bir parça seçin, sonra otomatik "
         "kablolayın."
@@ -4383,7 +4392,7 @@ TURKISH: Mapping[str, str] = {
         "devrenin söylediğini bağlayıp bağlamadığına bakar. Kartta görmek için bir satıra "
         "tıklayın."
     ),
-    "The board from the parts side (Ctrl+1). Flip shows the solder side, where the traces "
+    "The board from the component side (Ctrl+1). Flip shows the solder side, where the traces "
     "and bare wires are. A hole is named like C7: column letter, row number.": (
         "Kart, parça yüzünden (Ctrl+1). Çevir, lehim yollarının ve çıplak tellerin "
         "bulunduğu lehim yüzünü gösterir. Bir delik C7 gibi adlandırılır: sütun harfi, "
@@ -4430,7 +4439,7 @@ TURKISH: Mapping[str, str] = {
         "Alt yüzde izoleli tel. Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır."
     ),
     "Jumper over the parts": "Parçaların üstünden jumper",
-    "An insulated wire on the parts' side, hopping over everything below. It takes room a "
+    "An insulated wire on the component side, hopping over everything below. It takes room a "
     "part would use, so no part may stand on it.": (
         "Parça yüzünde, alttaki her şeyin üstünden atlayan izoleli tel. Bir parçanın "
         "kullanacağı yeri kaplar; bu yüzden üstünde parça duramaz."
@@ -4497,14 +4506,14 @@ TURKISH: Mapping[str, str] = {
     "Wire with insulation, on the underside. It may cross anything.": (
         "Alt yüzde izoleli tel. Her şeyin üzerinden geçebilir."
     ),
-    "An insulated wire on the parts' side, over everything below.": (
+    "An insulated wire on the component side, over everything below.": (
         "Parça yüzünde, alttaki her şeyin üstünden geçen izoleli tel."
     ),
     "Bent leg": "Bükülen bacak",
     "A part's own leg folded to a nearby hole: the cheapest connection.": (
         "Parçanın kendi bacağının yakındaki bir deliğe bükülmesi: en ucuz bağlantı."
     ),
-    "Parts side": "Parça yüzü",
+    "Component side": "Parça yüzü",
     "The side the parts stand on.": "Parçaların durduğu yüz.",
     "Solder side": "Lehim yüzü",
     "The side the joints, traces and bare wires are on.": (
@@ -5217,7 +5226,7 @@ TURKISH: Mapping[str, str] = {
     "{count} on the solder side, under the board: Ctrl+F turns it over": (
         "{count} tanesi lehim yüzünde, kartın altında: Ctrl+F kartı çevirir"
     ),
-    "{count} on the parts side: Ctrl+F turns the board over": (
+    "{count} on the component side: Ctrl+F turns the board over": (
         "{count} tanesi parça yüzünde: Ctrl+F kartı çevirir"
     ),
     '{count} could not be wired': '{count} tanesi kablolanamadı',

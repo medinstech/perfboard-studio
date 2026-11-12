@@ -5062,7 +5062,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_sheet.triggered.connect(self.on_export_schematic)
-        act_pdf = export_menu.addAction(t("1:1 &PDF (parts side + solder side)…"))
+        act_pdf = export_menu.addAction(t("1:1 &PDF (component side + solder side)…"))
         act_pdf.triggered.connect(self.on_export_pdf)
         act_png = export_menu.addAction(t("3D S&napshot…"))
         act_png.triggered.connect(self.on_export_3d_png)
@@ -5244,7 +5244,7 @@ class MainWindow(QMainWindow):
              t("May cross anything, at the cost of stripping it. Click where it starts "
                "and wherever it turns; Enter, right-click or a double-click finishes.")),
             ("top-jumper", "&Jumper Over the Parts", "J",
-             t("An insulated wire on the parts' side, hopping over everything below. It "
+             t("An insulated wire on the component side, hopping over everything below. It "
                "takes room the parts would use.")),
         ):
             action = draw_menu.addAction(t(label))
@@ -5663,7 +5663,7 @@ class MainWindow(QMainWindow):
         )
         act_reset_layout.triggered.connect(self.on_reset_layout)
         view_menu.addSeparator()
-        act_flip = view_menu.addAction(t("Flip Board (parts side / solder side)"))
+        act_flip = view_menu.addAction(t("Flip Board (component side / solder side)"))
         self.act_flip = act_flip
         act_flip.setShortcut(QKeySequence("Ctrl+F"))
         act_flip.triggered.connect(self.on_flip_board)
@@ -8343,7 +8343,11 @@ class MainWindow(QMainWindow):
             # that follows has only the boards tried before Cancel, and this is why.
             tried = len(choice.verdicts)
             self.statusBar().showMessage(
-                t("Trying boards was cancelled after {count} board(s).").format(count=tried)
+                counted(
+                    tried,
+                    t("Trying boards was cancelled after {count} board."),
+                    t("Trying boards was cancelled after {count} boards."),
+                )
                 if tried
                 else t("Cancelled before a board was tried; nothing changed."),
                 10000,
@@ -10519,7 +10523,7 @@ class MainWindow(QMainWindow):
             ),
         )
         size = _board_size_name(self.bus.document.board)
-        side = t("parts side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
+        side = t("component side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
         if self._system_in_front():
             system_doc = self.bus.system_document
             boards = counted(len(board_ids(system_doc)), t("{count} board"), t("{count} boards"))
@@ -11448,8 +11452,10 @@ class MainWindow(QMainWindow):
         stale = len(stale_conductor_ids(self.bus.document, self.lookup))
         note = (
             "  ·  "
-            + t("{count} conductor(s) are now out of date; Ctrl+R clears and rewires them").format(
-                count=stale
+            + counted(
+                stale,
+                t("{count} conductor is now out of date; Ctrl+R clears and rewires it"),
+                t("{count} conductors are now out of date; Ctrl+R clears and rewires them"),
             )
             if stale
             else ""
@@ -11664,9 +11670,11 @@ class MainWindow(QMainWindow):
         if best is None:
             return
         name = _plain(self.act_style[best.style].text())
-        beat = t("“{style}” beat {count} other style(s)").format(
-            style=name, count=best.considered - 1
-        )
+        beat = (
+            t("“{style}” beat {count} other style")
+            if best.considered == 2
+            else t("“{style}” beat {count} other styles")
+        ).format(style=name, count=best.considered - 1)
         plan = best.plan
         if _same_copper(old, plan.conductors):
             self.statusBar().showMessage(
@@ -12008,7 +12016,12 @@ class MainWindow(QMainWindow):
         if plan is None:
             return
         cleared_note = (
-            "  ·  " + t("{count} out-of-date conductor(s) removed first").format(count=cleared)
+            "  ·  "
+            + counted(
+                cleared,
+                t("{count} out-of-date conductor removed first"),
+                t("{count} out-of-date conductors removed first"),
+            )
             if cleared
             else ""
         )
@@ -12017,7 +12030,11 @@ class MainWindow(QMainWindow):
         # otherwise "best" is indistinguishable from the router having a good day.
         style_note = (
             "  ·  "
-            + t("“{style}” beat {count} other style(s)").format(
+            + (
+                t("“{style}” beat {count} other style")
+                if best.considered == 2
+                else t("“{style}” beat {count} other styles")
+            ).format(
                 style=_plain(self.act_style[best.style].text()),
                 count=best.considered - 1,
             )
@@ -12166,7 +12183,7 @@ class MainWindow(QMainWindow):
         if self.scene.side == "top":
             note = t("{count} on the solder side, under the board: Ctrl+F turns it over")
         else:
-            note = t("{count} on the parts side: Ctrl+F turns the board over")
+            note = t("{count} on the component side: Ctrl+F turns the board over")
         return "  ·  " + note.format(count=far)
 
     def _route_stripboard(self, only_net_ids: tuple[NetId, ...] | None, cleared: int = 0) -> None:
@@ -12187,7 +12204,12 @@ class MainWindow(QMainWindow):
             return
 
         cleared_note = (
-            "  ·  " + t("{count} out-of-date conductor(s) removed first").format(count=cleared)
+            "  ·  "
+            + counted(
+                cleared,
+                t("{count} out-of-date conductor removed first"),
+                t("{count} out-of-date conductors removed first"),
+            )
             if cleared
             else ""
         )
@@ -13606,8 +13628,10 @@ class MainWindow(QMainWindow):
         self._mark_saved()
         self.view.fit_board()
         self.statusBar().showMessage(
-            t("{count} part(s) waiting in the design: choose the board they go on.").format(
-                count=len(document.parts)
+            counted(
+                len(document.parts),
+                t("{count} part waiting in the design: choose the board it goes on."),
+                t("{count} parts waiting in the design: choose the board they go on."),
             ),
             8000,
         )
@@ -14239,6 +14263,12 @@ class MainWindow(QMainWindow):
         from one file to the next, and Ctrl+R on a freshly opened board asked about
         re-routing nets nobody had touched.
         """
+        # A document arriving is the answer to what Home asks, whichever door it came
+        # through. Home's own cards leave it first, but File > Examples, Ctrl+O, Ctrl+N and
+        # the command palette all reach the window with Home still in front -- and the
+        # board opened behind it, with nothing on the screen saying so.
+        if hasattr(self, "_central_stack"):
+            self.leave_home()
         self._nets_from_old_layout.clear()
         self._schematic_ref = None
         self._described_here.clear()

@@ -12722,6 +12722,31 @@ def test_escape_leaves_home() -> None:
         _close(window)
 
 
+def test_a_document_opened_through_any_door_takes_home_away() -> None:
+    """Home's cards leave Home before they open anything, but the menu bar is still there
+    under it: File > Examples, Ctrl+O, Ctrl+N and the command palette all opened a board
+    BEHIND Home, which stayed in front of it with nothing saying a board had arrived."""
+    import perfboard_studio.ui.main as main_module
+
+    examples = main_module.example_boards()
+    window = _blank_window()
+    try:
+        window.offer_home()
+        assert window.home_is_showing()
+        window.on_open_example(examples[1][0])
+        assert not window.home_is_showing(), "an example from File > Examples"
+        assert window.board_is_showing(), "and the board it opened is the one in front"
+
+        window._saved_document = window.bus.system_document
+        window._mark_saved()
+        window.show_home(window._make_home())
+        assert window.home_is_showing()
+        window.on_new()
+        assert not window.home_is_showing(), "a new board from Ctrl+N"
+    finally:
+        _close(window)
+
+
 def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkeypatch) -> None:
     """Home is the whole window: no panel, no header, no status bar around it. Leaving it
     puts back exactly what was there, and a window closed while it shows saves the panels
@@ -14444,7 +14469,7 @@ def test_a_cancelled_board_trial_says_so_on_the_status_bar(monkeypatch) -> None:
             main_module.MainWindow, "_run_planner", lambda self, label, work, **_: part_way
         )
         window._board_choice(document, suggestions)
-        assert "cancelled after 2 board(s)" in window.statusBar().currentMessage()
+        assert "cancelled after 2 boards" in window.statusBar().currentMessage()
 
         reference = part_way.reference
         nothing = BoardChoice(part_way.suggestions, reference, (), reference, False)
@@ -19542,7 +19567,7 @@ def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_
         offers[0].linkActivated.emit("try")
         assert asked and asked[-1].startswith("Wire the board in “")
         assert len(window.bus.history()) == steps + 1
-        assert "beat 3 other style(s)" in window.statusBar().currentMessage()
+        assert "beat 3 other styles" in window.statusBar().currentMessage()
 
         asked.clear()
         window.on_try_every_style()
