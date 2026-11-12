@@ -3643,6 +3643,75 @@ TURKISH: Mapping[str, str] = {
         "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
         " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "Adafruit MPR121 capacitive touch sensor (on a header)": (
+        "Adafruit MPR121 kapasitif dokunmatik sensör (header üzerinde)"
+    ),
+    "12-key capacitive touch sensor, on I2C. Its cable plugs into this 7-pin "
+    "header: VIN 3Vo GND ADDR SDA SCL IRQ from pin 1": (
+        "I2C üzerinden 12 tuşlu kapasitif dokunmatik sensör. Kablosu bu 7 pinli "
+        "header'a takılır: 1. pinden VIN 3Vo GND ADDR SDA SCL IRQ"
+    ),
+    "VIN takes 3 to 5 V: a 3.3 V regulator makes the chip's supply, and 3Vo is "
+    "its output (100 mA by Adafruit's page), not a second input. SDA and SCL go "
+    "through level-shifting transistors with 10k pull-ups to VIN, so the bus "
+    "idles at VIN's level. A 100k resistor holds ADDR low for the address "
+    "0x5A; tying ADDR to 3Vo gives 0x5B, to SDA 0x5C and to SCL 0x5D, so leave "
+    "it unwired for the default. IRQ is the chip's own 3.3 V line, pulled up "
+    "by the board's LED and a 1k resistor: it goes low when a touch changes "
+    "and stays low until the chip is read over I2C, so it can stay unwired. "
+    "The electrodes are on the 13-pin header along the other edge, which this "
+    "part does not have: wire them to your touch pads from the board's own "
+    "header. Other MPR121 boards carry a different header, so compare the "
+    "names printed on yours with these. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "VIN 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin beslemesini üretir ve 3Vo "
+        "onun çıkışıdır (Adafruit'in sayfasına göre 100 mA), ikinci bir giriş değildir. "
+        "SDA ile SCL seviye çeviren transistörlerden ve VIN'e giden 10k'lık yukarı "
+        "çekme dirençlerinden geçer, bu yüzden hat VIN seviyesinde bekler. 100k'lık bir "
+        "direnç ADDR'yi düşük tutar ve adres 0x5A olur; ADDR'yi 3Vo'ya bağlarsanız "
+        "0x5B, SDA'ya bağlarsanız 0x5C, SCL'ye bağlarsanız 0x5D olur, varsayılan için "
+        "boş bırakın. IRQ çipin kendi 3,3 V hattıdır ve kartın LED'i ile 1k'lık bir "
+        "dirençle yukarı çekilir: dokunma değişince düşer ve çip I2C'den okunana kadar "
+        "düşük kalır, boş bırakılabilir. Elektrotlar karşı kenardaki 13 pinli header'da "
+        "durur, bu parçada o yoktur: dokunma yüzeylerinizi kartın kendi header'ından "
+        "bağlayın. Başka MPR121 kartlarının header'ı farklıdır: sizinkinin üzerinde "
+        "yazan adları bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "HC-12 433 MHz serial radio module (on a header)": (
+        "HC-12 433 MHz seri telsiz modülü (header üzerinde)"
+    ),
+    "433 MHz wireless serial module, about 1 km in the open. Its cable plugs into "
+    "this 5-pin header: VCC GND RXD TXD SET from pin 1": (
+        "Açık alanda yaklaşık 1 km menzilli 433 MHz kablosuz seri modül. Kablosu bu 5 "
+        "pinli header'a takılır: 1. pinden VCC GND RXD TXD SET"
+    ),
+    "VCC takes 3.2 to 5.5 V and the supply has to give at least 200 mA while "
+    "the module transmits: the manual says that above 4.5 V a 1N4007 diode in "
+    "series with VCC keeps the module's own regulator cool. TXD goes to the "
+    "controller's RX and RXD to its TX. The manuals disagree on RXD's level: "
+    "V2.4 says 3.3 V TTL and V2.6 says 3.3 to 5 V, so from a 5 V board's TX "
+    "bring it down through a divider of 1k and 2k unless the manual for your "
+    "revision says otherwise. SET has a 10k pull-up inside: leave it unwired to "
+    "send and receive, and pull it low to give the module AT commands. Other "
+    "HC-12 boards carry a different header, so compare the names printed on "
+    "yours with these. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "VCC 3,2 ile 5,5 V alır ve modül gönderirken besleme en az 200 mA vermelidir: "
+        "kılavuza göre 4,5 V'un üzerinde VCC'ye seri bir 1N4007 diyot modülün kendi "
+        "regülatörünü serin tutar. TXD denetleyicinin RX'ine, RXD de TX'ine gider. "
+        "Kılavuzlar RXD'nin seviyesinde ayrılır: V2.4 3,3 V TTL der, V2.6 3,3 ile 5 V "
+        "der; bu yüzden 5 V'luk bir kartın TX'inden, sizin sürümünüzün kılavuzu başka "
+        "bir şey demiyorsa, 1k ve 2k'lık bir bölücüyle düşürün. SET'in içinde 10k'lık "
+        "bir yukarı çekme vardır: göndermek ve almak için boş bırakın, modüle AT "
+        "komutu vermek için düşük çekin. Başka HC-12 kartlarının header'ı farklıdır: "
+        "sizinkinin üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine "
+        "göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),

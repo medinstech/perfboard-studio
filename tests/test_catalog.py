@@ -1079,6 +1079,10 @@ def test_adafruits_sensor_breakouts_are_headers_in_the_silkscreens_order() -> No
             ["VIN", "2v8", "GND", "GPIO", "SHDN", "SCL", "SDA"],
             "Adafruit-VL53L0X-ToF-Distance-Sensor-PCB",
         ),
+        "adafruit-mpr121": (
+            ["VIN", "3Vo", "GND", "ADDR", "SDA", "SCL", "IRQ"],
+            "Adafruit-MPR121-PCB",
+        ),
     }
     for part_id, (names, repo) in expected.items():
         part = catalog_part(part_id)
@@ -1286,3 +1290,12 @@ def test_the_keystone_coin_holder_is_two_pins_three_pitches_apart_and_says_what_
     for words in ("CR2032", "coin cell", "düğme pil"):
         assert next(found.id for found in search_catalog(words)) == part.id, words
 
+
+
+def test_the_hc12_radio_is_its_five_pin_row_from_the_makers_manual() -> None:
+    part = catalog_part("hc-12")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["VCC", "GND", "RXD", "TXD", "SET"]
+    assert part.footprint_id == "hdr-1x5"
+    assert "hc01.com" in part.source
+    assert "hc-12" in {found.id for found in search_catalog("HC12")}

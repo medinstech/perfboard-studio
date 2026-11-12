@@ -2329,6 +2329,64 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "header, so compare the names printed on yours with these. " + _CABLED_CHECK
                 ),
                 aliases=("AD8232", "ECG", "EKG", "heart rate monitor", "kalp ritmi", "EKG sensörü")),
+    CatalogPart("adafruit-mpr121", "Adafruit MPR121 capacitive touch sensor (on a header)",
+                "sensor", "hdr-1x7",
+                "12-key capacitive touch sensor, on I2C. Its cable plugs into this 7-pin "
+                "header: VIN 3Vo GND ADDR SDA SCL IRQ from pin 1",
+                _legs("VIN", "3Vo", "GND", "ADDR", "SDA", "SCL", "IRQ"), value="MPR121",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its MPR121 breakout "
+                    "(github.com/adafruit/Adafruit-MPR121-PCB, 'Adafruit MPR121 Breakout'), the "
+                    "7-pin header JP2 along one long edge: pad 1 at VIN and every name read off "
+                    "its silkscreen, each pad's net checked against the board's nets; the "
+                    "address options and the regulator's current from Adafruit's pinout page "
+                    "for the board. The board's other header, 13 pins for the twelve electrodes "
+                    "and a ground, is not drawn"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V: a 3.3 V regulator makes the chip's supply, and 3Vo is "
+                    "its output (100 mA by Adafruit's page), not a second input. SDA and SCL go "
+                    "through level-shifting transistors with 10k pull-ups to VIN, so the bus "
+                    "idles at VIN's level. A 100k resistor holds ADDR low for the address "
+                    "0x5A; tying ADDR to 3Vo gives 0x5B, to SDA 0x5C and to SCL 0x5D, so leave "
+                    "it unwired for the default. IRQ is the chip's own 3.3 V line, pulled up "
+                    "by the board's LED and a 1k resistor: it goes low when a touch changes "
+                    "and stays low until the chip is read over I2C, so it can stay unwired. "
+                    "The electrodes are on the 13-pin header along the other edge, which this "
+                    "part does not have: wire them to your touch pads from the board's own "
+                    "header. Other MPR121 boards carry a different header, so compare the "
+                    "names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("MPR121", "capacitive touch", "touch sensor", "12 key touch",
+                         "dokunmatik sensör", "kapasitif dokunmatik")),
+    CatalogPart("hc-12", "HC-12 433 MHz serial radio module (on a header)", "connector",
+                "hdr-1x5",
+                "433 MHz wireless serial module, about 1 km in the open. Its cable plugs into "
+                "this 5-pin header: VCC GND RXD TXD SET from pin 1",
+                _legs("VCC", "GND", "RXD", "TXD", "SET"), value="HC-12", ref_prefix="J",
+                source=(
+                    "HC-12 user manual V2.6 (hc01.com), pin definition: pins 1 to 5 are VCC, "
+                    "GND, RXD, TXD and SET on a 2.54 mm row, the pads the manual says plug "
+                    "straight into a board's row seat; checked against the V2.3A and V2.4 "
+                    "manuals, which list the same five pins in the same order. The module's "
+                    "other four pads (the antenna pin, two grounds, one not connected) are not "
+                    "drawn"
+                ),
+                check=(
+                    "VCC takes 3.2 to 5.5 V and the supply has to give at least 200 mA while "
+                    "the module transmits: the manual says that above 4.5 V a 1N4007 diode in "
+                    "series with VCC keeps the module's own regulator cool. TXD goes to the "
+                    "controller's RX and RXD to its TX. The manuals disagree on RXD's level: "
+                    "V2.4 says 3.3 V TTL and V2.6 says 3.3 to 5 V, so from a 5 V board's TX "
+                    "bring it down through a divider of 1k and 2k unless the manual for your "
+                    "revision says otherwise. SET has a 10k pull-up inside: leave it unwired to "
+                    "send and receive, and pull it low to give the module AT commands. Other "
+                    "HC-12 boards carry a different header, so compare the names printed on "
+                    "yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("HC12", "433 MHz", "433MHz radio", "433 radio", "serial radio",
+                         "SI4463", "kablosuz seri", "433 MHz radyo")),
     CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",

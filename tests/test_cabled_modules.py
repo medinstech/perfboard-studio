@@ -189,6 +189,8 @@ SOLD_AS = {
     "micro-sd-module": "Micro SD",
     "hc-05": "HC-05",
     "hc-06": "HC-06",
+    "hc-12": "HC-12",
+    "adafruit-mpr121": "MPR121",
     "max485-module": "MAX485",
     "gy-bmp280": "GY-BMP280",
     "gy-bme280": "GY-BME280",
