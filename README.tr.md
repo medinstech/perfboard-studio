@@ -107,7 +107,7 @@ sebebi tam olarak bu farkı modellemesidir:
 | **telli lehim yolu** | aynısı, kalaylı bir telin üzerinde | ~10× daha düşük direnç, uzunluk sınırı yok |
 | çıplak tel | lehim yüzeyinde kalaylı tel | başka bir çıplak iletkenle kesişemez |
 | izoleli tel | serbestçe kesişebilir | hazırlık süresi maliyeti var |
-| parçaların üstünden jumper | parça yüzünden atlayan izoleli jumper | görünür, gövde alanı işgal eder |
+| parçaların üstünden jumper | parça yüzündeki izoleli jumper | görünür, gövde alanı işgal eder |
 
 Komşu pede olan 0,6 mm'lik boşluk, lehim yollarını hem bu kadar kullanışlı hem de bu
 kadar kolay yanlış yapılır kılan şeydir. Perfboard Studio bu riski router'ın maliyet

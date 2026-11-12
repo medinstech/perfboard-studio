@@ -44,11 +44,12 @@ closed without a bump.
   far face. A run is carried on from its end only on its own face, and a run made
   reinforced in its Properties stays on the face it was on. The wires keep their own face:
   a top jumper on top, a bare or insulated wire underneath.
-- **A via is marked in 2D.** Where a solder run on the component side meets copper on the
-  solder side in a hole with no lead, the board view draws an amber ring round the hole with
-  a pale dot in it, from either face: it is the one hole a builder solders on both sides with
-  nothing through it. The 1:1 sheet leaves it off, and the window's export and `--headless`
-  now build that sheet the same way.
+- **A via is marked in 2D and 3D.** Where a solder run on the component side meets copper on
+  the solder side in a hole with no lead, the board view draws an amber ring round the hole
+  with a pale dot in it, from either face: it is the one hole a builder solders on both sides
+  with nothing through it. In 3D it is a flush plug of solder in a copper rim on each face,
+  at the holes the engine calls a via. The 1:1 sheet leaves it off, and the window's export
+  and `--headless` now build that sheet the same way.
 - **The step card offers "Try every wiring style…"** under the counts of what is worth a
   look in the wiring. Balanced stays the default: measured in the window, trying every
   style took 15 s on atmega328-relay to find the same wiring Balanced lays in 2.5 s. Taken,
@@ -158,13 +159,11 @@ closed without a bump.
   Strip a Rail…: the net (ground first), the two fingers it runs between and the bridges,
   ticked where the net already reaches the hole beside, laid as one undo step; a rail with
   no bridge is allowed and said to carry nothing. Agents lay one with MCP's new `add_rail`,
-  built by the same code. The 2D and 3D
-  views draw a rail on its finger's copper, which on most stock boards is not one pitch past
-  the last hole: on the 6 x 8 cm board that point is the gap between two fingers.
-  pin, and never another net's. Agents lay one with MCP's new `add_rail`, on a board put on
-  with the new `use_stock_board`: a stock board as it is sold, its border, strips and corner
-  screws in one undo step, as the window's board chooser puts it on (69 tools). Drawing a rail on
-  its finger in the 2D and 3D views is still to come.
+  built by the same code, on a board put on with the new `use_stock_board`: a stock board as
+  it is sold, its border, strips and corner screws in one undo step, as the window's board
+  chooser puts it on (69 tools). The 2D and 3D views draw a rail on its finger's copper,
+  which on most stock boards is not one pitch past the last hole: on the 6 x 8 cm board that
+  point is the gap between two fingers.
 
 ### Changed
 

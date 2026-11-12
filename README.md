@@ -111,7 +111,7 @@ actually solder:
 | **reinforced solder trace** | the same, laid over a tinned wire | ~10× lower resistance, no length limit |
 | bare wire | tinned wire on the solder side | cannot cross another bare conductor |
 | insulated wire | may cross freely | costs preparation time |
-| jumper over the parts | insulated jumper on the parts' side | visible, occupies body space |
+| jumper over the parts | insulated jumper on the component side | visible, occupies body space |
 
 The 0.6 mm gap to the neighbouring pad is why solder traces are both so useful and so
 easy to get wrong. Perfboard Studio scores that risk into the router's cost function, and turns
