@@ -1429,12 +1429,19 @@ TURKISH: Mapping[str, str] = {
     "The rail {span} is laid. One Ctrl+Z takes it up.": (
         "{span} rayı döşendi. Tek bir Ctrl+Z ile geri alabilirsiniz."
     ),
-    "Hand-drawn solder goes on the solder side, under the board.": (
-        "Elle çizilen lehim, kartın altındaki lehim yüzüne gider."
+    "What you draw goes on the solder side, under the board. Turning the board over (Ctrl+F) chooses the face again.": (
+        "Çizdiğiniz bakır, kartın altındaki lehim yüzüne gider. Kartı çevirdiğinizde "
+        "(Ctrl+F) yüz yeniden seçilir."
     ),
-    "Hand-drawn solder goes on the component side, among the parts' pins, changing face only at a pad.": (
-        "Elle çizilen lehim, parçaların bacakları arasındaki parça yüzüne gider; yüz "
-        "yalnızca bir pedde değişir."
+    "What you draw goes on the component side, among the parts' pins, and an insulated wire is laid as a jumper over the parts. Turning the board over (Ctrl+F) chooses the face again.": (
+        "Çizdiğiniz bakır, parçaların bacakları arasındaki parça yüzüne gider; yalıtımlı "
+        "tel, parçaların üstünden geçen bir jumper olarak döşenir. Kartı çevirdiğinizde "
+        "(Ctrl+F) yüz yeniden seçilir."
+    ),
+    "on the component side": "parça yüzünde",
+    "on the solder side": "lehim yüzünde",
+    "a bare wire goes under the board only: an insulated wire goes over the parts": (
+        "çıplak tel yalnızca kartın altına döşenir: parçaların üstünden yalıtımlı tel geçer"
     ),
     "the copper goes on the far face: Ctrl+F turns the board over": (
         "bakır arka yüze döşenir: kartı Ctrl+F ile çevirebilirsiniz"
@@ -5083,10 +5090,12 @@ TURKISH: Mapping[str, str] = {
         "tıklayın."
     ),
     "The board from the component side (Ctrl+1). Flip shows the solder side, where the traces "
-    "and bare wires are. A hole is named like C7: column letter, row number.": (
+    "and bare wires are; on a board with pads on both faces, what you draw goes on the face "
+    "you are looking at. A hole is named like C7: column letter, row number.": (
         "Kart, parça yüzünden (Ctrl+1). Çevir, lehim yollarının ve çıplak tellerin "
-        "bulunduğu lehim yüzünü gösterir. Bir delik C7 gibi adlandırılır: sütun harfi, "
-        "satır numarası."
+        "bulunduğu lehim yüzünü gösterir; iki yüzünde ped olan bir kartta çizdiğiniz bakır, "
+        "baktığınız yüze gider. Bir delik C7 gibi adlandırılır: sütun harfi, satır "
+        "numarası."
     ),
     "The circuit as a drawing (Ctrl+2): the parts, and what connects to what. Clicking a "
     "symbol selects the same part on the board.": (

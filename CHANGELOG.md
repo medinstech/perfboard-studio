@@ -51,6 +51,16 @@ closed without a bump.
   with nothing through it. In 3D it is a flush plug of solder in a copper rim on each face,
   at the holes the engine calls a via. The 1:1 sheet leaves it off, and the window's export
   and `--headless` now build that sheet the same way.
+- **What you draw goes on the face you are looking at.** On a board with pads on both
+  faces, the drawing tools lay their copper on the face in view, and Ctrl+F turns the
+  drawing over with the board. Draw on: Solder Side | Component Side, under the banner
+  while a solder tool or Insulated Wire is armed, puts it on the other face until the next
+  flip, and the banner names the face, adding that the copper goes on the far face when it
+  does. An insulated wire drawn on the component side is laid as a jumper over the parts,
+  corners and all; a bare wire always goes underneath, and the banner says why while the
+  component side is in view. A run is carried on from its end only on its own face, and a
+  run made reinforced in its Properties stays on the face it was on. A board with pads on
+  one face is unchanged.
 - **The step card offers "Try every wiring style…"** under the counts of what is worth a
   look in the wiring. Balanced stays the default: measured in the window, trying every
   style took 15 s on atmega328-relay to find the same wiring Balanced lays in 2.5 s. Taken,

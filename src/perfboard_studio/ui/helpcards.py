@@ -79,7 +79,9 @@ def panel_help() -> dict[str, str]:
         "dockBoard": card(
             t("Board"),
             t("The board from the component side (Ctrl+1). Flip shows the solder side, where the "
-              "traces and bare wires are. A hole is named like C7: column letter, row number."),
+              "traces and bare wires are; on a board with pads on both faces, what you draw goes "
+              "on the face you are looking at. A hole is named like C7: column letter, row "
+              "number."),
         ),
         "dockSchematic": card(
             t("Schematic"),

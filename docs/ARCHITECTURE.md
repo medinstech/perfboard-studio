@@ -3757,6 +3757,22 @@ copper; `score_plan` counts them as `face_changes`, priced at the search's rate 
 other columns and zero on one face, and the scoreboard has a `via` column, `--faces` and
 `--prefer NET=top|bottom`.
 
+**Drawing by hand follows the view.** The window's drawing tools lay copper on the face being
+looked at, and a flip turns the drawing over with the board; Draw on is an override for the
+face not in view, until the next flip, and the banner names the face. The first version made
+Draw on a choice of its own, the solder side at every start, because the window opens on the
+component side and copper that followed the view would go on top unasked -- but a builder who
+turned the board over to look at the solder side and drew there found the run on the other
+face, said only by a banner. Following the view, the face is the one on the screen. Which KIND
+goes on the component side is `drawcheck.drawn_as`: a run on either face; an insulated wire
+becomes a `top-jumper`, because DRC's `jumper-under-body`, the guide's phase 7 and the 3D arc
+all know wire over the parts by that kind, and an insulated wire on top would be drawn flat
+through the leads and never measured under a body; a bare wire never goes there, as the router
+never lays one. A half-drawn path carries on across a flip, checked again on the new face,
+unless it was carrying on a run from its end. A board with pads on one face has one face to
+draw on, whichever is in view.
+`test_what_is_drawn_goes_on_the_face_in_view_and_draw_on_overrides_it_until_a_flip`.
+
 **The guide.** Component-side solder opens phase 7: after the parts, because solder in a hole
 before its lead goes in keeps the lead out, and before the long wires, so the board is turned
 once. Each via gets one line on the first step that lays the solder side's copper into it --

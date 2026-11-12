@@ -43,6 +43,7 @@ from perfboard_studio.geometry import (
     segments_overlap,
 )
 from perfboard_studio.model import (
+    Board,
     BoardSide,
     Conductor,
     ConductorKind,
@@ -52,10 +53,13 @@ from perfboard_studio.model import (
     SolderTraceConductor,
     WireConductor,
     contacts_every_path_hole,
+    has_component_side_copper,
     is_crossing_blocked,
 )
 
 Severity = Literal["error", "warning"]
+
+_RUNS = frozenset({"solder-trace", "solder-trace-wired"})
 
 #: The id the candidate goes by while it is checked; no document id looks like it.
 _CANDIDATE = "⁣drawn"
@@ -94,25 +98,43 @@ class DrawCheck:
         return self.problems[0] if self.problems else None
 
 
+def drawn_as(kind: ConductorKind, board: Board, face: BoardSide) -> tuple[ConductorKind, BoardSide]:
+    """What a hand tool of ``kind`` lays, and on which face, drawn on ``face``.
+
+    ``face`` is the window's Draw on choice, which follows the face being looked at. It
+    counts only where the board has pads on both faces; everywhere else a run goes on the
+    solder side and a wire on its kind's face (``commands.wire_side``). On a two-face board
+    a run goes on ``face``. An insulated wire drawn on the component side is laid as the
+    ``top-jumper`` it then is: DRC, the guide and the 3D view know wire over the parts by
+    that KIND, so an insulated wire on top would be drawn flat through the leads and never
+    measured under a body. A bare wire never goes there -- bare copper among standing
+    leads is a short waiting to happen, and the router never lays one -- so it stays under
+    the board, and the window says so.
+    """
+    if kind in _RUNS:
+        return kind, face if has_component_side_copper(board) else "bottom"
+    if kind == "insulated-wire" and face == "top" and has_component_side_copper(board):
+        return "top-jumper", "top"
+    return kind, wire_side(kind, board)
+
+
 def candidate(
     document: PerfDocument,
     kind: ConductorKind,
     path: tuple[HoleCoord, ...],
     side: BoardSide = "bottom",
 ) -> Conductor:
-    """The conductor the tool would lay, as the document would hold it. ``side`` is the face
-    a solder run goes on (the window's Draw on choice); a wire's face is its kind's."""
-    if kind in ("solder-trace", "solder-trace-wired"):
-        return SolderTraceConductor(id=_CANDIDATE, path=path, kind=kind, side=side)
+    """The conductor the tool would lay, as the document would hold it: ``kind`` on
+    ``side`` exactly (see ``drawn_as`` for what a tool lays on which face)."""
+    if kind in _RUNS:
+        return SolderTraceConductor(id=_CANDIDATE, path=path, kind=kind, side=side)  # type: ignore[arg-type]
     return WireConductor(
         id=_CANDIDATE,
         path=path,
         kind=kind,  # type: ignore[arg-type]
-        side=wire_side(kind, document.board),
+        side=side,
     )
 
-
-_RUNS = frozenset({"solder-trace", "solder-trace-wired"})
 
 
 def _corners(path: tuple[HoleCoord, ...]) -> tuple[HoleCoord, ...]:
@@ -169,9 +191,9 @@ def check_drawn(
     """What laying ``kind`` along ``path`` on ``document``'s board would join and touch.
 
     ``ignoring`` is a conductor the new path REPLACES -- a run being extended, an end being
-    dragged -- which is not something the new path can cross or lie along. ``side`` is the
-    face a solder run is drawn on: a run on the component side neither crosses nor lies
-    along the copper underneath.
+    dragged -- which is not something the new path can cross or lie along. ``kind`` and
+    ``side`` are what is laid, as ``drawn_as`` gives them: copper on the component side
+    neither crosses nor lies along the copper underneath.
     """
     if len(path) < 2:
         return DrawCheck(net_id=None, problems=())

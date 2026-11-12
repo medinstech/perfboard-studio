@@ -6177,29 +6177,34 @@ class MainWindow(QMainWindow):
         self._build_draw_face_bar()
 
     def _build_draw_face_bar(self) -> None:
-        """Draw on: Solder Side | Component Side, under the banner while a solder tool is
-        armed on a board with pads on both faces.
+        """Draw on: Solder Side | Component Side, under the banner while a solder tool or
+        Insulated Wire is armed on a board with pads on both faces.
 
-        AN EXPLICIT CHOICE, NOT THE VIEW. The window opens looking at the component side, so
-        copper that followed the view went on top of every double-sided board unasked, and
-        a builder who turned the board over to look would have changed where the next run
-        went. One choice for both solder tools, kept for the session only and the solder
-        side at every start: the wires keep their kind's face (``commands.wire_side``)."""
+        IT FOLLOWS THE VIEW. What is drawn goes on the face being looked at, and Ctrl+F
+        turns the board over and the drawing with it: a builder who looks at the solder side
+        means the solder side. The bar is the override for the face not in view, and it
+        lasts until the next flip. It used to be a choice of its own, the solder side at
+        every start, and a run drawn while looking at the component side went underneath
+        with nothing but the banner saying so. An insulated wire on the component side is
+        laid as a jumper over the parts, and a bare wire never goes there
+        (``drawcheck.drawn_as``)."""
         self.draw_face_group = QActionGroup(self)
         self.draw_face_group.setExclusive(True)
         self.act_draw_face: dict[BoardSide, QAction] = {}
         faces: tuple[tuple[BoardSide, str, str], ...] = (
             ("bottom", t("Solder Side"),
-             t("Hand-drawn solder goes on the solder side, under the board.")),
+             t("What you draw goes on the solder side, under the board. Turning the board "
+               "over (Ctrl+F) chooses the face again.")),
             ("top", t("Component Side"),
-             t("Hand-drawn solder goes on the component side, among the parts' pins, "
-               "changing face only at a pad.")),
+             t("What you draw goes on the component side, among the parts' pins, and an "
+               "insulated wire is laid as a jumper over the parts. Turning the board over "
+               "(Ctrl+F) chooses the face again.")),
         )
         for face, label, tip in faces:
             action = QAction(label, self)
             action.setCheckable(True)
             action.setToolTip(tip)
-            action.setChecked(face == "bottom")
+            action.setChecked(face == self.scene.draw_face)
             action.triggered.connect(lambda _checked=False, f=face: self.on_draw_face(f))
             self.draw_face_group.addAction(action)
             self.act_draw_face[face] = action
@@ -6215,9 +6220,10 @@ class MainWindow(QMainWindow):
         bar.track(self._draw_face_bar_rect, self.view.viewport())
 
     def _draw_face_bar_rect(self) -> QRect | None:
-        """Under the banner while a solder tool is armed where both faces have pads, and
-        nowhere otherwise: on any other board there is one face to draw on."""
-        if self.scene.armed_draw_kind not in ("solder-trace", "solder-trace-wired"):
+        """Under the banner while a tool that can go on either face is armed where both
+        faces have pads, and nowhere otherwise: on any other board, and for a bare wire or a
+        jumper, there is one face to draw on."""
+        if self.scene.armed_draw_kind not in ("solder-trace", "solder-trace-wired", "insulated-wire"):
             return None
         if not has_component_side_copper(self.bus.document.board):
             return None
@@ -6227,7 +6233,7 @@ class MainWindow(QMainWindow):
         return banner.geometry().translated(self.view.viewport().pos())
 
     def on_draw_face(self, face: BoardSide) -> None:
-        """The Draw on choice, for both solder tools."""
+        """The Draw on choice, until the next flip."""
         self.scene.set_draw_face(face)
         self.act_draw_face[face].setChecked(True)
         self._refresh_mode_banner()
@@ -6646,17 +6652,23 @@ class MainWindow(QMainWindow):
                 if two_point
                 else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
-            word = conductor_word(kind, self._guide_language())
-            if (
-                kind in ("solder-trace", "solder-trace-wired")
-                and self.scene.side == "bottom"
-                and self.scene.solder_draw_face == "top"
-            ):
-                # Turned over to the solder side with Draw on naming the component side:
-                # the run goes on the face the builder is not looking at, and nothing on
-                # the screen but this says so.
-                far = t("the copper goes on the far face: Ctrl+F turns the board over")
-                word = f"{word}  ·  {far}"
+            laid, face = self.scene.drawing_as(kind)
+            word = conductor_word(laid, self._guide_language())
+            if has_component_side_copper(self.bus.document.board):
+                # The banner names the face: on this board it is one of two, and it follows
+                # the view only until Draw on says otherwise.
+                where = t("on the component side") if face == "top" else t("on the solder side")
+                word = f"{word}  ·  {where}"
+                if kind == "bare-wire" and self.scene.side == "top":
+                    # The one tool that does not follow the view: bare copper never lies
+                    # among the parts' standing leads.
+                    only = t("a bare wire goes under the board only: an insulated wire goes over the parts")
+                    word = f"{word}  ·  {only}"
+                elif face != self.scene.side:
+                    # Draw on names the face the builder is not looking at, and nothing on
+                    # the screen but this says so.
+                    far = t("the copper goes on the far face: Ctrl+F turns the board over")
+                    word = f"{word}  ·  {far}"
             # What the next click or Enter would do wrong takes the hint's place while it
             # holds: the preview turns red at the hole, and this says why.
             # What the next click or Enter would do wrong takes the hint's place while it
@@ -13882,7 +13894,12 @@ class MainWindow(QMainWindow):
         # right edge, and the part somebody was about to solder was off screen.
         centre = self.view.mapToScene(self.view.viewport().rect().center())
         self.side = "bottom" if self.side == "top" else "top"
+        # The drawing turns over with the view: set_side sets the face drawn on as well,
+        # and Draw on shows it.
         self.scene.set_side(self.side)
+        face_actions = getattr(self, "act_draw_face", None)
+        if face_actions is not None:
+            face_actions[self.scene.draw_face].setChecked(True)
         span_w, _span_h = hole_span_mm(self.bus.document.board)
         self.view.centerOn(QPointF(span_w - centre.x(), centre.y()))
         # set_side rebuilds the scene, which drops the highlight with everything else.

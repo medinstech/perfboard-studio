@@ -95,7 +95,6 @@ from perfboard_studio.commands import (
     count_noun,
     next_net_name,
     plan_pin_join,
-    wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup, PhysicalNet, extract_physical_nets
 from perfboard_studio.drc import DrcViolation
@@ -210,7 +209,7 @@ from .bodies import (
     surface_for,
 )
 from .canvasinput import wheel_intent
-from .drawcheck import DrawCheck, DrawProblem, check_drawn
+from .drawcheck import DrawCheck, DrawProblem, check_drawn, drawn_as
 from .i18n import counted, t
 from .i18n import language as current_language
 from .moduleart import (
@@ -5033,10 +5032,11 @@ class BoardScene(QGraphicsScene):
         self.component_items: dict[str, ComponentItem] = {}
         self.mount_items: dict[str, MountingHoleItem] = {}
         self.connector_items: dict[str, EdgeConnectorItem] = {}
-        #: The face the hand solder tools lay copper on: the window's Draw on choice, for
-        #: this session only. Read through ``solder_draw_face``, which is the solder side
-        #: on every board with no pads on the component side.
-        self.draw_face: BoardSide = "bottom"
+        #: The face the hand tools draw on: the face being looked at, which every flip
+        #: sets, or the window's Draw on choice until the next flip. Read through
+        #: ``solder_draw_face`` and ``drawing_as``: it counts only on a board with pads on
+        #: both faces.
+        self.draw_face: BoardSide = side
         #: ``geometry.finger_cells`` of the document, once per build: where solder on an
         #: outside finger is drawn, for every conductor item and every zoom to a hole.
         self.finger_cells: dict[str, FingerCell] = {}
@@ -5171,9 +5171,12 @@ class BoardScene(QGraphicsScene):
         self._build()
 
     def set_side(self, side: BoardSide) -> None:
+        """Look at the board from ``side``. What is drawn next goes on that face too: a flip
+        is the builder saying which face they mean, and undoes a Draw on override."""
         if side != self.side:
             self.side = side
             self._build()
+        self.set_draw_face(side)
 
     def set_show_ratsnest(self, show: bool) -> None:
         if show != self.show_ratsnest:
@@ -5868,22 +5871,28 @@ class BoardScene(QGraphicsScene):
 
     @property
     def solder_draw_face(self) -> BoardSide:
-        """The face a hand-drawn solder run goes on: the Draw on choice where the board has
-        pads on the component side, the solder side everywhere else. NOT the face being
-        looked at: the window opens on the component side, and a run that followed the view
-        would have gone on top of every double-sided board unasked."""
+        """The face a hand-drawn solder run goes on: ``draw_face`` -- the face in view, or
+        the Draw on choice -- where the board has pads on the component side, the solder
+        side everywhere else."""
         if has_component_side_copper(self.document.board):
             return self.draw_face
         return "bottom"
 
+    def drawing_as(self, kind: ConductorKind) -> tuple[ConductorKind, BoardSide]:
+        """What the tool for ``kind`` lays now, and on which face (``drawcheck.drawn_as``)."""
+        return drawn_as(kind, self.document.board, self.draw_face)
+
     def set_draw_face(self, face: BoardSide) -> None:
-        """Choose the face the solder tools draw on. A run half drawn is started again: its
-        pads were checked against the other face's copper."""
+        """Choose the face the hand tools draw on. Copper half drawn carries on, on the new
+        face -- every step is checked again as it is drawn -- unless it was carrying on a run
+        from its end: that run is on the old face, so drawing starts again."""
         if face == self.draw_face:
             return
+        kind = self._draw_kind
+        before = self.drawing_as(kind) if kind is not None else None
         self.draw_face = face
-        if self._draw_kind in self._RUN_KINDS and self._draw_path:
-            self.arm_drawing(self._draw_kind)
+        if kind is not None and self._draw_continuing is not None and self.drawing_as(kind) != before:
+            self.arm_drawing(kind)
 
     @property
     def drawn_path(self) -> tuple[HoleCoord, ...]:
@@ -5911,8 +5920,8 @@ class BoardScene(QGraphicsScene):
         predicates (``drawcheck``); None with nothing armed or under two holes."""
         if self._draw_kind is None or len(path) < 2:
             return None
-        face = self.solder_draw_face
-        kind = f"{self._draw_kind}|{self._draw_continuing or ''}|{face}"
+        laid, face = self.drawing_as(self._draw_kind)
+        kind = f"{laid}|{self._draw_continuing or ''}|{face}"
         holes = tuple(path)
         cached = self._draw_checked
         if (
@@ -5925,7 +5934,7 @@ class BoardScene(QGraphicsScene):
         checked = check_drawn(
             self.document,
             self.lookup,
-            self._draw_kind,
+            laid,
             holes,
             ignoring=self._draw_continuing,
             side=face,
@@ -6103,17 +6112,11 @@ class BoardScene(QGraphicsScene):
             return result
         net_id = checked.net_id if checked is not None else None
         spec: NewConductor
-        if kind in ("solder-trace", "solder-trace-wired"):
-            spec = NewSolderTraceConductor(
-                path=path, kind=cast(Any, kind), net_id=net_id, side=self.solder_draw_face
-            )
+        laid, face = self.drawing_as(kind)
+        if laid in ("solder-trace", "solder-trace-wired"):
+            spec = NewSolderTraceConductor(path=path, kind=cast(Any, laid), net_id=net_id, side=face)
         else:
-            spec = NewWireConductor(
-                path=path,
-                kind=cast(Any, kind),
-                side=wire_side(kind, self.document.board),
-                net_id=net_id,
-            )
+            spec = NewWireConductor(path=path, kind=cast(Any, laid), side=face, net_id=net_id)
 
         result = self.bus.dispatch("conductor.add", AddConductorPayload(conductor=spec))
         self.last_draw_check = checked

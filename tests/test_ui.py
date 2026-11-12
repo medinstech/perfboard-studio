@@ -3084,6 +3084,9 @@ def _drawing_scene():
     )
     bus = _new_bus(doc)
     scene = BoardScene(bus.document, footprint_lookup(), side="top", bus=bus)
+    # Drawn under the board, as Draw on: Solder Side does: the board has pads on both
+    # faces, and these are about how copper is drawn, not which face it goes on.
+    scene.set_draw_face("bottom")
     return scene, bus
 
 
@@ -18897,6 +18900,7 @@ def test_a_run_drawn_on_from_its_end_is_the_same_run_longer() -> None:
     try:
         before = len(window.bus.document.conductors)
         window.on_draw_mode("solder-trace", True)
+        window.on_draw_face("bottom")  # Its runs are under the board.
         window.scene.draw_click(_hole(window, "L6"))
         assert window.scene.continuing == "cond-8"
         window.scene.draw_click(_hole(window, "L5"))
@@ -19100,6 +19104,7 @@ def test_copper_drawn_exactly_over_copper_is_not_laid_and_says_what_is_there() -
         before = window.bus.document.conductors
         steps = len(window.bus.history())
         window.on_draw_mode("solder-trace", True)
+        window.on_draw_face("bottom")  # Its runs are under the board.
         window.scene.draw_click(_hole(window, "G1"))
         assert window.scene.continuing is None
         _hover_hole(window, "H1")
@@ -20136,13 +20141,14 @@ def test_solder_on_an_outside_finger_is_drawn_on_the_finger_in_2d() -> None:
         _close(window)
 
 
-def test_hand_solder_is_drawn_on_the_face_draw_on_names_never_the_one_in_view() -> None:
-    """Draw on: Solder Side | Component Side, under the banner while a solder tool is armed
-    on a board with pads on both faces. The solder side at every start, whichever face the
-    window looks at; one choice for both solder tools; a run on the other face is not
-    carried on from its end; and turned over to the solder side with the component side
-    chosen, the banner says the copper goes on the far face. Wires keep their kind's face,
-    and a board with pads on one face has no choice to make."""
+def test_what_is_drawn_goes_on_the_face_in_view_and_draw_on_overrides_it_until_a_flip() -> None:
+    """On a board with pads on both faces, what is drawn goes on the face being looked at,
+    and Ctrl+F turns the drawing over with the view. Draw on, under the banner while a run
+    or an insulated wire is armed, picks the other face until the next flip, and the banner
+    names the face. An insulated wire on the component side is laid as a top jumper, corners
+    and all; a bare wire stays under the board, and the banner says so. A run on the other
+    face is not carried on from its end, and a board with pads on one face has no choice to
+    make."""
     from perfboard_studio.boardfamily import STANDARD_PRESETS
     from perfboard_studio.commands import create_empty_document, document_on_preset
     from perfboard_studio.model import DocumentMeta, HoleCoord
@@ -20159,23 +20165,23 @@ def test_hand_solder_is_drawn_on_the_face_draw_on_names_never_the_one_in_view() 
         result = None
         for hole in holes:
             result = window.scene.draw_click(hole)
-        if result is None:  # A jumper is laid by its second click.
+        if result is None:  # A wire is laid by Enter after its last corner.
             result = window.scene.commit_drawing()
         assert result is not None and result.ok, result
         return next(c for c in window.bus.document.conductors if c.path[0] == holes[0])
 
     far = t("the copper goes on the far face: Ctrl+F turns the board over")
+    on_top, underneath = t("on the component side"), t("on the solder side")
+    bare_only = t("a bare wire goes under the board only: an insulated wire goes over the parts")
     window = _window_on(board("double-sided-fr4"))
     try:
+        # The window opens on the component side, and that is where drawing goes.
         assert window.scene.side == "top"
         assert window.draw_face_bar.isHidden()
         window.on_draw_mode("solder-trace", True)
         assert not window.draw_face_bar.isHidden()
-        assert window.act_draw_face["bottom"].isChecked()
-        # Looking at the component side, a run still goes underneath unless asked.
-        assert draw(window, "solder-trace", HoleCoord(2, 2), HoleCoord(5, 2)).side == "bottom"
-        window.act_draw_face["top"].trigger()
-        assert window.scene.solder_draw_face == "top"
+        assert window.act_draw_face["top"].isChecked()
+        assert on_top in window._mode_text() and far not in window._mode_text()
         top_run = draw(window, "solder-trace", HoleCoord(2, 4), HoleCoord(5, 4))
         assert top_run.side == "top"
         # Made a reinforced run in its Properties, it stays on the face it was on.
@@ -20187,39 +20193,52 @@ def test_hand_solder_is_drawn_on_the_face_draw_on_names_never_the_one_in_view() 
             c for c in window.bus.document.conductors if c.path[0] == HoleCoord(2, 4)
         )
         assert (remade.kind, remade.side) == ("solder-trace-wired", "top")
-        # One choice for both solder tools.
         assert draw(
             window, "solder-trace-wired", HoleCoord(2, 6), HoleCoord(6, 6)
         ).side == "top"
-        # A run underneath ends at C3, but it is on the other face: a new run starts there.
-        window.on_draw_mode("solder-trace", True)
-        window.scene.draw_click(HoleCoord(5, 2))
-        assert window.scene.continuing is None
-        window.on_draw_mode("solder-trace", False)
-        # Turned over: the far-face note, for the component side only.
-        window.on_draw_mode("solder-trace", True)
-        assert far not in window._mode_text()
-        window.on_flip_board()
-        assert window.scene.side == "bottom"
-        assert far in window._mode_text()
-        window.act_draw_face["bottom"].trigger()
-        assert far not in window._mode_text()
-        # The wires are not on the choice, and the bar is not there for them.
-        window.act_draw_face["top"].trigger()
+        # An insulated wire on top is the jumper over the parts, its corners kept.
+        window.on_draw_mode("insulated-wire", True)
+        assert not window.draw_face_bar.isHidden()
+        jumper = draw(window, "insulated-wire", HoleCoord(8, 2), HoleCoord(8, 6), HoleCoord(10, 6))
+        assert (jumper.kind, jumper.side) == ("top-jumper", "top")
+        assert jumper.path == (HoleCoord(8, 2), HoleCoord(8, 6), HoleCoord(10, 6))
+        # A bare wire never lies among the leads: no choice, and the banner says why.
         window.on_draw_mode("bare-wire", True)
         assert window.draw_face_bar.isHidden()
-        assert draw(window, "bare-wire", HoleCoord(8, 2), HoleCoord(8, 6)).side == "bottom"
-        assert draw(window, "top-jumper", HoleCoord(10, 2), HoleCoord(10, 6)).side == "top"
+        assert bare_only in window._mode_text() and underneath in window._mode_text()
+        bare = draw(window, "bare-wire", HoleCoord(12, 2), HoleCoord(12, 6))
+        assert (bare.kind, bare.side) == ("bare-wire", "bottom")
+        assert draw(window, "top-jumper", HoleCoord(14, 2), HoleCoord(14, 6)).side == "top"
         window.on_draw_mode("bare-wire", False)
         assert window.draw_face_bar.isHidden()
-    finally:
-        _close(window)
 
-    # For the session only: the next window starts on the solder side.
-    window = _window_on(board("double-sided-fr4"))
-    try:
-        assert window.scene.solder_draw_face == "bottom"
+        # Turned over, drawing turns over with it.
+        window.on_flip_board()
+        assert (window.scene.side, window.scene.draw_face) == ("bottom", "bottom")
         assert window.act_draw_face["bottom"].isChecked()
+        window.on_draw_mode("solder-trace", True)
+        assert underneath in window._mode_text() and far not in window._mode_text()
+        assert bare_only not in window._mode_text()
+        assert draw(window, "solder-trace", HoleCoord(2, 8), HoleCoord(5, 8)).side == "bottom"
+        assert draw(window, "insulated-wire", HoleCoord(2, 10), HoleCoord(6, 10)).kind == "insulated-wire"
+        # The run on top ends at F5, but it is on the other face: a new run starts there.
+        window.on_draw_mode("solder-trace", True)
+        window.scene.draw_click(HoleCoord(5, 4))
+        assert window.scene.continuing is None
+        window.on_draw_mode("solder-trace", False)
+        # Draw on picks the face not in view, and the banner says so...
+        window.on_draw_mode("solder-trace", True)
+        window.act_draw_face["top"].trigger()
+        assert window.scene.solder_draw_face == "top"
+        assert on_top in window._mode_text() and far in window._mode_text()
+        assert draw(window, "solder-trace", HoleCoord(2, 12), HoleCoord(5, 12)).side == "top"
+        # ...until the next flip, which chooses the face again.
+        window.on_flip_board()
+        window.on_flip_board()
+        assert (window.scene.side, window.scene.draw_face) == ("bottom", "bottom")
+        assert window.act_draw_face["bottom"].isChecked()
+        window.on_draw_mode("solder-trace", True)
+        assert far not in window._mode_text()
     finally:
         _close(window)
 
@@ -20227,8 +20246,12 @@ def test_hand_solder_is_drawn_on_the_face_draw_on_names_never_the_one_in_view() 
     try:
         window.on_draw_mode("solder-trace", True)
         assert window.draw_face_bar.isHidden()
-        window.scene.draw_face = "top"
+        assert on_top not in window._mode_text() and underneath not in window._mode_text()
         assert draw(window, "solder-trace", HoleCoord(2, 2), HoleCoord(5, 2)).side == "bottom"
+        wire = draw(window, "insulated-wire", HoleCoord(2, 4), HoleCoord(6, 4))
+        assert (wire.kind, wire.side) == ("insulated-wire", "bottom")
+        window.on_draw_mode("insulated-wire", True)
+        assert window.draw_face_bar.isHidden()
     finally:
         _close(window)
 
