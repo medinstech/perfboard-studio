@@ -8,13 +8,17 @@ reason the rest of the engine is: the interesting failures are in the deciding, 
 test should be able to reach them by handing a function a string rather than by standing
 up a web server.
 
-WHAT THIS DELIBERATELY DOES NOT DO IS INSTALL ANYTHING. The downloaded file is verified,
-put in the user's Downloads folder, and shown to them in their file manager -- and there
-it stops. Running an installer on somebody's behalf means elevation on Windows, replacing
-a bundle inside /Applications on macOS, and overwriting a running AppImage on Linux;
-doing that with an installer nobody has signed (PLAN.md §12, unbought) is the kind of
-mechanism that is indistinguishable from malware and has no way back when it goes wrong.
-The last click is the user's.
+IT INSTALLS ON ONE PLATFORM, AND ONLY ON A CLICK. The downloaded file is verified against
+the published checksum and put in the user's Downloads folder. On a Windows Setup.exe
+build whose checksum matched, the strip then offers "Install and Restart": on that click
+the window asks about unsaved work as it always does, the file is hashed AGAIN (it has
+been sitting in a folder that anything the user runs can write to), and the installer is
+run through Windows' own elevation prompt with ``/S /UPDATE=<pid>`` -- see
+``start_install``. The installer waits for this process to end and opens the new version
+itself. Everywhere else it still stops at the download and the last click is the user's:
+a macOS bundle swap in /Applications and an overwritten running AppImage have no silent
+switch and no way back, and a pip install updates with pip. Nothing here runs without the
+click, and the elevation prompt is Windows asking, not this program deciding.
 
 QtNetwork rather than ``urllib``, for two reasons that are both about the frozen build.
 Qt uses the platform's own TLS -- Schannel on Windows, the system store on macOS -- so
@@ -33,8 +37,10 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import os
 import platform
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -43,12 +49,14 @@ from PySide6.QtCore import QObject, QStandardPaths, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QFontMetrics, QResizeEvent
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -61,6 +69,9 @@ from ..updates import (
     asset_for,
     expected_digest,
     highlights,
+    installer_arguments,
+    installs_in_place,
+    is_web_link,
     newer_release,
     parse_releases,
 )
@@ -155,6 +166,126 @@ def installable_asset(release: Release) -> Asset | None:
     return asset_for(release, platform=sys.platform, machine=platform.machine())
 
 
+#: Where the Windows installer records the folder it installed into
+#: (``packaging/perfboard-studio.nsi``: ``Software\\Medinstech\\Perfboard Studio``).
+INSTALL_KEY = "Software\\Medinstech\\Perfboard Studio"
+
+#: The error Windows gives when somebody answers the elevation prompt with No.
+ELEVATION_REFUSED = 1223
+
+
+def registered_install_dir() -> str | None:
+    """The folder the Windows installer recorded, or ``None`` anywhere it cannot be read.
+
+    The 64-bit view, which is where the installer writes (a 32-bit ``makensis`` build
+    would otherwise redirect both of them into the same wrong place).
+    """
+    if sys.platform != "win32":
+        return None
+    import winreg
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, INSTALL_KEY, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY
+        ) as key:
+            value, _kind = winreg.QueryValueEx(key, "Install_Dir")
+    except OSError:
+        return None
+    return str(value) or None
+
+
+def can_install_in_place() -> bool:
+    """Whether this running copy may be offered "Install and Restart".
+
+    The decision is ``updates.installs_in_place``; this only gathers what it is decided
+    from, so that none of it needs a registry or a frozen build to be tested.
+    """
+    return installs_in_place(
+        platform=sys.platform,
+        frozen=bool(getattr(sys, "frozen", False)),
+        exe_dir=str(Path(sys.executable).parent),
+        install_dir=registered_install_dir(),
+    )
+
+
+def file_digest(path: Path) -> str:
+    """The SHA-256 of a file, read in pieces: an installer is hundreds of megabytes."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class InstallAttempt:
+    """What running the installer came to, for the strip to say."""
+
+    started: bool
+    message: str = ""
+    #: The file was deleted rather than run. There is nothing to retry with.
+    discarded: bool = False
+
+
+def _run_elevated(path: str, arguments: str) -> None:
+    """Ask Windows to run ``path`` with administrator rights. The ONE call that runs it.
+
+    ``os.startfile`` with the ``runas`` verb is ShellExecute: the elevation prompt is
+    Windows' own, shows the installer's publisher (or "Unknown", while it is unsigned) and
+    can be refused. A function on its own so that a test replaces exactly this and nothing
+    else -- no suite should ever run an installer.
+    """
+    if sys.platform != "win32":
+        raise OSError("Install and Restart is for the Windows installer only.")
+    os.startfile(path, "runas", arguments)
+
+
+def start_install(path: str, expected: str, *, pid: int | None = None) -> InstallAttempt:
+    """Run the verified installer, as the last thing this process does.
+
+    Three refusals before anything runs, each one a thing that cannot be taken back:
+
+    * The file is no longer there.
+    * The file does not hash to what was verified when it was downloaded. It has been in
+      the Downloads folder since, where anything the user ran could have replaced it; the
+      checksum worth anything is the one taken just before it is run. It is DELETED, for
+      the reason a failed download is.
+    * Windows says no. The prompt is refused and nothing is installed -- the window stays
+      open, because this returns before anything closed it.
+
+    ``pid`` is this process unless a test says otherwise: the installer waits for it.
+    """
+    target = Path(path)
+    if not target.is_file():
+        return InstallAttempt(False, t("The installer is no longer where it was saved."), True)
+    try:
+        found = file_digest(target)
+    except OSError as err:
+        return InstallAttempt(False, t("Could not read the installer: {error}").format(error=err))
+    if found != expected:
+        with contextlib.suppress(OSError):
+            target.unlink(missing_ok=True)
+        return InstallAttempt(
+            False,
+            t(
+                "The installer changed after it was checked, so it was deleted and "
+                "nothing was installed."
+            ),
+            True,
+        )
+    try:
+        _run_elevated(str(target), installer_arguments(os.getpid() if pid is None else pid))
+    except OSError as err:
+        if getattr(err, "winerror", None) == ELEVATION_REFUSED:
+            return InstallAttempt(
+                False, t("Windows did not give permission, so nothing was installed.")
+            )
+        return InstallAttempt(
+            False, t("The installer could not be started: {error}").format(error=err)
+        )
+    return InstallAttempt(True)
+
+
 def checksum_asset(release: Release) -> Asset | None:
     for asset in release.assets:
         if asset.name.strip().lower() == CHECKSUM_ASSET.lower():
@@ -208,6 +339,9 @@ class UpdateChecker(QObject):
         self._target: Path | None = None
         self._expected: str | None = None
         self._cancelled = False
+        #: The digest the last finished download matched, or ``None``: not finished, or
+        #: nothing was published to match. The one-click install runs only on this.
+        self.verified_digest: str | None = None
 
     # -- checking ------------------------------------------------------------
 
@@ -240,6 +374,7 @@ class UpdateChecker(QObject):
         "downloaded, and by the way it is wrong".
         """
         self._cancelled = False
+        self.verified_digest = None
         sums = checksum_asset(release)
         if sums is None:
             self._start(asset, expected=None)
@@ -324,6 +459,7 @@ class UpdateChecker(QObject):
         except OSError as exc:
             self.downloadFailed.emit(str(exc))
             return
+        self.verified_digest = self._expected
         self.downloaded.emit(str(target), self._expected is not None)
 
     def cancel(self) -> None:
@@ -404,6 +540,9 @@ class UpdateBar(QFrame):
     notesRequested = Signal()
     dismissed = Signal()
     cancelRequested = Signal()
+    #: "Install and Restart", pressed. Only ever offered for a verified download on a
+    #: build that can replace itself (``can_install_in_place``).
+    installRequested = Signal()
     #: Close the strip and remember nothing -- for the states where there is no version
     #: to skip: the file is already downloaded, or the download failed.
     closeRequested = Signal()
@@ -449,13 +588,22 @@ class UpdateBar(QFrame):
         self.act_download = QPushButton()
         self.act_download.clicked.connect(self.downloadRequested)
         self.act_notes = QPushButton(t("What Changed"))
-        self.act_notes.setToolTip(t("Open this release's notes on GitHub."))
+        self.act_notes.setToolTip(t("Read what this release changes."))
         self.act_notes.clicked.connect(self.notesRequested)
         self.act_reveal = QPushButton(t("Show the File"))
         self.act_reveal.setToolTip(t("Open the folder the installer was saved in."))
         self.act_reveal.clicked.connect(self.revealRequested)
         self.act_cancel = QPushButton(t("Cancel"))
         self.act_cancel.clicked.connect(self.cancelRequested)
+        self.act_install = QPushButton(t("Install and Restart"))
+        self.act_install.setObjectName("updateInstall")
+        self.act_install.setToolTip(
+            t(
+                "Close this window (asking about unsaved work), run the installer — Windows "
+                "asks for permission — and open the new version."
+            )
+        )
+        self.act_install.clicked.connect(self.installRequested)
         self.act_hide = QPushButton(t("Hide"))
         self.act_hide.setToolTip(
             t(
@@ -470,14 +618,7 @@ class UpdateBar(QFrame):
         # a decision about the strip.
         self.act_close = QPushButton(t("Close"))
         self.act_close.clicked.connect(self.closeRequested)
-        for button in (
-            self.act_download,
-            self.act_notes,
-            self.act_reveal,
-            self.act_cancel,
-            self.act_hide,
-            self.act_close,
-        ):
+        for button in self._buttons():
             row.addWidget(button)
 
     def setVisible(self, visible: bool) -> None:
@@ -486,15 +627,19 @@ class UpdateBar(QFrame):
 
     # -- states --------------------------------------------------------------
 
-    def _show_buttons(self, *visible: QPushButton) -> None:
-        for button in (
+    def _buttons(self) -> tuple[QPushButton, ...]:
+        return (
+            self.act_install,
             self.act_download,
             self.act_notes,
             self.act_reveal,
             self.act_cancel,
             self.act_hide,
             self.act_close,
-        ):
+        )
+
+    def _show_buttons(self, *visible: QPushButton) -> None:
+        for button in self._buttons():
             button.setVisible(button in visible)
 
     def announce(self, release: Release, current: str, *, downloadable: bool) -> None:
@@ -544,7 +689,21 @@ class UpdateBar(QFrame):
         self.detail.show()
         self._show_buttons(self.act_cancel)
 
-    def show_downloaded(self, path: str, verified: bool) -> None:
+    def show_downloaded(self, path: str, verified: bool, *, can_install: bool = False) -> None:
+        """The file is here. Verified on a build that can replace itself: offer to do it."""
+        if verified and can_install:
+            self.headline.setText(t("The update is downloaded and its checksum matched."))
+            self.detail.setText(
+                t(
+                    "Install and Restart closes this window, asking about unsaved work, runs "
+                    "the installer and opens the new version."
+                )
+            )
+            self.detail.show()
+            self.progress.hide()
+            self._show_buttons(self.act_install, self.act_notes, self.act_reveal, self.act_close)
+            self.show()
+            return
         self.headline.setText(t("Downloaded to {path}").format(path=path))
         self.detail.setText(
             t("Its checksum matched. Close Perfboard Studio before you run it.")
@@ -554,6 +713,18 @@ class UpdateBar(QFrame):
         self.detail.show()
         self.progress.hide()
         self._show_buttons(self.act_reveal, self.act_close)
+        self.show()
+
+    def show_install_problem(self, message: str, *, retry: bool) -> None:
+        """The installer was not run. ``retry`` when the file is still there to run."""
+        self.headline.setText(t("The update was not installed."))
+        self.detail.setText(message)
+        self.detail.show()
+        self.progress.hide()
+        if retry:
+            self._show_buttons(self.act_install, self.act_reveal, self.act_close)
+        else:
+            self._show_buttons(self.act_notes, self.act_close)
         self.show()
 
     def show_failure(self, message: str) -> None:
@@ -566,6 +737,83 @@ class UpdateBar(QFrame):
 
     def dismiss(self) -> None:
         self.hide()
+
+
+class ReleaseNotesDialog(QDialog):
+    """What a release changes, in the window and not on a web page.
+
+    The notes are the release body, which ``release.yml`` builds out of this project's
+    changelog: markdown, so ``QTextBrowser.setMarkdown`` shows them as written. Links are
+    NOT followed by the browser widget -- ``setOpenLinks(False)`` -- but handed to
+    ``open_url`` and only when they are web links (``is_web_link``): the text arrived over
+    a network, and a ``file:`` link in it is not for this window to open.
+
+    A dialog and not the strip: the strip is one line and the notes are a page. It is not
+    modal over the board's work either -- the update is news, so it can sit beside it.
+    """
+
+    #: The same two actions the strip has, so reading the notes is not a dead end.
+    installRequested = Signal()
+    downloadRequested = Signal()
+
+    def __init__(self, release: Release, *, action: str, parent: QWidget | None = None) -> None:
+        """``action`` is ``"install"``, ``"download"`` or ``""`` for no button but Close."""
+        super().__init__(parent)
+        self.release = release
+        self.setObjectName("releaseNotes")
+        self.setWindowTitle(t("What Changed in {version}").format(version=release.version))
+        self.resize(640, 520)
+
+        column = QVBoxLayout(self)
+        column.setContentsMargins(16, 14, 16, 14)
+        column.setSpacing(10)
+
+        # A product name and a number: said the same in every language, so not through t().
+        self.heading = QLabel(f"Perfboard Studio {release.version}")
+        self.heading.setObjectName("releaseNotesHeading")
+        column.addWidget(self.heading)
+
+        self.browser = QTextBrowser()
+        self.browser.setObjectName("releaseNotesBody")
+        self.browser.setOpenLinks(False)
+        self.browser.setOpenExternalLinks(False)
+        self.browser.anchorClicked.connect(self._on_link)
+        body = release.notes.strip()
+        if body:
+            self.browser.setMarkdown(body)
+        else:
+            self.browser.setPlainText(t("This release carries no notes."))
+        column.addWidget(self.browser, 1)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.act_web = QPushButton(t("Open on GitHub"))
+        self.act_web.setToolTip(t("Open this release's page in your browser."))
+        self.act_web.clicked.connect(lambda: open_url(release.url))
+        row.addWidget(self.act_web)
+        row.addStretch(1)
+        self.act_action = QPushButton()
+        self.act_action.setDefault(True)
+        if action == "install":
+            self.act_action.setText(t("Install and Restart"))
+            self.act_action.clicked.connect(self.installRequested)
+            self.act_action.clicked.connect(self.accept)
+        elif action == "download":
+            self.act_action.setText(t("Download"))
+            self.act_action.clicked.connect(self.downloadRequested)
+            self.act_action.clicked.connect(self.accept)
+        else:
+            self.act_action.hide()
+        row.addWidget(self.act_action)
+        self.act_close = QPushButton(t("Close"))
+        self.act_close.clicked.connect(self.reject)
+        row.addWidget(self.act_close)
+        column.addLayout(row)
+
+    def _on_link(self, url: QUrl) -> None:
+        text = url.toString()
+        if is_web_link(text):
+            open_url(text)
 
 
 def open_in_file_manager(path: str) -> None:
@@ -584,21 +832,29 @@ def open_url(url: str) -> None:
 
 __all__ = [
     "CHECK_AUTOMATICALLY_KEY",
+    "ELEVATION_REFUSED",
+    "INSTALL_KEY",
     "LAST_CHECKED_KEY",
     "SKIPPED_VERSION_KEY",
     "ElidingLabel",
+    "InstallAttempt",
+    "ReleaseNotesDialog",
     "UpdateBar",
     "UpdateChecker",
+    "can_install_in_place",
     "checksum_asset",
     "download_directory",
+    "file_digest",
     "installable_asset",
     "last_checked",
     "now_iso",
     "open_in_file_manager",
     "open_url",
+    "registered_install_dir",
     "remember_check",
     "remember_preference",
     "remember_skip",
     "skipped_version",
+    "start_install",
     "stored_preference",
 ]

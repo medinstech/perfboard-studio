@@ -266,6 +266,63 @@ def highlights(notes: str, limit: int = 3) -> tuple[str, ...]:
     return tuple(found)
 
 
+def installer_arguments(pid: int) -> str:
+    """The command line the one-click update gives the NSIS installer.
+
+    ``/S`` is NSIS's silent switch, the one winget already uses. ``/UPDATE=<pid>`` is this
+    project's own: the installer waits for that process to end before it touches the
+    install folder, and opens the new version again when it is done
+    (``packaging/perfboard-studio.nsi``, ``.onInit``). The pid is the running window's, so
+    the installer never races a window that is still closing -- the failure a bare ``/S``
+    answers by giving up, because its "is it still running?" box has nobody to ask.
+
+    A string and not a list: ``os.startfile`` takes the arguments as one string, and there
+    is no space in either part to quote.
+    """
+    if pid <= 0:
+        raise ValueError(f"not a process id: {pid}")
+    return f"/S /UPDATE={pid}"
+
+
+def _same_folder(first: str, second: str) -> bool:
+    def norm(text: str) -> str:
+        return text.strip().replace("/", "\\").rstrip("\\").lower()
+
+    return bool(first.strip()) and norm(first) == norm(second)
+
+
+def installs_in_place(*, platform: str, frozen: bool, exe_dir: str, install_dir: str | None) -> bool:
+    """Whether "Install and Restart" is offered: only where it can be undone and is safe.
+
+    Three things all have to be true, and each is a way the button would do something
+    other than what its label says:
+
+    * **Windows.** The only platform with an installer that can be told to run silently
+      and replace what it finds. A macOS bundle swap in ``/Applications`` and an AppImage
+      overwritten while it runs have neither a switch nor a way back.
+    * **A packaged build.** A ``pip`` install updates with ``pip``; its "installer" would
+      put a second copy of the program next to a Python the user still runs.
+    * **The copy that is running is the copy the installer replaces.** ``install_dir`` is
+      where the last installer recorded itself. A bundle copied somewhere else -- a USB
+      stick, a build folder -- would be left running while Program Files got a new
+      version, and the "restart" would open a different program from the one that closed.
+    """
+    if not platform.startswith("win") or not frozen or install_dir is None:
+        return False
+    return _same_folder(exe_dir, install_dir)
+
+
+def is_web_link(url: str) -> bool:
+    """Whether a link inside release notes may be handed to the browser.
+
+    The notes are written by this project, but they are text fetched off a network and
+    shown in a window; a ``file:`` or a custom-scheme link in them is not something to
+    open on somebody's behalf. Web links only.
+    """
+    lowered = url.strip().lower()
+    return lowered.startswith(("https://", "http://"))
+
+
 def is_check_due(
     last_checked: str | None,
     now: str,
@@ -306,7 +363,10 @@ __all__ = [
     "asset_for",
     "expected_digest",
     "highlights",
+    "installer_arguments",
+    "installs_in_place",
     "is_check_due",
+    "is_web_link",
     "newer_release",
     "parse_releases",
     "parse_version",

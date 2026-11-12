@@ -367,3 +367,42 @@ def test_the_release_dataclass_is_frozen_like_everything_else_here() -> None:
         release.version = "9.9.9"  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         Asset(name="x", url="y").name = "z"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# One-click install: what is decided without running anything
+# ---------------------------------------------------------------------------
+
+
+def test_the_installer_gets_the_silent_switch_and_the_pid_to_wait_for() -> None:
+    from perfboard_studio.updates import installer_arguments
+
+    assert installer_arguments(4242) == "/S /UPDATE=4242"
+    for bad in (0, -1):
+        with pytest.raises(ValueError):
+            installer_arguments(bad)
+
+
+def test_install_and_restart_needs_windows_a_packaged_build_and_its_own_install_folder() -> None:
+    from perfboard_studio.updates import installs_in_place
+
+    here = r"C:\Program Files\Perfboard Studio"
+    ok = {"platform": "win32", "frozen": True, "exe_dir": here, "install_dir": here}
+    assert installs_in_place(**ok) is True
+    # The registry's spelling and the running exe's differ in case and slashes all the time.
+    assert installs_in_place(**{**ok, "install_dir": "c:/program files/perfboard studio/"}) is True
+    assert installs_in_place(**{**ok, "platform": "darwin"}) is False
+    assert installs_in_place(**{**ok, "platform": "linux"}) is False
+    assert installs_in_place(**{**ok, "frozen": False}) is False, "a pip install updates with pip"
+    assert installs_in_place(**{**ok, "install_dir": None}) is False
+    assert installs_in_place(**{**ok, "exe_dir": r"E:\portable\perfboard"}) is False
+    assert installs_in_place(**{**ok, "exe_dir": "", "install_dir": ""}) is False
+
+
+def test_only_web_links_in_release_notes_may_be_opened() -> None:
+    from perfboard_studio.updates import is_web_link
+
+    assert is_web_link("https://github.com/medinstech/perfboard-studio/issues/14")
+    assert is_web_link("HTTP://example.org")
+    for refused in ("file:///C:/x", "javascript:alert(1)", "ms-settings:", "", "//evil.example"):
+        assert not is_web_link(refused), refused

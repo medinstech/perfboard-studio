@@ -531,3 +531,200 @@ def test_closing_the_window_abandons_a_download_in_flight(window, tmp_path, down
     window.close()
     assert checker._cancelled is True
     pump(lambda: not list(downloads.glob("*.part")) if downloads.exists() else True)
+
+
+# ---------------------------------------------------------------------------
+# Install and Restart: the one click that runs something
+#
+# NOTHING IN THIS BLOCK RUNS AN INSTALLER. `updater._run_elevated` is the single call that
+# does, and every test here replaces it before it can be reached -- a suite that ran a
+# real Setup.exe would be installing into Program Files on whoever ran it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def elevated(monkeypatch):
+    """Records what would have been run, and runs nothing."""
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(updater, "_run_elevated", lambda path, args: calls.append((path, args)))
+    return calls
+
+
+def a_downloaded_installer(tmp_path) -> tuple[str, str]:
+    installer = tmp_path / "PerfboardStudio_0.8.0_Setup.exe"
+    installer.write_bytes(PAYLOAD)
+    return str(installer), hashlib.sha256(PAYLOAD).hexdigest()
+
+
+def test_the_installer_is_run_with_the_silent_switch_and_this_processs_id(
+    tmp_path, elevated
+) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+    attempt = updater.start_install(path, digest, pid=4242)
+    assert attempt.started
+    assert elevated == [(path, "/S /UPDATE=4242")]
+
+
+def test_a_file_that_changed_since_it_was_checked_is_deleted_and_never_run(
+    tmp_path, elevated
+) -> None:
+    """The checksum is taken again, because the Downloads folder is writable by anything.
+
+    Hashed at download time it proves the transfer arrived intact; hashed again just
+    before the run it proves nobody replaced it in between -- and the second is the one
+    that matters when the next thing that happens is an administrator prompt.
+    """
+    path, digest = a_downloaded_installer(tmp_path)
+    pathlib.Path(path).write_bytes(PAYLOAD + b" and something else")
+    attempt = updater.start_install(path, digest, pid=1)
+    assert not attempt.started and attempt.discarded
+    assert "deleted" in attempt.message
+    assert not pathlib.Path(path).exists()
+    assert elevated == []
+
+
+def test_an_installer_that_is_gone_is_reported_not_run(tmp_path, elevated) -> None:
+    attempt = updater.start_install(str(tmp_path / "gone.exe"), "0" * 64, pid=1)
+    assert not attempt.started and attempt.discarded
+    assert elevated == []
+
+
+def test_a_refused_elevation_prompt_installs_nothing_and_keeps_the_file(
+    tmp_path, monkeypatch
+) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+
+    def refused(path: str, arguments: str) -> None:
+        raise OSError(0, "The operation was canceled by the user", None, updater.ELEVATION_REFUSED)
+
+    monkeypatch.setattr(updater, "_run_elevated", refused)
+    attempt = updater.start_install(path, digest, pid=1)
+    assert not attempt.started and not attempt.discarded
+    assert "permission" in attempt.message
+    assert pathlib.Path(path).exists(), "a No at the prompt is not a reason to lose the download"
+
+
+def test_any_other_failure_to_start_is_said_not_swallowed(tmp_path, monkeypatch) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+
+    def broken(path: str, arguments: str) -> None:
+        raise OSError("The file is not a valid Win32 application")
+
+    monkeypatch.setattr(updater, "_run_elevated", broken)
+    attempt = updater.start_install(path, digest, pid=1)
+    assert not attempt.started
+    assert "valid Win32" in attempt.message
+
+
+def test_the_one_call_that_runs_an_installer_is_called_from_nowhere_else() -> None:
+    """Read from the source: `_run_elevated` is the only way out, and `start_install` its only caller."""
+    source = pathlib.Path(updater.__file__).read_text(encoding="utf-8")
+    assert source.count("os.startfile(") == 1
+    assert source.count("_run_elevated(") == 2, "its definition and start_install's one call"
+    for other in ("subprocess", "os.system", "QProcess"):
+        assert other not in source, other
+    assert "start_install(" not in source.replace("def start_install(", "")
+
+
+def test_a_verified_download_keeps_the_digest_it_matched(tmp_path, downloads) -> None:
+    digest = hashlib.sha256(PAYLOAD).hexdigest()
+    release = a_local_release(tmp_path, sums=f"{digest}  PerfboardStudio_0.8.0_Setup.exe\n")
+    checker, outcome = start_download(release)
+    try:
+        pump(lambda: bool(outcome))
+        assert checker.verified_digest == digest
+    finally:
+        dispose(checker)
+
+
+def test_an_unverified_download_has_no_digest_to_install_on(tmp_path, downloads) -> None:
+    checker, outcome = start_download(a_local_release(tmp_path, sums=None))
+    try:
+        pump(lambda: bool(outcome))
+        assert checker.verified_digest is None
+    finally:
+        dispose(checker)
+
+
+def test_the_strip_offers_install_only_for_a_verified_download_that_can_install(window) -> None:
+    bar = window.update_bar
+    bar.show_downloaded("/tmp/x.exe", True, can_install=True)
+    assert bar.act_install.isVisibleTo(bar) and bar.act_reveal.isVisibleTo(bar)
+    bar.show_downloaded("/tmp/x.exe", False, can_install=True)
+    assert not bar.act_install.isVisibleTo(bar), "no published checksum, no one-click install"
+    bar.show_downloaded("/tmp/x.exe", True, can_install=False)
+    assert not bar.act_install.isVisibleTo(bar), "macOS, AppImage and pip keep the file"
+
+
+def test_a_refused_install_can_be_tried_again_but_a_deleted_file_cannot(window) -> None:
+    bar = window.update_bar
+    bar.show_install_problem("Windows did not give permission.", retry=True)
+    assert bar.act_install.isVisibleTo(bar)
+    bar.show_install_problem("it was deleted", retry=False)
+    assert not bar.act_install.isVisibleTo(bar) and bar.act_notes.isVisibleTo(bar)
+
+
+def test_a_source_run_is_never_offered_the_install(monkeypatch) -> None:
+    """Under pytest nothing is frozen, so the answer is no whatever the registry says."""
+    monkeypatch.setattr(updater, "registered_install_dir", lambda: str(pathlib.Path(sys.executable).parent))
+    assert updater.can_install_in_place() is False
+
+
+# ---------------------------------------------------------------------------
+# The release notes, in the window
+# ---------------------------------------------------------------------------
+
+NOTES = "## 0.8.0\n\n- **Automatic updates.** The installers can now say so.\n\nSee [the guide](https://example.org/guide).\n"
+
+
+def a_notes_dialog(action: str = ""):
+    release = Release(version="0.8.0", tag="v0.8.0", url="https://example.org/r", notes=NOTES)
+    return updater.ReleaseNotesDialog(release, action=action)
+
+
+def test_the_notes_are_shown_as_markdown_not_as_source(window) -> None:
+    dialog = a_notes_dialog()
+    text = dialog.browser.toPlainText()
+    assert "Automatic updates." in text
+    assert "**" not in text and "##" not in text
+    assert "0.8.0" in dialog.windowTitle()
+
+
+def test_a_release_with_no_notes_says_so(window) -> None:
+    release = Release(version="0.8.0", tag="v0.8.0", url="x")
+    dialog = updater.ReleaseNotesDialog(release, action="")
+    assert dialog.browser.toPlainText() == "This release carries no notes."
+
+
+def test_a_web_link_in_the_notes_opens_in_the_browser_and_a_file_link_does_not(
+    window, _nothing_reaches_the_desktop
+) -> None:
+    from PySide6.QtCore import QUrl
+
+    dialog = a_notes_dialog()
+    dialog._on_link(QUrl("https://example.org/guide"))
+    dialog._on_link(QUrl("file:///C:/Windows/System32/cmd.exe"))
+    dialog._on_link(QUrl("javascript:alert(1)"))
+    assert _nothing_reaches_the_desktop == ["https://example.org/guide"]
+    assert dialog.browser.openLinks() is False, "the widget itself follows nothing"
+
+
+def test_the_notes_dialog_carries_the_action_the_strip_would(window) -> None:
+    install = a_notes_dialog("install")
+    seen: list[str] = []
+    install.installRequested.connect(lambda: seen.append("install"))
+    install.act_action.click()
+    assert seen == ["install"] and install.act_action.text() == "Install and Restart"
+
+    download = a_notes_dialog("download")
+    download.downloadRequested.connect(lambda: seen.append("download"))
+    download.act_action.click()
+    assert seen == ["install", "download"]
+
+    assert a_notes_dialog("").act_action.isHidden()
+
+
+def test_open_on_github_still_goes_to_the_release_page(window, _nothing_reaches_the_desktop) -> None:
+    dialog = a_notes_dialog()
+    dialog.act_web.click()
+    assert _nothing_reaches_the_desktop == ["https://example.org/r"]

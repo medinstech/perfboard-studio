@@ -440,7 +440,35 @@ TURKISH: Mapping[str, str] = {
         "“pip install -U perfboard-studio”; geri kalan her şey sürüm sayfasında."
     ),
     "What Changed": "Ne Değişti",
-    "Open this release's notes on GitHub.": "Bu sürümün notlarını GitHub'da açar.",
+    "Read what this release changes.": "Bu sürümün neleri değiştirdiğini okuyun.",
+    "What Changed in {version}": "{version} sürümünde ne değişti",
+    "This release carries no notes.": "Bu sürümün notu yok.",
+    "Open on GitHub": "GitHub'da Aç",
+    "Open this release's page in your browser.":
+        "Bu sürümün sayfasını tarayıcınızda açar.",
+    "Install and Restart": "Kur ve Yeniden Başlat",
+    "Close this window (asking about unsaved work), run the installer — Windows "
+    "asks for permission — and open the new version.":
+        "Bu pencereyi kapatır (kaydedilmemiş iş varsa sorar), kurulum dosyasını "
+        "çalıştırır — Windows izin ister — ve yeni sürümü açar.",
+    "The update is downloaded and its checksum matched.":
+        "Güncelleme indirildi ve sağlama toplamı tuttu.",
+    "Install and Restart closes this window, asking about unsaved work, runs "
+    "the installer and opens the new version.":
+        "Kur ve Yeniden Başlat bu pencereyi kapatır, kaydedilmemiş iş varsa sorar, "
+        "kurulum dosyasını çalıştırır ve yeni sürümü açar.",
+    "The update was not installed.": "Güncelleme kurulmadı.",
+    "The installer is no longer where it was saved.":
+        "Kurulum dosyası kaydedildiği yerde artık yok.",
+    "Could not read the installer: {error}": "Kurulum dosyası okunamadı: {error}",
+    "The installer changed after it was checked, so it was deleted and "
+    "nothing was installed.":
+        "Kurulum dosyası denetlendikten sonra değişmiş, o yüzden silindi ve hiçbir "
+        "şey kurulmadı.",
+    "Windows did not give permission, so nothing was installed.":
+        "Windows izin vermedi, o yüzden hiçbir şey kurulmadı.",
+    "The installer could not be started: {error}":
+        "Kurulum dosyası başlatılamadı: {error}",
     "Show the File": "Dosyayı Göster",
     "Open the folder the installer was saved in.":
         "Kurulum dosyasının kaydedildiği klasörü açar.",
