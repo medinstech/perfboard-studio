@@ -246,6 +246,10 @@ closed without a bump.
   net there only where that comes out shorter, and on every example board it never does, so
   turning it on and running Auto-wire gave the same board and not a word. The status line
   now says so, and that a net's Face set to Component Side is what puts a net there.
+- **A gap the guide checks at the bench has one name.** Auto-wire's status line said "1 pad
+  to measure for isolation", counted from the planner's pads, beside the Problems drawer and
+  bar saying "1 to check at the bench", counted from DRC's findings. The line now says the
+  drawer's words with the drawer's count.
 - **A board opened while Home is showing comes to the front.** Home's own cards left Home
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying

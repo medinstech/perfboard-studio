@@ -19367,10 +19367,17 @@ def test_auto_wires_status_line_counts_what_the_step_card_counts() -> None:
         assert card.startswith("53 wires, ")
         # Everything on the board counts as just laid when nothing was there before.
         said = window._wired_said(plan, set())
-        assert said == (
-            f"23 of 24 nets wired: {card}  ·  1 connection could not be wired"
-            "  ·  2 pads to measure for isolation"
+        assert said == f"23 of 24 nets wired: {card}  ·  1 connection could not be wired"
+        # What is left to check at the bench is the drawer's count, in the drawer's words
+        # -- never the planner's "2 pads to measure for isolation" beside it.
+        from perfboard_studio.drc import DrcViolation
+
+        bench = DrcViolation(
+            rule="solder-trace-proximity", severity="warning", message="",
+            holes=(HoleCoord(1, 1), HoleCoord(2, 1)),
         )
+        window._last_violations = (*window._last_violations, bench)
+        assert window._wired_said(plan, set()) == f"{said}  ·  1 to check at the bench"
         assert "orders" not in said and "insulated" not in said
         # Only what this run laid is counted: nothing new, no wiring said.
         everything = {c.id for c in window.bus.document.conductors}

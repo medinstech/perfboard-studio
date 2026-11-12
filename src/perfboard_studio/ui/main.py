@@ -12172,7 +12172,7 @@ class MainWindow(QMainWindow):
         "53 wires · 5 solder traces" of the same board -- two counts of one thing in two
         vocabularies, and one that was the planner's working. This counts the copper just
         laid as the card counts the board (``wiring_summary``), and keeps what the builder
-        must act on: connections left unwired, and pads to measure.
+        must act on: connections left unwired, and what to check at the bench.
         """
         summary = plan.summary
         said = t("{closed} of {considered} nets wired").format(
@@ -12206,12 +12206,13 @@ class MainWindow(QMainWindow):
                 t("{count} connection could not be wired"),
                 t("{count} connections could not be wired"),
             )
-        if summary.risk_holes:
-            said += "  ·  " + counted(
-                summary.risk_holes,
-                t("{count} pad to measure for isolation"),
-                t("{count} pads to measure for isolation"),
-            )
+        # The drawer's count and the drawer's words, not the planner's: "1 pad to measure
+        # for isolation" here beside "1 to check at the bench" there was one thing under
+        # two names, counted two ways (pads against findings). The checks are DRC's, run
+        # on this document before the line is written.
+        bench = sum(1 for v in self._last_violations if is_bench_check(v))
+        if bench:
+            said += "  ·  " + t("{count} to check at the bench").format(count=bench)
         return said
 
     def _both_faces_unused(self, before: set[str]) -> str:
