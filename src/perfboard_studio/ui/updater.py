@@ -174,6 +174,17 @@ INSTALL_KEY = "Software\\Medinstech\\Perfboard Studio"
 ELEVATION_REFUSED = 1223
 
 
+#: Where the check looks for releases, in place of GitHub's feed. For trying the whole
+#: flow -- check, download, verify, install -- against a release nobody published: a local
+#: server or a ``file:`` URL holding a feed in GitHub's shape, with the assets beside it.
+RELEASES_URL_VARIABLE = "PERFBOARD_STUDIO_RELEASES_URL"
+
+
+def releases_url() -> str:
+    """The feed to read: the override if the environment names one, else GitHub's."""
+    return os.environ.get(RELEASES_URL_VARIABLE, "").strip() or RELEASES_API_URL
+
+
 def registered_install_dir() -> str | None:
     """The folder the Windows installer recorded, or ``None`` anywhere it cannot be read.
 
@@ -346,7 +357,7 @@ class UpdateChecker(QObject):
     # -- checking ------------------------------------------------------------
 
     def check(self, current_version: str, *, allow_prerelease: bool = False) -> None:
-        reply = self._manager.get(_request(RELEASES_API_URL, json=True))
+        reply = self._manager.get(_request(releases_url(), json=True))
         reply.finished.connect(
             lambda: self._on_feed(reply, current_version, allow_prerelease)
         )
@@ -755,6 +766,9 @@ class ReleaseNotesDialog(QDialog):
     #: The same two actions the strip has, so reading the notes is not a dead end.
     installRequested = Signal()
     downloadRequested = Signal()
+    #: What the action button does now. ``set_action`` changes it while the dialog is open:
+    #: the download finishes under a dialog somebody left up.
+    _action = ""
 
     def __init__(self, release: Release, *, action: str, parent: QWidget | None = None) -> None:
         """``action`` is ``"install"``, ``"download"`` or ``""`` for no button but Close."""
@@ -794,21 +808,28 @@ class ReleaseNotesDialog(QDialog):
         row.addStretch(1)
         self.act_action = QPushButton()
         self.act_action.setDefault(True)
-        if action == "install":
-            self.act_action.setText(t("Install and Restart"))
-            self.act_action.clicked.connect(self.installRequested)
-            self.act_action.clicked.connect(self.accept)
-        elif action == "download":
-            self.act_action.setText(t("Download"))
-            self.act_action.clicked.connect(self.downloadRequested)
-            self.act_action.clicked.connect(self.accept)
-        else:
-            self.act_action.hide()
+        self.act_action.clicked.connect(self._on_action)
+        self.set_action(action)
         row.addWidget(self.act_action)
         self.act_close = QPushButton(t("Close"))
         self.act_close.clicked.connect(self.reject)
         row.addWidget(self.act_close)
         column.addLayout(row)
+
+    def set_action(self, action: str) -> None:
+        """``"install"``, ``"download"`` or ``""`` for no button but Close."""
+        self._action = action
+        labels = {"install": t("Install and Restart"), "download": t("Download")}
+        self.act_action.setText(labels.get(action, ""))
+        self.act_action.setVisible(action in labels)
+
+    def _on_action(self) -> None:
+        action = self._action
+        self.accept()
+        if action == "install":
+            self.installRequested.emit()
+        elif action == "download":
+            self.downloadRequested.emit()
 
     def _on_link(self, url: QUrl) -> None:
         text = url.toString()

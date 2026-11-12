@@ -910,3 +910,59 @@ def test_the_pill_opens_the_notes(window, an_installer_exists, _nothing_reaches_
     assert window._notes_dialog is not None and window._notes_dialog.isVisible()
     assert window._notes_dialog.act_action.text() == "Download"
     window._notes_dialog.close()
+
+
+# ---------------------------------------------------------------------------
+# Follow-ups from review: one notes dialog that keeps up, Home's text as text, the feed override
+# ---------------------------------------------------------------------------
+
+
+def test_the_notes_dialog_is_one_and_follows_the_download(
+    window, tmp_path, monkeypatch, an_installer_exists, _nothing_reaches_the_desktop
+) -> None:
+    window._on_update_checked(NEXT_RELEASE)
+    window._on_update_notes()
+    first = window._notes_dialog
+    assert first is not None and first.act_action.text() == "Download"
+    window._on_update_notes()
+    assert window._notes_dialog is first, "a second click raises the dialog, it does not stack another"
+    path, digest = a_downloaded_installer(tmp_path)
+    window._checker().verified_digest = digest
+    monkeypatch.setattr(updater, "can_install_in_place", lambda: True)
+    window._on_update_downloaded(path, True)
+    assert first.act_action.text() == "Install and Restart", "its button is not left on Download"
+    window._update_busy = True
+    window._refresh_update_surfaces()
+    assert first.act_action.isHidden(), "and is gone while a download runs"
+    first.close()
+
+
+def test_the_dialog_button_does_what_it_says_now(window) -> None:
+    dialog = a_notes_dialog("download")
+    seen: list[str] = []
+    dialog.installRequested.connect(lambda: seen.append("install"))
+    dialog.downloadRequested.connect(lambda: seen.append("download"))
+    dialog.set_action("install")
+    dialog.act_action.click()
+    assert seen == ["install"]
+
+
+def test_home_shows_the_summary_as_text_and_wraps_it(window) -> None:
+    from PySide6.QtCore import Qt
+
+    home = window._make_home()
+    home.set_update("0.8.0", summary="a <b>bold</b> claim · another", action="")
+    assert home.update_detail.textFormat() == Qt.TextFormat.PlainText
+    assert home.update_detail.wordWrap()
+    assert "<b>bold</b>" in home.update_detail.text()
+
+
+def test_the_feed_can_be_pointed_elsewhere_for_trying_the_whole_flow(monkeypatch) -> None:
+    from perfboard_studio.updates import RELEASES_API_URL
+
+    monkeypatch.delenv(updater.RELEASES_URL_VARIABLE, raising=False)
+    assert updater.releases_url() == RELEASES_API_URL
+    monkeypatch.setenv(updater.RELEASES_URL_VARIABLE, "file:///tmp/feed.json")
+    assert updater.releases_url() == "file:///tmp/feed.json"
+    monkeypatch.setenv(updater.RELEASES_URL_VARIABLE, "  ")
+    assert updater.releases_url() == RELEASES_API_URL

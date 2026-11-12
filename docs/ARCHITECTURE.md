@@ -3139,6 +3139,12 @@ said "installs nothing at all", and why that changed is what follows.
   the prompt (PLAN.md §12) -- which is the user's one chance to say no, and the reason the
   prompt is Windows' own and is never suppressed.
 
+**The feed can be pointed elsewhere to try the whole flow.** `PERFBOARD_STUDIO_RELEASES_URL`
+(`updater.releases_url`) replaces GitHub's releases URL for the check, so a release nobody
+published -- a local server or a `file:` URL holding a feed in GitHub's shape, assets beside
+it -- can be checked, downloaded, verified and installed on a throwaway machine. The verification
+is the same: the override moves where the feed is read from, not what is trusted.
+
 **The release notes are read in the window.** `ReleaseNotesDialog` shows the release body with
 `QTextBrowser.setMarkdown` and follows no link itself (`setOpenLinks(False)`): the text arrived
 over a network, so a link goes to `open_url` only if `updates.is_web_link` says it is

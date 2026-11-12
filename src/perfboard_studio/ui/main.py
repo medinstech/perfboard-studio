@@ -42,6 +42,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+import shiboken6
 from PySide6.QtCore import (
     QByteArray,
     QEvent,
@@ -16161,6 +16162,8 @@ class MainWindow(QMainWindow):
         release = self._update_release if self._update_noticed else None
         action = self._update_action()
         self.header.set_update(release.version if release is not None else None)
+        if self._notes_dialog is not None and shiboken6.isValid(self._notes_dialog):
+            self._notes_dialog.set_action(action)
         home = self._home_page
         if home is not None:
             summary = highlights(release.notes) if release is not None else []
@@ -16184,7 +16187,12 @@ class MainWindow(QMainWindow):
             updater.open_url(RELEASES_PAGE_URL)
             return
         # In the window, not on a web page; the page is one button away inside it. Not
-        # modal: the news can sit beside the board.
+        # modal: the news can sit beside the board -- and one, not a new one per click.
+        if self._notes_dialog is not None and shiboken6.isValid(self._notes_dialog):
+            self._notes_dialog.set_action(self._update_action())
+            self._notes_dialog.raise_()
+            self._notes_dialog.activateWindow()
+            return
         dialog = updater.ReleaseNotesDialog(release, action=self._update_action(), parent=self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.installRequested.connect(self._on_update_install)

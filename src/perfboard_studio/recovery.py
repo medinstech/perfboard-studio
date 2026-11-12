@@ -8,7 +8,7 @@ which of two versions is newer, what to call it -- none of that needs a filesyst
 
 **IT PROTECTS WORK AND NEVER RESTORES ANY.** A recovered document is OFFERED; the user
 decides, and the file on disk is not touched until they save. This is the shape
-``ui/updater.py`` already takes with the download it does not install, and it matters more
+``ui/updater.py`` takes with an update (it installs only on a click), and it matters more
 here: the thing at risk is the user's own board, and an automatic restore that guessed
 wrong would overwrite the good copy with the stale one. There is no way back from that.
 

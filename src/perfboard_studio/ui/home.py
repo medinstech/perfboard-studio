@@ -25,6 +25,7 @@ Esc is the window's too -- it means "a blank board", which is the window's to ma
 
 from __future__ import annotations
 
+import html
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -327,7 +328,7 @@ class Home(QWidget):
         self.update_headline.setText(
             "<b>"
             + t("Perfboard Studio {new} is available — you have {old}.").format(
-                new=version, old=__version__
+                new=html.escape(version), old=html.escape(__version__)
             )
             + "</b>"
         )
@@ -446,6 +447,10 @@ class Home(QWidget):
         self.update_headline = QLabel()
         self.update_headline.setTextFormat(Qt.TextFormat.RichText)
         self.update_detail = QLabel()
+        # The summary comes out of release notes off the network: text, never markup, and
+        # wrapped so a long line cannot widen Home's column.
+        self.update_detail.setTextFormat(Qt.TextFormat.PlainText)
+        self.update_detail.setWordWrap(True)
         theme.tone(self.update_detail, "secondary")
         words.addWidget(self.update_headline)
         words.addWidget(self.update_detail)
