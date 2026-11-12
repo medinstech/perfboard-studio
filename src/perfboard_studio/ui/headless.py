@@ -79,7 +79,7 @@ from .export_schematic import svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .i18n import language
 from .main import _document_arguments, read_document_text
-from .view2d import BACKGROUND, RULER_MARGIN_MM, BoardScene
+from .view2d import BACKGROUND, RULER_MARGIN_MM, BoardScene, print_scene
 
 
 def _find_repo_root() -> Path:
@@ -315,9 +315,9 @@ def _run_board(
         print(f"pads painted {scene.pad_grid.drawn} of {board.cols * board.rows} (Qt culls the rest)")
 
     # --- 1:1 scale verification and print sheets ---
-    # Built WITHOUT the editor overlays: see MainWindow._export_scene for why the ratsnest
-    # must not reach a sheet someone solders from.
-    print_top = BoardScene(doc, lookup, side="top", show_ratsnest=False, show_rulers=False)
+    # Built WITHOUT the editor overlays, from the window's own print scene: see
+    # view2d.print_scene for why the ratsnest must not reach a sheet someone solders from.
+    print_top = print_scene(doc, lookup, "top")
 
     check = verify_scale(print_top, board)
     print(
@@ -333,7 +333,7 @@ def _run_board(
     if is_breadboard(board):
         print("PDF mirrored none: a solderless breadboard has no solder side")
     else:
-        print_bottom = BoardScene(doc, lookup, side="bottom", show_ratsnest=False, show_rulers=False)
+        print_bottom = print_scene(doc, lookup, "bottom")
         pdf_solder = export_pdf(board, print_bottom, out_dir / "board_1to1_solder_side.pdf", mirrored=True)
         print(f"PDF mirrored {pdf_solder.stat().st_size / 1024:.0f} KB -> {pdf_solder.name}")
 

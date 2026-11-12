@@ -166,7 +166,7 @@ from perfboard_studio.model import (
     has_component_side_copper,
     pin_name_of,
 )
-from perfboard_studio.occupancy import stacking_layers
+from perfboard_studio.occupancy import build_occupancy, stacking_layers
 from perfboard_studio.phrasebook import guide_language, phrasebook
 from perfboard_studio.ratsnest import RatsnestLink, all_links, ratsnest
 from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
@@ -180,6 +180,7 @@ from perfboard_studio.wirecolour import (
     net_colours,
     signal_colour_index,
 )
+from perfboard_studio.wiringstats import vias
 
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
@@ -435,6 +436,17 @@ _INSULATION_SCREEN = {
 #: The tinned spine inside a wired solder trace, drawn as a core through the solder: a shade
 #: warmer and duller than the solder, the same colour as the 3D view's (`view3d.SPINE_RGB`).
 SPINE_CORE = QColor("#9e856b")
+
+#: A via in 2D (``ViaMarkItem``): an amber ring round the hole and a pale dot in it, picked
+#: from candidates rendered side by side. The ring is wider than a pad on purpose -- it is
+#: the one hole on the board where the copper changes face, and it has to be found.
+VIA_RING = QColor("#d9962b")
+VIA_RING_RADIUS_MM = 1.38
+VIA_RING_PEN_MM = 0.2
+VIA_DOT = QColor("#f4f1e8")
+VIA_DOT_RADIUS_MM = 0.34
+VIA_DOT_EDGE = QColor("#6b6f78")
+VIA_DOT_EDGE_MM = 0.06
 
 #: What a solder run looks like on screen (not on the 1:1 print, which stays flat): a lit
 #: ridge -- a dark casing, the run's colour, a thin highlight off the top-left, a domed
@@ -4871,6 +4883,69 @@ class LeadEndsLayerItem(QGraphicsItem):
             painter.restore()
 
 
+class ViaMarkItem(QGraphicsItem):
+    """A via: a pinless hole where a solder run on the component side meets copper on the
+    solder side (``wiringstats.vias``, the guide's and the 3D view's list too).
+
+    Drawn on both faces, over the copper: the hole goes through the board, so it is the same
+    place from either side, and it is the one place a builder solders both faces of a hole
+    with no lead in it. Screen only -- ``print_scene`` leaves it off the 1:1 sheet, which is
+    the copper and nothing the copper does not have. Takes no clicks: what is under it is
+    the copper, and that is what a click means.
+    """
+
+    def __init__(
+        self,
+        hole: HoleCoord,
+        board: Board,
+        side: BoardSide,
+        cells: Mapping[str, FingerCell] | None = None,
+    ) -> None:
+        super().__init__()
+        self.hole = hole
+        # On a finger's copper where the via is a finger cell, as the rail's own copper is.
+        self.setPos(path_point_to_screen(hole, board, side, cells or {}))
+        self.setZValue(45)  # Over the copper of either face, under the lead ends and tools.
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+    def boundingRect(self) -> QRectF:
+        reach = VIA_RING_RADIUS_MM + VIA_RING_PEN_MM
+        return QRectF(-reach, -reach, 2 * reach, 2 * reach)
+
+    def shape(self) -> QPainterPath:
+        return QPainterPath()  # Never what the pointer is over.
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        centre = QPointF(0, 0)
+        painter.setPen(QPen(VIA_RING, VIA_RING_PEN_MM))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(centre, VIA_RING_RADIUS_MM, VIA_RING_RADIUS_MM)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(VIA_DOT))
+        painter.drawEllipse(centre, VIA_DOT_RADIUS_MM, VIA_DOT_RADIUS_MM)
+        painter.setPen(QPen(VIA_DOT_EDGE, VIA_DOT_EDGE_MM))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(centre, VIA_DOT_RADIUS_MM, VIA_DOT_RADIUS_MM)
+
+
+def print_scene(
+    doc: PerfDocument, lookup: FootprintLookup, side: BoardSide, *, show_values: bool = False
+) -> BoardScene:
+    """The scene a 1:1 sheet is printed from: the board and nothing else. No ratsnest (a
+    line on paper reads as a wire to solder), no rulers, no via marks. The window's export
+    and ``--headless`` both build their sheets here, so the two cannot print different
+    things from one board."""
+    return BoardScene(
+        doc,
+        lookup,
+        side=side,
+        show_ratsnest=False,
+        show_rulers=False,
+        show_values=show_values,
+        show_vias=False,
+    )
+
+
 class BoardScene(QGraphicsScene):
     """The 2D board, rebuilt from a ``PerfDocument`` snapshot each time it changes.
 
@@ -4937,9 +5012,13 @@ class BoardScene(QGraphicsScene):
         show_pin_names: bool = True,
         show_references: bool = True,
         show_values: bool = False,
+        show_vias: bool = True,
     ) -> None:
         super().__init__()
         self.lookup = lookup
+        #: Mark each via (``ViaMarkItem``). On screen always; off on the 1:1 sheet.
+        self.show_vias = show_vias
+        self.via_items: list[ViaMarkItem] = []
         self.show_pin_names = show_pin_names
         self.show_references = show_references
         #: Each part's value after its reference (View > Show Part Values): a view setting,
@@ -5429,6 +5508,12 @@ class BoardScene(QGraphicsScene):
             if conductor.id in previously_selected_conductors:
                 conductor_item.setSelected(True)
         self._light_net_copper()
+        self.via_items = []
+        if self.show_vias:
+            for hole in self._via_holes():
+                mark = ViaMarkItem(hole, board, self.side, self.finger_cells)
+                self.addItem(mark)
+                self.via_items.append(mark)
 
         # Laid out for the whole board at once: where one part's names go depends on what
         # stands beside it. See bodies.lay_out_pin_names.
@@ -7122,6 +7207,15 @@ class BoardScene(QGraphicsScene):
             if item.shape().contains(item.mapFromScene(pos)):
                 return connector_id
         return None
+
+    def _via_holes(self) -> tuple[HoleCoord, ...]:
+        """The vias on the board. Asked only where there is a run on the component side,
+        so a board without one -- nearly every board -- builds no occupancy for it."""
+        if not any(
+            c.side == "top" and contacts_every_path_hole(c) for c in self.document.conductors
+        ):
+            return ()
+        return vias(self.document, build_occupancy(self.document, self.lookup))
 
     def conductor_at(self, pos: QPointF) -> ConductorItem | None:
         """The topmost conductor under a scene position, or None -- by its clickable band,

@@ -43,6 +43,11 @@ closed without a bump.
   far face. A run is carried on from its end only on its own face, and a run made
   reinforced in its Properties stays on the face it was on. The wires keep their own face:
   a top jumper on top, a bare or insulated wire underneath.
+- **A via is marked in 2D.** Where a solder run on the component side meets copper on the
+  solder side in a hole with no lead, the board view draws an amber ring round the hole with
+  a pale dot in it, from either face: it is the one hole a builder solders on both sides with
+  nothing through it. The 1:1 sheet leaves it off, and the window's export and `--headless`
+  now build that sheet the same way.
 - **The step card offers "Try every wiring style…"** under the counts of what is worth a
   look in the wiring. Balanced stays the default: measured in the window, trying every
   style took 15 s on atmega328-relay to find the same wiring Balanced lays in 2.5 s. Taken,

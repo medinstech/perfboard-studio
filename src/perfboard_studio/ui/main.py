@@ -426,6 +426,7 @@ from .view2d import (
     hole_to_screen,
     next_reference,
     picture_beside_the_pointer,
+    print_scene,
 )
 from .viewsch import SchematicView, SheetTool
 from .wiringreview import WiringNote, vias_said, wiring_notes, wiring_summary
@@ -15343,14 +15344,7 @@ class MainWindow(QMainWindow):
         """A scene for print: the board and nothing else -- with each part's value after
         its reference when the view shows them, since the sheet is what the board is
         checked against at the bench."""
-        return BoardScene(
-            doc,
-            self.lookup,
-            side=side,
-            show_ratsnest=False,
-            show_rulers=False,
-            show_values=self.act_values.isChecked(),
-        )
+        return print_scene(doc, self.lookup, side, show_values=self.act_values.isChecked())
 
     def on_export_3d_png(self) -> None:
         suggested = f"{self.current_path.stem}.png" if self.current_path else "board_3d.png"

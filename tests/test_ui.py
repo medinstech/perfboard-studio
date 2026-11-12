@@ -7582,6 +7582,73 @@ def test_a_bent_wired_run_on_the_far_face_is_a_line_not_a_filled_triangle() -> N
     )
 
 
+def _board_with_a_via() -> PerfDocument:
+    """A run on the component side from C4 to E4, and a wire on the solder side from E4 to
+    E8: E4 is a via, C4 is a plain end."""
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta, has_component_side_copper
+
+    doc = create_empty_document(DocumentMeta(name="via", created="", modified=""))
+    assert has_component_side_copper(doc.board)
+    run = SolderTraceConductor(
+        id="t", path=tuple(HoleCoord(c, 3) for c in range(2, 5)), side="top"
+    )
+    wire = WireConductor(id="w", path=(HoleCoord(4, 3), HoleCoord(4, 7)), side="bottom")
+    return dataclasses.replace(doc, conductors=(run, wire))
+
+
+@pytest.mark.parametrize("side", ["top", "bottom"])
+def test_a_via_is_marked_in_2d_from_either_face_and_a_plain_end_is_not(side: str) -> None:
+    doc = _board_with_a_via()
+    scene = BoardScene(doc, lambda _f: None, side=side)  # type: ignore[arg-type]
+    assert [mark.hole for mark in scene.via_items] == [HoleCoord(4, 3)]
+    assert scene.via_items[0].pos() == view2d.hole_to_screen(HoleCoord(4, 3), doc.board, side)
+
+    # The ring is drawn where the via is: amber on its circle, in both views.
+    px_per_mm = 12
+    image = _render_scene(scene, px_per_mm)
+    rect = scene.sceneRect()
+    centre = view2d.hole_to_screen(HoleCoord(4, 3), doc.board, side)
+
+    def at(dx: float, dy: float):  # -> QColor
+        x = (centre.x() + dx - rect.x()) * px_per_mm
+        y = (centre.y() + dy - rect.y()) * px_per_mm
+        return image.pixelColor(int(x), int(y))
+
+    ring = at(0, -view2d.VIA_RING_RADIUS_MM)
+    assert abs(ring.red() - 0xD9) < 40 and abs(ring.blue() - 0x2B) < 50, ring.name()
+    dot = at(0, 0)
+    assert dot.lightness() > 200, dot.name()
+
+    # A run with no other copper at its end, and a wire on one face, are no via.
+    plain = dataclasses.replace(doc, conductors=doc.conductors[:1])
+    assert BoardScene(plain, lambda _f: None, side=side).via_items == []  # type: ignore[arg-type]
+
+
+def test_the_1to1_sheet_has_no_via_marks_and_both_printers_build_it_one_way() -> None:
+    import inspect
+
+    from perfboard_studio.ui import headless
+    from perfboard_studio.ui.main import MainWindow
+
+    doc = _board_with_a_via()
+    for side in ("top", "bottom"):
+        sheet = view2d.print_scene(doc, lambda _f: None, side)  # type: ignore[arg-type]
+        assert sheet.via_items == [] and not sheet.show_ratsnest and not sheet.show_rulers
+
+    window = MainWindow(doc)
+    try:
+        assert window.scene.via_items, "the screen marks the via"
+        assert window._export_scene(doc, "top").via_items == []
+    finally:
+        window._saved_document = window.bus.system_document
+        window.close()
+    # The headless sheets come from the same function, not a second list of options.
+    source = inspect.getsource(headless)
+    assert source.count("print_scene(doc, lookup,") == 2
+    assert "show_ratsnest=False" not in source
+
+
 # ---------------------------------------------------------------------------
 # The schematic panel
 # ---------------------------------------------------------------------------
