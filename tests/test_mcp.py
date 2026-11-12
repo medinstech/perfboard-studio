@@ -1898,3 +1898,17 @@ def test_the_tool_lists_every_stock_board() -> None:
     for preset in STANDARD_PRESETS:
         assert f"{preset.family}: " in tool.description
         assert preset.name in tool.description
+
+
+def test_wiring_one_net_again_says_when_it_is_off_the_face_it_prefers() -> None:
+    board = BoardSession()
+    assert board.open_document(str(REPO_ROOT / "examples" / "arduino-io-shield.perf"))["ok"]
+    if board.document.conductors:
+        board.delete_conductors([c.id for c in board.document.conductors])
+    board.update_net("GND", preferred_side="top")
+    first = board.autoroute(faces="both")
+
+    again = board.reroute(nets=["GND"], faces="both")
+
+    assert again["ok"] and again["committed"]
+    assert again["face_notes"] == first["face_notes"]

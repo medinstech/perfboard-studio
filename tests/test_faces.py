@@ -19,6 +19,7 @@ from perfboard_studio.autoroute import (
     _face_note_message,
     face_notes,
     plan_autoroute,
+    plan_reroute,
     score_plan,
 )
 from perfboard_studio.command import CommandBus, CommandContext
@@ -718,3 +719,27 @@ def test_every_face_note_is_said_in_turkish(reason: str, off: int, total: int) -
         finally:
             set_language(before)
     assert (f"{total} bağlantısından {off} tanesi" in said) == (off != total)
+
+
+def test_wiring_one_net_again_says_the_same_as_wiring_the_board() -> None:
+    """Redo Wiring of one net (``plan_reroute``) is judged as Auto-wire is, from the document
+    it was made from -- here still holding the net's old copper, which a covered pin is not
+    read from."""
+    doc, plan = _preferring(_example("arduino-io-shield.perf"), "balanced", GND="top")
+    [wired_note] = face_notes(doc, plan, LOOKUP)
+    wired = plan.document
+    gnd = wired_note.net_id
+    router = options_for_style("balanced", RouterOptions(wire_path="grid", faces="both"))
+
+    again = plan_reroute(wired, LOOKUP, only_net_ids=(gnd,), options=AutorouteOptions(router=router))
+
+    [note] = face_notes(wired, again, LOOKUP)
+    assert [outcome.net_id for outcome in again.nets] == [gnd]
+    assert (note.net_name, note.reason, note.covered_by, note.message) == (
+        wired_note.net_name,
+        wired_note.reason,
+        wired_note.covered_by,
+        wired_note.message,
+    )
+    assert note.off_face == note.total
+

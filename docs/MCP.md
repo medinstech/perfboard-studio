@@ -456,7 +456,7 @@ named in `face_notes`, with the count, the reason (`"no-pads"`: the board has no
 face; `"covered"`: its pins there are under the parts in `covered_by`, their own seated
 bodies; `"no-way"`: nothing cheaper was found) and a `message` a person can read. A net
 that runs on its face and drops through a via to reach a pin is not one: that is the
-preference working.
+preference working. `reroute` says the same of the nets it wires again.
 
 **A rail is solder on a stock board's finger strip.** The strip down a stock board's long
 sides stands OUTSIDE the grid, a finger beside each outermost hole, and a finger is named

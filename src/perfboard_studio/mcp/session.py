@@ -32,6 +32,7 @@ from typing import Any, Literal, cast, get_args
 from perfboard_studio import persist
 from perfboard_studio.autoroute import (
     AutorouteOptions,
+    FaceNote,
     describe_reroute,
     face_notes,
     holes_to_avoid,
@@ -215,6 +216,26 @@ class SessionError(Exception):
 
 def _ok(**fields: Any) -> dict[str, Any]:
     return {"ok": True, **fields}
+
+
+def _face_notes(notes: tuple[FaceNote, ...]) -> dict[str, Any]:
+    """``autoroute`` and ``reroute``'s ``face_notes`` key, or nothing where there are none."""
+    if not notes:
+        return {}
+    return {
+        "face_notes": [
+            {
+                "net": note.net_name,
+                "preferred_side": note.preferred,
+                "off_face": note.off_face,
+                "connections": note.total,
+                "reason": note.reason,
+                "covered_by": list(note.covered_by),
+                "message": note.message,
+            }
+            for note in notes
+        ]
+    }
 
 
 def _refused(code: str, message: str) -> dict[str, Any]:
@@ -1886,20 +1907,7 @@ class BoardSession:
             result["vias"] = self._vias()
         # A net wired mostly off the face it prefers, and why (issue #14): a preference is
         # a price, so the router gives the face up where it must, and says so.
-        notes = face_notes(planned_on, plan, self.lookup)
-        if notes:
-            result["face_notes"] = [
-                {
-                    "net": note.net_name,
-                    "preferred_side": note.preferred,
-                    "off_face": note.off_face,
-                    "connections": note.total,
-                    "reason": note.reason,
-                    "covered_by": list(note.covered_by),
-                    "message": note.message,
-                }
-                for note in notes
-            ]
+        result.update(_face_notes(face_notes(planned_on, plan, self.lookup)))
         result.update(
             committed=True,
             summary=describe_route(plan),
@@ -2080,9 +2088,11 @@ class BoardSession:
                 **({"kept_clear": kept_clear} if without is not None else {}),
             )
 
+        planned_on = self.document
         result = self._dispatch("conductor.replace", plan.payload())
         if not result["ok"]:
             return result
+        result.update(_face_notes(face_notes(planned_on, plan, self.lookup)))
         result.update(
             committed=True,
             summary=describe_reroute(plan),

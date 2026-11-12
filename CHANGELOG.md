@@ -143,8 +143,8 @@ closed without a bump.
 - **Agents can wire both faces too.** MCP's `add_solder_trace` takes `side`, `create_net`
   and `update_net` take `preferred_side` (and `clear_preferred_side`), and `autoroute` and
   `reroute` take `faces`; the result names the `vias`, and the `"best"` comparison counts
-  each style's `face_changes`. `autoroute`'s `face_notes` names a net wired mostly off the
-  face it prefers, with the reason and the parts covering its pins.
+  each style's `face_changes`. `autoroute`'s and `reroute`'s `face_notes` name a net wired
+  mostly off the face it prefers, with the reason and the parts covering its pins.
 - **Rails on a stock board's finger strip.** The copper strip down the long sides of the
   stock boards, outside the grid, takes solder now: a rail along it, and a bridge from a hole
   beside it onto its finger, the way ground and power are run on those boards. A finger is

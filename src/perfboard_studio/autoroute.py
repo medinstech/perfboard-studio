@@ -1560,11 +1560,16 @@ def _and_list(names: Sequence[str]) -> str:
 
 
 def face_notes(
-    doc: PerfDocument, plan: AutoroutePlan, lookup: FootprintLookup
+    doc: PerfDocument, plan: AutoroutePlan | ReroutePlan, lookup: FootprintLookup
 ) -> tuple[FaceNote, ...]:
     """What the plan did with each net's preferred face, where it mostly did not keep it.
 
-    ``doc`` is the document the plan was made FROM. A connection counts as off its face
+    ``doc`` is the document the plan was made FROM -- for a reroute, the one still holding
+    the copper it rips up, which changes nothing here: only the nets' preferences, the
+    parts' references and which pins their bodies cover are read from it, and none of
+    those is copper. Only the nets the plan wired are judged, each on every connection it
+    made: all of a rerouted net's, since its copper was ripped up first, and on a board
+    auto-wire is finishing only the ones still missing. A connection counts as off its face
     when none of its copper is on it: one that runs on its face and drops through a via to
     reach a pin is the preference working, and the via is said where vias are. Said only
     when more than half are off, because a note on every board is one nobody reads.
