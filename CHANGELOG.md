@@ -124,8 +124,10 @@ closed without a bump.
   `copper-at-covered-pin` check (an error, or a warning saying to leave the leads long for a
   part that stands on them), and the build guide's step says not to build it as drawn. A
   trace on the component side also pays more for passing beside another net's pin, since it
-  is soldered after the parts are in: with GND preferring the component side, the example
-  boards' warnings come to 11 rather than 14.
+  is soldered after the parts are in. Auto-wire's style sweep over every example and test
+  board, with both faces open and GND preferring the component side, leaves 11 DRC warnings
+  (14 before this price, 24 with everything on the solder side); on the example boards
+  alone, 2 (13 on the solder side).
 - **The build guide says when to lay the component side's solder and where its vias are.**
   Its runs open phase 7, after the parts, since solder in a hole before its lead keeps the
   lead out, and before the long wires; phase 7's title says so, in both languages, only on
