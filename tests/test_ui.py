@@ -19629,6 +19629,70 @@ def test_wire_on_both_faces_reaches_the_router_and_is_remembered() -> None:
         _close(single)
 
 
+def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() -> None:
+    """The shield's GND set to the component side comes back wired underneath: every GND
+    pin there is under J2's plastic. The window says so -- on the status line and in a
+    Faces group of the Problems drawer -- and counts it as nothing: a preference is a price,
+    never a rule."""
+    from perfboard_studio.ui.engine_text import say
+    from perfboard_studio.ui.i18n import counted, t
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+
+    shield = _example_document("arduino-io-shield")
+    bare = dataclasses.replace(
+        shield,
+        conductors=(),
+        nets=tuple(
+            dataclasses.replace(n, preferred_side="top" if n.name == "GND" else None)
+            for n in shield.nets
+        ),
+    )
+    window = _window_on(bare)
+    try:
+        window.act_both_faces.setChecked(True)
+        window.on_autoroute_all()
+        said_of, notes = window._face_notes
+        assert said_of is window.bus.document
+        [note] = notes
+        assert (note.net_name, note.reason, note.covered_by) == ("GND", "covered", ("J2",))
+        # The engine's own note, from the document the plan was made FROM.
+        assert window.bus.document.conductors
+        assert counted(
+            1,
+            t("{count} net wired off the face it prefers: why is in Problems"),
+            t("{count} nets wired off the face they prefer: why is in Problems"),
+        ) in window.statusBar().currentMessage()
+
+        tree = window.drc_tree
+        groups = {
+            tree.topLevelItem(i).data(0, ROLE_FINDING_KEY): tree.topLevelItem(i)
+            for i in range(tree.topLevelItemCount())
+        }
+        faces = groups["FACES"]
+        assert faces.text(0) == t("Faces")
+        assert [faces.child(i).text(1) for i in range(faces.childCount())] == [say(note.message)]
+
+        # A click on the row lights the net.
+        window._on_drc_item_clicked(faces.child(0), 1)
+        assert note.net_id in window._selected_net_ids()
+
+        # Counted as nothing: the badge reads the same with the note and without it.
+        counts: list[dict] = []
+        window.problems_bar.set_counts = lambda **kw: counts.append(kw)  # type: ignore[method-assign]
+        window._refresh_problems_bar()
+        window._face_notes = (None, ())
+        window._refresh_problems_bar()
+        assert counts[0] == counts[1]
+        # ...and the group goes with the note.
+        window._refresh_drc_panel(window._last_violations, window._last_lvs)
+        assert all(
+            tree.topLevelItem(i).data(0, ROLE_FINDING_KEY) != "FACES"
+            for i in range(tree.topLevelItemCount())
+        )
+    finally:
+        _close(window)
+
+
 def test_vias_are_counted_on_the_card_in_the_status_line_and_on_the_copper() -> None:
     """A via is one more hole to fill and check, so the wiring says how many there are:
     the step card's line, Auto-wire's status line (the ones it just made) and the

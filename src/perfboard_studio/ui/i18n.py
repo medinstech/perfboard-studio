@@ -4151,6 +4151,19 @@ TURKISH: Mapping[str, str] = {
         "Yanlış değil: çalışan ama gerektiğinden zor kurulan kablolama. Tellerini seçmek "
         "için bir satıra tıklayın."
     ),
+    "Faces": "Yüzler",
+    "{count} net off its face": "{count} net başka yüzde",
+    "{count} nets off their face": "{count} net başka yüzde",
+    "Not a problem: a face a net prefers is a price, not a rule, and Auto-wire gave it up where it had to. Click a row to light its net.": (
+        "Sorun değil: bir netin tercih ettiği yüz bir kural değil, bir bedeldir; Otomatik "
+        "Kablola ondan gerektiği yerde vazgeçti. Netini yakmak için bir satıra tıklayın."
+    ),
+    "{count} net wired off the face it prefers: why is in Problems": (
+        "{count} net tercih ettiği yüzün dışında kablolandı: nedeni Sorunlar'da"
+    ),
+    "{count} nets wired off the face they prefer: why is in Problems": (
+        "{count} net tercih ettiği yüzün dışında kablolandı: nedenleri Sorunlar'da"
+    ),
     "{count} to wire": "{count} kablolanacak",
     "Matches the circuit: {matched} of {total} nets": "Devreyle uyuşan net: {matched}/{total}",
     "Select and move parts. Esc comes back to it from any tool.": (

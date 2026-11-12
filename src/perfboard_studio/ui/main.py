@@ -126,9 +126,11 @@ from perfboard_studio.autoroute import (
     AutorouteOptions,
     AutoroutePlan,
     BestAutoroute,
+    FaceNote,
     UnroutedLink,
     describe_best,
     describe_reroute,
+    face_notes,
     holes_to_avoid,
     plan_autoroute,
     plan_best_autoroute,
@@ -2741,6 +2743,10 @@ class MainWindow(QMainWindow):
         self._not_wired: tuple[
             PerfDocument | None, tuple[tuple[str, tuple[HoleCoord, ...], NetId | None], ...]
         ] = (None, ())
+        #: The nets the last Auto-wire wired mostly off the face they prefer, and the
+        #: document that was said of (``autoroute.face_notes``): information in the
+        #: Problems drawer until the board changes, never a problem and never counted.
+        self._face_notes: tuple[PerfDocument | None, tuple[FaceNote, ...]] = (None, ())
         #: Which primitive the router should reach for first. See router.RoutingStyle, and
         #: StylePreference for the extra "best" value that measures rather than assumes.
         self._routing_style: StylePreference = "balanced"
@@ -10583,6 +10589,7 @@ class MainWindow(QMainWindow):
 
         self._add_erc_findings(needle, expanded)
         self._add_not_wired(needle)
+        self._add_face_notes(needle)
         self._add_wiring_notes(needle, expanded)
 
         # The pins nothing is wired to yet, while there are connections left to route, are
@@ -10823,6 +10830,52 @@ class MainWindow(QMainWindow):
         leaf.setData(0, ROLE_COMPONENT_IDS, violation.component_ids)
         leaf.setData(0, ROLE_CONDUCTOR_IDS, violation.conductor_ids)
         return leaf
+
+    def _add_face_notes(self, needle: str) -> None:
+        """The Faces group: each net the last Auto-wire wired mostly off the face it
+        prefers, and why. A preference is a price, never a rule (``Net.preferred_side``),
+        so this is said as information -- in the secondary colour, counted as nothing --
+        and a click on a row lights its net."""
+        said_of, notes = self._face_notes
+        if said_of is not self.bus.document or not notes:
+            return
+        rows = [say(note.message) for note in notes]
+        root = QTreeWidgetItem([
+            t("Faces"),
+            counted(len(notes), t("{count} net off its face"), t("{count} nets off their face")),
+        ])
+        root.setToolTip(
+            1,
+            t("Not a problem: a face a net prefers is a price, not a rule, and Auto-wire "
+              "gave it up where it had to. Click a row to light its net."),
+        )
+        root.setData(0, ROLE_FINDING_KEY, "FACES")
+        root.setForeground(0, QColor(theme.colour("secondary")))
+        self.drc_tree.addTopLevelItem(root)
+        for note, text in zip(notes, rows, strict=True):
+            if needle and needle not in _folded(text):
+                continue
+            leaf = QTreeWidgetItem(["", text])
+            leaf.setToolTip(1, text)
+            leaf.setData(0, ROLE_NET_ID, note.net_id)
+            root.addChild(leaf)
+        root.setExpanded(True)
+
+    def _say_face_notes(self, planned_on: PerfDocument, plan: AutoroutePlan) -> str:
+        """Keep what the plan did with each net's preferred face for the Problems drawer,
+        and return the status line's mention of it, or "". ``planned_on`` is the document
+        the plan was made FROM, before its copper was laid."""
+        notes = face_notes(planned_on, plan, self.lookup)
+        self._face_notes = (self.bus.document, notes) if notes else (None, ())
+        if not notes:
+            return ""
+        if self._last_lvs is not None:
+            self._refresh_drc_panel(self._last_violations, self._last_lvs)
+        return counted(
+            len(notes),
+            t("{count} net wired off the face it prefers: why is in Problems"),
+            t("{count} nets wired off the face they prefer: why is in Problems"),
+        )
 
     def _add_wiring_notes(self, needle: str, expanded: set[str]) -> None:
         """The Wiring group: what is worth a look in the copper, each row selecting the
@@ -12017,12 +12070,19 @@ class MainWindow(QMainWindow):
         # Said after the commit, and said in full: the failures are the part a user must not
         # miss (PLAN.md Sec 13), so they go in the status line and, if there are any, into a
         # dialog that names each one.
+        faces_said = self._say_face_notes(document, plan)
         self.statusBar().showMessage(
             f"{self._wired_said(plan, before)}{cleared_note}{style_note}"
             f"{self._far_side_note(before)}",
             0,
         )
         self._report_unrouted(plan)
+        if faces_said:
+            # After the unwired count, which takes the line when there is one: the face
+            # is the lesser news, and both are in the drawer.
+            self.statusBar().showMessage(
+                f"{self.statusBar().currentMessage()}  ·  {faces_said}", 0
+            )
 
     def _remember_wiring_before(self, conductors: tuple[Conductor, ...]) -> None:
         """The copper a route started from, for Compare With Before; shown again at once

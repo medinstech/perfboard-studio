@@ -22,6 +22,11 @@ closed without a bump.
 
 ### Added
 
+- **Auto-wire says, in the window, when a net was wired off the face it prefers.** The
+  status line names how many, and a Faces group in the Problems drawer gives each net's
+  reason (its pins on that face are under a part's body, the board has no pads there, or no
+  clear way was found), a click lighting the net. It is information, not a problem: the
+  badge does not count it and nothing waits on it.
 - **Two-sided wiring in the window.** On a board with pads on the component side, a net's
   Properties has a Face row (Either, Component Side, Solder Side), and its right-click
   menus have the same three under Net Face. A net set to the component side is wired there
