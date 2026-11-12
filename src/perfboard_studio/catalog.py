@@ -296,6 +296,10 @@ _POLOLU_A4988_RIGHT = ("VMOT", "GND", "2B", "2A", "1A", "1B", "VDD", "GND")
 # The same board with the DRV8825 on it, named from Driver_Motor:Pololu_Breakout_DRV8825.
 _POLOLU_DRV8825_LEFT = ("EN", "M0", "M1", "M2", "RST", "SLP", "STEP", "DIR")
 _POLOLU_DRV8825_RIGHT = ("VMOT", "GND", "B2", "B1", "A1", "A2", "FLT", "GND")
+# The DFPlayer Mini from above with the micro SD socket up: its pins 1 to 8 down the left,
+# 9 to 16 UP the right, so the right column read top to bottom is 16 down to 9.
+_DFPLAYER_LEFT = ("VCC", "RX", "TX", "DAC_R", "DAC_L", "SPK2", "GND", "SPK1")
+_DFPLAYER_RIGHT = ("BUSY", "USB-", "USB+", "ADKEY2", "ADKEY1", "IO2", "GND", "IO1")
 # The USB-C end at the top, as Seeed's own pinout draws it; read off the nets of the two
 # header rows on Seeed's KiCad board, functions from its pin map.
 _XIAO_LEFT = ("D0", "D1", "D2", "D3", "D4/SDA", "D5/SCL", "D6/TX")
@@ -3258,6 +3262,37 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 check="Set the current limit with the trimmer before a motor is connected. "
                 + _MODULE_TOP),
+    CatalogPart("dfplayer-mini", "DFPlayer Mini MP3 player", "module",
+                "mod-2x8-p7-r1-20.32x20.32x2-s8.5",
+                "MP3 and WAV player from a micro SD card, 16 pins, rows 17.78 mm apart: serial "
+                "control, a 3 W speaker output and a line output",
+                _two_columns(_DFPLAYER_LEFT, _DFPLAYER_RIGHT), ref_prefix="U",
+                value="DFPlayer Mini",
+                source=(
+                    "FN-M16P datasheet (Flyron; DFRobot ships it as the DFPlayer Mini manual), "
+                    "section 2: the 16 pins, 1 to 8 down one side and 9 to 16 up the other, "
+                    "from its table; pin positions and the 20.32 mm square board from DFRobot's "
+                    "dimension drawing for the DFR0299 (wiki.dfrobot.com/DFR0299), whose rows are "
+                    "drawn 18.03 mm apart and are seated here on the 17.78 mm grid"
+                ),
+                check=(
+                    "VCC takes 3.2 to 5 V. RX and TX are 3.3 V logic at 9600 baud: from a 5 V "
+                    "board's TX, put a 1k resistor in series with RX. SPK1 and SPK2 are the two "
+                    "ends of a bridge-tied amplifier for a 4 or 8 ohm speaker under 3 W: join "
+                    "neither to ground, and the speaker has no polarity. DAC_R and DAC_L are the "
+                    "line output for an external amplifier or headphones, not for a speaker. BUSY "
+                    "is low while a track plays and high when idle. IO1 and IO2 play the previous "
+                    "and next track when pulled to ground through a button, and ADKEY1 and ADKEY2 "
+                    "do the same through a resistor ladder; the module has two GND pins and uses "
+                    "either. DFRobot's board drawing v1.1 prints pin 12 as IO3 and pin 16 as GPIOA1 "
+                    "where the datasheet has ADKEY1 and BUSY, and the datasheet's own picture "
+                    "swaps SPK1 with SPK2 and the ADKEYs and the USB pair against its table: the "
+                    "names here follow the table. A serial player needs only VCC, GND, RX, TX and "
+                    "the speaker. The micro SD socket is the tallest part and the maker gives no "
+                    "height: it is taken as 2 mm. " + _MODULE_TOP
+                ),
+                aliases=("DFPlayer", "DF Player", "MP3 player", "MP3 module", "YX5200", "DFR0299",
+                         "MP3 çalar", "ses çalar", "mp3 modülü")),
     CatalogPart("seeed-xiao-esp32c3", "Seeed XIAO ESP32C3", "module",
                 "mod-2x7-p6-r1-17.78x21x3.2-s8.5",
                 "ESP32-C3 board, 14 pins, rows 15.24 mm apart",

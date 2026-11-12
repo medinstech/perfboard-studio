@@ -2532,6 +2532,44 @@ TURKISH: Mapping[str, str] = {
     "PTC resettable fuse": "PTC kendini sıfırlayan sigorta",
     "Pololu A4988 carrier": "Pololu A4988 taşıyıcı kartı",
     "Pololu DRV8825 carrier": "Pololu DRV8825 taşıyıcı kartı",
+    "DFPlayer Mini MP3 player": "DFPlayer Mini MP3 çalar",
+    "MP3 and WAV player from a micro SD card, 16 pins, rows 17.78 mm apart: serial "
+    "control, a 3 W speaker output and a line output": (
+        "Mikro SD karttan MP3 ve WAV çalar, 16 pin, sıralar 17,78 mm arayla: seri "
+        "kontrol, 3 W'lık hoparlör çıkışı ve hat çıkışı"
+    ),
+    "VCC takes 3.2 to 5 V. RX and TX are 3.3 V logic at 9600 baud: from a 5 V "
+    "board's TX, put a 1k resistor in series with RX. SPK1 and SPK2 are the two "
+    "ends of a bridge-tied amplifier for a 4 or 8 ohm speaker under 3 W: join "
+    "neither to ground, and the speaker has no polarity. DAC_R and DAC_L are the "
+    "line output for an external amplifier or headphones, not for a speaker. BUSY "
+    "is low while a track plays and high when idle. IO1 and IO2 play the previous "
+    "and next track when pulled to ground through a button, and ADKEY1 and ADKEY2 "
+    "do the same through a resistor ladder; the module has two GND pins and uses "
+    "either. DFRobot's board drawing v1.1 prints pin 12 as IO3 and pin 16 as GPIOA1"
+    " where the datasheet has ADKEY1 and BUSY, and the datasheet's own picture "
+    "swaps SPK1 with SPK2 and the ADKEYs and the USB pair against its table: the "
+    "names here follow the table. A serial player needs only VCC, GND, RX, TX and "
+    "the speaker. The micro SD socket is the tallest part and the maker gives no "
+    "height: it is taken as 2 mm. The height of what is on the board is an "
+    "estimate, and so is its colour; the pins, the rows and the board outline are "
+    "measured.": (
+        "VCC 3,2 ile 5 V alır. RX ve TX 9600 baud'da 3,3 V mantıktır: 5 V'luk bir "
+        "kartın TX'inden RX'e 1k'lık bir direnç seri koyun. SPK1 ve SPK2, 3 W altı 4 "
+        "ya da 8 ohm'luk bir hoparlör için köprü bağlı yükselticinin iki ucudur: "
+        "ikisini de toprağa bağlamayın, hoparlörün kutbu yoktur. DAC_R ve DAC_L "
+        "harici bir yükseltici ya da kulaklık için hat çıkışıdır, hoparlör için "
+        "değil. BUSY parça çalarken düşük, boştayken yüksektir. IO1 ve IO2 bir buton "
+        "üzerinden toprağa çekilince önceki ve sonraki parçayı çalar, ADKEY1 ve "
+        "ADKEY2 aynısını direnç merdiveniyle yapar; modülde iki GND pini vardır ve "
+        "ikisi de kullanılabilir. DFRobot'un v1.1 kart çizimi 12. pini IO3, 16. pini "
+        "GPIOA1 yazar; datasheet'te bunlar ADKEY1 ve BUSY'dir, datasheet'in kendi "
+        "resmi de SPK1 ile SPK2'yi, ADKEY'leri ve USB çiftini tablosuna göre ters "
+        "yazar: buradaki adlar tabloyu izler. Seri bir çalar için yalnızca VCC, GND, "
+        "RX, TX ve hoparlör gerekir. Mikro SD yuvası en yüksek parçadır ve yapımcı "
+        "bir yükseklik vermez: 2 mm alındı. Kartın üzerindekilerin yüksekliği bir "
+        "tahmindir, rengi de öyle; pinler, sıralar ve kart ana hattı ölçülmüştür."
+    ),
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",

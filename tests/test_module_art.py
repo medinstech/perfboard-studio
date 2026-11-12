@@ -58,7 +58,11 @@ CAN_NAMES = (("1", "3V3"), ("2", "GND"), ("3", "CTX"), ("4", "CRX"), ("5", "CANH
 #: ``test_a_module_drawn_as_the_block_is_one_on_purpose`` fails if one of these gains a
 #: layout, so the reason cannot outlive the fact, or leaves the catalog. The ESP-01 and the
 #: nRF24L01+ were here until their photographs were rectified onto their drawn boards.
-DRAWN_AS_THE_BLOCK: dict[str, str] = {}
+DRAWN_AS_THE_BLOCK: dict[str, str] = {
+    # DFRobot's dimension drawing (DFR0299) gives the pads and the micro SD socket's outline and
+    # no chip or part positions, and there is no art kind for the socket.
+    "dfplayer-mini": "no measured layout of what stands on its board",
+}
 
 def _on_a_module(part) -> bool:  # type: ignore[no-untyped-def]
     """A catalog part on a module's own board, whatever shelf it is on: the GY-521 is a sensor."""

@@ -103,6 +103,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "wemos-d1-mini": 22.86,
         "pololu-a4988": 12.7,
         "pololu-drv8825": 12.7,
+        # DFRobot's drawing has the pins 18.03 mm apart; the grid's nearest is seven holes.
+        "dfplayer-mini": 17.78,
         "seeed-xiao-esp32c3": 15.24,
         # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
         "lm2596-module": 40.64,
@@ -1299,3 +1301,21 @@ def test_the_hc12_radio_is_its_five_pin_row_from_the_makers_manual() -> None:
     assert part.footprint_id == "hdr-1x5"
     assert "hc01.com" in part.source
     assert "hc-12" in {found.id for found in search_catalog("HC12")}
+
+
+def test_the_dfplayers_pins_are_the_datasheets_table_in_the_footprints_numbering() -> None:
+    """The maker numbers 1 to 8 down the left and 9 to 16 UP the right; the module's footprint
+    numbers row by row, left then right. Both are checked against the datasheet's table."""
+    makers = {
+        1: "VCC", 2: "RX", 3: "TX", 4: "DAC_R", 5: "DAC_L", 6: "SPK2", 7: "GND", 8: "SPK1",
+        9: "IO1", 10: "GND", 11: "IO2", 12: "ADKEY1", 13: "ADKEY2", 14: "USB+", 15: "USB-",
+        16: "BUSY",
+    }  # fmt: skip
+    part = catalog_part("dfplayer-mini")
+    assert part is not None
+    names = dict(part.pin_names)
+    for number, name in makers.items():
+        row = number if number <= 8 else 17 - number
+        footprint_pin = 2 * row - 1 if number <= 8 else 2 * row
+        assert names[str(footprint_pin)] == name, number
+    assert "dfplayer-mini" in {found.id for found in search_catalog("DFPlayer")}
