@@ -2989,7 +2989,7 @@ class _MoveSymbols:
             refs = {part.id: part.ref for part in circuit_parts(doc)}
             named = refs.get(moved, moved)
             return f"Move {named} on the sheet"
-        return f"Move {len(p.placements)} symbol(s) on the sheet"
+        return f"Move {count_noun(len(p.placements), 'symbol')} on the sheet"
 
 
 def _with_frozen_wires(doc: PerfDocument, wires: tuple[SheetWire, ...]) -> tuple[SheetWire, ...]:
@@ -3048,7 +3048,7 @@ class _AutoSymbols:
     def describe(self, p: AutoSymbolsPayload, doc: PerfDocument) -> str:
         if not p.ids:
             return "Lay the whole sheet out automatically"
-        return f"Lay {len(p.ids)} symbol(s) out automatically"
+        return f"Lay {count_noun(len(p.ids), 'symbol')} out automatically"
 
 
 class _DrawSheetWire:
@@ -3192,7 +3192,7 @@ class _DeleteSheetWires:
         if len(p.wires) == 1:
             wire = p.wires[0]
             return f"Rub out the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}{tail}"
-        return f"Rub out {len(p.wires)} wire(s) on the sheet{tail}"
+        return f"Rub out {count_noun(len(p.wires), 'wire')} on the sheet{tail}"
 
 
 class _CutSheetWires:
@@ -3256,7 +3256,7 @@ class _CutSheetWires:
         if len(p.wires) == 1:
             wire = p.wires[0]
             return f"Delete the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}"
-        return f"Delete {len(p.wires)} wire(s) on the sheet"
+        return f"Delete {count_noun(len(p.wires), 'wire')} on the sheet"
 
 
 class _AddSheetNote:
