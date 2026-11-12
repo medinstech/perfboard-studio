@@ -19884,6 +19884,50 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         _close(window)
 
 
+@pytest.mark.parametrize("gnd_copper", ["kept", "none"])
+def test_redo_wiring_of_one_net_says_it_is_off_its_face_as_auto_wire_does(
+    monkeypatch, gnd_copper: str
+) -> None:
+    """Set GND to the component side on the wired shield and redo GND alone: it comes back
+    underneath, exactly where it was, for the same reason Auto-wire's did (J2's plastic) --
+    the case that most needs the why, since nothing on the board moved -- and is told so the
+    same way: the status line and the Faces group."""
+    from perfboard_studio.commands import UpdateNetPayload
+    from perfboard_studio.ui.i18n import counted, t
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+
+    shield = _example_document("arduino-io-shield")
+    gnd = next(n for n in shield.nets if n.name == "GND")
+    if gnd_copper == "none":
+        # The other road through on_reroute: copper is laid, not found unchanged.
+        shield = dataclasses.replace(
+            shield, conductors=tuple(c for c in shield.conductors if c.net_id != gnd.id)
+        )
+    window = _window_on(shield)
+    monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
+    try:
+        window.act_both_faces.setChecked(True)
+        window.bus.dispatch("net.update", UpdateNetPayload(id=gnd.id, preferred_side="top"))
+        window.on_reroute((gnd.id,))
+
+        said_of, notes = window._face_notes
+        assert said_of is window.bus.document
+        [note] = notes
+        assert (note.net_name, note.reason, note.covered_by) == ("GND", "covered", ("J2",))
+        assert counted(
+            1,
+            t("{count} net wired off the face it prefers: why is in Problems"),
+            t("{count} nets wired off the face they prefer: why is in Problems"),
+        ) in window.statusBar().currentMessage()
+        tree = window.drc_tree
+        assert any(
+            tree.topLevelItem(i).data(0, ROLE_FINDING_KEY) == "FACES"
+            for i in range(tree.topLevelItemCount())
+        )
+    finally:
+        _close(window)
+
+
 def test_vias_are_counted_on_the_card_in_the_status_line_and_on_the_copper() -> None:
     """A via is one more hole to fill and check, so the wiring says how many there are:
     the step card's line, Auto-wire's status line (the ones it just made) and the

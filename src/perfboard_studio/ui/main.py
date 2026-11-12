@@ -127,6 +127,7 @@ from perfboard_studio.autoroute import (
     AutoroutePlan,
     BestAutoroute,
     FaceNote,
+    ReroutePlan,
     UnroutedLink,
     describe_best,
     describe_reroute,
@@ -10909,7 +10910,9 @@ class MainWindow(QMainWindow):
             root.addChild(leaf)
         root.setExpanded(True)
 
-    def _say_face_notes(self, planned_on: PerfDocument, plan: AutoroutePlan) -> str:
+    def _say_face_notes(
+        self, planned_on: PerfDocument, plan: AutoroutePlan | ReroutePlan
+    ) -> str:
         """Keep what the plan did with each net's preferred face for the Problems drawer,
         and return the status line's mention of it, or "". ``planned_on`` is the document
         the plan was made FROM, before its copper was laid."""
@@ -11860,13 +11863,18 @@ class MainWindow(QMainWindow):
         if plan.remove_ids and _same_copper(
             [c for c in document.conductors if c.id in removing], plan.conductors
         ):
+            # The copper did not move, and when a net prefers the other face that is the
+            # very thing to explain: GND set to the component side came back exactly where
+            # it was, under the board, because its pins there are under a part.
+            faces_said = self._say_face_notes(document, plan)
             self.statusBar().showMessage(
                 f"{why + '  ' if why else ''}"
                 + t(
                     "Wired again, and it came out exactly as it is. A different Wiring ▸ "
                     "Wiring Style or Wiring ▸ When a Trace Must Cross gives different "
                     "wiring."
-                ),
+                )
+                + (f"  ·  {faces_said}" if faces_said else ""),
                 0,
             )
             return
@@ -11932,10 +11940,17 @@ class MainWindow(QMainWindow):
             said.append(in_style)
         if without:
             said.append(without)
+        faces_said = self._say_face_notes(document, plan)
         self.statusBar().showMessage("  ·  ".join(said), 0)
         self._report_unrouted_items(
             [item for outcome in plan.nets for item in outcome.unrouted]
         )
+        if faces_said:
+            # GND set to the component side and wired again on its own comes back under
+            # the board for the same reason Auto-wire's did, and is owed the same why.
+            self.statusBar().showMessage(
+                f"{self.statusBar().currentMessage()}  ·  {faces_said}", 0
+            )
 
     def _clear_strays(self, quiet: bool = False) -> int:
         """Delete conductors that are attached to nothing, as one undo step.
