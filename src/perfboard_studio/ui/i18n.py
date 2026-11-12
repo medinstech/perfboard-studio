@@ -3120,6 +3120,43 @@ TURKISH: Mapping[str, str] = {
         "üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
         "çerçevesi ölçülmüştür."
     ),
+    "Adafruit 2.8 in TFT touch breakout, ILI9341 (on a header)": (
+        "Adafruit 2,8 inç TFT dokunmatik kart, ILI9341 (header üzerinde)"
+    ),
+    "2.8 inch colour TFT, 240 x 320, with a resistive touchscreen and a microSD socket,"
+    " on SPI. Its cable plugs into this 20-pin header: GND Vin 3Vo CLK MISO MOSI CS D/C"
+    " RST Lite Y+ X+ Y- X- IM3 IM2 IM1 IM0 CCS CD from pin 1": (
+        "Dirençli dokunmatik ekranlı ve microSD yuvalı, SPI üzerinden 240 x 320, 2,8 "
+        "inç renkli TFT. Kablosu bu 20 pinli header'a takılır: 1. pinden GND Vin 3Vo "
+        "CLK MISO MOSI CS D/C RST Lite Y+ X+ Y- X- IM3 IM2 IM1 IM0 CCS CD"
+    ),
+    "Vin takes 3 to 5 V and a 3.3 V regulator on the board makes 3Vo, which is an "
+    "output and not a second supply. CS, D/C, CLK, RST, MOSI and CCS go through "
+    "74LVC245 level shifters on the board, so 3.3 V and 5 V logic both do; MISO is a "
+    "3.3 V output. Lite is the base of the backlight's transistor: high lights it, and "
+    "tying it to Vin keeps it lit. X+, Y+, X- and Y- are the resistive touchscreen's "
+    "four wires, and CCS and CD the microSD socket's chip select and card detect, which"
+    " share CLK, MISO and MOSI. IM0 to IM3 are the controller's interface-mode inputs, "
+    "set by the solder jumpers beside them; the board's silkscreen says to close IM1, "
+    "IM2 and IM3 for SPI. Other ILI9341 modules sold as 2.8 inch SPI carry a shorter "
+    "header with other names, so compare the names printed on the board with these "
+    "before using it. Match each lead to the name printed beside the module's pins, not"
+    " to its place: sellers' boards are not all wired in the same order.": (
+        "Vin 3 ile 5 V alır, kartın üzerindeki 3,3 V'luk regülatör 3Vo'yu üretir; 3Vo "
+        "bir çıkıştır, ikinci bir besleme girişi değildir. CS, D/C, CLK, RST, MOSI ve "
+        "CCS kartın üzerindeki 74LVC245 seviye çeviricilerinden geçer, bu yüzden hem "
+        "3,3 V hem 5 V mantık olur; MISO 3,3 V'luk bir çıkıştır. Lite arka ışığın "
+        "transistörünün beyzidir: yüksek olunca yanar, Vin'e bağlarsanız hep yanık "
+        "kalır. X+, Y+, X- ve Y- dirençli dokunmatik ekranın dört teli, CCS ile CD de "
+        "microSD yuvasının çip seçimi ve kart algılamasıdır; ikisi de CLK, MISO ve "
+        "MOSI'yi paylaşır. IM0 ile IM3 denetleyicinin arayüz kipi girişleridir ve "
+        "yanlarındaki lehim köprüleriyle ayarlanır; kartın baskısı SPI için IM1, IM2 ve"
+        " IM3'ün kapatılmasını söyler. 2,8 inç SPI diye satılan başka ILI9341 "
+        "modüllerinin header'ı daha kısadır ve adları farklıdır: kullanmadan önce "
+        "kartın üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
     "MAX485 RS-485 module (on a header)": (
         "MAX485 RS-485 modülü (header üzerinde)"
     ),
@@ -3428,6 +3465,28 @@ TURKISH: Mapping[str, str] = {
         "bir ölçü aletiyle trimmeri ayarlayın. Components101 çıkışın girişten hep yüksek "
         "olması gerektiğini söyler ve sayfası ters girişe karşı bir korumadan söz etmez; bu "
         "yüzden VIN+ ucunu besleme kaynağının artısıyla karşılaştırın."
+    ),
+    "XL6009 boost module, on four wires": (
+        "XL6009 yükseltici modül, dört telli"
+    ),
+    "Steps a voltage up, with a 4 A limit: 3 to 32 V in, 5 to 35 V out, set with its "
+    "trimmer": (
+        "Gerilimi yükseltir, 4 A sınırıyla: 3 ile 32 V giriş, 5 ile 35 V çıkış, "
+        "trimmerle ayarlanır"
+    ),
+    "A boost converter's output must stay above its input: if turning the trimmer "
+    "changes nothing, the output equals the input, and a 12 V input cannot give 9 V. "
+    "Set the trimmer with the output unloaded and a meter on OUT+ and OUT- before you "
+    "connect what it feeds. Components101 recommends a heat sink above 15 W of output, "
+    "and its page mentions no protection against a reversed input, so check IN+ against"
+    " the supply's plus.": (
+        "Yükseltici bir dönüştürücünün çıkışı girişinin üstünde kalmalıdır: trimmeri "
+        "çevirmek bir şey değiştirmiyorsa çıkış girişe eşittir ve 12 V giriş 9 V "
+        "veremez. Beslediği devreyi bağlamadan önce, çıkış yüksüzken ve OUT+ ile OUT- "
+        "uçlarında bir ölçü aletiyle trimmeri ayarlayın. Components101 15 W'ın "
+        "üstündeki çıkışta bir soğutucu önerir ve sayfası ters girişe karşı bir "
+        "korumadan söz etmez; bu yüzden IN+ ucunu besleme kaynağının artısıyla "
+        "karşılaştırın."
     ),
     "AMS1117-3.3 regulator module, on three wires": "AMS1117-3.3 regülatör modülü, üç telli",
     "Fixed 3.3 V linear regulator on a small board: 4.75 to 12 V in, 800 mA at most": (

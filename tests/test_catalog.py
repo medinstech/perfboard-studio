@@ -1049,6 +1049,7 @@ def test_the_power_modules_are_wires_named_as_printed() -> None:
     expected = {
         "tp4056-module": ["IN+", "IN-", "OUT+", "OUT-", "B+", "B-"],
         "mt3608-boost": ["VIN+", "VIN-", "VOUT+", "VOUT-"],
+        "xl6009-boost": ["IN+", "IN-", "OUT+", "OUT-"],
         "ams1117-33-module": ["VIN", "GND", "OUT"],
     }
     for part_id, names in expected.items():
@@ -1062,6 +1063,7 @@ def test_the_power_modules_are_wires_named_as_printed() -> None:
     assert "not the same wire as B-" in tp4056.check
     assert next(found.id for found in search_catalog("TP4056")) == "tp4056-module"
     assert next(found.id for found in search_catalog("MT3608")) == "mt3608-boost"
+    assert next(found.id for found in search_catalog("XL6009")) == "xl6009-boost"
     assert next(found.id for found in search_catalog("AMS1117")) == "ams1117-33-module"
 
 
@@ -1078,6 +1080,12 @@ def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> No
             "Nokia 5110",
         ),
         "ttp223-touch": (["GND", "VCC", "SIG"], "AZ-Delivery", "TTP223"),
+        "adafruit-ili9341-tft": (
+            ["GND", "Vin", "3Vo", "CLK", "MISO", "MOSI", "CS", "D/C", "RST", "Lite", "Y+", "X+",
+             "Y-", "X-", "IM3", "IM2", "IM1", "IM0", "CCS", "CD"],
+            "adafruit/2.8-TFT-Breakout-PCB",
+            "ILI9341",
+        ),
     }
     for part_id, (names, named_source, query) in expected.items():
         part = catalog_part(part_id)

@@ -210,6 +210,7 @@ SOLD_AS = {
     "ttp223-touch": "TTP223",
     "ftdi-basic": "FTDI BASIC",
     "pca9685-servo-driver": "PCA9685",
+    "adafruit-ili9341-tft": "ILI9341 TFT",
 }
 
 

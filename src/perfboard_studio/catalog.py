@@ -2364,7 +2364,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                          "MT3608", "boost converter", "step up converter",
                          "voltage booster", "yükseltici", "gerilim yükseltici",
                          )),
-    CatalogPart("ams1117-33-module", "AMS1117-3.3 regulator module, on three wires", "regulator",
+    CatalogPart("xl6009-boost", "XL6009 boost module, on four wires", "regulator",
+                "wire-4",
+                "Steps a voltage up, with a 4 A limit: 3 to 32 V in, 5 to 35 V out, set with "
+                "its trimmer",
+                _legs("IN+", "IN-", "OUT+", "OUT-"), value="XL6009", ref_prefix="U",
+                source=(
+                    "Components101's XL6009 module page "
+                    "(components101.com/modules/xl6009-dc-dc-step-down-voltage-regulator-module), "
+                    "its pin table: IN+ the positive input, IN- ground, OUT+ the regulated "
+                    "positive output, OUT- ground; input 3 to 32 V, output 5 to 35 V "
+                    "(adjustable), 4 A at most. The page calls the module a step-down "
+                    "converter in its address and in places and a step-up one elsewhere; the "
+                    "table is the same either way, and the XL6009 modules sold as adjustable "
+                    "4 A converters are boost ones. It does not say where the pads sit, and "
+                    "the module is a part off the board on wires, so only its four wires "
+                    "are drawn"
+                ),
+                check=(
+                    "A boost converter's output must stay above its input: if turning the "
+                    "trimmer changes nothing, the output equals the input, and a 12 V input "
+                    "cannot give 9 V. Set the trimmer with the output unloaded and a meter on "
+                    "OUT+ and OUT- before you connect what it feeds. Components101 recommends "
+                    "a heat sink above 15 W of output, and its page mentions no protection "
+                    "against a reversed input, so check IN+ against the supply's plus."
+                ),
+                aliases=(
+                         "XL6009", "XL6009 boost", "4A boost", "boost 4A", "yükseltici 4A",
+                         "XL6009 yükseltici",
+                         )),
+    CatalogPart("ams1117-33-module","AMS1117-3.3 regulator module, on three wires", "regulator",
                 "wire-3",
                 "Fixed 3.3 V linear regulator on a small board: 4.75 to 12 V in, 800 mA at "
                 "most",
@@ -2413,7 +2442,42 @@ CATALOG: tuple[CatalogPart, ...] = (
                          "ST7735", "ST7735S", "TFT display", "1.8 TFT", "128x160 TFT",
                          "renkli ekran", "TFT ekran",
                          )),
-    CatalogPart("nokia-5110", "Nokia 5110 LCD module (on a header)", "display",
+    CatalogPart("adafruit-ili9341-tft", "Adafruit 2.8 in TFT touch breakout, ILI9341 (on a header)",
+                "display", "hdr-1x20",
+                "2.8 inch colour TFT, 240 x 320, with a resistive touchscreen and a microSD "
+                "socket, on SPI. Its cable plugs into this 20-pin header: GND Vin 3Vo CLK MISO "
+                "MOSI CS D/C RST Lite Y+ X+ Y- X- IM3 IM2 IM1 IM0 CCS CD from pin 1",
+                _legs("GND", "Vin", "3Vo", "CLK", "MISO", "MOSI", "CS", "D/C", "RST", "Lite",
+                      "Y+", "X+", "Y-", "X-", "IM3", "IM2", "IM1", "IM0", "CCS", "CD"),
+                value="ILI9341 TFT", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for the 2.8 inch TFT breakout "
+                    "(github.com/adafruit/2.8-TFT-Breakout-PCB, 'Adafruit 2.8 TFT Breakout v2'), "
+                    "the 20-pin SPI header JP2 along one short edge: pad 1 at the GND end and "
+                    "every name read off that header's silkscreen, each pad's net checked "
+                    "against the board's nets. The nets are named for the parallel interface, so "
+                    "the pad marked CLK is on the net LCD_RS and D/C on LCD_WR: the ILI9341's "
+                    "D/CX (SCL) and WRX (D/CX) pins, which change their job in SPI mode. The "
+                    "board's second 20-pin header, JP1, is the 8-bit parallel one and is not "
+                    "this part"
+                ),
+                check=(
+                    "Vin takes 3 to 5 V and a 3.3 V regulator on the board makes 3Vo, which is "
+                    "an output and not a second supply. CS, D/C, CLK, RST, MOSI and CCS go "
+                    "through 74LVC245 level shifters on the board, so 3.3 V and 5 V logic both "
+                    "do; MISO is a 3.3 V output. Lite is the base of the backlight's transistor: "
+                    "high lights it, and tying it to Vin keeps it lit. X+, Y+, X- and Y- are the "
+                    "resistive touchscreen's four wires, and CCS and CD the microSD socket's chip "
+                    "select and card detect, which share CLK, MISO and MOSI. IM0 to IM3 are the "
+                    "controller's interface-mode inputs, set by the solder jumpers beside them; "
+                    "the board's silkscreen says to close IM1, IM2 and IM3 for SPI. Other "
+                    "ILI9341 modules sold as 2.8 inch SPI carry a shorter header with other "
+                    "names, so compare the names printed on the board with these before using "
+                    "it. " + _CABLED_CHECK
+                ),
+                aliases=("ILI9341", "TFT touch", "TFT touchscreen", "2.8 TFT", "touchscreen",
+                         "Adafruit 1770", "dokunmatik ekran", "dokunmatik TFT")),
+    CatalogPart("nokia-5110","Nokia 5110 LCD module (on a header)", "display",
                 "hdr-1x8",
                 "84 x 48 monochrome LCD (PCD8544) on SPI. Its cable plugs into this 8-pin "
                 "header: RST CE DC DIN CLK VCC LIGHT GND from pin 1",
