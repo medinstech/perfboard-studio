@@ -19182,6 +19182,256 @@ def test_a_handle_over_a_short_says_so_in_the_drag_banner() -> None:
         _close(window)
 
 
+def test_a_stretch_slides_sideways_with_its_neighbours_stretched_and_its_ends_kept() -> None:
+    H = view2d.HoleCoord
+    slid = view2d.slid_path
+    u = (H(2, 2), H(2, 5), H(8, 5), H(8, 2))
+    # A wire's middle leg, two rows down: the legs either side stretch to meet it.
+    assert slid("insulated-wire", u, 1, 0, 2) == (H(2, 2), H(2, 7), H(8, 7), H(8, 2))
+    # Only the part across the stretch counts: a hand that wanders along it moves nothing.
+    assert slid("insulated-wire", u, 1, 3, 2) == (H(2, 2), H(2, 7), H(8, 7), H(8, 2))
+    assert slid("insulated-wire", u, 1, 3, 0) == u
+    # A straight wire slid off its pads gets a leg from each, and the ends stay put.
+    assert slid("bare-wire", (H(2, 2), H(6, 2)), 0, 0, -1) == (
+        H(2, 2), H(2, 1), H(6, 1), H(6, 2)
+    )
+    # Slid over the far end, the leg it ran into folds away: an L, not a hairpin.
+    assert slid("insulated-wire", (H(2, 2), H(2, 5), H(8, 5)), 0, 6, 0) == (
+        H(2, 2), H(8, 2), H(8, 5)
+    )
+    # A run is every pad of the new chain, pressed anywhere along the stretch.
+    run = (H(2, 2), H(3, 2), H(4, 2))
+    slid_run = (H(2, 2), H(2, 3), H(3, 3), H(4, 3), H(4, 2))
+    assert slid("solder-trace", run, 0, 0, 1) == slid_run
+    assert slid("solder-trace", run, 1, 0, 1) == slid_run
+    # ...and refused where the new chain would cross itself: each of its pads is a joint.
+    z = (H(2, 2), H(6, 2), H(6, 4), H(2, 4), H(2, 6))
+    every: list = [z[0]]
+    for corner in z[1:]:
+        every.extend(view2d._orthogonal_run(every[-1], corner, False))
+    assert slid("solder-trace", tuple(every), 0, 0, 3) is None
+    # A diagonal stretch has no sideways on the grid.
+    assert slid("top-jumper", (H(2, 2), H(5, 5)), 0, 1, 0) is None
+
+
+def _wired_scene():  # type: ignore[no-untyped-def]
+    """A small board with one insulated wire, A-shaped: (2,2) down to (2,6), across to
+    (10,6) -- nothing selected, no tool armed."""
+    H = view2d.HoleCoord
+    scene, bus = _drawing_scene()
+    scene.arm_drawing("insulated-wire")
+    for hole in (H(2, 2), H(2, 6), H(10, 6)):
+        scene.draw_click(hole)
+    result = scene.commit_drawing()
+    assert result is not None and result.ok, result
+    scene.arm_drawing(None)
+    scene.set_document(bus.document)
+    [wire] = bus.document.conductors
+    assert wire.path == (H(2, 2), H(2, 6), H(10, 6))
+    return scene, bus, wire
+
+
+def test_copper_is_picked_up_where_it_is_pressed_without_being_selected_first() -> None:
+    """Sinan: "I can move a part as I like by dragging, but not a connection." A press on
+    copper picks up what it is on -- an end, a wire's corner, a stretch -- and the cursor
+    says which before the press."""
+    H = view2d.HoleCoord
+    scene, bus, wire = _wired_scene()
+    board = bus.document.board
+
+    def at(hole):  # type: ignore[no-untyped-def]
+        return hole_to_screen(hole, board, scene.side)
+
+    assert not scene.selected_conductor_ids()
+    grab = view2d.CopperGrab
+    assert scene.copper_grab_at(at(H(2, 2))) == grab(wire.id, "end", 0)
+    assert scene.copper_grab_at(at(H(10, 6))) == grab(wire.id, "end", 2)
+    assert scene.copper_grab_at(at(H(2, 6))) == grab(wire.id, "corner", 1)
+    assert scene.copper_grab_at(at(H(6, 6))) == grab(wire.id, "segment", 1, "rows")
+    assert scene.copper_grab_at(at(H(2, 4))) == grab(wire.id, "segment", 0, "columns")
+    assert scene.copper_grab_at(at(H(6, 3))) is None
+    cursor = view2d.grab_cursor
+    assert cursor(scene.copper_grab_at(at(H(2, 2)))) == Qt.CursorShape.CrossCursor
+    assert cursor(scene.copper_grab_at(at(H(6, 6)))) == Qt.CursorShape.SizeVerCursor
+    assert cursor(scene.copper_grab_at(at(H(2, 4)))) == Qt.CursorShape.SizeHorCursor
+    # Nothing is picked up while a tool is armed: the press is the tool's.
+    scene.arm_drawing("bare-wire")
+    assert scene.copper_grab_at(at(H(2, 2))) is None
+    scene.arm_drawing(None)
+
+    # The bottom leg, slid two rows down: one setPath, one undo step.
+    steps = len(bus.history())
+    assert scene.grab_copper(at(H(6, 6)))
+    scene.reshape_to(H(7, 8))
+    result = scene.finish_reshape()
+    assert result is not None and result.ok, result
+    [moved] = bus.document.conductors
+    assert moved.path == (H(2, 2), H(2, 8), H(10, 8), H(10, 6))
+    assert len(bus.history()) == steps + 1
+    scene.set_document(bus.document)
+
+    # The corner, moved and put back with Esc: nothing changes.
+    assert scene.grab_copper(at(H(2, 8)))
+    scene.reshape_to(H(3, 9))
+    assert scene.reshaping
+    assert scene.cancel_reshape()
+    assert bus.document.conductors == (moved,)
+    assert len(bus.history()) == steps + 1
+
+
+def test_a_run_slid_onto_another_nets_pad_is_red_before_it_is_let_go() -> None:
+    """LED_A's run, F1 → I1, slid down a row onto F2 -- GND's wire end -- says so as it is
+    dragged, as drawing does, and Esc leaves it where it was."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        scene = window.scene
+        run = next(c for c in window.bus.document.conductors if c.id == "cond-13")
+        assert scene.begin_reshape(1, "cond-13", slide_from=_hole(window, "G1"))
+        scene.reshape_to(_hole(window, "G2"))
+        banner = window.view.drag_banner
+        assert banner.isVisibleTo(window.view) and "short" in banner.text(), banner.text()
+        assert scene.cancel_reshape()
+        assert next(c for c in window.bus.document.conductors if c.id == "cond-13") == run
+    finally:
+        _close(window)
+
+
+def test_a_click_on_copper_without_a_drag_still_selects_it() -> None:
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    H = view2d.HoleCoord
+    window = _window_on(create_empty_document(DocumentMeta(name="c", created="", modified="")))
+    try:
+        window.on_draw_mode("bare-wire", True)
+        window.scene.draw_click(H(2, 2))
+        window.scene.draw_click(H(8, 2))
+        assert window.scene.commit_drawing() is not None
+        window.on_draw_mode("bare-wire", False)
+        [wire] = window.bus.document.conductors
+        view = window.view
+        board = window.bus.document.board
+        pos = QPointF(view.mapFromScene(hole_to_screen(H(5, 2), board, window.scene.side)))
+
+        def mouse(kind, buttons=Qt.MouseButton.LeftButton):  # type: ignore[no-untyped-def]
+            return QMouseEvent(
+                kind, pos, view.viewport().mapToGlobal(pos), Qt.MouseButton.LeftButton,
+                buttons, Qt.KeyboardModifier.NoModifier,
+            )
+
+        steps = len(window.bus.history())
+        view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress))
+        view.mouseReleaseEvent(mouse(QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton))
+        assert list(window.scene.selected_conductor_ids()) == [wire.id]
+        assert len(window.bus.history()) == steps
+    finally:
+        _close(window)
+
+
+def test_on_a_dense_board_a_copper_end_on_a_pin_moves_and_the_part_moves_by_its_body() -> None:
+    """atmega328-relay, through the view's own mouse events: a press on a pin a conductor
+    ends at picks up the END -- the part stays -- and the cursor over that pin says so; a
+    press on the part's body still moves the part."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    from perfboard_studio.geometry import all_pin_holes
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        view, scene = window.view, window.scene
+        document = window.bus.document
+        board = document.board
+        H = view2d.HoleCoord
+
+        def at(hole):  # type: ignore[no-untyped-def]
+            return QPointF(view.mapFromScene(hole_to_screen(hole, board, scene.side)))
+
+        def mouse(kind, pos, buttons=Qt.MouseButton.LeftButton):  # type: ignore[no-untyped-def]
+            return QMouseEvent(
+                kind, pos, view.viewport().mapToGlobal(pos.toPoint()), Qt.MouseButton.LeftButton,
+                buttons, Qt.KeyboardModifier.NoModifier,
+            )
+
+        pins = {}
+        for comp in document.components:
+            footprint = window.lookup(comp.footprint_id)
+            assert footprint is not None
+            for _pin, hole in all_pin_holes(comp, footprint):
+                pins[hole] = comp
+        used = {hole for c in document.conductors for hole in c.path} | set(pins)
+        found = None
+        for conductor in document.conductors:
+            if conductor.kind not in ("bare-wire", "insulated-wire", "solder-trace"):
+                continue
+            end = conductor.path[-1]
+            if end not in pins:
+                continue
+            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                target = H(end.col + dc, end.row + dr)
+                if target not in used and 0 <= target.col < board.cols and 0 <= target.row < board.rows:
+                    found = (conductor, end, target)
+                    break
+            if found is not None:
+                break
+        assert found is not None
+        conductor, end, target = found
+        part = pins[end]
+        centre = hole_to_screen(end, board, scene.side)
+        assert scene.copper_grab_at(centre) == view2d.CopperGrab(
+            conductor.id, "end", len(conductor.path) - 1
+        )
+        item = scene.component_items[part.id]
+        item._follow_the_pointer(centre)
+        assert item.cursor().shape() == Qt.CursorShape.CrossCursor
+
+        anchors = {c.id: c.anchor for c in document.components}
+        steps = len(window.bus.history())
+        view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, at(end)))
+        view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, at(target)))
+        view.mouseReleaseEvent(
+            mouse(QEvent.Type.MouseButtonRelease, at(target), Qt.MouseButton.NoButton)
+        )
+        after = window.bus.document
+        assert {c.id: c.anchor for c in after.components} == anchors
+        moved = next(c for c in after.conductors if c.id == conductor.id)
+        assert moved.path != conductor.path and moved.path[0] == conductor.path[0]
+        assert target in moved.path
+        history = window.bus.history()[steps:]
+        assert len(history) == 1, history
+
+        # The body of a part with no copper under its middle: the part's move cursor, and
+        # a press there is not the copper's.
+        for comp_item in scene.component_items.values():
+            middle = comp_item.sceneBoundingRect().center()
+            if scene.copper_grab_at(middle) is None and scene.component_at(middle) is comp_item:
+                break
+        else:
+            raise AssertionError("no part with a bare middle")
+        comp_item._follow_the_pointer(middle)
+        assert comp_item.cursor().shape() == Qt.CursorShape.SizeAllCursor
+        assert scene.grab_copper(middle) is False
+    finally:
+        _close(window)
+
+
+def test_a_label_left_alone_is_not_written_back_by_a_drag_of_something_else() -> None:
+    """nano-relay's two labels sit 0.86 and 1.01 mm off their holes, off the snap step: each
+    was "moved" from the moment it was drawn, and every drag on the board added an "Edit a
+    label on the board" nobody made."""
+    window = _window_on(_example_document("nano-relay"))
+    try:
+        notes = window.scene.board_note_items
+        assert notes
+        assert not any(item.moved for item in notes.values())
+        assert window.scene.commit_pending_moves() == []
+    finally:
+        _close(window)
+
+
 def test_a_click_where_copper_lies_on_copper_takes_the_next_one_each_time() -> None:
     """A run and a wire along one row: the one on top was all a click could reach, and
     Delete then took the wrong one."""

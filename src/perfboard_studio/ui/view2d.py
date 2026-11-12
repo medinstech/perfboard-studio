@@ -28,7 +28,7 @@ from collections import Counter
 from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import replace
 from functools import lru_cache
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -1144,6 +1144,11 @@ class BoardNoteItem(QGraphicsItem):
         centre = board_note_centre_mm(note, board)
         self.home = mm_to_screen(centre.x, centre.y, board, side)
         self.setPos(self.home)
+        # Home is where it SITS, snapped (``itemChange``), not where the file put it: a label
+        # whose offset is off the snap step -- nano-relay's two, at 0.86 and 1.01 mm -- was
+        # "moved" from the moment it was drawn, and every drag of anything else on the board
+        # wrote it back snapped, as an "Edit a label on the board" nobody made.
+        self.home = self.pos()
         self._width = physical_label_width_mm(note.text, note.size_mm) + 0.8
         self._height = note.size_mm * 1.8
 
@@ -2119,6 +2124,14 @@ def _orthogonal_run(from_: HoleCoord, to: HoleCoord, column_first: bool) -> list
     return run
 
 
+def _distance_to_leg(p: QPointF, a: QPointF, b: QPointF) -> float:
+    """How far ``p`` is from the straight leg ``a``-``b``, in scene millimetres."""
+    dx, dy = b.x() - a.x(), b.y() - a.y()
+    length = dx * dx + dy * dy
+    t_ = 0.0 if length == 0 else max(0.0, min(1.0, ((p.x() - a.x()) * dx + (p.y() - a.y()) * dy) / length))
+    return math.hypot(p.x() - (a.x() + t_ * dx), p.y() - (a.y() + t_ * dy))
+
+
 def _in_line(a: HoleCoord, b: HoleCoord, c: HoleCoord) -> bool:
     """Whether three holes lie on one row or one column: a drag from ``a`` through ``b`` to
     ``c`` has not turned."""
@@ -2163,8 +2176,8 @@ def reshaped_path(
       runs on to it along the grid, as the drawing tool does. Its middle has no handle --
       every pad of it is a joint.
     - A wire's end: its last leg is laid again from the corner before it, along the grid.
-    - A wire's corner: moved where it is dropped.
-    - A top jumper's end: straight, as it is drawn.
+    - A wire's corner, or a jumper's: moved where it is dropped.
+    - A top jumper's end: straight from the hole before it, as it is drawn.
     """
     holes = list(path)
     if not 0 <= index < len(holes):
@@ -2194,6 +2207,128 @@ def reshaped_path(
     if len(new) < 2 or new[0] == new[-1]:
         return None
     return tuple(new if index == last else new[::-1])
+
+
+def _corner_indices(path: Sequence[HoleCoord]) -> list[int]:
+    """The indices of the holes where ``path`` starts, turns or ends."""
+    out = [0]
+    for i in range(1, len(path) - 1):
+        a, b, c = path[i - 1], path[i], path[i + 1]
+        ab = (b.col - a.col, b.row - a.row)
+        bc = (c.col - b.col, c.row - b.row)
+        if ab[0] * bc[1] != ab[1] * bc[0] or ab[0] * bc[0] + ab[1] * bc[1] <= 0:
+            out.append(i)
+    out.append(len(path) - 1)
+    return out
+
+
+def _tidied(points: Sequence[HoleCoord]) -> list[HoleCoord]:
+    """Corners with nothing to say taken out until none is left: a hole named twice in a
+    row, a point on a straight leg, and a leg that folds back along the one before it.
+    Never the two ends -- they are where the copper is soldered."""
+    out = list(points)
+    while True:
+        tidy: list[HoleCoord] = []
+        for hole in out:
+            if tidy and tidy[-1] == hole:
+                continue
+            if len(tidy) >= 2:
+                a, b = tidy[-2], tidy[-1]
+                if (b.col - a.col) * (hole.row - b.row) == (b.row - a.row) * (hole.col - b.col):
+                    tidy[-1] = hole
+                    continue
+            tidy.append(hole)
+        if tidy == out:
+            return tidy
+        out = tidy
+
+
+def slid_path(
+    kind: ConductorKind, path: Sequence[HoleCoord], leg: int, dcol: int, drow: int
+) -> tuple[HoleCoord, ...] | None:
+    """``path`` with the straight stretch through its holes ``leg`` and ``leg + 1`` slid
+    sideways by (``dcol``, ``drow``) -- only the part across the stretch counts, so a hand
+    that wanders along it changes nothing -- or None where that cannot be.
+
+    The stretches on either side stretch to meet it, and the ends stay on their pads: where
+    the stretch began or ended at one, a leg from that pad to it is put in. A solder run is
+    every pad of the new chain, refused where it would cross itself, since each of those
+    pads is soldered; a diagonal stretch -- a jumper laid straight -- has no sideways on the
+    grid and is not slid.
+    """
+    holes = list(path)
+    if not 0 <= leg < len(holes) - 1:
+        return None
+    corners = _corner_indices(holes)
+    j = max(k for k in range(len(corners) - 1) if corners[k] <= leg)
+    a, b = holes[corners[j]], holes[corners[j + 1]]
+    if a.row == b.row:
+        dcol = 0
+    elif a.col == b.col:
+        drow = 0
+    else:
+        return None
+    if (dcol, drow) == (0, 0):
+        return tuple(holes)
+    points = [holes[k] for k in corners]
+    last = len(points) - 1
+    moved_a = HoleCoord(a.col + dcol, a.row + drow)
+    moved_b = HoleCoord(b.col + dcol, b.row + drow)
+    new = _tidied(
+        [
+            *points[:j],
+            *([a] if j == 0 else []),
+            moved_a,
+            moved_b,
+            *([b] if j + 1 == last else []),
+            *points[j + 2 :],
+        ]
+    )
+    if len(new) < 2 or new[0] == new[-1]:
+        return None
+    if kind not in _SOLDER_RUNS:
+        return tuple(new)
+    every = [new[0]]
+    for corner in new[1:]:
+        if corner.row != every[-1].row and corner.col != every[-1].col:
+            return None
+        every.extend(_orthogonal_run(every[-1], corner, False))
+    return tuple(every) if len(set(every)) == len(every) else None
+
+
+class CopperGrab(NamedTuple):
+    """What a press in the Select tool picks up of the copper under it
+    (``BoardScene.copper_grab_at``): an END of a conductor to move, a wire's CORNER to move,
+    or a SEGMENT -- a straight stretch, by the leg ``position`` to ``position + 1`` of its path --
+    to slide sideways. ``across`` is the way a segment slides: "rows" or "columns"."""
+
+    conductor_id: str
+    kind: str
+    position: int
+    across: str = ""
+
+
+def grab_cursor(grab: CopperGrab | None) -> Qt.CursorShape | None:
+    """The cursor that says what a press would pick up: the cross for a point -- an end or
+    a corner, put down on a hole -- and the two-headed arrow a segment slides along. A part
+    keeps the four-way move cursor, so the three never look alike."""
+    if grab is None:
+        return None
+    if grab.kind == "segment":
+        return (
+            Qt.CursorShape.SizeVerCursor if grab.across == "rows" else Qt.CursorShape.SizeHorCursor
+        )
+    return Qt.CursorShape.CrossCursor
+
+
+def _show_cursor(item: QGraphicsItem, shape: Qt.CursorShape | None) -> None:
+    """``item``'s cursor set to ``shape``, or taken away for None -- touched only when it
+    changes, since this runs on every hover move."""
+    if shape is None:
+        if item.hasCursor():
+            item.unsetCursor()
+    elif not item.hasCursor() or item.cursor().shape() != shape:
+        item.setCursor(shape)
 
 
 class CopperHandleItem(QGraphicsItem):
@@ -2478,6 +2613,8 @@ class ConductorItem(QGraphicsItem):
         # on the other face -- so wherever a part's outline covered a run, nothing on the
         # face the user was working on could be clicked.
         self.setZValue((40 if conductor.side == side else -50) + 0.1 * stack)
+        # For the cursor: what a press here picks up (``_follow_the_pointer``).
+        self.setAcceptHoverEvents(True)
         first, last = conductor.path[0], conductor.path[-1]
         # The net is the thing a reader hovering a trace is asking about -- "what IS this"
         # -- and it was the one field the tooltip left out.
@@ -2486,6 +2623,25 @@ class ConductorItem(QGraphicsItem):
             f"{conductor_word(conductor.kind, guide_language(current_language()))}  "
             f"{format_hole(first, board)} → {format_hole(last, board)}{net_note}"
         )
+
+    def _follow_the_pointer(self, at: QPointF) -> None:
+        """The cursor a press here would earn: an end's, a corner's or a segment's
+        (``grab_cursor``), or none -- a click that only selects."""
+        scene = self.scene()
+        grab = scene.copper_grab_at(at) if isinstance(scene, BoardScene) else None
+        _show_cursor(self, grab_cursor(grab))
+
+    def hoverEnterEvent(self, event: Any) -> None:
+        self._follow_the_pointer(event.scenePos())
+        super().hoverEnterEvent(event)
+
+    def hoverMoveEvent(self, event: Any) -> None:
+        self._follow_the_pointer(event.scenePos())
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event: Any) -> None:
+        _show_cursor(self, None)
+        super().hoverLeaveEvent(event)
 
     def _points(self) -> list[QPointF]:
         return [
@@ -4504,25 +4660,32 @@ class ComponentItem(QGraphicsItem):
         scene = self.scene()
         return bool(getattr(scene, "in_a_mode", False))
 
-    def _follow_the_pointer(self) -> None:
+    def _follow_the_pointer(self, at: QPointF) -> None:
         """The move cursor over a part that can move and while no tool is armed; none
         otherwise, so a mode's cross shows through. A locked part gets no promise it cannot
-        keep: the bus refuses its move with a message, which is the answer to the drag."""
-        if self.comp.locked or self._in_a_mode():
-            if self.hasCursor():
-                self.unsetCursor()
-        elif not self.hasCursor():
-            self.setCursor(Qt.CursorShape.SizeAllCursor)
+        keep: the bus refuses its move with a message, which is the answer to the drag.
+
+        Over a pad a copper end lies on, the copper's cursor: a press there picks up the
+        end (``BoardScene.copper_grab_at``), and the part is moved by its body."""
+        if self._in_a_mode():
+            _show_cursor(self, None)
+            return
+        scene = self.scene()
+        grab = scene.copper_grab_at(at) if isinstance(scene, BoardScene) else None
+        if grab is not None:
+            _show_cursor(self, grab_cursor(grab))
+        else:
+            _show_cursor(self, None if self.comp.locked else Qt.CursorShape.SizeAllCursor)
 
     def hoverEnterEvent(self, event: Any) -> None:
         self.hovered = True
-        self._follow_the_pointer()
+        self._follow_the_pointer(event.scenePos())
         self.update()
         super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event: Any) -> None:
         # A tool armed or put down with the pointer still on the part.
-        self._follow_the_pointer()
+        self._follow_the_pointer(event.scenePos())
         super().hoverMoveEvent(event)
 
     def hoverLeaveEvent(self, event: Any) -> None:
@@ -5120,6 +5283,9 @@ class BoardScene(QGraphicsScene):
         self._reshape_path: tuple[HoleCoord, ...] | None = None
         self._reshape_preview: DrawPreviewItem | None = None
         self._reshape_check: DrawCheck | None = None
+        #: A segment's drag: the hole it was pressed on, which the slide is measured from.
+        #: None while an end or a corner is dragged.
+        self._reshape_slide: HoleCoord | None = None
         self._net_pin_target: str | None = None
         self._net_pin_picks: list[tuple[str, str]] = []
         self._net_pin_holes: list[HoleCoord] = []
@@ -5356,6 +5522,7 @@ class BoardScene(QGraphicsScene):
         self._reshape = None
         self._reshape_path = None
         self._reshape_preview = None
+        self._reshape_slide = None
         # Dropped with the dict, for the same reason: a part selected while clear() runs
         # tells the layer to repaint, and the layer is one of the items being destroyed.
         self.reference_layer = None
@@ -6659,7 +6826,9 @@ class BoardScene(QGraphicsScene):
         if conductor is None or conductor.kind not in self._CORNER_KINDS | self._TWO_POINT_KINDS:
             return
         last = len(conductor.path) - 1
-        indices = range(len(conductor.path)) if conductor.kind in self._WIRE_KINDS else (0, last)
+        # Every corner of a wire, and of a jumper drawn with corners; a run's middle is
+        # pads, every one a joint.
+        indices = range(len(conductor.path)) if conductor.kind not in self._RUN_KINDS else (0, last)
         for index in indices:
             handle = CopperHandleItem(index, conductor.path[index], self.document.board, self.side)
             self.addItem(handle)
@@ -6674,13 +6843,26 @@ class BoardScene(QGraphicsScene):
                 return handle.index
         return None
 
-    def begin_reshape(self, index: int) -> bool:
-        """Pick up the selected conductor's handle ``index``. Also the seam tests drive."""
-        chosen = self.selected_conductor_ids()
-        conductor = next((c for c in self.document.conductors if c.id in chosen), None)
-        if len(chosen) != 1 or conductor is None:
+    def begin_reshape(
+        self,
+        index: int,
+        conductor_id: str | None = None,
+        *,
+        slide_from: HoleCoord | None = None,
+    ) -> bool:
+        """Pick up hole ``index`` of a conductor: the one selected, or ``conductor_id``.
+        With ``slide_from``, the leg from ``index`` to ``index + 1`` instead, to be slid
+        sideways from that hole (``slid_path``). Also the seam tests drive."""
+        if conductor_id is None:
+            chosen = self.selected_conductor_ids()
+            if len(chosen) != 1:
+                return False
+            conductor_id = chosen[0]
+        conductor = next((c for c in self.document.conductors if c.id == conductor_id), None)
+        if conductor is None:
             return False
         self._reshape = (conductor.id, index)
+        self._reshape_slide = slide_from
         self._reshape_path = None
         self._reshape_check = None
         self._reshape_preview = DrawPreviewItem(conductor.kind, self.document.board, self.side)
@@ -6698,7 +6880,14 @@ class BoardScene(QGraphicsScene):
         if conductor is None:
             return
         board = self.document.board
-        path = reshaped_path(conductor.kind, conductor.path, index, at)
+        slide = self._reshape_slide
+        path = (
+            reshaped_path(conductor.kind, conductor.path, index, at)
+            if slide is None
+            else slid_path(
+                conductor.kind, conductor.path, index, at.col - slide.col, at.row - slide.row
+            )
+        )
         legal = path is not None and all(is_inside_board(hole, board) for hole in path)
         self._reshape_path = path if legal and path != conductor.path else None
         shown = path if legal and path is not None else conductor.path
@@ -6708,7 +6897,7 @@ class BoardScene(QGraphicsScene):
         # that was a pad the run already had, not the one the drag brought in.
         asked = (
             self._reshape_path[::-1]
-            if self._reshape_path is not None and index == 0
+            if self._reshape_path is not None and index == 0 and slide is None
             else self._reshape_path
         )
         checked = (
@@ -6757,8 +6946,92 @@ class BoardScene(QGraphicsScene):
         self._reshape_path = None
         self._reshape_preview = None
         self._reshape_check = None
+        self._reshape_slide = None
         self.drawChecked.emit(None)
         return True
+
+    # -- copper picked up where it lies ----------------------------------------------------
+    #
+    # A part was dragged the moment it was pressed; copper had to be clicked first, and then
+    # only its ends moved, by squares a third of a pad wide -- so on a board the eye reads as
+    # parts AND wiring, half of it would not move under the hand. A press on copper in the
+    # Select tool now picks up what it is on: an end (on its pad, which is where it is
+    # soldered), a wire's corner, or a straight stretch to slide sideways. Each is the
+    # handle drag that was there already -- one ``conductor.setPath``, checked live as it is
+    # drawn, Esc puts it back -- and a press let go where it went down still only selects.
+
+    def copper_grab_at(self, pos: QPointF) -> CopperGrab | None:
+        """What a press at scene position ``pos`` in the Select tool picks up of the copper,
+        or None for nothing -- the part under it, or the board.
+
+        An END within a pad's reach comes first, wherever the copper lies, a part's pin on
+        the same pad included: the end is soldered there, and the part is moved by its
+        body. A wire's CORNER next, the same way. Then a SEGMENT, by the band the copper is
+        clicked by (``conductor_at``), unless a part lies over it (``component_at``'s rule).
+        Ties go to the conductor drawn on top.
+        """
+        if self.in_a_mode or self.bus is None:
+            return None
+        board = self.document.board
+        reach = board.pad_diameter / 2
+        kinds = self._CORNER_KINDS | self._TWO_POINT_KINDS
+        by_id = {c.id: c for c in self.document.conductors}
+        best: tuple[tuple[bool, float, str], CopperGrab] | None = None
+        for conductor_id, item in self.conductor_items.items():
+            conductor = by_id.get(conductor_id)
+            if (
+                conductor is None
+                or conductor.kind not in kinds
+                or not item.isVisible()
+                or item.is_hidden_on_screen()
+            ):
+                continue
+            last = len(conductor.path) - 1
+            points = (
+                range(len(conductor.path)) if conductor.kind not in self._RUN_KINDS else (0, last)
+            )
+            for index in points:
+                spot = hole_to_screen(conductor.path[index], board, self.side)
+                if math.hypot(spot.x() - pos.x(), spot.y() - pos.y()) > reach:
+                    continue
+                kind = "end" if index in (0, last) else "corner"
+                key = (kind != "end", -item.zValue(), conductor_id)
+                if best is None or key < best[0]:
+                    best = (key, CopperGrab(conductor_id, kind, index))
+        if best is not None:
+            return best[1]
+        over = self.conductor_at(pos)
+        if over is None or self.component_at(pos) is not None:
+            return None
+        conductor = by_id.get(over.conductor_id)
+        if conductor is None or conductor.kind not in kinds:
+            return None
+        return self._segment_grab(conductor, pos)
+
+    def _segment_grab(self, conductor: Conductor, pos: QPointF) -> CopperGrab | None:
+        """The leg of ``conductor`` nearest ``pos``, as a segment to slide -- None for a
+        diagonal one, which has no sideways on the grid."""
+        board = self.document.board
+        spots = [hole_to_screen(hole, board, self.side) for hole in conductor.path]
+        nearest = min(
+            range(len(spots) - 1), key=lambda i: _distance_to_leg(pos, spots[i], spots[i + 1])
+        )
+        a, b = conductor.path[nearest], conductor.path[nearest + 1]
+        if a.row == b.row:
+            return CopperGrab(conductor.id, "segment", nearest, "rows")
+        if a.col == b.col:
+            return CopperGrab(conductor.id, "segment", nearest, "columns")
+        return None
+
+    def grab_copper(self, pos: QPointF) -> bool:
+        """Pick up what a press at ``pos`` would (``copper_grab_at``). True if it did."""
+        grab = self.copper_grab_at(pos)
+        if grab is None:
+            return False
+        at = screen_to_hole(pos, self.document.board, self.side)
+        return self.begin_reshape(
+            grab.position, grab.conductor_id, slide_from=at if grab.kind == "segment" else None
+        )
 
     # -- several conductors under one click ----------------------------------------------
 
@@ -7139,6 +7412,9 @@ class BoardScene(QGraphicsScene):
             if index is not None and self.begin_reshape(index):
                 event.accept()
                 return
+            if self.grab_copper(event.scenePos()):
+                event.accept()
+                return
             if self.cycle_pick(event.scenePos()):
                 event.accept()
                 return
@@ -7198,11 +7474,12 @@ class BoardScene(QGraphicsScene):
             return
         if self._reshape is not None:
             moved = self._reshape_path is not None
+            held = self._reshape[0]
             self.finish_reshape()
-            if not moved:
-                # A handle pressed and let go where it was is a click, and a click where
-                # copper lies over copper takes the next one.
-                self.cycle_pick(event.scenePos())
+            if not moved and not self.cycle_pick(event.scenePos()):
+                # Copper pressed and let go where it was is a click: it selects what was
+                # pressed -- and where copper lies over copper, the next one.
+                self.select_conductors([held])
             event.accept()
             return
         super().mouseReleaseEvent(event)

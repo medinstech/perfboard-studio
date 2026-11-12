@@ -2297,6 +2297,23 @@ because the import goes the way that does not make a cycle. With the two views a
 a drag can simply cross from one to the other when they sit side by side; stacked, the dock
 area's tab bar is the thing to drag over.
 
+**On the board, a press picks up what it is on, copper as well as parts**
+(`BoardScene.copper_grab_at`). Copper used to have to be clicked first, and then only its
+ends moved, by squares a third of a pad wide, while a part moved the moment it was pressed:
+half of what the eye reads on a board would not move under the hand. Now, in the Select
+tool, an END within a pad's reach comes first -- a part's pin on the same pad included,
+since the end is soldered there; the part is moved by its body -- then a wire's or a
+jumper's CORNER, then a straight stretch, which SLIDES sideways (`slid_path`): its
+neighbours stretch to meet it and a leg is put in from an end where needed, so the ends
+never leave their pads. A segment, not a hole, is what is pressed in the middle of copper,
+because moving one hole of a run would tear it. Every one of them is the handle drag that
+was already there -- one `conductor.setPath`, checked by `drawcheck` as it moves, Esc puts it
+back -- and a press let go where it went down still selects, so click-to-select and the
+pick cycle over stacked copper are unchanged. The cursor is asked the same question
+(`grab_cursor`) by the part and by the copper under the pointer, so what it promises is what
+the press does: a cross for a point, a two-headed arrow for a stretch, four ways for a part.
+Pinned by `test_on_a_dense_board_a_copper_end_on_a_pin_moves_and_the_part_moves_by_its_body`.
+
 **A right-click on the sheet edits the CIRCUIT, because the drawing has nothing to edit.**
 `MainWindow.sheet_menu` builds one of three menus from what is under the pointer — a symbol
 is a part, a wire is a net, bare sheet is the sheet — and returns it rather than showing it,

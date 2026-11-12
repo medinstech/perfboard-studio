@@ -22,6 +22,16 @@ closed without a bump.
 
 ### Added
 
+- **Copper moves under the hand, like a part.** In the Select tool a press on copper picks
+  it up at once, with no click to select it first: on an end -- anywhere on its pad, a part's
+  pin included -- it moves that end; on a wire's or a jumper's corner, the corner; on a
+  straight stretch, it slides the stretch sideways along the grid, the stretches beside it
+  stretching to meet it and a leg put in from an end where needed, so the ends stay on their
+  pads. A solder run slid is soldered on its new pads, and goes red before it is let go
+  where it would short, as drawing does. Each drag is one undo step and Esc puts it back; a
+  press let go where it went down still only selects. The cursor says what a press would
+  pick up: a cross for an end or a corner, a two-headed arrow for a stretch, the four-way
+  arrow for a part, which is now moved by its body.
 - **Copper is drawn by dragging, pad to pad.** With a drawing tool armed, press on a hole,
   drag, and let go on another: a run, a wire or a jumper in one gesture, a corner wherever
   the drag turns, previewed and checked as it goes exactly as clicks are. A press let go
@@ -247,6 +257,10 @@ closed without a bump.
 
 ### Fixed
 
+- **A label on the board is no longer edited by a drag of something else.** A label whose
+  offset from its hole was off the quarter-millimetre step it snaps to -- both of the
+  nano-relay example's -- counted as moved from the moment it was drawn, so every drag of a
+  part wrote it back snapped, and Undo showed an "Edit a label on the board" nobody made.
 - **A board the size question offers is never refused once chosen.** Its trial judges each
   board with the copper stripped, so with the parts taken off and the wiring left on, a
   smaller board was offered and then refused over a wire in a bare warning ("Conductor
