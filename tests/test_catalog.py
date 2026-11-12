@@ -1109,6 +1109,22 @@ def test_adafruits_motion_and_humidity_breakouts_are_headers_in_the_silkscreens_
         }, part_id
 
 
+def test_the_pulse_sensor_and_the_dac_are_headers_in_the_silkscreens_order() -> None:
+    expected = {
+        "sparkfun-max30105": (["SCL", "SDA", "5V", "GND", "!INT"], "MAX30105_Particle_Sensor_Breakout"),
+        "adafruit-mcp4725": (["VDD", "GND", "SCL", "SDA", "A0", "VOUT"], "Adafruit-MCP4725-PCB"),
+    }
+    for part_id, (names, repo) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert repo in part.source, part_id
+        assert part.value is not None and part_id in {
+            found.id for found in search_catalog(part.value)
+        }, part_id
+    assert "sparkfun-max30105" in {found.id for found in search_catalog("MAX30102")}
+
+
 def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:
     expected = {
         "st7735-tft-18": (

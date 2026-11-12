@@ -1974,6 +1974,53 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("SHT31", "SHT31-D", "SHT3x", "temperature sensor", "humidity sensor",
                          "sıcaklık nem sensörü", "nem sensörü")),
+    CatalogPart("sparkfun-max30105", "SparkFun MAX30105 particle and pulse sensor (on a header)",
+                "sensor", "hdr-1x5",
+                "Particle, pulse and pulse-oximeter sensor, on I2C. Its cable plugs into this "
+                "5-pin header: SCL SDA 5V GND !INT from pin 1",
+                _legs("SCL", "SDA", "5V", "GND", "!INT"), value="MAX30105", ref_prefix="J",
+                source=(
+                    "SparkFun's own Eagle board for its MAX30105 breakout "
+                    "(github.com/sparkfun/MAX30105_Particle_Sensor_Breakout, "
+                    "Hardware/MAX30105_Breakout.brd), the 5-pin header J2: pad 1 at SCL and "
+                    "every name read off its silkscreen, each pad's net checked against the "
+                    "board's nets. The supply note is the repository's readme"
+                ),
+                check=(
+                    "The 5V pad feeds the sensor's LEDs directly and a 1.8 V regulator for its "
+                    "logic. SCL and SDA go through level-shifting MOSFETs, so the bus may run "
+                    "at the 5V pad's level. The readme says the board needs 3.3 V to run the "
+                    "red and infrared LEDs and recommends 3.5 V for the green one, so the pad "
+                    "is not only a 5 V input. The bus pull-ups and the !INT pull-up go to the "
+                    "5V pad through the PU and INT solder jumpers, which the board file draws "
+                    "closed by a trace. !INT is the sensor's interrupt output, active low, and "
+                    "can stay unwired. Other MAX30102 and MAX30105 boards carry a different "
+                    "header, so compare the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("MAX30105", "MAX30102", "MAX30100", "pulse oximeter", "heart rate sensor",
+                         "pulse sensor", "nabız sensörü", "nabız oksimetre")),
+    CatalogPart("adafruit-mcp4725", "Adafruit MCP4725 12-bit DAC (on a header)", "sensor",
+                "hdr-1x6",
+                "12-bit digital-to-analog converter, on I2C. Its cable plugs into this 6-pin "
+                "header: VDD GND SCL SDA A0 VOUT from pin 1",
+                _legs("VDD", "GND", "SCL", "SDA", "A0", "VOUT"), value="MCP4725",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its MCP4725 breakout "
+                    "(github.com/adafruit/Adafruit-MCP4725-PCB, 'Adafruit MCP4725 Original'), "
+                    "the 6-pin header JP1: pad 1 at VDD and every name read off its silkscreen, "
+                    "each pad's net checked against the board's nets. The silkscreen gives the "
+                    "supply as 2.7 to 5.5 V and the address as 110001 followed by A0"
+                ),
+                check=(
+                    "VDD takes 2.7 to 5.5 V by the board's silkscreen, and VOUT swings between "
+                    "0 V and VDD. Resistors on the board pull SCL and SDA up to VDD, and A0 is "
+                    "pulled low, which makes the I2C address 0x62; tie A0 to VDD for 0x63. "
+                    "Other MCP4725 boards carry a different header, so compare the names "
+                    "printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("MCP4725", "DAC", "digital to analog", "12 bit DAC", "analog output",
+                         "dijital analog çevirici")),
     CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",

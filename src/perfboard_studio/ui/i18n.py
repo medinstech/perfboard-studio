@@ -3179,6 +3179,58 @@ TURKISH: Mapping[str, str] = {
         "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
         " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "SparkFun MAX30105 particle and pulse sensor (on a header)": (
+        "SparkFun MAX30105 partikül ve nabız sensörü (header üzerinde)"
+    ),
+    "Particle, pulse and pulse-oximeter sensor, on I2C. Its cable plugs into this 5-pin"
+    " header: SCL SDA 5V GND !INT from pin 1": (
+        "I2C üzerinden partikül, nabız ve nabız oksimetresi sensörü. Kablosu bu 5 pinli"
+        " header'a takılır: 1. pinden SCL SDA 5V GND !INT"
+    ),
+    "The 5V pad feeds the sensor's LEDs directly and a 1.8 V regulator for its logic. "
+    "SCL and SDA go through level-shifting MOSFETs, so the bus may run at the 5V pad's "
+    "level. The readme says the board needs 3.3 V to run the red and infrared LEDs and "
+    "recommends 3.5 V for the green one, so the pad is not only a 5 V input. The bus "
+    "pull-ups and the !INT pull-up go to the 5V pad through the PU and INT solder "
+    "jumpers, which the board file draws closed by a trace. !INT is the sensor's "
+    "interrupt output, active low, and can stay unwired. Other MAX30102 and MAX30105 "
+    "boards carry a different header, so compare the names printed on yours with these."
+    " Match each lead to the name printed beside the module's pins, not to its place: "
+    "sellers' boards are not all wired in the same order.": (
+        "5V pini sensörün LED'lerini doğrudan, mantığını da 1,8 V'luk bir regülatör "
+        "üzerinden besler. SCL ile SDA seviye çeviren MOSFET'lerden geçer, bu yüzden "
+        "hat 5V pininin seviyesinde çalışabilir. Deponun readme'sine göre kart kırmızı "
+        "ve kızılötesi LED'ler için 3,3 V ister, yeşil LED için 3,5 V önerir; yani pin "
+        "yalnızca bir 5 V girişi değildir. Hat ve !INT yukarı çekme dirençleri, kart "
+        "dosyasında iz ile kapalı çizilmiş PU ve INT lehim köprüleri üzerinden 5V "
+        "pinine gider. !INT sensörün kesme çıkışıdır, düşükte etkindir ve boş "
+        "kalabilir. Başka MAX30102 ve MAX30105 kartlarının header'ı farklıdır: "
+        "sizinkinin üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine "
+        "göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "Adafruit MCP4725 12-bit DAC (on a header)": (
+        "Adafruit MCP4725 12 bit DAC (header üzerinde)"
+    ),
+    "12-bit digital-to-analog converter, on I2C. Its cable plugs into this 6-pin "
+    "header: VDD GND SCL SDA A0 VOUT from pin 1": (
+        "I2C üzerinden 12 bit dijital-analog çevirici. Kablosu bu 6 pinli header'a "
+        "takılır: 1. pinden VDD GND SCL SDA A0 VOUT"
+    ),
+    "VDD takes 2.7 to 5.5 V by the board's silkscreen, and VOUT swings between 0 V and "
+    "VDD. Resistors on the board pull SCL and SDA up to VDD, and A0 is pulled low, "
+    "which makes the I2C address 0x62; tie A0 to VDD for 0x63. Other MCP4725 boards "
+    "carry a different header, so compare the names printed on yours with these. Match "
+    "each lead to the name printed beside the module's pins, not to its place: sellers'"
+    " boards are not all wired in the same order.": (
+        "VDD, kartın baskısına göre 2,7 ile 5,5 V alır ve VOUT 0 V ile VDD arasında "
+        "değişir. Kartın üzerindeki dirençler SCL ile SDA'yı VDD'ye çeker, A0 ise düşük"
+        " tutulur; bu da I2C adresini 0x62 yapar, 0x63 için A0'ı VDD'ye bağlayın. Başka"
+        " MCP4725 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),

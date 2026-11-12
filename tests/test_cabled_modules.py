@@ -210,6 +210,8 @@ SOLD_AS = {
     "adafruit-vl53l0x": "VL53L0X",
     "adafruit-adxl345": "ADXL345",
     "adafruit-sht31": "SHT31",
+    "sparkfun-max30105": "MAX30105",
+    "adafruit-mcp4725": "MCP4725",
     "st7735-tft-18": "ST7735 TFT",
     "nokia-5110": "Nokia 5110",
     "adafruit-rfm9x-lora": "RFM9x",
