@@ -1166,6 +1166,39 @@ def test_the_tca9548a_is_one_board_on_two_rows_of_twelve() -> None:
     assert "tca9548a" in {found.id.replace("adafruit-", "") for found in search_catalog("PCA9548")}
 
 
+def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
+    expected = {
+        "adafruit-ccs811": (
+            ["VIN", "3V3", "GND", "SDA", "SCL", "!WAKE", "!RST", "!INT"],
+            "Adafruit-CCS811-Breakout-PCB",
+        ),
+        "adafruit-lsm6ds3": (
+            ["VIN", "3Vo", "GND", "SCL", "SDA", "DO", "CS", "I1", "I2"],
+            "Adafruit-LSM6DS3TR-C-PCB",
+        ),
+        "adafruit-bno055": (
+            ["Vin", "3Vo", "GND", "SDA", "SCL", "RST"],
+            "Adafruit-BNO055-Breakout-PCB",
+        ),
+        "adafruit-as5600": (
+            ["VIN", "3Vo", "GND", "SCL", "SDA", "OUT"],
+            "Adafruit-AS5600-Magnetic-Angle-Sensor-PCB",
+        ),
+        "adafruit-qmc5883p": (
+            ["VIN", "3Vo", "GND", "SCL", "SDA"],
+            "Adafruit-QMC5883P-Triple-Axis-Magnetometer-PCB",
+        ),
+    }
+    for part_id, (names, repo) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert repo in part.source, part_id
+        assert part.value is not None and part_id in {
+            found.id for found in search_catalog(part.value)
+        }, part_id
+
+
 def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:
     expected = {
         "st7735-tft-18": (

@@ -2104,6 +2104,135 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("HMC5883L", "HMC5883", "compass", "magnetometer", "pusula",
                          "manyetometre")),
+    CatalogPart("adafruit-ccs811", "Adafruit CCS811 air quality sensor (on a header)", "sensor",
+                "hdr-1x8",
+                "Air quality (eCO2 and TVOC) sensor, on I2C. Its cable plugs into this 8-pin "
+                "header: VIN 3V3 GND SDA SCL !WAKE !RST !INT from pin 1",
+                _legs("VIN", "3V3", "GND", "SDA", "SCL", "!WAKE", "!RST", "!INT"),
+                value="CCS811", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its CCS811 breakout "
+                    "(github.com/adafruit/Adafruit-CCS811-Breakout-PCB, 'CCS811 Rev B'), the "
+                    "8-pin header JP3: pad 1 at VIN and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets. The silkscreen reads Vin 3-5VDC "
+                    "and Vlogic 3-5VDC"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+                    "chip's supply, and 3V3 is its output, not a second input. SDA and SCL go "
+                    "through level-shifting transistors, so the bus may run at VIN's level. "
+                    "!WAKE and !RST are held high by resistors on the board, each through a "
+                    "diode, so a pin pulling them low from outside works at either logic "
+                    "level. By the chip's datasheet !WAKE must be low while the chip talks on "
+                    "I2C, so wire it to GND or to a pin; pulling !RST low resets the chip. "
+                    "!INT comes straight from the chip and can stay unwired. Other CCS811 "
+                    "boards carry a different header, so compare the names printed on yours "
+                    "with these. " + _CABLED_CHECK
+                ),
+                aliases=("CCS811", "air quality sensor", "eCO2", "TVOC",
+                         "hava kalitesi sensörü")),
+    CatalogPart("adafruit-lsm6ds3", "Adafruit LSM6DS3 accelerometer and gyro (on a header)",
+                "sensor", "hdr-1x9",
+                "6-axis accelerometer and gyroscope, on I2C or SPI. Its cable plugs into this "
+                "9-pin header: VIN 3Vo GND SCL SDA DO CS I1 I2 from pin 1",
+                _legs("VIN", "3Vo", "GND", "SCL", "SDA", "DO", "CS", "I1", "I2"),
+                value="LSM6DS3", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its LSM6DS3 breakout "
+                    "(github.com/adafruit/Adafruit-LSM6DS3TR-C-PCB, 'Adafruit_LSM6DS3'), the "
+                    "9-pin primary header JP1: pad 1 at VIN and every name read off its "
+                    "silkscreen, each pad's net checked against the board's nets. The silkscreen "
+                    "reads I2C VLogic/Vcc 3-5VDC and I2C Addr 0x6A. Its 5-pin auxiliary I2C "
+                    "header JP2 is not on this part"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+                    "chip's supply, and 3Vo is its output, not a second input. SCL and SDA go "
+                    "through level-shifting transistors, so the bus may run at VIN's level. "
+                    "CS is held high on the board through a diode, which leaves the chip on "
+                    "I2C: pull it low only to use SPI. DO is the chip's SDO and, on I2C, its "
+                    "address bit: the board holds it low for the 0x6A the silkscreen gives, and "
+                    "the AD0 solder jumper ties it to 3.3 V for the other address. I1 and I2 "
+                    "are the interrupt outputs and can stay unwired. The board's second "
+                    "header, the chip's auxiliary I2C for a sensor hub, is not drawn here. "
+                    "Other LSM6DS3 boards carry a different header, so compare the names "
+                    "printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("LSM6DS3", "LSM6DS3TR-C", "IMU", "6 axis", "accelerometer gyro",
+                         "ivme jiroskop")),
+    CatalogPart("adafruit-bno055", "Adafruit BNO055 orientation sensor (on a header)", "sensor",
+                "hdr-1x6",
+                "9-axis orientation sensor with sensor fusion, on I2C. Its cable plugs into this "
+                "6-pin header: Vin 3Vo GND SDA SCL RST from pin 1",
+                _legs("Vin", "3Vo", "GND", "SDA", "SCL", "RST"), value="BNO055",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its BNO055 breakout "
+                    "(github.com/adafruit/Adafruit-BNO055-Breakout-PCB, 'Adafruit BNO055'), the "
+                    "6-pin header JP1: pad 1 at Vin and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets. The silkscreen reads Vin 3-5V "
+                    "DC, 3V logic, SDA/SCL/RST 5V ok. Its 4-pin header JP2 (PS0 PS1 INT ADR) is "
+                    "not on this part"
+                ),
+                check=(
+                    "Vin takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+                    "chip's supply, and 3Vo is its output, not a second input. SDA and SCL go "
+                    "through level-shifting transistors and RST through a diode, which is what "
+                    "the silkscreen means by 5 V OK. The board's second header, PS0, PS1, INT "
+                    "and ADR, is not drawn here: the board holds all three inputs low, which "
+                    "is I2C at 0x28, and ADR tied to 3.3 V gives 0x29. Other BNO055 boards "
+                    "carry a different header, so compare the names printed on yours with "
+                    "these. " + _CABLED_CHECK
+                ),
+                aliases=("BNO055", "BNO", "orientation sensor", "9 axis", "IMU",
+                         "yönelim sensörü")),
+    CatalogPart("adafruit-as5600", "Adafruit AS5600 magnetic angle sensor (on a header)",
+                "sensor", "hdr-1x6",
+                "12-bit magnetic rotary position sensor, on I2C. Its cable plugs into this "
+                "6-pin header: VIN 3Vo GND SCL SDA OUT from pin 1",
+                _legs("VIN", "3Vo", "GND", "SCL", "SDA", "OUT"), value="AS5600",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its AS5600 breakout "
+                    "(github.com/adafruit/Adafruit-AS5600-Magnetic-Angle-Sensor-PCB), the 6-pin "
+                    "header JP1: pad 1 at VIN and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets. The silkscreen reads Vcc/logic "
+                    "3-5VDC and I2C Addr 0x36"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+                    "chip's supply, and 3Vo is its output, not a second input. SCL and SDA go "
+                    "through level-shifting transistors, so the bus may run at VIN's level. "
+                    "OUT comes straight from the chip and is its analog or PWM output, as the "
+                    "chip is set up. The board ties the chip's DIR pin low with a closed "
+                    "solder jumper. Other AS5600 boards carry a different header, so compare "
+                    "the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("AS5600", "magnetic encoder", "angle sensor", "rotary position",
+                         "manyetik enkoder", "açı sensörü")),
+    CatalogPart("adafruit-qmc5883p", "Adafruit QMC5883P magnetometer (on a header)", "sensor",
+                "hdr-1x5",
+                "3-axis magnetometer (compass), on I2C. Its cable plugs into this 5-pin "
+                "header: VIN 3Vo GND SCL SDA from pin 1",
+                _legs("VIN", "3Vo", "GND", "SCL", "SDA"), value="QMC5883P", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its QMC5883P breakout "
+                    "(github.com/adafruit/Adafruit-QMC5883P-Triple-Axis-Magnetometer-PCB), the "
+                    "5-pin header JP2: pad 1 at VIN and every name read off its silkscreen, "
+                    "each pad's net checked against the board's nets. The silkscreen reads "
+                    "VLogic/Vcc 3-5VDC and I2C address 0x2C"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+                    "chip's supply, and 3Vo is its output, not a second input. SCL and SDA go "
+                    "through level-shifting transistors, so the bus may run at VIN's level. "
+                    "The QMC5883P is not the QMC5883L or the HMC5883L: its I2C address is "
+                    "0x2C by the silkscreen, so code written for those two will not find it. "
+                    "Other QMC5883P boards carry a different header, so compare the names "
+                    "printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("QMC5883P", "QMC5883", "compass", "magnetometer", "pusula",
+                         "manyetometre")),
     CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",

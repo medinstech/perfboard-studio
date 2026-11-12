@@ -3339,6 +3339,148 @@ TURKISH: Mapping[str, str] = {
         "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "Adafruit CCS811 air quality sensor (on a header)": (
+        "Adafruit CCS811 hava kalitesi sensörü (header üzerinde)"
+    ),
+    "Air quality (eCO2 and TVOC) sensor, on I2C. Its cable plugs into this 8-pin "
+    "header: VIN 3V3 GND SDA SCL !WAKE !RST !INT from pin 1": (
+        "I2C üzerinden hava kalitesi (eCO2 ve TVOC) sensörü. Kablosu bu 8 pinli "
+        "header'a takılır: 1. pinden VIN 3V3 GND SDA SCL !WAKE !RST !INT"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the chip's "
+    "supply, and 3V3 is its output, not a second input. SDA and SCL go through level-"
+    "shifting transistors, so the bus may run at VIN's level. !WAKE and !RST are held "
+    "high by resistors on the board, each through a diode, so a pin pulling them low "
+    "from outside works at either logic level. By the chip's datasheet !WAKE must be "
+    "low while the chip talks on I2C, so wire it to GND or to a pin; pulling !RST low "
+    "resets the chip. !INT comes straight from the chip and can stay unwired. Other "
+    "CCS811 boards carry a different header, so compare the names printed on yours with"
+    " these. Match each lead to the name printed beside the module's pins, not to its "
+    "place: sellers' boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin "
+        "beslemesini üretir ve 3V3 onun çıkışıdır, ikinci bir giriş değildir. SDA ile "
+        "SCL seviye çeviren transistörlerden geçer, bu yüzden hat VIN seviyesinde "
+        "çalışabilir. !WAKE ile !RST kartın üzerindeki dirençlerle yüksek tutulur, her "
+        "biri bir diyot üzerinden; böylece dışarıdan düşük çeken bir pin her iki mantık"
+        " seviyesinde de çalışır. Çipin veri sayfasına göre çip I2C'de konuşurken !WAKE"
+        " düşük olmalıdır, bu yüzden onu GND'ye ya da bir pine bağlayın; !RST'yi düşük "
+        "çekmek çipi sıfırlar. !INT doğrudan çipten gelir ve boş kalabilir. Başka "
+        "CCS811 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit LSM6DS3 accelerometer and gyro (on a header)": (
+        "Adafruit LSM6DS3 ivmeölçer ve jiroskop (header üzerinde)"
+    ),
+    "6-axis accelerometer and gyroscope, on I2C or SPI. Its cable plugs into this 9-pin"
+    " header: VIN 3Vo GND SCL SDA DO CS I1 I2 from pin 1": (
+        "I2C veya SPI üzerinden 6 eksenli ivmeölçer ve jiroskop. Kablosu bu 9 pinli "
+        "header'a takılır: 1. pinden VIN 3Vo GND SCL SDA DO CS I1 I2"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the chip's "
+    "supply, and 3Vo is its output, not a second input. SCL and SDA go through level-"
+    "shifting transistors, so the bus may run at VIN's level. CS is held high on the "
+    "board through a diode, which leaves the chip on I2C: pull it low only to use SPI. "
+    "DO is the chip's SDO and, on I2C, its address bit: the board holds it low for the "
+    "0x6A the silkscreen gives, and the AD0 solder jumper ties it to 3.3 V for the "
+    "other address. I1 and I2 are the interrupt outputs and can stay unwired. The "
+    "board's second header, the chip's auxiliary I2C for a sensor hub, is not drawn "
+    "here. Other LSM6DS3 boards carry a different header, so compare the names printed "
+    "on yours with these. Match each lead to the name printed beside the module's pins,"
+    " not to its place: sellers' boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin "
+        "beslemesini üretir ve 3Vo onun çıkışıdır, ikinci bir giriş değildir. SCL ile "
+        "SDA seviye çeviren transistörlerden geçer, bu yüzden hat VIN seviyesinde "
+        "çalışabilir. CS kartın üzerinde bir diyot üzerinden yüksek tutulur, bu da çipi"
+        " I2C'de bırakır: yalnızca SPI kullanmak için düşük çekin. DO çipin SDO'sudur "
+        "ve I2C'de adres bitidir: kart onu baskının verdiği 0x6A için düşük tutar, AD0 "
+        "lehim köprüsü de öteki adres için 3,3 V'a bağlar. I1 ile I2 kesme çıkışlarıdır"
+        " ve boş kalabilir. Kartın ikinci header'ı, çipin sensör merkezi için yardımcı "
+        "I2C'si, burada çizilmemiştir. Başka LSM6DS3 kartlarının header'ı farklıdır: "
+        "sizinkinin üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine "
+        "göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "Adafruit BNO055 orientation sensor (on a header)": (
+        "Adafruit BNO055 yönelim sensörü (header üzerinde)"
+    ),
+    "9-axis orientation sensor with sensor fusion, on I2C. Its cable plugs into this "
+    "6-pin header: Vin 3Vo GND SDA SCL RST from pin 1": (
+        "I2C üzerinden sensör birleştirmeli 9 eksenli yönelim sensörü. Kablosu bu 6 "
+        "pinli header'a takılır: 1. pinden Vin 3Vo GND SDA SCL RST"
+    ),
+    "Vin takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the chip's "
+    "supply, and 3Vo is its output, not a second input. SDA and SCL go through level-"
+    "shifting transistors and RST through a diode, which is what the silkscreen means "
+    "by 5 V OK. The board's second header, PS0, PS1, INT and ADR, is not drawn here: "
+    "the board holds all three inputs low, which is I2C at 0x28, and ADR tied to 3.3 V "
+    "gives 0x29. Other BNO055 boards carry a different header, so compare the names "
+    "printed on yours with these. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "Vin, kartın baskısına göre 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin "
+        "beslemesini üretir ve 3Vo onun çıkışıdır, ikinci bir giriş değildir. SDA ile "
+        "SCL seviye çeviren transistörlerden, RST de bir diyottan geçer; baskıdaki 5 V "
+        "OK bunu söyler. Kartın ikinci header'ı, PS0, PS1, INT ve ADR, burada "
+        "çizilmemiştir: kart üç girişi de düşük tutar, bu da 0x28 adresinde I2C'dir; "
+        "ADR'yi 3,3 V'a bağlamak 0x29 verir. Başka BNO055 kartlarının header'ı "
+        "farklıdır: sizinkinin üzerinde yazan adları bunlarla karşılaştırın. Her "
+        "kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın:"
+        " satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "Adafruit AS5600 magnetic angle sensor (on a header)": (
+        "Adafruit AS5600 manyetik açı sensörü (header üzerinde)"
+    ),
+    "12-bit magnetic rotary position sensor, on I2C. Its cable plugs into this 6-pin "
+    "header: VIN 3Vo GND SCL SDA OUT from pin 1": (
+        "I2C üzerinden 12 bit manyetik dönme konumu sensörü. Kablosu bu 6 pinli "
+        "header'a takılır: 1. pinden VIN 3Vo GND SCL SDA OUT"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the chip's "
+    "supply, and 3Vo is its output, not a second input. SCL and SDA go through level-"
+    "shifting transistors, so the bus may run at VIN's level. OUT comes straight from "
+    "the chip and is its analog or PWM output, as the chip is set up. The board ties "
+    "the chip's DIR pin low with a closed solder jumper. Other AS5600 boards carry a "
+    "different header, so compare the names printed on yours with these. Match each "
+    "lead to the name printed beside the module's pins, not to its place: sellers' "
+    "boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin "
+        "beslemesini üretir ve 3Vo onun çıkışıdır, ikinci bir giriş değildir. SCL ile "
+        "SDA seviye çeviren transistörlerden geçer, bu yüzden hat VIN seviyesinde "
+        "çalışabilir. OUT doğrudan çipten gelir ve çip nasıl ayarlandıysa analog ya da "
+        "PWM çıkışıdır. Kart çipin DIR pinini kapalı bir lehim köprüsüyle düşük tutar. "
+        "Başka AS5600 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit QMC5883P magnetometer (on a header)": (
+        "Adafruit QMC5883P manyetometre (header üzerinde)"
+    ),
+    "3-axis magnetometer (compass), on I2C. Its cable plugs into this 5-pin header: VIN"
+    " 3Vo GND SCL SDA from pin 1": (
+        "I2C üzerinden 3 eksenli manyetometre (pusula). Kablosu bu 5 pinli header'a "
+        "takılır: 1. pinden VIN 3Vo GND SCL SDA"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the chip's "
+    "supply, and 3Vo is its output, not a second input. SCL and SDA go through level-"
+    "shifting transistors, so the bus may run at VIN's level. The QMC5883P is not the "
+    "QMC5883L or the HMC5883L: its I2C address is 0x2C by the silkscreen, so code "
+    "written for those two will not find it. Other QMC5883P boards carry a different "
+    "header, so compare the names printed on yours with these. Match each lead to the "
+    "name printed beside the module's pins, not to its place: sellers' boards are not "
+    "all wired in the same order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır: 3,3 V'luk bir regülatör çipin "
+        "beslemesini üretir ve 3Vo onun çıkışıdır, ikinci bir giriş değildir. SCL ile "
+        "SDA seviye çeviren transistörlerden geçer, bu yüzden hat VIN seviyesinde "
+        "çalışabilir. QMC5883P, QMC5883L ya da HMC5883L değildir: baskıya göre I2C "
+        "adresi 0x2C'dir, bu yüzden o ikisi için yazılmış kod onu bulamaz. Başka "
+        "QMC5883P kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),
