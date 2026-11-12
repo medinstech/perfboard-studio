@@ -1355,6 +1355,10 @@ class ApplyBoardPresetPayload:
     edge_connectors: tuple[EdgeConnector, ...] = ()
     mounting_holes: tuple[MountingHole, ...] = ()
     label: str | None = None
+    #: Take up, in this same step, the copper, cuts and labels the new board has no room
+    #: for (``left_off_board``) rather than refusing the board over them. A part is never
+    #: taken up: a board that strands one still refuses.
+    take_up: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -2744,6 +2748,8 @@ class _ApplyBoardPreset:
     def apply(
         self, doc: PerfDocument, p: ApplyBoardPresetPayload, ctx: CommandContext
     ) -> PerfDocument:
+        if p.take_up:
+            doc = _without(doc, left_off_board(doc, p))
         # Validated against the new board with the OLD features cleared, so a run of
         # fingers along the previous board's longer edge cannot fail a resize it has no
         # part in.
@@ -4794,6 +4800,82 @@ def create_standard_registry() -> CommandRegistry:
 # ---------------------------------------------------------------------------
 # A stock board, as one fact
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class LeftOffBoard:
+    """What a board change leaves no room for, short of a part: the conductors through a
+    hole the new grid does not have or laid on a finger it is not sold with, the track cuts
+    off it, and the labels it no longer holds.
+
+    ONE FACT, TWO CONSUMERS. The window asks with these counts and ``board.applyPreset``
+    with ``take_up`` removes exactly these, so the question cannot promise less than the
+    command takes. A board trial (``boardfit.try_board``) judges a board with the copper
+    stripped, so the window offered boards the command then refused over a wire left on the
+    board from before: "Conductor cond-133 passes through L23", as the whole answer.
+    """
+
+    conductor_ids: tuple[str, ...] = ()
+    cut_ids: tuple[str, ...] = ()
+    note_ids: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.conductor_ids or self.cut_ids or self.note_ids)
+
+
+def left_off_board(doc: PerfDocument, payload: ApplyBoardPresetPayload) -> LeftOffBoard:
+    """What ``board.applyPreset`` of ``payload`` would refuse over, short of a part --
+    each test the one ``board.set`` and ``_assert_rails_stand`` make, on the same holes."""
+    new = payload.board
+    after = dataclasses.replace(
+        doc,
+        board=new,
+        edge_connectors=tuple(payload.edge_connectors),
+        mounting_holes=tuple(payload.mounting_holes),
+    )
+    was = finger_cells(doc)
+    now = finger_cells(after)
+
+    def stranded(cond: Conductor) -> bool:
+        for hole in cond.path:
+            if is_inside_board(hole, doc.board):
+                if not is_inside_board(hole, new):
+                    return True
+                continue
+            key = hole_key(hole)
+            if key not in was:
+                continue  # off the board before: DRC's to report, as the rail check says
+            cell = now.get(key)
+            if cell is None or is_inside_board(hole, new) or not finger_holds(
+                cell, cond.kind, cond.side
+            ):
+                return True
+        return False
+
+    return LeftOffBoard(
+        conductor_ids=tuple(c.id for c in doc.conductors if stranded(c)),
+        cut_ids=tuple(cut.id for cut in doc.cuts if not is_inside_board(cut.at, new)),
+        note_ids=tuple(
+            note.id
+            for note in doc.board_notes
+            if not is_inside_board(note.at, new)
+            or not _label_on_substrate(note.at, note.offset_x_mm, note.offset_y_mm, new)
+        ),
+    )
+
+
+def _without(doc: PerfDocument, left: LeftOffBoard) -> PerfDocument:
+    if not left:
+        return doc
+    conductors = set(left.conductor_ids)
+    cuts = set(left.cut_ids)
+    notes = set(left.note_ids)
+    return dataclasses.replace(
+        doc,
+        conductors=tuple(c for c in doc.conductors if c.id not in conductors),
+        cuts=tuple(c for c in doc.cuts if c.id not in cuts),
+        board_notes=tuple(n for n in doc.board_notes if n.id not in notes),
+    )
 
 
 def preset_payload(

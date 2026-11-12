@@ -1533,6 +1533,22 @@ TURKISH: Mapping[str, str] = {
     "Suggested:  ": "Önerilen:  ",
     "Arranging the circuit on the board…": "Devre kart üzerine yerleştiriliyor…",
     "Board refused": "Kart reddedildi",
+    "{count} conductor: a wire or a solder run": "{count} iletken: tel ya da lehim yolu",
+    "{count} conductors: wires and solder runs": "{count} iletken: teller ve lehim yolları",
+    "{count} track cut": "{count} yol kesiği",
+    "{count} track cuts": "{count} yol kesiği",
+    "{count} label": "{count} etiket",
+    "{count} labels": "{count} etiket",
+    "The new board has no room for these, so they are taken up with it:": (
+        "Yeni kartta bunlara yer yok, bu yüzden kartla birlikte kaldırılırlar:"
+    ),
+    "One Ctrl+Z puts the board and all of it back.": (
+        "Tek bir Ctrl+Z kartı da bunların hepsini de geri getirir."
+    ),
+    "Take up what does not fit?": "Sığmayanlar kaldırılsın mı?",
+    "Not applied: the board on the document is as it was.": (
+        "Uygulanmadı: belgedeki kart olduğu gibi kaldı."
+    ),
     "Every part in the design is already on the board.": (
         "Tasarımdaki her parça zaten kart üzerinde."
     ),

@@ -12722,6 +12722,55 @@ def test_escape_leaves_home() -> None:
         _close(window)
 
 
+def test_a_board_the_question_offered_is_never_refused_over_copper_left_on_the_old_one(
+    monkeypatch,
+) -> None:
+    """A board trial judges a board with the copper stripped, so the question offered a
+    smaller board the command then refused over a wire still on the old one -- "Conductor
+    cond-133 passes through L23" in a bare warning. Now the window says how much will not
+    fit and takes it up with the board, one undo step; declined, nothing changes."""
+    import perfboard_studio.ui.main as main_module
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.boardfit import BoardChoice
+    from perfboard_studio.commands import UnplaceComponentPayload
+    from perfboard_studio.placer import BoardSuggestion
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        for component in window.bus.document.components:
+            window.bus.dispatch("component.unplace", UnplaceComponentPayload(id=component.id))
+        before = window.bus.document
+        smaller = next(p for p in STANDARD_PRESETS if not p.single_sided and p.name == "6 x 8 cm")
+        chosen = BoardSuggestion(smaller, board_from_preset(smaller, before.board), None)
+        choice = BoardChoice((chosen,), chosen, (), chosen, True)
+        warned: list[str] = []
+        monkeypatch.setattr(
+            main_module.QMessageBox, "warning", lambda *args: warned.append(str(args[2]))
+        )
+        asked: list[str] = []
+        answer = [False]
+
+        def confirm(self, title, body, verb):
+            asked.append(body)
+            return answer[0]
+
+        monkeypatch.setattr(type(window), "_confirm", confirm)
+
+        assert not window._use_board(choice, chosen)
+        assert window.bus.document is before, "declined, the board is as it was"
+        assert len(asked) == 1 and "conductors" in asked[0]
+
+        answer[0] = True
+        assert window._use_board(choice, chosen)
+        assert not warned, "never a bare refusal for a board the question offered"
+        assert window.bus.document.board.cols == chosen.board.cols
+        assert len(window.bus.document.conductors) < len(before.conductors)
+        window.bus.undo()
+        assert window.bus.document == before, "one Ctrl+Z puts the board and its copper back"
+    finally:
+        _close(window)
+
+
 def test_a_document_opened_through_any_door_takes_home_away() -> None:
     """Home's cards leave Home before they open anything, but the menu bar is still there
     under it: File > Examples, Ctrl+O, Ctrl+N and the command palette all opened a board

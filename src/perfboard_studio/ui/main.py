@@ -219,6 +219,7 @@ from perfboard_studio.commands import (
     create_starter_document,
     design_on_a_new_board,
     layout_on_a_solderable_breadboard,
+    left_off_board,
     next_net_name,
     preset_payload,
 )
@@ -8354,6 +8355,45 @@ class MainWindow(QMainWindow):
             )
         return choice
 
+    def _taking_up(self, payload: ApplyBoardPresetPayload) -> ApplyBoardPresetPayload | None:
+        """``payload``, asked about first when the new board has no room for copper, cuts
+        or labels already on this one: with ``take_up`` set when the answer is yes, None
+        when it is no. Unchanged when nothing falls off.
+
+        A board trial judges a board with the copper stripped, so the question offered
+        boards the command then refused over a wire left from the board before -- "Conductor
+        cond-133 passes through L23", as the whole answer. Taking it up is the command's own
+        step, so one Ctrl+Z puts the board and the copper back together.
+        """
+        left = left_off_board(self.bus.document, payload)
+        if not left:
+            return payload
+        lines = [
+            counted(
+                len(left.conductor_ids),
+                t("{count} conductor: a wire or a solder run"),
+                t("{count} conductors: wires and solder runs"),
+            )
+            if left.conductor_ids
+            else "",
+            counted(len(left.cut_ids), t("{count} track cut"), t("{count} track cuts"))
+            if left.cut_ids
+            else "",
+            counted(len(left.note_ids), t("{count} label"), t("{count} labels"))
+            if left.note_ids
+            else "",
+        ]
+        listed = "".join(f"<li>{line}</li>" for line in lines if line)
+        body = (
+            "<p>" + t("The new board has no room for these, so they are taken up with it:")
+            + f"</p><ul>{listed}</ul><p>"
+            + t("One Ctrl+Z puts the board and all of it back.")
+            + "</p>"
+        )
+        if not self._confirm(t("Take up what does not fit?"), body, t("Use This Board")):
+            return None
+        return dataclasses.replace(payload, take_up=True)
+
     def _ask_which_board(
         self, choice: BoardChoice, document: PerfDocument
     ) -> tuple[bool, BoardSuggestion | None]:
@@ -8388,7 +8428,10 @@ class MainWindow(QMainWindow):
         was worked out for (``placer.placement_inputs``), so any edit in between -- a part
         added, a net changed -- throws it away and placing works it out afresh.
         """
-        result = self.bus.dispatch("board.applyPreset", preset_payload(chosen.preset, chosen.board))
+        payload = self._taking_up(preset_payload(chosen.preset, chosen.board))
+        if payload is None:
+            return False
+        result = self.bus.dispatch("board.applyPreset", payload)
         if not result.ok:
             QMessageBox.warning(self, t("Board refused"), refused(result))
             return False
@@ -13693,15 +13736,17 @@ class MainWindow(QMainWindow):
         def apply(design: BoardDesign) -> str | None:
             if (design.board, design.edge_connectors, design.mounting_holes) == current:
                 return None
-            result = self.bus.dispatch(
-                "board.applyPreset",
+            payload = self._taking_up(
                 ApplyBoardPresetPayload(
                     board=design.board,
                     edge_connectors=design.edge_connectors,
                     mounting_holes=design.mounting_holes,
                     label=_board_label(design.board),
-                ),
+                )
             )
+            if payload is None:
+                return t("Not applied: the board on the document is as it was.")
+            result = self.bus.dispatch("board.applyPreset", payload)
             if not result.ok:
                 return (
                     f"{refused(result)} "

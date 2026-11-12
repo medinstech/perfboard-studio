@@ -623,3 +623,83 @@ def test_a_trimmed_strip_still_runs_most_of_the_board() -> None:
             assert connector.count >= span - 2 * (1 + inset), (
                 f"{preset.name} lost too many fingers"
             )
+
+
+def _atmega_with_its_parts_taken_off() -> tuple[CommandBus, ApplyBoardPresetPayload]:
+    """atmega328-relay's design with every part taken off its 7 x 9 cm board and its
+    wiring left on it, and the 6 x 8 cm board a board trial judged with the copper
+    stripped -- the case the window offered and the command then refused."""
+    from pathlib import Path
+
+    from perfboard_studio.commands import UnplaceComponentPayload, preset_payload
+
+    root = Path(__file__).resolve().parents[1]
+    doc = persist.deserialize_document(
+        (root / "examples" / "atmega328-relay.perf").read_text(encoding="utf-8")
+    ).document
+    assert doc is not None
+    bus = _bus(doc)
+    for component in doc.components:
+        assert bus.dispatch("component.unplace", UnplaceComponentPayload(id=component.id)).ok
+    smaller = next(p for p in STANDARD_PRESETS if not p.single_sided and p.name == "6 x 8 cm")
+    return bus, preset_payload(smaller, board_from_preset(smaller, bus.document.board))
+
+
+def test_a_board_takes_up_in_its_own_step_exactly_the_copper_it_has_no_room_for() -> None:
+    """``left_off_board`` is the question's count and ``take_up`` the command's removal --
+    one fact, so the window cannot promise less than the command takes -- and a board
+    refused over a wire left from the board before is a board taken, with the wire, in
+    ONE undo step."""
+    from perfboard_studio.commands import left_off_board
+
+    bus, payload = _atmega_with_its_parts_taken_off()
+    before = bus.document
+    refused = bus.dispatch("board.applyPreset", payload)
+    assert not refused.ok and refused.code == "would-strand-conductor"
+
+    left = left_off_board(before, payload)
+    assert left.conductor_ids, "the wires past the new edge are named"
+    past = {
+        c.id
+        for c in before.conductors
+        if any(h.col >= payload.board.cols or h.row >= payload.board.rows for h in c.path)
+    }
+    assert set(left.conductor_ids) >= past
+
+    depth = len(bus._undo_stack)
+    taken = bus.dispatch("board.applyPreset", dataclasses.replace(payload, take_up=True))
+    assert taken.ok, taken.message
+    after = bus.document
+    assert after.board.cols == payload.board.cols
+    assert {c.id for c in after.conductors} == {c.id for c in before.conductors} - set(
+        left.conductor_ids
+    ), "exactly what was counted, and nothing else"
+    assert len(bus._undo_stack) == depth + 1
+
+    bus.undo()
+    assert bus.document == before, "one Ctrl+Z puts the board and the copper back"
+
+
+def test_take_up_never_takes_a_part() -> None:
+    """A part the new grid strands still refuses the board: taking copper up is a
+    consequence of the board change, taking a part off is a decision about the design."""
+    from perfboard_studio.model import ComponentInstance
+
+    big = next(p for p in STANDARD_PRESETS if not p.single_sided and p.name == "9 x 15 cm")
+    board = board_from_preset(big, DEFAULT_BOARD)
+    doc = _doc(
+        board,
+        components=(
+            ComponentInstance(
+                id="cmp-1", ref="R1", value="1k", footprint_id="r-axial-5",
+                anchor=HoleCoord(board.cols - 1, board.rows - 1),
+            ),
+        ),
+    )
+    bus = _bus(doc)
+    small = next(p for p in STANDARD_PRESETS if not p.single_sided and p.name == "2 x 8 cm")
+    result = bus.dispatch(
+        "board.applyPreset",
+        ApplyBoardPresetPayload(board=board_from_preset(small, board), take_up=True),
+    )
+    assert not result.ok and result.code == "would-strand-component"

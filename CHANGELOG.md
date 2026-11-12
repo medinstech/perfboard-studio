@@ -231,6 +231,13 @@ closed without a bump.
 
 ### Fixed
 
+- **A board the size question offers is never refused once chosen.** Its trial judges each
+  board with the copper stripped, so with the parts taken off and the wiring left on, a
+  smaller board was offered and then refused over a wire in a bare warning ("Conductor
+  cond-133 passes through L23"). The window now says how many conductors, track cuts and
+  labels the new board has no room for and takes them up with the board, in one undo step;
+  Board ▸ Design the Board asks the same. `board.applyPreset` takes `take_up` for it, and a part the new
+  grid strands still refuses the board.
 - **A board opened while Home is showing comes to the front.** Home's own cards left Home
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying
