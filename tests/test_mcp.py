@@ -1786,6 +1786,7 @@ def test_an_edge_connector_may_have_copper_on_both_faces(session) -> None:
     assert session.document.edge_connectors[0].face == "both"
 
 
+@requires_offscreen_gl  # ends in generate_guide(directory), which renders a step image
 def test_one_board_with_every_face_and_rail_feature_goes_through_every_output(tmp_path) -> None:
     """The seam: a stock board an agent puts on, a net kept on the component side, Auto-wire
     on both faces, a hand-drawn component-side trace changing face at an empty hole, a rail
