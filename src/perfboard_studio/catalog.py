@@ -3788,7 +3788,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                          "microSD")),
     CatalogPart("sparkfun-thumb-joystick", "SparkFun thumb joystick breakout (BOB-09110)", "sensor",
                 "mod-5x1-p1-r1-25.4x31.75x15-s8.5-o0x-14.61",
-                "An analog thumb joystick with a push button on a 1 inch by 1.25 inch board: "
+                "An analog thumb joystick with a press-down select switch on a 1 inch by 1.25 inch board: "
                 "five header pins, two analog axes and a select line",
                 _legs("VCC", "VERT", "HORZ", "SEL", "GND"), ref_prefix="U",
                 value="SparkFun Thumb Joystick",

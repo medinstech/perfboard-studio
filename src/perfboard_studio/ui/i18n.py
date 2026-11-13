@@ -3743,9 +3743,10 @@ TURKISH: Mapping[str, str] = {
     "SparkFun thumb joystick breakout (BOB-09110)": (
         "SparkFun başparmak joystick kartı (BOB-09110)"
     ),
-    "An analog thumb joystick with a push button on a 1 inch by 1.25 inch board: five "
-    "header pins, two analog axes and a select line": (
-        "1 inç x 1,25 inçlik bir kartta basma düğmeli analog başparmak joystick'i: beş "
+    "An analog thumb joystick with a press-down select switch on a 1 inch by 1.25 inch "
+    "board: five header pins, two analog axes and a select line": (
+        "1 inç x 1,25 inçlik bir kartta aşağı basılan seçme anahtarlı analog başparmak "
+        "joystick'i: beş "
         "header pini, iki analog eksen ve bir seçme hattı"
     ),
     "Pin 1 is VCC, the left end of the header with the joystick up and the header at the "
