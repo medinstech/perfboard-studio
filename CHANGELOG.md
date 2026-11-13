@@ -144,6 +144,19 @@ closed without a bump.
   the window rather than the board, and greyed out where there is only one face. The step
   card and Auto-wire's status line count the vias ("3 vias"), and a piece of copper's
   Properties says where it joins the other face.
+- **A net's Face row says what Auto-wire did with the face, and why.** Under the Face
+  buttons, Properties says what the last Auto-wire or Redo Wiring did with the face the net
+  prefers: kept it, or left it because its pins there are under a part's body, because no
+  clear way was found, or some of each. The pins it reached beside a body are named ("J2.6 is
+  reached by a jumper to the free hole beside it, joined to the pin underneath"), and the
+  Problems drawer's Faces group says the same sentence with the net named. Copper laid
+  before the Face was set stays where it is, since Auto-wire keeps the copper it finds: the
+  row says so with **Redo Wiring of** the net under it, setting the Face says so on the
+  status line, and an Auto-wire that leaves such a net says "GND is already wired on the
+  solder side: Redo Wiring of GND moves it". A net that kept its face is no longer counted
+  as one off it, on the status line or the Problems bar. The chosen button in a row of
+  choices in Properties (a net's Class and Face, a part's rotation) is now marked, as a
+  toolbar's is.
 - **Draw on: Solder Side | Component Side.** On a board with pads on both faces, the two
   solder tools show this choice under the banner while they are armed, and lay the run on
   the face it names. It is the solder side at every start and is not kept: it never follows
