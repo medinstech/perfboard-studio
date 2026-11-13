@@ -62,6 +62,11 @@ DRAWN_AS_THE_BLOCK: dict[str, str] = {
     # DFRobot's dimension drawing (DFR0299) gives the pads and the micro SD socket's outline and
     # no chip or part positions, and there is no art kind for the socket.
     "dfplayer-mini": "no measured layout of what stands on its board",
+    "esp32-cam": (
+        "AI-Thinker publishes no drawing of the board, and the only pictures of it are renders "
+        "and the community's footprints: the headers are measured, the camera, the FPC "
+        "connector and the flash LED are not, so the module claims nothing about them"
+    ),
 }
 
 def _on_a_module(part) -> bool:  # type: ignore[no-untyped-def]

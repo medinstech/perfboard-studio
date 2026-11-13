@@ -302,6 +302,11 @@ _C3_DEVKITM_RIGHT = (
     "GND", "TX", "RX", "GND", "IO9", "IO8", "GND", "IO7", "IO6", "IO5",
     "IO4", "GND", "IO18", "IO19", "GND",
 )  # fmt: skip
+# AI-Thinker's ESP32-CAM, camera side up and the camera end at the top: the left row down from
+# 5V to IO4, the right row down from 3V3 to GND.
+_ESP32_CAM_LEFT = ("5V", "GND", "IO12", "IO13", "IO15", "IO14", "IO2", "IO4")
+_ESP32_CAM_RIGHT = ("3V3", "IO16", "IO0", "GND", "VCC", "U0R", "U0T", "GND")
+
 # Espressif's ESP32-S3-DevKitC-1, the antenna end up: J1 down the left (3V3 to GND) and J3 down
 # the right (GND to GND). Revisions 1.0 and 1.1 print the same names on both headers; only the
 # RGB LED moved, from IO48 to IO38.
@@ -3220,6 +3225,35 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "and IO38 on 1.1. Clones with a USB-C socket or fewer pins are other boards. "
                     + _MODULE_TOP
                 )),
+    CatalogPart("esp32-cam", "ESP32-CAM (AI-Thinker)", "module",
+                "mod-2x8-p9-r1-27x40.5x4.5-s8.5-o0x6.86",
+                "ESP32 with a camera and a card slot, 16 pins, rows 22.86 mm apart",
+                _two_columns(_ESP32_CAM_LEFT, _ESP32_CAM_RIGHT), ref_prefix="U",
+                value="ESP32-CAM",
+                source=(
+                    "The pin names from Random Nerd Tutorials' ESP32-CAM pinout and espboards.dev's "
+                    "board drawing, which agree pin for pin, read camera side up with the camera "
+                    "end at the top; the board 27 x 40.5 mm from AI-Thinker's product "
+                    "specification; the rows 22.86 mm (nine pitches) apart from two footprints "
+                    "that were not drawn from one another, KiCad's Ai-Thinker_ESP32-CAM (merge "
+                    "request !2289 in kicad-footprints) and the sstv-backpack project's "
+                    "ESP32-CAM, with Electronic Cats' at 23.0 mm, and the first pin 4.5 mm from "
+                    "the camera end from those and the two drawings. AI-Thinker publishes no "
+                    "drawing of the headers, so the rows and the pin ends are the community's "
+                    "and not the maker's"
+                ),
+                check=(
+                    "Pin 1 is 5V, top of the left row with the camera side up and the camera end "
+                    "at the top; pin 2 is 3V3, top of the right row, and the rows run down to "
+                    "IO4 and GND. There is no USB socket: flash it through U0R and U0T from a "
+                    "USB-serial adapter with IO0 held to GND, or put it on an ESP32-CAM-MB base. "
+                    "VCC on the right row is the 3.3 V or 5 V rail the board's own jumper picks, "
+                    "and 5V on the left is the 5 V input. IO4 is also the flash LED, IO16 is the PSRAM's chip select, "
+                    "and the card slot on the back takes IO2, IO4, IO12, IO13, IO14 and IO15. "
+                    "The SD card slot and the ESP32 module are on the back, under the board, "
+                    "and are not drawn. " + _MODULE_TOP
+                ),
+                aliases=("camera", "OV2640", "AI-Thinker", "ESP32 CAM", "wifi camera")),
     CatalogPart("arduino-nano", "Arduino Nano", "module",
                 "mod-2x15-p6-r1-17.78x45.72x4-s8.5-o0x1.27",
                 "ATmega328P board, 30 pins, rows 15.24 mm apart",

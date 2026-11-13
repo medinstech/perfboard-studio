@@ -107,6 +107,7 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "dfplayer-mini": 17.78,
         "seeed-xiao-esp32c3": 15.24,
         "esp32-s3-devkitc-1": 22.86,
+        "esp32-cam": 22.86,
         "seeed-xiao-rp2040": 15.24,
         # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
         "lm2596-module": 40.64,
@@ -237,7 +238,7 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
     assert [part.id for part in search_catalog("bc547")] == ["bc547"]
     assert {part.id for part in search_catalog("esp32")} == {
         "esp32-devkitc", "esp32-devkit-v1", "esp32-c3-devkitm-1", "esp32-s3-devkitc-1",
-        "seeed-xiao-esp32c3",
+        "seeed-xiao-esp32c3", "esp32-cam",
     }
     assert all(part.symbol == "pmos" for part in search_catalog("p-channel"))
     assert {part.category for part in search_catalog(category="regulator")} == {"regulator"}
@@ -1291,6 +1292,18 @@ def test_the_drv8871_header_reads_in2_in1_vm_gnd_as_the_silkscreen_has_it() -> N
     assert [name for _, name in part.pin_names] == ["IN2", "IN1", "VM", "GND"]
     assert "Adafruit-DRV8871-Breakout-PCB" in part.source and "Rlim" in part.check
     assert "adafruit-drv8871" in {found.id for found in search_catalog("drv8871")}
+
+
+def test_the_esp32_cam_is_two_rows_of_eight_and_says_where_its_rows_come_from() -> None:
+    """No maker drawing of the headers exists, so the 22.86 mm between the rows rests on
+    community footprints, and the entry says so rather than passing it off as the maker's."""
+    part = catalog_part("esp32-cam")
+    assert part is not None
+    assert [name for _, name in part.pin_names][:4] == ["5V", "3V3", "GND", "IO16"]
+    assert len(part.pin_names) == 16
+    assert "AI-Thinker publishes no drawing" in part.source
+    assert "kicad-footprints" in part.source and "sstv-backpack" in part.source
+    assert "esp32-cam" in {found.id for found in search_catalog("camera")}
 
 
 def test_the_microphone_boards_read_as_the_front_silkscreen_does() -> None:

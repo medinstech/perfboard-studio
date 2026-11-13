@@ -3536,6 +3536,29 @@ TURKISH: Mapping[str, str] = {
         "yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi "
         "ölçülmüştür."
     ),
+    "ESP32 with a camera and a card slot, 16 pins, rows 22.86 mm apart": (
+        "Kameralı ve kart yuvalı ESP32, 16 pin, sıralar arası 22,86 mm"
+    ),
+    "Pin 1 is 5V, top of the left row with the camera side up and the camera end at the "
+    "top; pin 2 is 3V3, top of the right row, and the rows run down to IO4 and GND. "
+    "There is no USB socket: flash it through U0R and U0T from a USB-serial adapter "
+    "with IO0 held to GND, or put it on an ESP32-CAM-MB base. VCC on the right row is "
+    "the 3.3 V or 5 V rail the board's own jumper picks, and 5V on the left is the 5 V "
+    "input. IO4 is also the flash LED, IO16 is the PSRAM's chip select, and the card "
+    "slot on the back takes IO2, IO4, IO12, IO13, IO14 and IO15. The SD card slot and "
+    "the ESP32 module are on the back, under the board, and are not drawn. The height "
+    "of what is on the board is an estimate, and so is its colour; the pins, the rows "
+    "and the board outline are measured.": (
+        "1. pin 5V'tur: kamera tarafı yukarıda ve kamera ucu üstte dururken sol sıranın en "
+        "üstü; 2. pin 3V3, sağ sıranın en üstüdür ve sıralar IO4 ile GND'ye kadar iner. USB "
+        "soketi yoktur: IO0 GND'ye çekili tutularak U0R ve U0T üzerinden bir USB-seri "
+        "adaptörle ya da ESP32-CAM-MB tabanıyla programlayın. Sağ sıradaki VCC, kartın "
+        "kendi lehim köprüsünün seçtiği 3,3 V ya da 5 V hattıdır; soldaki 5V ise 5 V "
+        "girişidir. IO4 aynı zamanda flaş LED'idir, IO16 PSRAM'in çip seçimidir ve arkadaki "
+        "kart yuvası IO2, IO4, IO12, IO13, IO14 ve IO15'i kullanır. Kart yuvasıyla ESP32 "
+        "modülü arka yüzdedir, kartın altındadır ve çizilmemiştir. Kartın üstündekilerin "
+        "yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Adafruit MAX4466 microphone amplifier": (
         "Adafruit MAX4466 mikrofon yükselticisi"
     ),
