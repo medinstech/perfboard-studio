@@ -102,6 +102,8 @@ positions, packages and turns, never its artwork -- and nothing of the file is s
 
 - **SparkFun Arduino Pro Mini 328** -- SparkFun Electronics, Eagle board, CC BY-SA 3.0:
   <https://github.com/sparkfun/Arduino_Pro_Mini_328> (`Hardware/Arduino-Pro-Mini.brd`)
+- **SparkFun Pro Micro** -- SparkFun Electronics, Eagle board, CC BY-SA 3.0:
+  <https://github.com/sparkfun/Pro_Micro> (`Hardware/v13/SparkFun_Pro_Micro.brd`)
 - **SparkFun Logic Level Converter - Bi-Directional** -- SparkFun Electronics, Eagle board,
   CC BY-SA 3.0: <https://github.com/sparkfun/Logic_Level_Bidirectional>
   (`Hardware/Logic_Level_Bidirectional.brd`)

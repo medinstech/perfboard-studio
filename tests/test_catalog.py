@@ -111,6 +111,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "sparkfun-tb6612fng": 15.24,
         # SparkFun's Eagle board: its rows at x = 1.27 and 16.51 mm, 0.6 inch apart.
         "sparkfun-pro-mini": 15.24,
+        # SparkFun's Pro Micro board, same 0.6 inch rows: x = 1.27 and 16.51 mm.
+        "sparkfun-pro-micro": 15.24,
         # Adafruit's Eagle board: its headers at x = 1.27 and 16.51 mm, 0.6 inch apart.
         "adafruit-tca9548a": 15.24,
         # SparkFun's Eagle board: its rows at y = 1.27 and 11.43 mm, 0.4 inch apart.
@@ -1177,6 +1179,28 @@ def test_the_colour_thermocouple_and_compass_boards_are_headers_in_the_silkscree
         assert part.value is not None and part_id in {
             found.id for found in search_catalog(part.value)
         }, part_id
+
+
+def test_the_pro_micro_is_one_board_on_two_rows_of_twelve_usb_end_first() -> None:
+    """Read off SparkFun's Eagle boards: v1.3 and v2.0 put the same net on each header pad, and
+    their pin table gives the same order from the USB end."""
+    part = catalog_part("sparkfun-pro-micro")
+    assert part is not None
+    names = dict(part.pin_names)
+    assert len(names) == 24
+    assert [names[str(n)] for n in (1, 2, 3, 4, 5, 6)] == ["TXO", "RAW", "RXI", "GND", "GND", "RST"]
+    # The right row, top to bottom, is the pin table's: RAW GND RST VCC A3 A2 A1 A0 15 14 16 10.
+    assert [names[str(n)] for n in range(2, 25, 2)] == [
+        "RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D15/SCK", "D14/MISO", "D16/MOSI",
+        "D10",
+    ]
+    # The left row: TXO RXI GND GND 2 3 4 5 6 7 8 9.
+    assert [names[str(n)] for n in range(1, 24, 2)] == [
+        "TXO", "RXI", "GND", "GND", "D2/SDA", "D3/SCL", "D4", "D5", "D6", "D7", "D8", "D9",
+    ]
+    assert "sparkfun/Pro_Micro" in part.source
+    assert "VCC" in part.check and "5V" in part.check
+    assert "pro-micro" in {found.id.replace("sparkfun-", "") for found in search_catalog("ATmega32U4")}
 
 
 def test_the_tca9548a_is_one_board_on_two_rows_of_twelve() -> None:

@@ -5739,9 +5739,77 @@ def _art_led(s: _ArtSolid) -> list[_Piece]:
     return pieces
 
 
+def _art_qfn_on_corner(s: _ArtSolid) -> list[_Piece]:
+    """A leadless chip turned on its corner, as the Pro Micro's ATmega32U4 is: the same body,
+    pad ends, pin-1 dot and marking as ``_art_qfn``, built in the chip's own frame and turned
+    as one, so the pad ends are one mesh and not a hundred actors."""
+    body = s.length
+    turn = s.corner - 45.0 if s.corner is not None else 0.0
+    corner = math.radians(s.corner if s.corner is not None else 45.0)
+    pad = 0.28
+    pitch = 0.5
+    show = 0.05 - pad / 2
+    count = max(int((body - 1.0) / pitch), 1)
+    ends = _Mesh()
+    for sign in (-1.0, 1.0):
+        for index in range(count):
+            offset = (index - (count - 1) / 2) * pitch
+            _mesh_box(ends, (offset, sign * (body / 2 + show), 0.08), (pad, pad, 0.16))
+            _mesh_box(ends, (sign * (body / 2 + show), offset, 0.08), (pad, pad, 0.16))
+    pieces = [
+        _Piece(
+            source=_moulded_box(body, body, s.height),
+            rgb=_ART_EPOXY_RGB,
+            position=(s.x, s.y, s.z + s.height / 2),
+            orientation=(0.0, 0.0, turn),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=ends.data(),
+            rgb=LEAD_RGB,
+            position=(s.x, s.y, s.z),
+            orientation=(0.0, 0.0, turn),
+            material=TINNED,
+        ),
+    ]
+    # Its feature is the corner on the axis: the dot sits in from that corner.
+    dot = min(0.35, body * 0.1)
+    reach = (body / 2 - dot * 2.2) * math.sqrt(2.0)
+    pieces.append(
+        _Piece(
+            source=_cylinder(dot, 0.05, resolution=16),
+            rgb=_ART_DOT_RGB,
+            position=(
+                s.x + reach * math.cos(corner),
+                s.y + reach * math.sin(corner),
+                s.z + s.height + 0.02,
+            ),
+            orientation=_ALONG_Z,
+            material=MOULDED,
+        )
+    )
+    if s.text:
+        glyphs = _printed(s.text, body * 0.11, body * 0.8)
+        if glyphs is not None:
+            # Along a side, and the way up that reads from the front.
+            upright = turn + 180.0 if math.cos(math.radians(turn)) < -1e-9 else turn
+            pieces.append(
+                _Piece(
+                    source=glyphs,
+                    rgb=_ART_INK_RGB,
+                    position=(s.x, s.y, s.z + s.height + 0.02),
+                    orientation=(0.0, 0.0, upright),
+                    material=INK,
+                )
+            )
+    return pieces
+
+
 def _art_qfn(s: _ArtSolid) -> list[_Piece]:
     """A leadless chip: the flat body, the ends of its pads showing round the bottom edge,
     the pin-1 dot and its marking."""
+    if s.corner is not None:
+        return _art_qfn_on_corner(s)
     pad = 0.28
     pitch = 0.5
     pieces = [

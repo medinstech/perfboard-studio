@@ -178,6 +178,14 @@ _KK_WORDS = ("Molex", "KK", "KK254", "KK 254", "KF2510", "2510", "wire-to-board"
 # named here D2 ... D13 as the Nano's are).
 _PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9")
 _PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
+# SparkFun's Pro Micro, read off its Eagle board the same way, the USB end up. SparkFun prints
+# the bare numbers; the I2C and SPI functions are added as the Nano's names carry them, and
+# the numbers are the Arduino Leonardo core's: D14, D15 and D16 are MISO, SCK and MOSI, which
+# is not the order of the pins.
+_PRO_MICRO_LEFT = ("TXO", "RXI", "GND", "GND", "D2/SDA", "D3/SCL", "D4", "D5", "D6", "D7",
+                   "D8", "D9")
+_PRO_MICRO_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D15/SCK", "D14/MISO",
+                    "D16/MOSI", "D10")
 
 # Adafruit's TCA9548A I2C multiplexer, its silkscreen read off its Eagle board, the VIN end
 # up: the controller's side (VIN, bus, reset, address) and channels 0 and 1 down one row,
@@ -3181,6 +3189,30 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("Pro Mini", "Arduino Pro Mini", "DEV-11113", "DEV-11114",
                          "ATmega328P", "Arduino")),
+    CatalogPart("sparkfun-pro-micro", "SparkFun Pro Micro (ATmega32U4)", "module",
+                "mod-2x12-p6-r1-17.78x33.9x2.6-s8.5-o0x-1.71",
+                "ATmega32U4 board with USB, 24 pins, rows 15.24 mm apart: 5 V at 16 MHz or "
+                "3.3 V at 8 MHz",
+                _two_columns(_PRO_MICRO_LEFT, _PRO_MICRO_RIGHT), ref_prefix="U",
+                value="Pro Micro",
+                source=(
+                    "SparkFun Pro Micro Eagle boards (github sparkfun/Pro_Micro, "
+                    "Hardware/v13 and Hardware/v20, SparkFun_Pro_Micro.brd) and its pin table "
+                    "(Documentation/ProMicro.csv): the 0.7 x 1.3 inch board, both 12-pin rows "
+                    "0.6 inch apart, and the net on every header pad, the same on both "
+                    "revisions"
+                ),
+                check=(
+                    "VCC is the regulator's output and RAW its input. VCC is 5 V on the 16 MHz "
+                    "board and 3.3 V on the 8 MHz one, and clones print it as VCC or as 5V: "
+                    "read which yours is before a 3.3 V part is wired to it. RST, between GND "
+                    "and VCC on the right row, resets when tied to GND. D14, D15 and D16 are "
+                    "MISO, SCK and MOSI, in that order down the right row. The USB socket "
+                    "stands a little past the end of the board. Clones are sold with the same "
+                    "24 header pins, but check the names printed on yours against these. "
+                    + _MODULE_TOP
+                ),
+                aliases=("Pro Micro", "DEV-12640", "ATmega32U4", "32U4", "Arduino")),
     CatalogPart("adafruit-tca9548a", "Adafruit TCA9548A I2C multiplexer", "module",
                 "mod-2x12-p6-r1-17.78x30.48x1.6-s8.5",
                 "One I2C bus to eight, one at a time: 24 pins, rows 15.24 mm apart",

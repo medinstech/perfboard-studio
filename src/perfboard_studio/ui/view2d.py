@@ -3981,8 +3981,14 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         painter.drawEllipse(QPointF(0.0, 0.0), ring * 0.22, ring * 0.22)
     elif kind == "qfn":
         dot = min(0.35, min(length, width) * 0.1)
+        if part.diagonal:
+            # A corner along the axis, as the TQFP's: the chip's own (1, 1) corner on +x.
+            painter.rotate(-45)
         _art_box(painter, -half_l, half_l, half_w, _art_colour("epoxy"))
-        if pin_one:
+        if part.diagonal:
+            painter.setBrush(QBrush(_art_colour("dot")))
+            painter.drawEllipse(QPointF(half_l - dot * 2.2, half_w - dot * 2.2), dot, dot)
+        elif pin_one:
             painter.setBrush(QBrush(_art_colour("dot")))
             painter.drawEllipse(QPointF(half_l - dot * 2.2, pin_one * (half_w - dot * 2.2)), dot, dot)
     elif kind == "tqfp32":

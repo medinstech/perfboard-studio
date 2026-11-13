@@ -127,6 +127,7 @@ def _footprint(footprint_id: str):
         ("Pololu DRV8825", "pololu-drv8825"),
         ("SparkFun TB6612FNG", "sparkfun-tb6612fng"),
         ("Pololu DRV8833", "pololu-drv8833"),
+        ("SparkFun Pro Micro 5V/16MHz", "sparkfun-pro-micro"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
         ("GY-521 MPU-6050", "gy-521"),
@@ -791,6 +792,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "hc-sr501": None,  # blue, as the photograph's is
         "sparkfun-tb6612fng": SPARKFUN_RED,
         "sparkfun-pro-mini": SPARKFUN_RED,
+        "sparkfun-pro-micro": SPARKFUN_RED,
         "adafruit-tca9548a": ADAFRUIT_BLUE,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
@@ -1424,6 +1426,65 @@ def test_3d_puts_a_chips_dot_in_its_pin_1_corner_however_it_is_turned(
         # The world's y runs up the board, the rows down it.
         assert (_sign(dx), _sign(dy)) == (_sign(wx), _sign(-wy)), (kind, axis, facing, across)
         assert min(abs(dx), abs(dy)) > 0.5, (kind, axis, facing, across)
+
+
+def _corner_qfn(axis: str, facing: int):  # type: ignore[no-untyped-def]
+    from perfboard_studio.ui.moduleart import PlacedArt
+
+    return PlacedArt(
+        kind="qfn", x=0.0, y=0.0, size_x=7.0, size_y=7.0, height=0.9, axis=axis,  # type: ignore[arg-type]
+        facing=facing, text="", diagonal=True, across=0,
+    )
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+@pytest.mark.parametrize("facing", [1, -1])
+def test_2d_turns_a_qfn_on_its_corner_and_puts_its_dot_on_the_axis(
+    axis: str, facing: int, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    """The Pro Micro's ATmega32U4 stands on its corner, as the Pro Mini's TQFP does: the square
+    is turned an eighth of a turn, so its diagonal lies along the axis, the dot sits in the
+    corner ``facing`` names (on the axis) and the box's own corners are bare board."""
+    window = (-8.0, -8.0, 8.0, 8.0)
+    image, scale = _dots_painted([_corner_qfn(axis, facing)], monkeypatch, window)
+    middle = _red_middle(image, scale, window, window)
+    assert middle is not None
+    along, across = (middle[0], middle[1]) if axis == "x" else (middle[1], middle[0])
+    assert _sign(along) == facing and abs(along) > 2.5, middle
+    assert abs(across) < 0.4, middle
+    # A square 7 mm chip is 9.9 mm over its corners, and its corners are on the axes.
+    def painted(x_mm: float, y_mm: float) -> bool:
+        colour = image.pixelColor(int((x_mm - window[0]) * scale), int((y_mm - window[1]) * scale))
+        return colour.alpha() > 0
+
+    assert painted(4.6, 0.0) and painted(0.0, 4.6)
+    assert not painted(3.3, 3.3), "the corner of the unturned square is still painted"
+
+
+@pytest.mark.parametrize("rotation", TURNS)
+@pytest.mark.parametrize("mirrored", [False, True])
+@pytest.mark.parametrize("axis", ["x", "y"])
+@pytest.mark.parametrize("facing", [1, -1])
+def test_3d_turns_a_qfn_on_its_corner_and_puts_its_dot_on_the_axis(
+    axis: str, facing: int, rotation: int, mirrored: bool
+) -> None:
+    from perfboard_studio.geometry import transform_offset
+    from perfboard_studio.mcp.session import new_board
+    from perfboard_studio.ui import view3d
+
+    board = new_board(cols=40, rows=40).board
+    component = _part(BUCK, "a part", (), rotation, mirrored)
+    solid = view3d._art_solid(_corner_qfn(axis, facing), component, board, 1.6)
+    assert solid.corner is not None
+    pieces = view3d._art_pieces(solid)
+    dots = [piece for piece in pieces if piece.rgb == view3d._ART_DOT_RGB]
+    assert len(dots) == 1
+    local = (float(facing), 0.0) if axis == "x" else (0.0, float(facing))
+    wx, wy = transform_offset(local[0], local[1], rotation, mirrored)  # type: ignore[arg-type]
+    dx, dy = dots[0].position[0] - solid.x, dots[0].position[1] - solid.y
+    # On the axis the part's facing turns to, the world's y up where the rows run down.
+    assert abs(dx * wy + dy * wx) < 1e-6 * (1 + abs(dx) + abs(dy)), (dx, dy, wx, wy)
+    assert dx * wx - dy * wy > 2.5
 
 
 @pytest.mark.parametrize("key", sorted(PIN_ONE_CORNERS))

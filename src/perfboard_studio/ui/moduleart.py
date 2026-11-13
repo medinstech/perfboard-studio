@@ -844,6 +844,60 @@ SPARKFUN_PRO_MINI_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's Pro Micro (DEV-12640), read off SparkFun's own Eagle board (Hardware/v13
+#: SparkFun_Pro_Micro.brd, whose header, nets and 0.7 x 1.3 inch outline Hardware/v20 repeats):
+#: the ATmega32U4 in its QFN-44 on its corner with pin 1 towards the USB end, the 16 MHz crystal
+#: at the far end, the MIC5219 regulator, the two tantalums either side of it, the resettable
+#: fuse and the diode behind the USB socket, the 0603 parts and the three LEDs -- the red power
+#: LED beside the tantalums, the green and the yellow at the far end. ``u`` runs from the D9/D10
+#: end to the USB end, ``v`` from the TXO row to the RAW row. Sizes are the packages' (the
+#: socket's from its reference outline: 5 x 7.8 mm, its mouth 0.9 mm past the board).
+SPARKFUN_PRO_MICRO_MODULE = ModuleArt(
+    key="sparkfun-pro-micro",
+    board_colour=SPARKFUN_RED,
+    names=("pro micro",),
+    board=(33.9, 17.78),
+    pins=24,
+    frame="columns",
+    landmark=("RAW", 1, -1),
+    # SparkFun prints the names between the pins and the parts, smaller than the tags here, and
+    # the tantalums and the 0603s stand 1.2 mm from the pins: printed over the parts, as the
+    # Pro Mini's are.
+    names_over_parts=True,
+    parts=(
+        ArtPart("qfn", -2.98, 0.0, 7.0, 7.0, 0.9, facing=1, diagonal=True, text="ATMEGA32U4"),
+        ArtPart("crystal", -14.79, 0.0, 5.0, 3.2, 1.0, along_v=True, colour="#d8cfb0"),
+        ArtPart("sot23-5", 4.90, -0.25, 2.9, 2.8, 1.1, facing=-1),
+        ArtPart("sma", 4.90, 3.82, 3.2, 1.6, 1.6, facing=1, colour="#d8b45c"),
+        ArtPart("sma", 4.85, -3.83, 3.2, 1.6, 1.6, facing=1, colour="#d8b45c"),
+        ArtPart("chip-c", 7.81, 0.0, 3.2, 1.6, 0.9, along_v=True),
+        ArtPart("sma", 9.62, 0.0, 2.5, 1.25, 1.0, along_v=True, facing=-1),
+        ArtPart("chip-c", -9.08, 4.43, 1.6, 0.8, 0.8),
+        ArtPart("chip-c", -8.82, -4.32, 1.6, 0.8, 0.8),
+        ArtPart("chip-c", 1.61, -3.85, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -12.12, -1.78, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -12.12, 1.91, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", 1.19, 4.04, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", 8.08, -3.82, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", 9.55, 3.82, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", 10.99, 3.81, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", -15.17, -4.32, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", -15.17, 4.32, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 9.54, -3.81, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", 10.99, -3.81, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("led", 8.16, 3.82, 1.6, 0.8, 0.6, along_v=True, colour="#d83a32"),
+        ArtPart("led", -12.12, -4.32, 1.6, 0.8, 0.6, colour="#3fae49"),
+        ArtPart("led", -12.12, 4.32, 1.6, 0.8, 0.6, colour="#e3b92c"),
+        ArtPart("usb", 14.45, 0.0, 5.0, 7.5, 2.6, facing=1),
+    ),
+    source=(
+        "SparkFun Pro Micro Eagle board, github sparkfun/Pro_Micro, Hardware/v13/"
+        "SparkFun_Pro_Micro.brd, CC BY-SA 3.0 (the board, both rows, every top-side part's "
+        "place, package and turn; the diode's band from its package's silkscreen); "
+        "Microchip's QFN-44 (the chip)"
+    ),
+)
+
 #: SparkFun's Logic Level Converter - Bi-Directional (BOB-12009), read off SparkFun's own Eagle
 #: board (Logic_Level_Bidirectional.brd): the 0.6 x 0.5 inch board, its two rows of six 0.4
 #: inch apart, and on the top side a BSS138 per channel with its two 10k pull-ups, one towards
@@ -1540,6 +1594,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     XIAO_ESP32C3_MODULE,
     SPARKFUN_TB6612_MODULE,
     SPARKFUN_PRO_MINI_MODULE,
+    SPARKFUN_PRO_MICRO_MODULE,
     ADAFRUIT_TCA9548A_MODULE,
     SPARKFUN_LOGIC_LEVEL_MODULE,
     ADAFRUIT_INA219_QT_MODULE,

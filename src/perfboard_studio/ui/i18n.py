@@ -4768,6 +4768,28 @@ TURKISH: Mapping[str, str] = {
         "bu yüzden bunları elinizdeki karta bakarak kablolayın. Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
         "çerçevesi ölçülmüştür."
     ),
+    "ATmega32U4 board with USB, 24 pins, rows 15.24 mm apart: 5 V at 16 MHz or 3.3 V at "
+    "8 MHz": (
+        "USB'li ATmega32U4 kartı, 24 pin, sıralar 15,24 mm arayla: 16 MHz'de 5 V ya da 8 MHz'de "
+        "3,3 V"
+    ),
+    "VCC is the regulator's output and RAW its input. VCC is 5 V on the 16 MHz board and "
+    "3.3 V on the 8 MHz one, and clones print it as VCC or as 5V: read which yours is before "
+    "a 3.3 V part is wired to it. RST, between GND and VCC on the right row, resets when tied "
+    "to GND. D14, D15 and D16 are MISO, SCK and MOSI, in that order down the right row. The "
+    "USB socket stands a little past the end of the board. Clones are sold with the same 24 "
+    "header pins, but check the names printed on yours against these. The height of what is "
+    "on the board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "VCC regülatörün çıkışı, RAW girişidir. VCC, 16 MHz kartta 5 V, 8 MHz kartta 3,3 V'tur "
+        "ve klonlar bunu VCC ya da 5V diye basar: 3,3 V'luk bir parçayı ona bağlamadan önce "
+        "sizdekinin hangisi olduğuna bakın. Sağ sıradaki GND ile VCC arasındaki RST, GND'ye "
+        "bağlandığında sıfırlar. D14, D15 ve D16 sırasıyla MISO, SCK ve MOSI'dir; sağ sırada "
+        "yukarıdan aşağıya bu sırayla dizilirler. USB soketi kartın ucundan biraz taşar. "
+        "Klonlar aynı 24 header pini ile satılır, ama üzerlerinde basılı isimleri bunlarla "
+        "karşılaştırın. Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar "
+        "ve kart çerçevesi ölçülmüştür."
+    ),
     "Four channels between two logic levels, both ways: 12 pins, rows 10.16 mm apart": (
         "İki mantık seviyesi arasında iki yönlü dört kanal: 12 pin, sıralar 10,16 mm arayla"
     ),
