@@ -117,6 +117,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "sparkfun-pro-micro": 15.24,
         # Adafruit's Eagle board: its headers at x = 1.27 and 16.51 mm, 0.6 inch apart.
         "adafruit-tca9548a": 15.24,
+        # Adafruit's ADS1115 Eagle board: its headers at y = 2.54 and 15.24 mm, 0.5 inch apart.
+        "adafruit-ads1115": 12.7,
         # SparkFun's Eagle board: its rows at y = 1.27 and 11.43 mm, 0.4 inch apart.
         "sparkfun-logic-level-converter": 10.16,
         # NodeMCU's Gerbers: its rows at x = +-11.43 mm, 0.9 inch apart.
@@ -1254,6 +1256,21 @@ def test_the_tca9548a_is_one_board_on_two_rows_of_twelve() -> None:
     assert [names[str(n)] for n in (5, 9, 13, 17)] == ["SDA", "RST", "A1", "SD0"]
     assert "Adafruit-TCA9548A-I2C-Multiplexer-PCB" in part.source
     assert "tca9548a" in {found.id.replace("adafruit-", "") for found in search_catalog("PCA9548")}
+
+
+def test_the_ads1115_is_one_board_on_two_rows_of_six_i2c_first() -> None:
+    """Adafruit's STEMMA QT board has its I2C header (VIN first) and its analog one (the
+    board prints A+ and A- at the ends, which its nets call AVDD and AGND) 0.5 inch apart on
+    one grid: one module, the I2C row down the left and A3 to A0 down the right."""
+    part = catalog_part("adafruit-ads1115")
+    assert part is not None
+    names = dict(part.pin_names)
+    assert len(names) == 12
+    assert [names[str(n)] for n in range(1, 13, 2)] == ["VIN", "GND", "SCL", "SDA", "ADDR", "ALRT"]
+    assert [names[str(n)] for n in range(2, 13, 2)] == ["AVDD", "A3", "A2", "A1", "A0", "AGND"]
+    assert "ADS1X15-Breakout-Board-PCBs" in part.source
+    assert "0x48" in part.check and "0x49" in part.check
+    assert "adafruit-ads1115" in {found.id for found in search_catalog("ADS1015")}
 
 
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:

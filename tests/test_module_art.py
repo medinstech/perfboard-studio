@@ -128,6 +128,8 @@ def _footprint(footprint_id: str):
         ("SparkFun TB6612FNG", "sparkfun-tb6612fng"),
         ("Pololu DRV8833", "pololu-drv8833"),
         ("SparkFun Pro Micro 5V/16MHz", "sparkfun-pro-micro"),
+        ("Adafruit ADS1115", "adafruit-ads1115"),
+        ("ADS1015 STEMMA QT", "adafruit-ads1115"),
         ("ESP32-S3-DevKitC-1", "esp32-s3-devkitc-1"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
@@ -798,6 +800,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-pro-mini": SPARKFUN_RED,
         "sparkfun-pro-micro": SPARKFUN_RED,
         "adafruit-tca9548a": ADAFRUIT_BLUE,
+        "adafruit-ads1115": ADAFRUIT_BLACK,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
@@ -1257,6 +1260,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("pololu-drv8833", "8833"): (1, 1),  # Pololu's picture: towards AOUT1
     ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
     ("adafruit-tca9548a", "TCA9548A"): (-1, -1),  # Adafruit's board: U1's pad 1, towards VIN
+    ("adafruit-ads1115", ""): (-1, 1),  # Adafruit's board: U1's pad 1, towards VIN and ADDR
     ("sparkfun-hx711", "HX711"): (-1, -1),  # SparkFun's board: U1's pad 1, towards AVDD and VCC
     # Adafruit's boards, both revisions: U1's pad 1, towards VIN+ and the shunt.
     ("adafruit-ina219", ""): (1, -1),
@@ -1274,6 +1278,7 @@ _CHIP_SIZES: dict[str, tuple[float, float, float]] = {
     "so16": (9.9, 6.0, 1.75),
     "ssop24": (7.8, 7.6, 1.5),
     "sot23-8": (3.0, 3.0, 1.45),
+    "msop10": (3.0, 4.9, 1.1),
     "tssop24": (7.8, 6.4, 1.2),
     "tssop28": (9.7, 6.4, 1.2),
     "tqfp32": (9.0, 9.0, 1.2),

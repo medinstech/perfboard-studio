@@ -195,6 +195,13 @@ _TCA9548A_LEFT = ("VIN", "GND", "SDA", "SCL", "RST", "A0", "A1", "A2",
 _TCA9548A_RIGHT = ("SC7", "SD7", "SC6", "SD6", "SC5", "SD5", "SC4", "SD4",
                    "SC3", "SD3", "SC2", "SD2")
 
+# Adafruit's ADS1115 (and ADS1015) breakout in its STEMMA QT revision, its silkscreen read off
+# its Eagle board, the VIN end up: the I2C header down one row (VIN, GND, SCL, SDA, ADDR,
+# ALRT), the analog one down the other. The board prints A+ and A- for the chip's supply pins
+# behind their ferrite beads, which are named here as the nets are, AVDD and AGND.
+_ADS1115_LEFT = ("VIN", "GND", "SCL", "SDA", "ADDR", "ALRT")
+_ADS1115_RIGHT = ("AVDD", "A3", "A2", "A1", "A0", "AGND")
+
 
 def _legs(*names: str) -> PinNames:
     """Pin names in pin order: ``_legs("C", "B", "E")`` is 1=C, 2=B, 3=E."""
@@ -3264,6 +3271,33 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("TCA9548A", "TCA9548", "PCA9548", "I2C multiplexer", "I2C mux",
                          "I2C çoklayıcı")),
+    CatalogPart("adafruit-ads1115", "Adafruit ADS1115 16-bit ADC (STEMMA QT)", "module",
+                "mod-2x6-p5-r1-17.78x25.4x2.9-s8.5",
+                "16-bit ADC with four inputs on I2C: 12 pins, rows 12.7 mm apart",
+                _two_columns(_ADS1115_LEFT, _ADS1115_RIGHT), ref_prefix="U",
+                value="Adafruit ADS1115",
+                source=(
+                    "Adafruit's own Eagle board for its ADS1X15 breakouts "
+                    "(github.com/adafruit/ADS1X15-Breakout-Board-PCBs, 'Adafruit ADS1115 ADC "
+                    "STEMMA QT'): its two 1 x 6 headers 12.7 mm apart on the 25.4 x 17.78 mm "
+                    "board, every name read off its silkscreen (VIN GND SCL SDA ADDR ALRT, "
+                    "A+ A3 A2 A1 A0 A-) and each pad's net checked against the board's nets. "
+                    "The silkscreen reads 'Max Analog In: VIN' and 'I2C Addr 0x48'; the "
+                    "tallest thing is the STEMMA QT sockets, 2.9 mm up"
+                ),
+                check=(
+                    "The board prints VIN on pin 1, 2 to 5 V, and A+ and A- on the analog "
+                    "header: those are AVDD and AGND, the chip's own supply through a ferrite "
+                    "bead from VIN and GND, so they carry the same voltage and the same ground. "
+                    "The four inputs read from 0 V up to VIN, no higher. The I2C address is "
+                    "0x48, because the board holds ADDR low with a 10k resistor; the solder "
+                    "jumper on the board ties ADDR to VIN instead, which makes it 0x49. SCL, "
+                    "SDA and ALRT each have a 10k pull-up to VIN on the board, and the two "
+                    "STEMMA QT sockets carry the same I2C as the header. An older revision of "
+                    "this board has one 10-pin header instead of these two rows: this is the "
+                    "STEMMA QT one. " + _MODULE_TOP
+                ),
+                aliases=("ADS1115", "ADS1015", "16 bit ADC", "ADC", "STEMMA QT", "Qwiic")),
     CatalogPart("sparkfun-logic-level-converter",
                 "SparkFun Logic Level Converter - Bi-Directional", "module",
                 "mod-6x2-p1-r4-15.24x12.7x1.6-s8.5",

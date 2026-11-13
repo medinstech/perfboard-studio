@@ -107,6 +107,8 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:                       ``colour`` for a housing that is not natural nylon.
 #:  * ``sot23-8``     -- a SOT-23-8 (TI's DCN), four gull-wing legs a side, drawn from
 #:                       ``GULL_WING_LEGS`` as the TSSOP is.
+#:  * ``msop10``      -- a 10-leg MSOP (TI's DGS: 3.0 mm body, 4.9 mm over the legs, five a
+#:                       side 0.5 mm apart): the ADS1115's. Drawn from ``GULL_WING_LEGS`` too.
 ArtKind = Literal[
     "can",
     "inductor",
@@ -135,6 +137,8 @@ ArtKind = Literal[
     "so16",
     # A SOT-23-8: TI's DCN (R-PDSO-G8), 3.0 x 1.75 mm, legs 0.65 mm apart -- an INA219's.
     "sot23-8",
+    # A 10-leg MSOP (TI's DGS, 3.0 mm body): the ADS1115's.
+    "msop10",
     "qfn",
     "tqfp32",
     "rf-module",
@@ -186,6 +190,8 @@ GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
     "so16": (8, 1.27, 1.05),
     # TI's DCN drawing: a 3.00 mm span over a 1.75 mm body, at most.
     "sot23-8": (4, 0.65, 0.625),
+    # TI's DGS drawing: a 4.90 mm span over a 3.00 mm body, five legs a side.
+    "msop10": (5, 0.5, 0.95),
 }
 
 def gull_wing_dot(body_half: float) -> tuple[float, float, float]:
@@ -1051,6 +1057,50 @@ ADAFRUIT_TCA9548A_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's ADS1115 (and ADS1015) breakout, product 1085, read off Adafruit's own Eagle
+#: board for its STEMMA QT revision (ADS1X15-Breakout-Board-PCBs): the 25.4 x 17.78 mm board
+#: with the I2C header (VIN first) and the analog one 12.7 mm apart, a STEMMA QT socket on each
+#: short edge with its mouth outwards, the converter in TI's DGS MSOP-10 with its pin 1 towards
+#: VIN, the ferrite beads and bypass capacitors of the analog supply, the pull-up array, the
+#: power LED, and an M2.5 hole in each corner. The solder jumpers are not drawn. ``u`` runs
+#: down the headers from the VIN end, ``v`` across from the I2C header to the analog one. Sizes
+#: are the packages': the 0603 and 0805 parts, the resistor array as one 3.2 x 1.6 mm body.
+ADAFRUIT_ADS1115_MODULE = ModuleArt(
+    key="adafruit-ads1115",
+    board_colour=ADAFRUIT_BLACK,
+    names=("ads1115", "ads1015"),
+    board=(25.4, 17.78),
+    pins=12,
+    frame="columns",
+    landmark=("VIN", -1, -1),
+    # The converter, the capacitors and the ferrites stand between the rows where a name
+    # would go, and 12.7 mm leaves no room for both: the board is drawn as it is, and the
+    # names go over its parts.
+    names_over_parts=True,
+    parts=(
+        ArtPart("msop10", 0.25, 0.64, 3.0, 4.9, 1.1, along_v=True, facing=-1, across=1),
+        ArtPart("chip-c", -4.57, 3.05, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", -4.45, -3.18, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", -4.57, 1.14, 1.6, 0.8, 0.45),
+        ArtPart("chip-r", -4.70, -0.44, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 4.89, 0.64, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 0.0, -2.48, 3.2, 1.6, 0.6),
+        ArtPart("chip-r", -7.11, 3.43, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("led", -9.14, 3.68, 1.6, 0.8, 0.5, colour="#3fae49"),
+        ArtPart("jst-sh", -10.03, 0.0, 4.25, 6.0, 2.9, facing=-1),
+        ArtPart("jst-sh", 10.03, 0.0, 4.25, 6.0, 2.9, facing=1),
+        ArtPart("hole", -10.16, -6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, -6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", -10.16, 6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, 6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit ADS1115 STEMMA QT Eagle board, github adafruit/ADS1X15-Breakout-Board-PCBs, "
+        "CC BY-SA (the board, both headers, every top-side part's place, package and turn); TI "
+        "ADS1115 datasheet SBAS444, DGS (the chip); KiCad's JST SM04B-SRSS-TB model (the sockets)"
+    ),
+)
+
 #: Adafruit's INA219 current sensor breakout, both revisions, read off Adafruit's own Eagle
 #: boards (github adafruit/Adafruit-INA219-Current-Sensor-PCB) and seen from above with the
 #: header along the top, VCC at the right (``pin_one``): the INA219 in TI's SOT-23-8 with its
@@ -1670,6 +1720,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_PRO_MINI_MODULE,
     SPARKFUN_PRO_MICRO_MODULE,
     ADAFRUIT_TCA9548A_MODULE,
+    ADAFRUIT_ADS1115_MODULE,
     SPARKFUN_LOGIC_LEVEL_MODULE,
     ADAFRUIT_INA219_QT_MODULE,
     ADAFRUIT_INA219_MODULE,

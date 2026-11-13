@@ -3510,6 +3510,33 @@ TURKISH: Mapping[str, str] = {
         "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "Adafruit ADS1115 16-bit ADC (STEMMA QT)": (
+        "Adafruit ADS1115 16 bit ADC (STEMMA QT)"
+    ),
+    "16-bit ADC with four inputs on I2C: 12 pins, rows 12.7 mm apart": (
+        "I2C üzerinde dört girişli 16 bit ADC: 12 pin, sıralar arası 12,7 mm"
+    ),
+    "The board prints VIN on pin 1, 2 to 5 V, and A+ and A- on the analog header: those "
+    "are AVDD and AGND, the chip's own supply through a ferrite bead from VIN and GND, so "
+    "they carry the same voltage and the same ground. The four inputs read from 0 V up to "
+    "VIN, no higher. The I2C address is 0x48, because the board holds ADDR low with a 10k "
+    "resistor; the solder jumper on the board ties ADDR to VIN instead, which makes it "
+    "0x49. SCL, SDA and ALRT each have a 10k pull-up to VIN on the board, and the two "
+    "STEMMA QT sockets carry the same I2C as the header. An older revision of this board "
+    "has one 10-pin header instead of these two rows: this is the STEMMA QT one. The "
+    "height of what is on the board is an estimate, and so is its colour; the pins, the "
+    "rows and the board outline are measured.": (
+        "Kartta 1. pine VIN yazar, 2 ile 5 V; analog header'daki A+ ve A- ise AVDD ve "
+        "AGND'dir: çipin VIN ve GND'den ferrit boncuk üzerinden beslenen kendi "
+        "beslemesidir, yani aynı gerilimi ve aynı toprağı taşırlar. Dört giriş 0 V'tan "
+        "VIN'e kadar okur, daha yükseğini okumaz. I2C adresi 0x48'dir, çünkü kart ADDR'yi "
+        "10k dirençle düşük tutar; karttaki lehim köprüsü ADDR'yi bunun yerine VIN'e "
+        "bağlar, bu da adresi 0x49 yapar. SCL, SDA ve ALRT'nin her birinin kartta VIN'e "
+        "10k yukarı çekme direnci vardır, iki STEMMA QT soketi de header'la aynı I2C'yi "
+        "taşır. Bu kartın eski bir sürümünde bu iki sıra yerine tek bir 10 pinli header "
+        "vardır: bu, STEMMA QT olanıdır. Kartın üstündekilerin yüksekliği tahmindir, "
+        "rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Adafruit CCS811 air quality sensor (on a header)": (
         "Adafruit CCS811 hava kalitesi sensörü (header üzerinde)"
     ),
