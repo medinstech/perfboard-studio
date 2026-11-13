@@ -105,7 +105,7 @@ closed without a bump.
   pin joined by name only stays whole, since the name still joins it. One Ctrl+Z. The status
   line says where the pins went -- "GND split in two: R3.1, R4.1 are now N3" -- as it does
   when a wire's end is moved off a chain.
-- **40 more modules, boards and breakouts in the catalog**, with their pins named from the
+- **44 more modules, boards and breakouts in the catalog**, with their pins named from the
   maker's own board files or manual and a check that says what each pin wants. As the header
   their cable plugs into: Adafruit's MPR121 touch sensor, RFM9x LoRa radio, ILI9341 2.8 inch
   TFT, MAX98357 amplifier, TMC2209 stepper driver, CCS811, LSM6DS3, BNO055, AS5600 and
@@ -118,12 +118,15 @@ closed without a bump.
   board files or drawings and their photos, SparkFun's Pro Micro, Seeed's XIAO RP2040,
   Espressif's ESP32-S3-DevKitC-1, and Adafruit's ADS1115 (the STEMMA QT revision),
   SCD-40/SCD-41 CO2 sensor, DRV8871 motor driver and MAX4466 and MAX9814 microphone
-  amplifiers, each microphone with its electret capsule. The AI-Thinker ESP32-CAM goes in as
-  its two rows of eight pins: AI-Thinker publishes no drawing of them, so their 22.86 mm
-  spacing comes from two community footprints, and its check says so. The DFPlayer Mini MP3
-  player goes in as the sixteen-pin module it is, from its datasheet and DFRobot's drawing,
-  drawn as a plain block since nothing measures what stands on its board. The XL6009 boost
-  module goes in off the board, on four wires.
+  amplifiers, each microphone with its electret capsule, and 1.14 inch 240x135 TFT with its
+  glass; and SparkFun's ACS712 current sensor, thumb joystick and soil moisture sensor, the
+  last on its three header pads with its gold probe fingers drawn. The ACS712 and the
+  joystick are SparkFun's own boards by name: the ACS712's check says clone boards differ,
+  and the joystick's clones are other parts in the catalog. The AI-Thinker ESP32-CAM goes in as its two rows of eight pins: AI-Thinker publishes no
+  drawing of them, so their 22.86 mm spacing comes from two community footprints, and its
+  check says so. The DFPlayer Mini MP3 player goes in as the sixteen-pin module it is, from
+  its datasheet and DFRobot's drawing, drawn as a plain block since nothing measures what
+  stands on its board. The XL6009 boost module goes in off the board, on four wires.
 - **Copper is drawn by dragging, pad to pad.** With a drawing tool armed, press on a hole,
   drag, and let go on another: a run, a wire or a jumper in one gesture, a corner wherever
   the drag turns, previewed and checked as it goes exactly as clicks are. A press let go
