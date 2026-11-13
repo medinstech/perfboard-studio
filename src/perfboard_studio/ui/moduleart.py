@@ -579,6 +579,45 @@ C3_DEVKITM_MODULE = ModuleArt(
     ),
 )
 
+#: Espressif's ESP32-S3-DevKitC-1 (v1.1): the ESP32-S3-WROOM-1 at the top with its antenna 6.3 mm
+#: past the board, the regulator and the two auto-reset transistors under it, the RGB LED on
+#: IO38, the USB bridge, and BOOT and RESET either side of the two micro-USB sockets (UART
+#: left, USB right). Every position read off Espressif's DXF_ESP32-S3-DevKitC-1_V1.1
+#: dimensions drawing, whose placement outlines are the parts' own; the module's 25.5 x 18 mm
+#: is its datasheet's. The bridge's pin 1 is not marked on the drawing, so none is drawn. The
+#: module is 18 mm across on rows 22.86 mm apart, which leaves under a millimetre beside each
+#: pin for a name, so the names are printed over it.
+S3_DEVKITC_MODULE = ModuleArt(
+    key="esp32-s3-devkitc-1",
+    board_colour=ESPRESSIF_BLACK,
+    names=("s3-devkitc", "s3 devkitc", "s3_devkitc"),
+    board=(69.4, 25.4),
+    pins=44,
+    frame="columns",
+    landmark=("TX", -1, 1),
+    names_over_parts=True,
+    parts=(
+        ArtPart("rf-module", -21.95, 0.05, 25.5, 18.0, 3.2, facing=-1, antenna=6.3, inset=1.0,
+                text="ESP32-S3-WROOM-1"),
+        ArtPart("sot223", -1.92, 0.81, 7.0, 6.5, 1.7, along_v=True, facing=-1),
+        ArtPart("sma", -0.52, 6.4, 2.85, 1.48, 0.9),
+        ArtPart("sot23", 5.37, -0.13, 2.4, 2.9, 1.1),
+        ArtPart("led", 5.37, -5.2, 3.5, 3.5, 1.5),
+        ArtPart("sot23", 5.37, 5.08, 2.4, 2.9, 1.1),
+        ArtPart("qfn", 14.31, 0.89, 5.0, 5.0, 0.9, facing=-1, text="CP2102N", across=0),
+        ArtPart("button", 20.49, -5.17, 3.05, 2.2, 1.5, along_v=True),
+        ArtPart("button", 20.49, 5.21, 3.05, 2.2, 1.5, along_v=True),
+        ArtPart("sma", 25.5, -2.26, 1.7, 1.25, 0.9, along_v=True),
+        ArtPart("sma", 25.5, 2.18, 1.7, 1.25, 0.9, along_v=True),
+        ArtPart("usb", 31.66, -6.7, 6.0, 7.4, 2.6, facing=1),
+        ArtPart("usb", 31.66, 6.7, 6.0, 7.4, 2.6, facing=1),
+    ),
+    source=(
+        "Espressif DXF_ESP32-S3-DevKitC-1_V1.1 dimensions drawing (positions); ESP32-S3-WROOM-1 "
+        "datasheet (the module)"
+    ),
+)
+
 #: The Arduino Nano: the unfitted ICSP header at the far end, the four LEDs (TX, RX, power,
 #: L) across the board, the reset button, the ATmega328P turned on its corner and the mini-B
 #: socket at the USB end. Positions read off the mechanical drawing in Arduino's A000005
@@ -1618,6 +1657,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     DEVKITC_MODULE,
     ESP32_DEVKIT_V1_MODULE,
     C3_DEVKITM_MODULE,
+    S3_DEVKITC_MODULE,
     NANO_MODULE,
     PICO_MODULE,
     D1_MINI_MODULE,

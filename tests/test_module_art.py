@@ -128,6 +128,7 @@ def _footprint(footprint_id: str):
         ("SparkFun TB6612FNG", "sparkfun-tb6612fng"),
         ("Pololu DRV8833", "pololu-drv8833"),
         ("SparkFun Pro Micro 5V/16MHz", "sparkfun-pro-micro"),
+        ("ESP32-S3-DevKitC-1", "esp32-s3-devkitc-1"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
         ("Seeed XIAO RP2040", "seeed-xiao-rp2040"),
@@ -156,7 +157,6 @@ def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
         "Arduino Nano 33 IoT",
         "Raspberry Pi Pico W",
         "Raspberry Pi Pico 2",
-        "ESP32-S3-DevKitC-1",
         "ESP32-DevKitC-VE",
         "LOLIN D1 mini Pro",
         # Same pins, another board: the StepStick clones are not Pololu's layout.
@@ -790,6 +790,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "pololu-a4988": PICO_MODULE.board_colour,
         "pololu-drv8825": POLOLU_DRV8825_MODULE.board_colour,
         "seeed-xiao-esp32c3": ESPRESSIF_BLACK,
+        "esp32-s3-devkitc-1": ESPRESSIF_BLACK,
         "seeed-xiao-rp2040": ESPRESSIF_BLACK,
         "lm2596-module": None,  # the blue every seller's board is
         "hc-sr501": None,  # blue, as the photograph's is
@@ -1249,6 +1250,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("raspberry-pi-pico", ""): None,  # KiCad's model: the flash a plain box
     ("raspberry-pi-pico", "RP2-B2"): None,  # and the RP2040 too
     ("esp32-devkitc", "CP2102N"): (1, -1),  # Espressif's PCB layout: the chamfered corner
+    ("esp32-s3-devkitc-1", "CP2102N"): None,  # Espressif's drawing marks no pin 1
     ("esp32-c3-devkitm-1", ""): (1, -1),  # Espressif's PCB layout: U3's ring and chamfer
     ("pololu-a4988", "4988"): (1, -1),  # Pololu's photograph: nearest VMOT
     ("pololu-drv8825", ""): (1, -1),  # Pololu's photograph: VMOT end, trimmer side

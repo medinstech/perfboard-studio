@@ -4935,6 +4935,17 @@ TURKISH: Mapping[str, str] = {
         "USB-C soketi kartın ucundan yaklaşık 1,8 mm taşar. Kartın üstündekilerin yüksekliği "
         "tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
     ),
+    "ESP32-S3 dev board, 44 pins, rows 22.86 mm apart": (
+        "ESP32-S3 geliştirme kartı, 44 pin, sıralar arası 22,86 mm"
+    ),
+    "The pins are the same on revision 1.0 and 1.1; the RGB LED is on IO48 on 1.0 and IO38 "
+    "on 1.1. Clones with a USB-C socket or fewer pins are other boards. The height of what "
+    "is on the board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "Pinler 1.0 ve 1.1 sürümlerinde aynıdır; RGB LED 1.0'da IO48'e, 1.1'de IO38'e bağlıdır. "
+        "USB-C soketli veya daha az pinli klonlar başka kartlardır. Kartın üstündekilerin "
+        "yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "RP2040 board, 14 pins, rows 15.24 mm apart": (
         "RP2040 kartı, 14 pin, sıralar arası 15,24 mm"
     ),

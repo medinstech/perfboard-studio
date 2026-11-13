@@ -106,6 +106,7 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         # DFRobot's drawing has the pins 18.03 mm apart; the grid's nearest is seven holes.
         "dfplayer-mini": 17.78,
         "seeed-xiao-esp32c3": 15.24,
+        "esp32-s3-devkitc-1": 22.86,
         "seeed-xiao-rp2040": 15.24,
         # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
         "lm2596-module": 40.64,
@@ -233,7 +234,8 @@ def test_the_nano_right_column_runs_from_vin_to_d13() -> None:
 def test_search_matches_the_name_the_summary_and_the_kind() -> None:
     assert [part.id for part in search_catalog("bc547")] == ["bc547"]
     assert {part.id for part in search_catalog("esp32")} == {
-        "esp32-devkitc", "esp32-devkit-v1", "esp32-c3-devkitm-1", "seeed-xiao-esp32c3"
+        "esp32-devkitc", "esp32-devkit-v1", "esp32-c3-devkitm-1", "esp32-s3-devkitc-1",
+        "seeed-xiao-esp32c3",
     }
     assert all(part.symbol == "pmos" for part in search_catalog("p-channel"))
     assert {part.category for part in search_catalog(category="regulator")} == {"regulator"}
@@ -1202,6 +1204,27 @@ def test_the_pro_micro_is_one_board_on_two_rows_of_twelve_usb_end_first() -> Non
     assert "sparkfun/Pro_Micro" in part.source
     assert "VCC" in part.check and "5V" in part.check
     assert "pro-micro" in {found.id.replace("sparkfun-", "") for found in search_catalog("ATmega32U4")}
+
+
+def test_the_esp32_s3_devkitc_1_is_the_header_both_revisions_print() -> None:
+    """Espressif's v1.0 and v1.1 guides print the same J1 and J3 tables (only the RGB LED's
+    GPIO differs) and the v1.1 dimensions drawing labels the pads the same way: J1 down the
+    left from 3V3, J3 down the right from GND, 22 pads each, 22.86 mm apart."""
+    part = catalog_part("esp32-s3-devkitc-1")
+    assert part is not None
+    names = dict(part.pin_names)
+    assert len(names) == 44
+    left = [names[str(n)] for n in range(1, 45, 2)]
+    right = [names[str(n)] for n in range(2, 45, 2)]
+    assert left[:4] == ["3V3", "3V3", "RST", "IO4"] and left[-2:] == ["5V", "GND"]
+    assert right[:4] == ["GND", "TX", "RX", "IO1"]
+    assert right[-5:] == ["IO21", "IO20", "IO19", "GND", "GND"]
+    # GPIO numbers on the two headers: each of the chip's pads that the board brings out, once.
+    gpios = [n for n in left + right if n.startswith("IO")]
+    assert len(gpios) == len(set(gpios)) == 34
+    assert {"IO19", "IO20"} <= set(gpios) and "IO43" not in gpios and "IO44" not in gpios
+    assert "IO48" in part.check and "IO38" in part.check
+    assert "esp32-s3-devkitc-1" in {found.id for found in search_catalog("s3 devkitc")}
 
 
 def test_the_xiao_rp2040_has_the_xiao_c3s_header_and_its_own_name() -> None:

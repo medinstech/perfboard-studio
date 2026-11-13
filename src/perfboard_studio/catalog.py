@@ -295,6 +295,17 @@ _C3_DEVKITM_RIGHT = (
     "GND", "TX", "RX", "GND", "IO9", "IO8", "GND", "IO7", "IO6", "IO5",
     "IO4", "GND", "IO18", "IO19", "GND",
 )  # fmt: skip
+# Espressif's ESP32-S3-DevKitC-1, the antenna end up: J1 down the left (3V3 to GND) and J3 down
+# the right (GND to GND). Revisions 1.0 and 1.1 print the same names on both headers; only the
+# RGB LED moved, from IO48 to IO38.
+_S3_DEVKITC_LEFT = (
+    "3V3", "3V3", "RST", "IO4", "IO5", "IO6", "IO7", "IO15", "IO16", "IO17", "IO18",
+    "IO8", "IO3", "IO46", "IO9", "IO10", "IO11", "IO12", "IO13", "IO14", "5V", "GND",
+)  # fmt: skip
+_S3_DEVKITC_RIGHT = (
+    "GND", "TX", "RX", "IO1", "IO2", "IO42", "IO41", "IO40", "IO39", "IO38", "IO37",
+    "IO36", "IO35", "IO0", "IO45", "IO48", "IO47", "IO21", "IO20", "IO19", "GND", "GND",
+)  # fmt: skip
 
 # Pololu's own top view: the logic pins down the left, the motor and supply pins down the
 # right with VMOT at the top -- KiCad's Pololu_Breakout footprint is the same board turned
@@ -3162,6 +3173,20 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _two_columns(_C3_DEVKITM_LEFT, _C3_DEVKITM_RIGHT), ref_prefix="U",
                 source="KiCad RF_Module:ESP32-C3-DevKitM-1 footprint and symbol",
                 check=_MODULE_TOP),
+    CatalogPart("esp32-s3-devkitc-1", "ESP32-S3-DevKitC-1", "module",
+                "mod-2x22-p9-r1-25.4x69.4x3.5-s8.5-o0x0.18",
+                "ESP32-S3 dev board, 44 pins, rows 22.86 mm apart",
+                _two_columns(_S3_DEVKITC_LEFT, _S3_DEVKITC_RIGHT), ref_prefix="U",
+                source=(
+                    "Espressif ESP32-S3-DevKitC-1 user guides v1.0 and v1.1 (J1/J3 pin tables, "
+                    "which agree) and the v1.1 dimensions drawing (DXF_ESP32-S3-DevKitC-1_V1.1): "
+                    "board 25.4 x 62.87 mm, module antenna 6.3 mm past it, pin rows 22.86 mm apart"
+                ),
+                check=(
+                    "The pins are the same on revision 1.0 and 1.1; the RGB LED is on IO48 on 1.0 "
+                    "and IO38 on 1.1. Clones with a USB-C socket or fewer pins are other boards. "
+                    + _MODULE_TOP
+                )),
     CatalogPart("arduino-nano", "Arduino Nano", "module",
                 "mod-2x15-p6-r1-17.78x45.72x4-s8.5-o0x1.27",
                 "ATmega328P board, 30 pins, rows 15.24 mm apart",
