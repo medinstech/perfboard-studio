@@ -95,6 +95,7 @@ from perfboard_studio.schematic import (
     Symbol,
     Wire,
     moved_corner,
+    moved_end,
     moved_run,
     no_connect_arms,
     rail_glyph_bars,
@@ -977,6 +978,11 @@ class SchematicView(QGraphicsView):
     #: A drawn wire was dragged by a corner or a run into a new shape: (ref a, pin a,
     #: ref b, pin b, the new path as (x, y) pairs). Its ends and its net stay as they were.
     wireReshaped = Signal(str, str, str, str, list)
+    #: An end of the selected wire was dragged onto another pin: (ref a, pin a, ref b,
+    #: pin b -- the wire -- then the end that moved and the pin it went to, ref and pin
+    #: each, then the new path from the end that stayed to that pin, as (x, y) pairs).
+    #: That is a change to the circuit, and the window's: ``sheet.wire.reconnect``.
+    wireEndMoved = Signal(str, str, str, str, str, str, str, str, list)
     #: The wire tool's first click landed on a wire rather than a pin. Carries the wire's
     #: two ends as "R1.2 – U1.4", for the status bar.
     teeStarted = Signal(str)
@@ -1066,6 +1072,12 @@ class SchematicView(QGraphicsView):
             tuple[tuple[NetNode, NetNode], tuple[Point2, ...], str, int] | None
         ) = None
         self._reshaping = False
+        #: An end of the SELECTED wire pressed in Select: the wire's two pins, its path, and
+        #: whether the end is the first point. Dragged onto another pin, the end moves there
+        #: (``_moving_end``). Only the selected wire's: on any other wire's end the pin is
+        #: what is pressed, and a drag from it draws a new wire, as it always did.
+        self._press_end: tuple[tuple[NetNode, NetNode], tuple[Point2, ...], bool] | None = None
+        self._moving_end = False
         #: The last route ``_pin_to_pin`` found: the drawing itself (held, so a new one is
         #: never mistaken for it), the two pins, the route.
         self._route_memo: (
@@ -1388,6 +1400,7 @@ class SchematicView(QGraphicsView):
         return (
             self._dragging
             or self._reshaping
+            or self._moving_end
             or self._band_from is not None
             or self._shape_from is not None
         )
@@ -1410,6 +1423,8 @@ class SchematicView(QGraphicsView):
         self._pin_press = None
         self._press_wire = None
         self._reshaping = False
+        self._press_end = None
+        self._moving_end = False
         if self.item is not None:
             self.item.drag_offset = None
             self.item.live_wires = None
@@ -1715,6 +1730,12 @@ class SchematicView(QGraphicsView):
             event.modifiers()
             & (Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier)
         )
+        grabbed = None if additive else self._end_at(where)
+        if grabbed is not None:
+            # An end of the wire that is selected: held, so a drag takes it to another pin.
+            self._press_end = grabbed
+            event.accept()
+            return
         symbol = self.symbol_at(where)
         if symbol is not None and additive and symbol.ref in self.selected_refs:
             # Let go of, and nothing more: a symbol just taken out of the selection is not
@@ -1969,6 +1990,11 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        if self._press_end is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._drag_end(event, where)
+            event.accept()
+            return
+
         if self.item is not None and self.tool == "select" and not event.buttons():
             over = self.wire_at(where)
             self._show_wire_selection(over[1] if over is not None else ())
@@ -2008,6 +2034,53 @@ class SchematicView(QGraphicsView):
                 ]
             )
         self.item.drag_offset = offset
+        self.item.update()
+
+    def _end_at(
+        self, where: QPointF
+    ) -> tuple[tuple[NetNode, NetNode], tuple[Point2, ...], bool] | None:
+        """The end of the selected wire under the pointer, if it ends on a pin there: the
+        wire, its path, and whether that end is the path's first point. The end of a T that
+        lands on a wire is not a pin and is not offered."""
+        if self.selected_wire is None or self.item is None:
+            return None
+        path = self._path_of(self.selected_wire)
+        if len(path) < 2:
+            return None
+        radius = self.pin_pick_radius()
+        for node, point, first in (
+            (self.selected_wire[0], path[0], True),
+            (self.selected_wire[1], path[-1], False),
+        ):
+            anchor = pin_anchor(self.item.drawing, node.component_ref, node.pin)
+            if anchor is None or math.hypot(anchor.x() - point.x, anchor.y() - point.y) > 1e-6:
+                continue
+            if math.hypot(where.x() - point.x, where.y() - point.y) <= radius:
+                return self.selected_wire, path, first
+        return None
+
+    def _end_moved(self, where: QPointF) -> tuple[Point2, ...]:
+        """The held wire from the end that stays to the pin under the pointer, or to the
+        pointer itself on the grid while it is over no pin."""
+        if self._press_end is None or self.item is None:
+            return ()
+        _ends, path, first = self._press_end
+        from_stay = tuple(reversed(path)) if first else path
+        pin = self.pin_at(where)
+        target = pin_anchor(self.item.drawing, *pin) if pin is not None else None
+        to = target if target is not None else _snapped(where)
+        return moved_end(from_stay, Point2(x=to.x(), y=to.y()))
+
+    def _drag_end(self, event: QMouseEvent, where: QPointF) -> None:
+        """Show the held wire with its end where the pointer is, the pin under it lit."""
+        if self._press_at is None or self.item is None:
+            return
+        moved = event.position().toPoint() - self._press_at
+        if not self._moving_end and moved.manhattanLength() < QApplication.startDragDistance():
+            return
+        self._moving_end = True
+        self.item.hover_pin = self.pin_at(where)
+        self.item.ghost_path = tuple(_point(point) for point in self._end_moved(where))
         self.item.update()
 
     def _reshaped(self, where: QPointF) -> tuple[Point2, ...]:
@@ -2118,6 +2191,24 @@ class SchematicView(QGraphicsView):
 
         if self._press_note is not None:
             self._clear_ghosts()
+            event.accept()
+            return
+
+        if self._press_end is not None:
+            held_end, moving = self._press_end, self._moving_end
+            pin = self.pin_at(where) if moving else None
+            path = self._end_moved(where) if pin is not None else ()
+            self._clear_ghosts()
+            if self.item is not None:
+                self.item.hover_pin = None
+            (a, b), _path, first = held_end
+            leaving = a if first else b
+            if pin is not None and NetNode(component_ref=pin[0], pin=pin[1]) not in (a, b):
+                self.wireEndMoved.emit(
+                    a.component_ref, a.pin, b.component_ref, b.pin,
+                    leaving.component_ref, leaving.pin, pin[0], pin[1],
+                    [(point.x, point.y) for point in path],
+                )
             event.accept()
             return
 

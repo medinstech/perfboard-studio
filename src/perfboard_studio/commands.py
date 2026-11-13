@@ -1133,6 +1133,23 @@ class ReshapeSheetWirePayload:
 
 
 @dataclass(frozen=True, slots=True)
+class ReconnectSheetWirePayload:
+    """One end of a drawn wire taken off its pin and put on another: the wire from ``a`` to
+    ``b`` has its end ``end`` (one of the two) moved to the pin ``to``. ``path`` is the new
+    wire, from the end that stays to ``to``.
+
+    A CHANGE TO THE CIRCUIT, unlike a reshape: ``end`` leaves the net the way a cut takes a
+    pin off it, and ``to`` joins it the way a drawn wire joins a pin -- in one command, so
+    one undo puts the wire and both connections back."""
+
+    a: NetNode
+    b: NetNode
+    end: NetNode
+    to: NetNode
+    path: tuple[Point2, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AddSheetNotePayload:
     """A caption or a box on the drawing. Nothing derives anything from it."""
 
@@ -3351,6 +3368,134 @@ class _CutSheetWires:
         return f"Delete {count_noun(len(p.wires), 'wire')} on the sheet"
 
 
+class _ReconnectSheetWire:
+    """Move one end of a drawn wire to another pin.
+
+    THE RULES, each the answer the commands it is made of already give:
+
+    - The pin the end leaves comes off the net when no wire still drawn has it as an end,
+      as ``sheet.wire.cut`` takes it off; joined by name as well, it is taken off anyway,
+      as a cut would.
+    - The pin the end goes to joins the wire's net, as ``sheet.wire`` joins it. On another
+      net already it is refused (``two-nets``): joining two nets is a change to the
+      circuit nobody asked for by moving a wire.
+    - A T landing on the wire stays on it: the pins that name its host are renamed with the
+      wire's, and a T on that T after it, so nothing is left branching off a wire that no
+      longer has that name.
+    - A net whose every pin is a wire end is split where the wires now leave it in two
+      pieces, the larger keeping the name (``_split_by_wires``), as after a cut.
+    - The end of a T that lands on a wire is not a pin, so it is not moved here: drawing
+      the branch again is how it goes somewhere else.
+    """
+
+    type = "sheet.wire.reconnect"
+
+    def apply(
+        self, doc: PerfDocument, p: ReconnectSheetWirePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        key = frozenset((p.a, p.b))
+        wire = next((w for w in doc.sheet_wires if frozenset((w.a, w.b)) == key), None)
+        if wire is None:
+            raise CommandError(
+                "no-such-wire", f"No wire is drawn from {_pin_name(p.a)} to {_pin_name(p.b)}."
+            )
+        if p.end not in (wire.a, wire.b):
+            raise CommandError(
+                "not-an-end",
+                f"{_pin_name(p.end)} is not an end of the wire from {_pin_name(wire.a)} to "
+                f"{_pin_name(wire.b)}.",
+            )
+        if wire.tap is not None and p.end == wire.b:
+            raise CommandError(
+                "branch-end",
+                f"That end of the branch from {_pin_name(wire.a)} lands on a wire, not a pin; "
+                "draw the branch again to put it somewhere else.",
+            )
+        stay = wire.b if p.end == wire.a else wire.a
+        if p.to == p.end:
+            raise CommandError("nothing-to-do", f"The wire already ends on {_pin_name(p.to)}.")
+        if p.to == stay or (wire.tap is not None and p.to == wire.tap):
+            raise CommandError("same-pin", "A wire has to go between two different pins.")
+        if any(frozenset((w.a, w.b)) == frozenset((stay, p.to)) for w in doc.sheet_wires):
+            raise CommandError(
+                "already-wired",
+                f"A wire is drawn from {_pin_name(stay)} to {_pin_name(p.to)} already.",
+            )
+        net = next((n for n in doc.nets if wire.a in n.nodes and wire.b in n.nodes), None)
+        if net is None:
+            raise CommandError(
+                "wire-not-drawn",
+                f"The wire from {_pin_name(wire.a)} to {_pin_name(wire.b)} no longer joins "
+                "one net, so it is not drawn.",
+            )
+        other = next((n for n in doc.nets if p.to in n.nodes and n.id != net.id), None)
+        if other is not None:
+            raise CommandError(
+                "two-nets",
+                f"{_pin_name(stay)} is on {net.name} and {_pin_name(p.to)} is on "
+                f"{other.name}. Joining two nets is a change to the circuit — "
+                "disconnect one of the pins first.",
+            )
+        if len(p.path) < 2:
+            raise CommandError(
+                "path-too-short", "A wire on the sheet needs at least two points."
+            )
+        moved = (
+            dataclasses.replace(wire, b=p.to, path=p.path)
+            if p.end == wire.b
+            else dataclasses.replace(wire, a=p.to, path=tuple(reversed(p.path)))
+        )
+        _check_square(moved)
+
+        # The T's on it, and on them: a T names its host by the host's two pins, and the
+        # pin that went is ``p.end`` wherever it is named, so it becomes ``p.to``.
+        renamed = {key}
+        wires = [moved if w is wire else w for w in doc.sheet_wires]
+        grew = True
+        while grew:
+            grew = False
+            for index, w in enumerate(wires):
+                if w.tap is None or w.host_pins not in renamed:
+                    continue
+                b = p.to if w.b == p.end else w.b
+                tap = p.to if w.tap == p.end else w.tap
+                if w.a in (b, tap):
+                    raise CommandError(
+                        "same-pin",
+                        f"{_pin_name(w.a)} branches off that wire already, so the wire cannot "
+                        "end on it as well.",
+                    )
+                wires[index] = dataclasses.replace(w, b=b, tap=tap)
+                if b != w.b:
+                    renamed.add(frozenset((w.a, w.b)))
+                grew = True
+        kept = tuple(wires)
+
+        touched = {w.a for w in kept} | {w.b for w in kept if w.tap is None}
+        nodes = [n for n in net.nodes if n != p.end or n in touched]
+        if p.to not in nodes:
+            nodes.append(p.to)
+        pieces = _split_by_wires(tuple(nodes), kept)
+        nets: list[Net] = [
+            dataclasses.replace(n, nodes=pieces[0]) if n.id == net.id else n for n in doc.nets
+        ]
+        for piece in pieces[1:]:
+            named = dataclasses.replace(doc, nets=tuple(nets))
+            nets.append(
+                dataclasses.replace(
+                    net, id=ctx.next_id("net"), name=next_net_name(named), nodes=piece
+                )
+            )
+        return dataclasses.replace(doc, nets=tuple(nets), sheet_wires=kept)
+
+    def describe(self, p: ReconnectSheetWirePayload, doc: PerfDocument) -> str:
+        stay = p.b if p.end == p.a else p.a
+        return (
+            f"Move the wire from {_pin_name(stay)} off {_pin_name(p.end)} "
+            f"onto {_pin_name(p.to)}"
+        )
+
+
 def _split_by_wires(
     nodes: tuple[NetNode, ...], wires: tuple[SheetWire, ...]
 ) -> list[tuple[NetNode, ...]]:
@@ -4431,6 +4576,7 @@ DESIGN_COMMANDS = frozenset(
         "sheet.note.update",
         "sheet.wire",
         "sheet.wire.cut",
+        "sheet.wire.reconnect",
         "sheet.wire.delete",
         "sheet.wire.reshape",
         "symbol.auto",
@@ -4877,6 +5023,7 @@ draw_sheet_wire: CommandDefinition[DrawSheetWirePayload] = _DrawSheetWire()
 delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWires()
 cut_sheet_wires: CommandDefinition[CutSheetWiresPayload] = _CutSheetWires()
 reshape_sheet_wire: CommandDefinition[ReshapeSheetWirePayload] = _ReshapeSheetWire()
+reconnect_sheet_wire: CommandDefinition[ReconnectSheetWirePayload] = _ReconnectSheetWire()
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
@@ -4949,6 +5096,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     delete_sheet_wires,
     cut_sheet_wires,
     reshape_sheet_wire,
+    reconnect_sheet_wire,
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,

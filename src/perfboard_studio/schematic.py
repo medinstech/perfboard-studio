@@ -3240,6 +3240,16 @@ def _spoils(
     )
 
 
+def moved_end(path: Sequence[Point2], to: Point2) -> tuple[Point2, ...]:
+    """The drawn path with its LAST point taken to ``to``, the run into it sliding so the
+    wire stays square -- what a symbol moving does to its wires (``_reanchored``), for the
+    end of one wire dragged onto another pin. Reverse a path to move its first point."""
+    points = tuple(path)
+    if len(points) < 2:
+        return points
+    return _reanchored(points, points[0], to)
+
+
 def _square_tidy(points: Sequence[Point2]) -> tuple[Point2, ...]:
     """``_tidy``, and then every corner that does not turn taken out: a run that goes on in
     the same direction is one run. A point where the wire turns back on itself stays, since

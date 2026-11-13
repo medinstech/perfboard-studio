@@ -85,6 +85,11 @@ closed without a bump.
   The ends stay on their pins and the wire stays square, so dragging the straight wire
   between two pins down makes a U. Only the drawing changes, never the connection, and one
   undo puts it back. Esc during the drag calls it off.
+- **An end of a wire on the schematic can be moved to another pin.** Select the wire, then
+  drag one of its ends onto another pin: the wire now ends there, the new pin joins the net
+  and the old one leaves it unless another wire still holds it. A branch on the wire
+  follows it. A pin already on another net is refused rather than merging two nets, and an
+  end let go anywhere but on a pin stays where it was.
 - **Cutting the wire in the middle of a fully wired net splits it in two.** A net drawn
   as a chain of wires stayed one net when a wire in the middle was cut, so its two ends
   were still joined by a name nobody wrote and the sheet no longer showed. Where every pin

@@ -50,6 +50,7 @@ from perfboard_studio.commands import (
     MoveSymbolsPayload,
     PartPlacement,
     PlacePartsPayload,
+    ReconnectSheetWirePayload,
     RenameDocumentPayload,
     ReshapeSheetWirePayload,
     RotateComponentPayload,
@@ -300,6 +301,16 @@ def _session() -> list[str]:
                 Point2(40.64, 20.32),
                 Point2(40.64, 15.24),
             ),
+        ),
+    )
+    run(
+        "sheet.wire.reconnect",
+        ReconnectSheetWirePayload(
+            a=wire.a,
+            b=wire.b,
+            end=wire.b,
+            to=NetNode("R11", "1"),
+            path=(Point2(30.48, 15.24), Point2(30.48, 20.32), Point2(50.8, 20.32)),
         ),
     )
     run("sheet.wire.delete", DeleteSheetWiresPayload(wires=bus.document.sheet_wires))

@@ -1570,6 +1570,17 @@ the way the wire runs whichever end the view handed it from. A T on a reshaped w
 rewritten: the sheet lands every T on its wire as it draws (`_laid_onto`), which is what
 already keeps one on a wire whose symbol moved.
 
+**An end dragged to another pin is a cut and a wire in one command**
+(`sheet.wire.reconnect`). Only the SELECTED wire's ends can be taken hold of, so a press
+that merely selects a wire never tears it off a pin. The pin left behind comes off the net
+when no other wire holds it, as `sheet.wire.cut` takes it off; the pin reached joins, as
+`sheet.wire` joins it, and is refused when it is on another net, because merging two nets
+is not what moving a wire asks for. A fully wired net is split where the wires now part,
+by the cut's `_split_by_wires`. A T names its host by the host's two pins, so every T on
+the wire (and on those T's) is renamed with it rather than left branching off a pair that
+no longer exists. The end of a T that lands on a wire is not a pin and is refused
+(`branch-end`): drawing the branch again is how it moves.
+
 **Delete cuts a wire; Remove Line Only rubs it out.** `sheet.wire.cut` takes the wire with
 its T's and takes off the net every pin that only they joined; `sheet.wire.delete` leaves
 the circuit and takes the line. A net whose every pin is a wire end is SPLIT where a cut
