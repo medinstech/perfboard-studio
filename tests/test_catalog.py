@@ -106,6 +106,7 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         # DFRobot's drawing has the pins 18.03 mm apart; the grid's nearest is seven holes.
         "dfplayer-mini": 17.78,
         "seeed-xiao-esp32c3": 15.24,
+        "seeed-xiao-rp2040": 15.24,
         # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
         "lm2596-module": 40.64,
         "sparkfun-tb6612fng": 15.24,
@@ -1201,6 +1202,21 @@ def test_the_pro_micro_is_one_board_on_two_rows_of_twelve_usb_end_first() -> Non
     assert "sparkfun/Pro_Micro" in part.source
     assert "VCC" in part.check and "5V" in part.check
     assert "pro-micro" in {found.id.replace("sparkfun-", "") for found in search_catalog("ATmega32U4")}
+
+
+def test_the_xiao_rp2040_has_the_xiao_c3s_header_and_its_own_name() -> None:
+    """Seeed's v1.3 board puts the same nets on the same fourteen pads as the C3's, and its
+    pin map names them D0..D10 with GPIO26-29 on A0-A3, GPIO6/7 as I2C and GPIO0 as TX."""
+    part = catalog_part("seeed-xiao-rp2040")
+    other = catalog_part("seeed-xiao-esp32c3")
+    assert part is not None and other is not None
+    assert part.footprint_id == other.footprint_id and part.pin_names == other.pin_names
+    names = dict(part.pin_names)
+    assert [names[str(n)] for n in (1, 2, 5, 8, 9, 12, 13, 14)] == [
+        "D0", "5V", "D2", "D10/MOSI", "D4/SDA", "D8/SCK", "D6/TX", "D7/RX",
+    ]
+    assert "RP2040" in part.summary and "xiao rp2040" in (part.value or "").lower()
+    assert [found.id for found in search_catalog("rp2040") if found.id == part.id] == [part.id]
 
 
 def test_the_tca9548a_is_one_board_on_two_rows_of_twelve() -> None:

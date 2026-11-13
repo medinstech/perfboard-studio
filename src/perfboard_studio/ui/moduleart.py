@@ -764,6 +764,39 @@ XIAO_ESP32C3_MODULE = ModuleArt(
     ),
 )
 
+#: The Seeed XIAO RP2040, USB-C at the top: the socket, the shield can over the chip, the
+#: flash, the crystal and the regulator, the RESET and BOOT buttons with the RGB LED between
+#: them along the far end, the red power LED and the three-colour user LED beside the socket.
+#: Every position from Seeed's own KiCad board (XIAO RP2040 v1.3; ``u`` towards the far end
+#: from the socket, ``v`` towards the 5V row), the can's from the pads it
+#: is soldered to and its size from Seeed's photograph; what stands under the can is hidden by
+#: it, as on the board. The socket stands 1.4 mm past the end (the board's silkscreen outline
+#: of it); only what is over the board is drawn. The can covers the board where the names
+#: would go, and Seeed prints them on the back.
+XIAO_RP2040_MODULE = ModuleArt(
+    key="seeed-xiao-rp2040",
+    board_colour=ESPRESSIF_BLACK,
+    names=("xiao rp2040", "xiao-rp2040", "xiao_rp2040"),
+    board=(21.0, 17.78),
+    pins=14,
+    frame="columns",
+    landmark=("5V", -1, 1),
+    names_over_parts=True,
+    parts=(
+        ArtPart("usb", -7.56, 0.0, 5.88, 8.94, 3.2, facing=-1),
+        ArtPart("led", -7.53, 5.67, 1.0, 1.0, 0.5, colour="#4a4540"),
+        ArtPart("led", -5.21, 5.77, 1.0, 0.5, 0.35, along_v=True, colour="#e0402f"),
+        ArtPart("shield", 2.14, 0.05, 10.6, 12.4, 1.2, text="XIAO RP2040"),
+        ArtPart("button", 9.11, -4.06, 3.6, 2.0, 1.0, along_v=True),
+        ArtPart("led", 9.11, 0.0, 2.4, 2.4, 0.8, colour="#e8e6df"),
+        ArtPart("button", 9.11, 4.06, 3.6, 2.0, 1.0, along_v=True),
+    ),
+    source=(
+        "Seeed XIAO RP2040 v1.3 KiCad board (every part's place); Seeed's photograph of "
+        "the board (the shield can's size, and how far the socket overhangs)"
+    ),
+)
+
 #: Every module there is a layout for, in the order they are tried.
 #: SparkFun's red solder mask: its boards are red, and a blue block would be somebody else's.
 SPARKFUN_RED = "#b8262b"
@@ -1592,6 +1625,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     POLOLU_A4988_MODULE,
     POLOLU_DRV8825_MODULE,
     XIAO_ESP32C3_MODULE,
+    XIAO_RP2040_MODULE,
     SPARKFUN_TB6612_MODULE,
     SPARKFUN_PRO_MINI_MODULE,
     SPARKFUN_PRO_MICRO_MODULE,

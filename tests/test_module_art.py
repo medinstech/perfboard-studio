@@ -130,6 +130,8 @@ def _footprint(footprint_id: str):
         ("SparkFun Pro Micro 5V/16MHz", "sparkfun-pro-micro"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
+        ("Seeed XIAO RP2040", "seeed-xiao-rp2040"),
+        ("XIAO RP2040", "seeed-xiao-rp2040"),
         ("GY-521 MPU-6050", "gy-521"),
         ("GY521", "gy-521"),
         ("SSD1306 OLED", "ssd1306-oled"),
@@ -163,7 +165,7 @@ def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
         "DRV8825",
         # The other XIAO boards share the footprint and not the parts.
         "XIAO ESP32S3",
-        "XIAO RP2040",
+        "XIAO SAMD21",
         # A chip names no board: the MPU-6050 is on the GY-521 and on others.
         "MPU-6050",
         "GY-87",
@@ -788,6 +790,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "pololu-a4988": PICO_MODULE.board_colour,
         "pololu-drv8825": POLOLU_DRV8825_MODULE.board_colour,
         "seeed-xiao-esp32c3": ESPRESSIF_BLACK,
+        "seeed-xiao-rp2040": ESPRESSIF_BLACK,
         "lm2596-module": None,  # the blue every seller's board is
         "hc-sr501": None,  # blue, as the photograph's is
         "sparkfun-tb6612fng": SPARKFUN_RED,

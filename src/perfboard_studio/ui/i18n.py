@@ -4935,6 +4935,15 @@ TURKISH: Mapping[str, str] = {
         "USB-C soketi kartın ucundan yaklaşık 1,8 mm taşar. Kartın üstündekilerin yüksekliği "
         "tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
     ),
+    "RP2040 board, 14 pins, rows 15.24 mm apart": (
+        "RP2040 kartı, 14 pin, sıralar arası 15,24 mm"
+    ),
+    "The USB-C socket stands about 1.4 mm past the end of the board. The height of what is "
+    "on the board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "USB-C soketi kartın ucundan yaklaşık 1,4 mm taşar. Kartın üstündekilerin yüksekliği "
+        "tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Humidity and temperature sensor, 20-90 %RH, 0-50 degrees C, single wire": (
         "Nem ve sıcaklık sensörü, %20-90 bağıl nem, 0-50 derece, tek hat"
     ),

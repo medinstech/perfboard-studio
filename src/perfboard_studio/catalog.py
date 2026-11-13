@@ -3387,6 +3387,16 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 check="The USB-C socket stands about 1.8 mm past the end of the board. "
                 + _MODULE_TOP),
+    CatalogPart("seeed-xiao-rp2040", "Seeed XIAO RP2040", "module",
+                "mod-2x7-p6-r1-17.78x21x3.2-s8.5",
+                "RP2040 board, 14 pins, rows 15.24 mm apart",
+                _two_columns(_XIAO_LEFT, _XIAO_RIGHT), ref_prefix="U", value="XIAO RP2040",
+                source=(
+                    "Seeed XIAO RP2040 v1.3 KiCad board: the 21.1 x 17.78 mm outline, the "
+                    "header rows and their nets; pin functions from Seeed's pin map"
+                ),
+                check="The USB-C socket stands about 1.4 mm past the end of the board. "
+                + _MODULE_TOP),
     CatalogPart("nodemcu-devkit-1.0", "NodeMCU DevKit 1.0 (ESP-12E)", "module",
                 "mod-2x15-p9-r1-25.4x48.26x3.2-s8.5",
                 "ESP8266 board, 30 pins, rows 22.86 mm apart",
