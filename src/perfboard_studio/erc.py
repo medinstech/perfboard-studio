@@ -51,6 +51,11 @@ and the warnings:
 - ``part-not-defined`` -- a net naming a reference that is neither on the board nor in the
   design. A warning, because a netlist handed to the MCP server is read before its parts
   are added, and ``commands.assert_pins_free`` calls that a perfectly good document.
+- ``value-missing`` -- a part whose value IS the part, with none: a resistor, a capacitor,
+  an inductor, a diode, a crystal or a pot (``VALUE_ARCHETYPES``). Its package says nothing
+  about which one to fit, and the guide's step read "R1 -- I6 -> L6" with every check green
+  (the newcomer walk). A chip, a module, a connector, a switch or an LED is named by its
+  package or its pins, so it is never asked for one.
 
 "CONNECTED" MEANS ON A NET WITH ANOTHER PIN THAT EXISTS. A VCC pin alone on a net called
 VCC is connected to nothing, and is both a single-pin net and an unpowered chip.
@@ -97,6 +102,7 @@ RULES: tuple[str, ...] = (
     "single-pin-net",
     "part-unconnected",
     "part-not-defined",
+    "value-missing",
 )
 
 SEVERITY: dict[str, ErcSeverity] = {
@@ -110,6 +116,7 @@ SEVERITY: dict[str, ErcSeverity] = {
     "single-pin-net": "warning",
     "part-unconnected": "warning",
     "part-not-defined": "warning",
+    "value-missing": "warning",
 }
 
 
@@ -169,6 +176,22 @@ KIND_BY_ARCHETYPE: dict[BodyArchetype, PartKind] = {
     # A resistor or a diode, standing or lying: two leads and no supply.
     "axial-upright": "passive",
 }
+
+#: The packages whose part is its value: two leads and a number to buy by -- a resistor, a
+#: capacitor of any of three bodies, an inductor or a diode in an axial body, a crystal, a
+#: pot. Everything else is named by what it is (a DIP is its chip, a header its pins, an LED
+#: an LED), so an empty value there leaves nothing unknown.
+VALUE_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
+    {
+        "axial-cylinder",
+        "axial-upright",
+        "radial-electrolytic",
+        "disc-ceramic",
+        "box-film",
+        "crystal-hc49",
+        "potentiometer",
+    }
+)
 
 #: Names a pin with nothing inside it is given.
 _NO_CONNECT = frozenset({"NC", "N.C.", "N/C", "DNC"})
@@ -295,6 +318,12 @@ def run_erc(doc: PerfDocument, lookup: FootprintLookup) -> tuple[ErcFinding, ...
         footprint = circuit.footprints[ref]
         if footprint is None:
             continue
+        if footprint.body.archetype in VALUE_ARCHETYPES and not part.value.strip():
+            circuit.report(
+                "value-missing",
+                f"{ref} has no value, so nothing says which one to fit.",
+                refs=(ref,),
+            )
         pins = tuple(_Pin(pin.number, pin_name_of(part, pin)) for pin in footprint.pins)
         if not any(circuit.joined(ref, pin.number) for pin in pins):
             if anything_joined:

@@ -110,6 +110,25 @@ class WorkflowFacts:
     #: holding a step back, but not "ready to build" without a word either -- Auto-wire
     #: finished there over wires lying across pins 44 times.
     wiring_to_review: int = 0
+    #: Parts whose value is the part and that have none (ERC's ``value-missing``), by
+    #: reference. The circuit is not drawn until each says which one to fit: every check
+    #: passed over an empty resistor and the guide's first step read "R1 -- I6 -> L6"
+    #: (the newcomer walk).
+    valueless: tuple[str, ...] = ()
+
+
+#: How many references a step names before it says how many more.
+NAMED_REFS = 5
+
+
+def refs_said(refs: tuple[str, ...]) -> str:
+    """"R1", "R1 and C2", "R1, R2, R3, C1, C2 and 3 more": the parts a step is waiting on."""
+    if len(refs) > NAMED_REFS:
+        more = len(refs) - NAMED_REFS
+        return t("{refs} and {count} more").format(refs=", ".join(refs[:NAMED_REFS]), count=more)
+    if len(refs) == 1:
+        return refs[0]
+    return f"{', '.join(refs[:-1])} {t('and')} {refs[-1]}"
 
 
 #: What the Next button does once everything before Build is done.
@@ -170,6 +189,8 @@ def step_action(key: StepKey, facts: WorkflowFacts | None = None) -> str:
     """
     if key == "circuit" and facts is not None and facts.erc_errors:
         return t("Show Problems")
+    if key == "circuit" and facts is not None and facts.nets and facts.valueless:
+        return t("Set the Values")
     if key == "circuit" and facts is not None and facts.parts_off_board + facts.parts_on_board:
         return t("Connect the Pins")
     if key == "check" and facts is not None and facts.problems_showing:
@@ -230,6 +251,11 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     parts = facts.parts_off_board + facts.parts_on_board
     if key == "circuit" and parts and facts.erc_errors:
         return t("The circuit has a mistake to put right first. Show Problems says what and where.")
+    if key == "circuit" and parts and facts.nets and facts.valueless:
+        return t(
+            "Still without a value: {parts}. Select each and type its value in Properties: "
+            "470, 10k, 100nF."
+        ).format(parts=refs_said(facts.valueless))
     if key == "circuit" and parts:
         return t(
             "Join the parts on the sheet: click a pin, then the pin it connects to. "
@@ -281,7 +307,7 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     # A circuit with an error in it is not drawn yet, whatever else is: an unpowered chip is
     # still unpowered on the finest board, and nothing downstream will say so.
     circuit_bad = parts > 0 and facts.erc_errors > 0
-    circuit_done = parts > 0 and facts.nets > 0 and not circuit_bad
+    circuit_done = parts > 0 and facts.nets > 0 and not circuit_bad and not facts.valueless
     board_done = facts.board_chosen or facts.parts_on_board > 0
     place_done = (
         facts.parts_on_board > 0 and facts.parts_off_board == 0 and not facts.empty_board
@@ -308,6 +334,10 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     elif circuit_bad:
         errors = _counted(facts.erc_errors, t("{count} error"), t("{count} errors"))
         circuit = f"{part_count} · {errors}"
+    elif facts.nets and facts.valueless:
+        circuit = f"{part_count} · " + _counted(
+            len(facts.valueless), t("{count} without a value"), t("{count} without a value")
+        )
     else:
         circuit = f"{part_count} · {_counted(facts.nets, t('{count} net'), t('{count} nets'))}"
     if parts == 0:

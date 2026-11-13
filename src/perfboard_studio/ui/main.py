@@ -2602,6 +2602,7 @@ def _erc_title(rule: str) -> str:
         "single-pin-net": t("Net with only one pin"),
         "part-unconnected": t("Part connected to nothing"),
         "part-not-defined": t("Net names a part that isn't there"),
+        "value-missing": t("Part with no value"),
     }
     return titles.get(rule, rule)
 
@@ -3539,6 +3540,9 @@ class MainWindow(QMainWindow):
             wiring_to_review=len(
                 {cid for note in self._last_wiring for cid in note.conductor_ids}
             ),
+            valueless=tuple(
+                ref for f in self._last_erc if f.rule == "value-missing" for ref in f.refs
+            ),
         )
 
     def _empty_board(self) -> BoardId | None:
@@ -3649,6 +3653,14 @@ class MainWindow(QMainWindow):
         if step == "circuit" and any(f.severity == "error" for f in self._last_erc):
             # What step_action promised: the circuit's errors, beside the sheet they are on.
             self.show_circuit_findings()
+        elif step == "circuit" and (facts := self.workflow_facts()).nets and facts.valueless:
+            # Joined and not yet said what they are: the first in Properties, the keyboard
+            # in its Value, as a double-click on it does.
+            self.show_schematic()
+            ref = facts.valueless[0]
+            self._schematic_ref = ref
+            self._on_schematic_part_activated(ref)
+            self._sync_schematic_highlight()
         elif step == "circuit":
             self.show_schematic()
             document = self.bus.system_document

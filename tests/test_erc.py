@@ -385,6 +385,27 @@ def test_a_net_naming_a_pin_the_part_lacks_and_a_part_nobody_has() -> None:
     ]
 
 
+def test_a_part_whose_value_is_the_part_needs_one() -> None:
+    """A resistor and a capacitor with no value got through every check, and the guide's
+    first step read "R1 -- I6 -> L6" (the newcomer walk). A chip, an LED and a header are
+    named by what they are, so an empty value there is not asked about."""
+    parts = [
+        dataclasses.replace(plain("R1", "r-axial-4"), value=""),
+        dataclasses.replace(plain("C1", "c-disc-p2"), value=" "),
+        dataclasses.replace(plain("U1", "dip-8"), value=""),
+        dataclasses.replace(plain("D1", "led-3mm"), value=""),
+        dataclasses.replace(plain("J1", "hdr-1x2"), value=""),
+    ]
+    doc = circuit(parts, {"A": ("R1.1", "C1.1", "U1.1", "D1.1", "J1.1")})
+    found = [(f.rule, f.severity, f.refs, f.message) for f in checked(doc) if f.rule == "value-missing"]
+    assert found == [
+        ("value-missing", "warning", ("R1",), "R1 has no value, so nothing says which one to fit."),
+        ("value-missing", "warning", ("C1",), "C1 has no value, so nothing says which one to fit."),
+    ]
+    # Asked whether or not it is wired: a value is not a connection.
+    assert [f.refs for f in checked(circuit(parts, {})) if f.rule == "value-missing"] == [("R1",), ("C1",)]
+
+
 def test_a_finding_is_plain_data_about_named_pins() -> None:
     parts = [cat("U1", "ne555"), plain("R1", "r-axial-4")]
     doc = circuit(parts, {"OUT": ("U1.3", "R1.1"), "GND": ("U1.1", "R1.2")})

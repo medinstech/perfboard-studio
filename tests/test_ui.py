@@ -8803,8 +8803,8 @@ def test_the_step_bar_follows_the_document() -> None:
     window = _blank_window()
     try:
         assert window.workflow_bar.next_key == "circuit"
-        _add(window, "R1", "r-axial-3")
-        _add(window, "R2", "r-axial-3")
+        _add(window, "R1", "r-axial-3", "1k")
+        _add(window, "R2", "r-axial-3", "10k")
         from perfboard_studio.commands import AddNetPayload
         from perfboard_studio.model import NetNode
 
@@ -8819,6 +8819,40 @@ def test_the_step_bar_follows_the_document() -> None:
         assert window.workflow_bar.next_key == "board"
         board_button = window.workflow_bar.buttons["board"]
         assert board_button.property("status") == "current"
+    finally:
+        _close(window)
+
+
+def test_next_asks_for_the_values_a_drawn_circuit_left_empty() -> None:
+    """The newcomer walk's first stall: two resistors joined with no value went on to a
+    board and a guide that never said which resistor. The step waits, names them, and Next
+    puts the first in Properties with the keyboard in its Value."""
+    from perfboard_studio.commands import AddNetPayload
+    from perfboard_studio.model import NetNode
+    from perfboard_studio.ui.i18n import t
+
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        _add(window, "R2", "r-axial-3", "10k")
+        window.bus.dispatch(
+            "net.add",
+            AddNetPayload(name="A", nodes=(NetNode("R1", "2"), NetNode("R2", "1"))),
+        )
+        bar = window.workflow_bar
+        assert bar.next_key == "circuit"
+        assert bar.next_button.text() == t("Set the Values")
+        assert [f.refs for f in window._last_erc if f.rule == "value-missing"] == [("R1",)]
+
+        focused: list[str] = []
+        real = window.inspector.focus_field
+        window.inspector.focus_field = lambda name: (focused.append(name), real(name))[1]
+        bar.next_button.click()
+        editor = window.inspector.shown
+        assert editor.ref.text() == "R1" and focused == ["value"]
+        editor.value.setText("1k")
+        editor.value.editingFinished.emit()
+        assert bar.next_key == "board"
     finally:
         _close(window)
 

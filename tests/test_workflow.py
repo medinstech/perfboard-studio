@@ -324,3 +324,22 @@ def test_wiring_worth_a_look_is_said_on_the_last_step_and_holds_nothing_back() -
     one = step_hint("build", dataclasses.replace(facts, wiring_to_review=1))
     assert "1 wire is worth a look" in one
     assert "ready to build" in step_hint("build", dataclasses.replace(facts, wiring_to_review=0))
+
+
+def test_a_circuit_whose_parts_have_no_value_is_not_drawn_yet() -> None:
+    """Every check passed over two empty resistors, the step bar went green and the guide's
+    first step read "R1 -- I6 -> L6" (the newcomer walk). The circuit step waits for the
+    values, names the parts, and Next goes to the first of them."""
+    facts = dataclasses.replace(EMPTY, parts_off_board=8, nets=7, valueless=("R1", "R2", "C1"))
+    assert statuses(facts)["circuit"] == "current"
+    assert next_step(workflow_steps(facts)) == "circuit"
+    circuit = workflow_steps(facts)[0]
+    assert circuit.action == "Set the Values"
+    assert circuit.summary == "8 parts · 3 without a value"
+    assert "R1, R2 and C1" in step_hint("circuit", facts)
+    # Joining comes first: with nothing joined yet, the step still asks for the lines.
+    unjoined = dataclasses.replace(facts, nets=0)
+    assert workflow_steps(unjoined)[0].action == "Connect the Pins"
+    # A long list is cut short rather than run across the card.
+    many = dataclasses.replace(facts, valueless=tuple(f"R{n}" for n in range(1, 9)))
+    assert "R1, R2, R3, R4, R5 and 3 more" in step_hint("circuit", many)
