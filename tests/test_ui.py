@@ -20727,7 +20727,7 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
     never a rule."""
     from perfboard_studio.ui import theme
     from perfboard_studio.ui.i18n import counted, t
-    from perfboard_studio.ui.main import ROLE_FINDING_KEY, face_note_said
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
 
     shield = _example_document("arduino-io-shield")
     bare = dataclasses.replace(
@@ -20763,7 +20763,7 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         assert faces.text(0) == t("Faces")
         # The window's sentence, the one under the net's Face row, with the net named.
         assert [faces.child(i).text(1) for i in range(faces.childCount())] == [
-            face_note_said(note, named=True)
+            window._face_note_text(note, named=True)
         ]
 
         # A click on the row lights the net.
@@ -20813,7 +20813,7 @@ def test_the_face_row_says_what_auto_wire_did_with_the_face() -> None:
     looked ignored (#14). Under the buttons now, the note in the window's words -- and a pin
     reached beside a body is never a "via", which on this board is a solder run changing
     face. No Redo: planned again with the face set, it comes back the same."""
-    from perfboard_studio.ui.main import face_note_said, reached_beside
+    from perfboard_studio.ui.main import face_note_said, reached_beside, reached_beside_said
 
     window = _window_on(_shield_with_gnd_on_top())
     try:
@@ -20823,8 +20823,14 @@ def test_the_face_row_says_what_auto_wire_did_with_the_face() -> None:
         assert note.reason == "mixed" and note.beside
         editor = _inspect_net(window, note.net_id)
         said = editor.face_said.text()
-        assert not editor.face_said.isHidden() and said == face_note_said(note)
-        assert reached_beside() in said and "via" not in said
+        assert not editor.face_said.isHidden() and said == face_note_said(
+            note, window._beside_pins(note)
+        )
+        # The pin reached beside J2 by name, beside the J2 pin that sent GND underneath.
+        pins = window._beside_pins(note)
+        assert pins and all(pin.startswith("J2.") for pin in pins)
+        assert reached_beside_said(pins) in said
+        assert reached_beside(len(pins) > 1) in said and "via" not in said
         assert editor.redo_face.isHidden()
     finally:
         _close(window)
@@ -20839,8 +20845,6 @@ def test_a_face_set_on_copper_already_laid_says_it_stays_and_offers_to_redo_it(
     and on every Auto-wire that leaves the net where it is."""
     from perfboard_studio.commands import DeleteConductorsPayload
     from perfboard_studio.ui.i18n import t
-    from perfboard_studio.ui.main import face_note_said
-
     window = _window_on(_example_document("arduino-io-shield"))
     monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
     try:
@@ -20883,7 +20887,7 @@ def test_a_face_set_on_copper_already_laid_says_it_stays_and_offers_to_redo_it(
         editor.redo_face.click()
         [note] = window._current_face_notes()
         editor = _inspect_net(window, gnd.id)
-        assert editor.face_said.text() == face_note_said(note)
+        assert editor.face_said.text() == window._face_note_text(note)
         assert editor.redo_face.isHidden()
     finally:
         _close(window)
@@ -20893,7 +20897,7 @@ def test_a_net_that_kept_its_face_is_told_so_under_its_face_row() -> None:
     """The NE555's GND keeps the component side throughout and reaches J1's pin, under the
     header's plastic, from the hole beside it: the one note about a preference working."""
     from perfboard_studio.ui.i18n import counted, t
-    from perfboard_studio.ui.main import face_note_said, reached_beside
+    from perfboard_studio.ui.main import reached_beside, reached_beside_said
 
     ne555 = _golden_document("ne555")
     window = _window_on(
@@ -20914,9 +20918,10 @@ def test_a_net_that_kept_its_face_is_told_so_under_its_face_row() -> None:
         assert (note.reason, note.off_face, note.beside) == ("kept", 0, ("J1",))
         editor = _inspect_net(window, note.net_id)
         said = editor.face_said.text()
-        assert said == face_note_said(note)
+        assert said == window._face_note_text(note)
         assert said.startswith(t("Wired {face}, as set.").format(face=t("on the component side")))
-        assert reached_beside() in said
+        assert said.endswith(reached_beside_said(window._beside_pins(note)))
+        assert window._beside_pins(note)[0].startswith("J1.") and reached_beside() in said
         assert editor.redo_face.isHidden()
         # Kept, not off: the status line and the bar do not count it as given up.
         status = window.statusBar().currentMessage()

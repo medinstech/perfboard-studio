@@ -535,28 +535,34 @@ def _parts_said(refs: Sequence[str]) -> str:
     return template.format(refs=joined)
 
 
-def reached_beside() -> str:
+def reached_beside(several: bool = False) -> str:
     """How a net that kept its face reaches a pin under a seated body: the ONE place the
     window says it, since the word for it is still being settled. Not "via": the via count
     and its mark are a solder run changing face at a pad, and this is a jumper ending in
     the free hole beside the pin and an offcut joining the two underneath."""
+    if several:
+        return t("a jumper to the free hole beside each, joined to the pin underneath")
     return t("a jumper to the free hole beside it, joined to the pin underneath")
 
 
-def reached_beside_said(refs: Sequence[str], face: str, *, everywhere: bool) -> str:
-    """The pins under ``refs`` that the net reached from ``face`` anyway; ``everywhere``
-    when the net kept the face throughout, and otherwise only where it did."""
+def reached_beside_said(pins: Sequence[str]) -> str:
+    """The pins, by name ("J2.6"), that a net reached from its face although a body sits
+    on them: named, because beside a note that a pin of the same part sent the net to the
+    other face, "its pins under J2" left the reader to guess which was which."""
+    joined = pins[0] if len(pins) == 1 else f"{', '.join(pins[:-1])} {t('and')} {pins[-1]}"
     return (
-        t("Each of its pins under {parts} is reached by {how}.")
-        if everywhere
-        else t("Where it stays {face}, each of its pins under {parts} is reached by {how}.")
-    ).format(parts=_parts_said(refs), face=face, how=reached_beside())
+        t("{pins} are reached by {how}.") if len(pins) > 1 else t("{pins} is reached by {how}.")
+    ).format(pins=joined, how=reached_beside(len(pins) > 1))
 
 
-def face_note_said(note: FaceNote, *, named: bool = False) -> str:
+def face_note_said(
+    note: FaceNote, beside_pins: Sequence[str] = (), *, named: bool = False
+) -> str:
     """What Auto-wire did with a net's preferred face, from the note's facts rather than
     its English (``autoroute.face_notes``): under the net's Face row, where the net goes
-    without saying, and ``named`` in the Problems drawer's Faces group."""
+    without saying, and ``named`` in the Problems drawer's Faces group. ``beside_pins`` names
+    the pins reached beside a body (``MainWindow._beside_pins``); without them the parts
+    stand in."""
     face = _on_face(note.preferred)
     other = _on_face("bottom" if note.preferred == "top" else "top")
     off, total = note.off_face, note.total
@@ -607,7 +613,7 @@ def face_note_said(note: FaceNote, *, named: bool = False) -> str:
             )
         ).format(off=off, total=total, other=other, face=face)
     if note.beside:
-        said += " " + reached_beside_said(note.beside, face, everywhere=not off)
+        said += " " + reached_beside_said(beside_pins or note.beside)
     if named:
         prefers = (
             t("{net} prefers the component side.")
@@ -11429,7 +11435,7 @@ class MainWindow(QMainWindow):
         notes = self._current_face_notes()
         if not notes:
             return
-        rows = [face_note_said(note, named=True) for note in notes]
+        rows = [self._face_note_text(note, named=True) for note in notes]
         off = len(self._off_face_notes())
         root = QTreeWidgetItem([
             t("Faces"),
@@ -11471,7 +11477,7 @@ class MainWindow(QMainWindow):
             return "", False
         note = next((n for n in self._current_face_notes() if n.net_id == net_id), None)
         if note is not None:
-            return face_note_said(note), False
+            return self._face_note_text(note), False
         off = next((o for o in nets_off_their_face(document) if o.net_id == net_id), None)
         if off is None:
             return "", False
@@ -11482,6 +11488,39 @@ class MainWindow(QMainWindow):
             ).format(other=_on_face("bottom" if off.preferred == "top" else "top")),
             True,
         )
+
+    def _face_note_text(self, note: FaceNote, *, named: bool = False) -> str:
+        """``face_note_said`` with the pins it reached beside a body named from the board."""
+        return face_note_said(note, self._beside_pins(note), named=named)
+
+    def _beside_pins(self, note: FaceNote) -> tuple[str, ...]:
+        """The pins of ``note.beside``'s parts that the net reaches by an offcut on the other
+        face -- a bare wire one pitch long, as the router lays it beside a covered pin and
+        ``autoroute._reached_beside`` reads it -- as "J2.6", in board order. The note names
+        the parts; the copper says which pins."""
+        document = self.bus.document
+        ends = {
+            hole_key(hole)
+            for c in document.conductors
+            if c.net_id == note.net_id
+            and c.side != note.preferred
+            and c.kind == "bare-wire"
+            and len(c.path) == 2
+            for hole in c.path
+        }
+        pins: list[str] = []
+        for component in document.components:
+            if component.ref not in note.beside:
+                continue
+            footprint = self.lookup(component.footprint_id)
+            if footprint is None:
+                continue
+            pins.extend(
+                f"{component.ref}.{pin.number}"
+                for pin, hole in all_pin_holes(component, footprint)
+                if hole_key(hole) in ends
+            )
+        return tuple(pins)
 
     def _already_off_face_said(self, only_net_ids: tuple[NetId, ...] | None = None) -> str:
         """The nets wired before their Face was set, all their copper on the other face and
