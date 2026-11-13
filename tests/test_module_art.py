@@ -141,6 +141,7 @@ def _footprint(footprint_id: str):
         ("Adafruit DRV8871", "adafruit-drv8871"),
         ("Adafruit MAX4466 microphone amplifier", "adafruit-max4466"),
         ("MAX9814 AGC mic", "adafruit-max9814"),
+        ("SparkFun ACS712 current sensor", "sparkfun-acs712"),
         ("ESP32-S3-DevKitC-1", "esp32-s3-devkitc-1"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
@@ -826,6 +827,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "adafruit-drv8871": ADAFRUIT_BLUE,
         "adafruit-max4466": ADAFRUIT_BLACK,
         "adafruit-max9814": ADAFRUIT_BLUE,
+        "sparkfun-acs712": SPARKFUN_RED,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
@@ -1286,6 +1288,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
     ("adafruit-tca9548a", "TCA9548A"): (-1, -1),  # Adafruit's board: U1's pad 1, towards VIN
     ("adafruit-ads1115", ""): (-1, 1),  # Adafruit's board: U1's pad 1, towards VIN and ADDR
+    ("sparkfun-acs712", "ACS712"): (1, -1),  # SparkFun's board: U$1's pad 1, towards VCC, off the header
     ("adafruit-drv8871", ""): (-1, 1),  # Adafruit's photograph: U1's pin 1 towards IN2 and the header
     ("sparkfun-hx711", "HX711"): (-1, -1),  # SparkFun's board: U1's pad 1, towards AVDD and VCC
     # Adafruit's boards, both revisions: U1's pad 1, towards VIN+ and the shunt.

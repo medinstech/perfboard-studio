@@ -3699,6 +3699,35 @@ CATALOG: tuple[CatalogPart, ...] = (
                     + _MODULE_TOP
                 ),
                 aliases=("microphone", "mic", "electret", "audio", "AGC", "MAX9814")),
+    CatalogPart("sparkfun-acs712", "SparkFun Hall-effect current sensor breakout (ACS712)", "sensor",
+                "mod-4x1-p1-r1-15.24x21.59x1.75-s8.5-o0x-9.53",
+                "A Hall-effect current sensor for AC and DC, four header pins: the load goes "
+                "through two holes by the chip, not through the header",
+                _legs("GND", "FILT", "VOUT", "VCC"), ref_prefix="U",
+                value="SparkFun ACS712",
+                source=(
+                    "SparkFun's own Eagle board for BOB-08882 (github.com/sparkfun/Hall-Effect_"
+                    "Current_Sensor_Breakout-ACS712, v1.1): its 1 x 4 header JP3 along the "
+                    "right edge, each pad's net and the silkscreen beside it read off the "
+                    "board, and the board's 21.59 x 15.24 mm outline; the sensor's "
+                    "sensitivities from Allegro's ACS712 datasheet"
+                ),
+                check=(
+                    "SparkFun's board is printed VCC, Vout, FILT, GND down its edge; pin 1 is "
+                    "GND, the end of that list that is on the left once the board is turned "
+                    "with its header at the bottom and its text upright. VCC is 5 V. At no "
+                    "current the output rests at half of VCC and moves by 185 mV per ampere on "
+                    "the 5 A part (100 mV per ampere on the 20 A, 66 mV on the 30 A): the range "
+                    "is the suffix on the chip, SparkFun's drawing names none. The load goes "
+                    "through the two large holes beside the chip, which are not on the pin grid, "
+                    "so no wire of the load ever touches the header. FILT is the chip's "
+                    "filter pin: a capacitor from it to GND lowers the bandwidth, and the board "
+                    "fits none. SparkFun has retired this board; the ACS712 boards sold today "
+                    "are other makers' clones, whose header, supply and load terminals are laid "
+                    "out differently and are not this part. "
+                    + _MODULE_TOP
+                ),
+                aliases=("ACS712", "current sensor", "hall effect", "akım sensörü", "amper")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

@@ -3646,6 +3646,39 @@ TURKISH: Mapping[str, str] = {
         "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "SparkFun Hall-effect current sensor breakout (ACS712)": (
+        "SparkFun Hall etkili akım sensörü kartı (ACS712)"
+    ),
+    "A Hall-effect current sensor for AC and DC, four header pins: the load goes through "
+    "two holes by the chip, not through the header": (
+        "AC ve DC için Hall etkili bir akım sensörü, dört header pini: yük, header'dan "
+        "değil, çipin yanındaki iki delikten geçer"
+    ),
+    "SparkFun's board is printed VCC, Vout, FILT, GND down its edge; pin 1 is GND, the end "
+    "of that list that is on the left once the board is turned with its header at the "
+    "bottom and its text upright. VCC is 5 V. At no current the output rests at half of "
+    "VCC and moves by 185 mV per ampere on the 5 A part (100 mV per ampere on the 20 A, 66 "
+    "mV on the 30 A): the range is the suffix on the chip, SparkFun's drawing names none. "
+    "The load goes through the two large holes beside the chip, which are not on the pin "
+    "grid, so no wire of the load ever touches the header. FILT is the chip's filter pin: "
+    "a capacitor from it to GND lowers the bandwidth, and the board fits none. SparkFun "
+    "has retired this board; the ACS712 boards sold today are other makers' clones, whose "
+    "header, supply and load terminals are laid out differently and are not this part. The "
+    "height of what is on the board is an estimate, and so is its colour; the pins, the "
+    "rows and the board outline are measured.": (
+        "SparkFun'un kartının kenarında yukarıdan aşağı VCC, Vout, FILT, GND yazar; 1. pin "
+        "GND'dir, yani kart header altta ve yazısı dik duracak şekilde çevrildiğinde bu "
+        "listenin solda kalan ucu. VCC 5 V'tur. Akım yokken çıkış VCC'nin yarısında durur "
+        "ve 5 A'lik parçada amper başına 185 mV, 20 A'lik parçada 100 mV, 30 A'lik parçada "
+        "66 mV değişir: aralık çip üzerindeki sonektir, SparkFun'un çizimi hiçbirini "
+        "söylemez. Yük, çipin yanındaki, pin ızgarasında olmayan iki büyük delikten geçer; "
+        "yükün hiçbir teli header'a değmez. FILT çipin filtre pinidir: ondan GND'ye bağlı "
+        "bir kondansatör bant genişliğini düşürür, kartta hiç takılı değildir. SparkFun bu "
+        "kartı emekli etti; bugün satılan ACS712 kartları başka üreticilerin klonlarıdır, "
+        "header'ları, beslemeleri ve yük terminalleri farklı yerleştirilmiştir ve bu parça "
+        "değildir. Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, "
+        "sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
         "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
     ),

@@ -1228,6 +1228,31 @@ ADAFRUIT_MAX9814_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's Hall-effect current sensor breakout (BOB-08882, retired), read off SparkFun's own
+#: Eagle board and seen from above with the four-pin header along the top, GND at the right
+#: (``pin_one``): the ACS712 stands in the middle of the board with its pin 1 towards VCC and
+#: away from the header, and the two large holes the load goes through are at the far end,
+#: one each side. The board has no other part. The chip's size is the SO-8's.
+SPARKFUN_ACS712_MODULE = ModuleArt(
+    key="sparkfun-acs712",
+    board_colour=SPARKFUN_RED,
+    names=("sparkfun acs712",),
+    board=(15.24, 21.59),
+    pins=4,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("soic8", 0.0, -0.64, 4.9, 6.0, 1.75, facing=-1, text="ACS712", across=1),
+        ArtPart("hole", -3.81, 6.99, 6.2, 6.2, 0.0, inset=1.2, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 3.81, 6.99, 6.2, 6.2, 0.0, inset=1.2, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "SparkFun's Eagle board for the ACS712 breakout, github sparkfun/Hall-Effect_Current_"
+        "Sensor_Breakout-ACS712 v1.1: the outline, the chip's place and pad 1, the header and "
+        "the two load holes' places and sizes"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1857,6 +1882,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ADAFRUIT_DRV8871_MODULE,
     ADAFRUIT_MAX4466_MODULE,
     ADAFRUIT_MAX9814_MODULE,
+    SPARKFUN_ACS712_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

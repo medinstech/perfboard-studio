@@ -1320,6 +1320,15 @@ def test_the_microphone_boards_read_as_the_front_silkscreen_does() -> None:
     assert {"adafruit-max4466", "adafruit-max9814"} <= {found.id for found in search_catalog("microphone")}
 
 
+def test_the_acs712_is_sparkfuns_board_by_name_and_says_clones_differ() -> None:
+    part = catalog_part("sparkfun-acs712")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["GND", "FILT", "VOUT", "VCC"]
+    assert "Hall-Effect_Current_Sensor_Breakout-ACS712" in part.source
+    assert "clones" in part.check and "not this part" in part.check
+    assert "sparkfun-acs712" in {found.id for found in search_catalog("current sensor")}
+
+
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-ccs811": (
