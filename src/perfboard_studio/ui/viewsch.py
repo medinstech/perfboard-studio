@@ -986,7 +986,8 @@ class SchematicView(QGraphicsView):
     #: The wire tool's first click landed on a wire rather than a pin. Carries the wire's
     #: two ends as "R1.2 – U1.4", for the status bar.
     teeStarted = Signal(str)
-    #: A pin was clicked with the label tool: join it to a net by NAME. The window asks
+    #: A pin was clicked with the label tool, or a drawn wire -- which carries the pin it
+    #: starts from: join it to a net by NAME, or name the net it is on. The window asks
     #: which name, because that is a question with a dialog behind it.
     labelRequested = Signal(str, str)
     #: A row was dragged out of the Parts panel and dropped on the sheet. Carries the
@@ -1706,6 +1707,14 @@ class SchematicView(QGraphicsView):
 
         if self.tool == "label":
             pin = self.pin_at(where)
+            if pin is None:
+                # A WIRE IS LABELLED AS ITS PIN IS: the name goes to the net it is drawn
+                # on, which is the net of either end. The first is always a pin -- the
+                # other end of a T lands on a wire.
+                run = self.wire_at(where)
+                if run is not None:
+                    first = run[0][0]
+                    pin = (first.component_ref, first.pin)
             if pin is not None:
                 self.labelRequested.emit(pin[0], pin[1])
             event.accept()

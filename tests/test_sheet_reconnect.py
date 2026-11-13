@@ -221,3 +221,28 @@ def test_an_end_let_go_over_no_pin_stays_where_it_was() -> None:
     finally:
         view.close()
         view.deleteLater()
+
+
+def test_the_label_tool_on_a_wire_asks_for_the_name_of_its_net_by_its_first_pin() -> None:
+    from PySide6.QtCore import QPointF
+
+    from .test_sheet_reshape import _drawn, _select_view
+    from .test_ui import _send_mouse
+
+    _, view = _select_view()
+    asked: list[tuple] = []
+    view.labelRequested.connect(lambda *args: asked.append(args))
+    try:
+        view.set_tool("label")
+        wire = _drawn(view)
+        start, end = wire.path[0], wire.path[-1]
+        middle = view.mapFromScene(QPointF((start.x + end.x) / 2, (start.y + end.y) / 2))
+        _send_mouse(view, "press", middle)
+        _send_mouse(view, "release", middle)
+        assert asked == [("R1", "2")]
+        # Bare sheet asks nothing, as before.
+        _send_mouse(view, "press", view.mapFromScene(QPointF(start.x, start.y + 80)))
+        assert asked == [("R1", "2")]
+    finally:
+        view.close()
+        view.deleteLater()
