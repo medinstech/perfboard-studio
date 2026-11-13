@@ -537,24 +537,31 @@ def _parts_said(refs: Sequence[str]) -> str:
     return template.format(refs=joined)
 
 
-def reached_beside(several: bool = False) -> str:
-    """How a net that kept its face reaches a pin under a seated body: the ONE place the
-    window says it, since the word for it is still being settled. Not "via": the via count
-    and its mark are a solder run changing face at a pad, and this is a jumper ending in
-    the free hole beside the pin and an offcut joining the two underneath."""
-    if several:
-        return t("a jumper to the free hole beside each, joined to the pin underneath")
-    return t("a jumper to the free hole beside it, joined to the pin underneath")
-
-
 def reached_beside_said(pins: Sequence[str]) -> str:
-    """The pins, by name ("J2.6"), that a net reached from its face although a body sits
-    on them: named, because beside a note that a pin of the same part sent the net to the
-    other face, "its pins under J2" left the reader to guess which was which."""
+    """How a net that kept its face reaches the pins, by name ("J2.6"), that a body sits on:
+    the wire ends in the free hole beside each and a lead offcut underneath joins the two,
+    said with the reason and in the guide's word for the offcut. The same sentence as the
+    engine's note (``autoroute.reached_beside_message``), so one translation serves both.
+    Not "via": the via count and its mark are a solder run changing face at a pad. Named,
+    because beside a note that a pin of the same part sent the net to the other face, "its
+    pins under J2" left the reader to guess which was which."""
     joined = pins[0] if len(pins) == 1 else f"{', '.join(pins[:-1])} {t('and')} {pins[-1]}"
-    return (
-        t("{pins} are reached by {how}.") if len(pins) > 1 else t("{pins} is reached by {how}.")
-    ).format(pins=joined, how=reached_beside(len(pins) > 1))
+    if len(pins) == 1:
+        template = t(
+            "{pins} is under the body, so its wire ends in the free hole beside it, "
+            "and a short lead offcut underneath joins that hole to the pin."
+        )
+    elif len({pin.rpartition(".")[0] or pin for pin in pins}) > 1:
+        template = t(
+            "{pins} are under the bodies, so each wire ends in the free hole beside it, "
+            "and a short lead offcut underneath joins that hole to its pin."
+        )
+    else:
+        template = t(
+            "{pins} are under the body, so each wire ends in the free hole beside it, "
+            "and a short lead offcut underneath joins that hole to its pin."
+        )
+    return template.format(pins=joined)
 
 
 def face_note_said(
@@ -615,7 +622,7 @@ def face_note_said(
             )
         ).format(off=off, total=total, other=other, face=face)
     if note.beside:
-        said += " " + reached_beside_said(beside_pins or note.beside)
+        said += " " + reached_beside_said(beside_pins or note.beside_pins or note.beside)
     if named:
         prefers = (
             t("{net} prefers the component side.")

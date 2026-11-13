@@ -1765,7 +1765,8 @@ def test_autoroute_says_when_a_net_is_wired_off_the_face_it_prefers() -> None:
             "reached_beside": ["J2"],
             "message": "GND prefers the component side, but 4 of its 5 connections are wired "
             "on the solder side: 1 because its pins there are under J2, 3 because no clear way "
-            "was found for them there. Its pins under J2 are reached through a via beside them.",
+            "was found for them there. J2.6 is under the body, so its wire ends in the free hole "
+            "beside it, and a short lead offcut underneath joins that hole to the pin.",
         }
     ]
 
@@ -1792,8 +1793,8 @@ def test_autoroute_says_which_pins_a_net_kept_on_its_face_reached_beside_a_body(
         "kept", 0, [], ["J1"],
     )
     assert note["message"] == (
-        "GND is wired on the component side; its pins under J1 are reached through a via "
-        "beside them."
+        "GND is wired on the component side. J1.2 is under the body, so its wire ends in the "
+        "free hole beside it, and a short lead offcut underneath joins that hole to the pin."
     )
 
 

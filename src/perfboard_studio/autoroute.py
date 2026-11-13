@@ -68,7 +68,7 @@ from .commands import (
 )
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import run_drc
-from .geometry import format_hole, hole_key, holes_under_line, path_length_mm
+from .geometry import all_pin_holes, format_hole, hole_key, holes_under_line, path_length_mm
 from .model import (
     Board,
     BoardSide,
@@ -1585,6 +1585,9 @@ class FaceNote:
     #: The parts with a pin under them that a connection kept on the face reached anyway,
     #: through a hole beside it and an offcut underneath (``router._jumper_landings``).
     beside: tuple[str, ...] = ()
+    #: Those pins, by name ("J2.6"), in board order: what the message names, so the builder
+    #: reads which pin gets the offcut rather than guessing among a header's.
+    beside_pins: tuple[str, ...] = ()
 
 
 def _face_word(side: BoardSide) -> str:
@@ -1617,6 +1620,7 @@ def face_notes(
         return ()
     occupancy = None
     refs = {component.id: component.ref for component in doc.components}
+    pin_names: dict[str, tuple[int, int, str]] | None = None
     notes: list[FaceNote] = []
     for outcome in plan.nets:
         preferred = preferring.get(outcome.net_id)
@@ -1632,6 +1636,7 @@ def face_notes(
             occupancy = build_occupancy(doc, lookup)
         covered: list[str] = []
         beside: list[str] = []
+        beside_pins: set[tuple[int, int, str]] = set()
         off = off_covered = 0
         for routed in links:
             kept = any(conductor.side == preferred for conductor in routed.conductors)
@@ -1643,9 +1648,14 @@ def face_notes(
                 # offcut on the other face reached it from the hole beside.
                 if found is None:
                     continue
-                if (kept and _reached_beside(routed, hole, preferred)) or (
-                    not kept and found[1]
-                ):
+                if kept and _reached_beside(routed, hole, preferred):
+                    if pin_names is None:
+                        pin_names = _pin_names(doc, lookup)
+                    named = pin_names.get(hole_key(hole))
+                    if named is not None:
+                        beside_pins.add(named)
+                    under.append(refs.get(found[0], found[0]))
+                elif not kept and found[1]:
                     under.append(refs.get(found[0], found[0]))
             if kept:
                 _add_new(beside, under)
@@ -1667,10 +1677,24 @@ def face_notes(
             continue
         notes.append(
             _face_note(
-                outcome, preferred, off, len(links), reason, covered, off_covered, beside
+                outcome, preferred, off, len(links), reason, covered, off_covered, beside,
+                tuple(name for *_, name in sorted(beside_pins)),
             )
         )
     return tuple(notes)
+
+
+def _pin_names(doc: PerfDocument, lookup: FootprintLookup) -> dict[str, tuple[int, int, str]]:
+    """Every placed pin's hole, to its name ("J2.6") and a key that sorts it in board order:
+    the part's place in the document, then the pin's in its footprint."""
+    names: dict[str, tuple[int, int, str]] = {}
+    for index, component in enumerate(doc.components):
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        for order, (pin, hole) in enumerate(all_pin_holes(component, footprint)):
+            names.setdefault(hole_key(hole), (index, order, f"{component.ref}.{pin.number}"))
+    return names
 
 
 def _reached_beside(routed: RoutedLink, pin: HoleCoord, preferred: BoardSide) -> bool:
@@ -1700,6 +1724,7 @@ def _face_note(
     covered: Sequence[str] = (),
     off_covered: int = 0,
     beside: Sequence[str] = (),
+    beside_pins: Sequence[str] = (),
 ) -> FaceNote:
     return FaceNote(
         net_id=outcome.net_id,
@@ -1710,10 +1735,31 @@ def _face_note(
         reason=reason,
         covered_by=tuple(covered),
         message=_face_note_message(
-            outcome.net_name, preferred, off, total, reason, covered, off_covered, beside
+            outcome.net_name, preferred, off, total, reason, covered, off_covered,
+            beside_pins or beside,
         ),
         off_covered=off_covered,
         beside=tuple(beside),
+        beside_pins=tuple(beside_pins),
+    )
+
+
+def reached_beside_message(pins: Sequence[str]) -> str:
+    """How a pin under a body is reached from its face, said with the reason: the wire ends
+    in the free hole beside it and a lead offcut underneath joins the two -- in the guide's
+    words, which is what a builder knows the offcut by. Not "via": the via count is a solder
+    run changing face at a pad. ``pins`` are named ("J2.6"); "the bodies" when they are under
+    more than one part's."""
+    if len(pins) == 1:
+        return (
+            f"{pins[0]} is under the body, so its wire ends in the free hole beside it, "
+            "and a short lead offcut underneath joins that hole to the pin."
+        )
+    parts = {pin.rpartition(".")[0] or pin for pin in pins}
+    bodies = "bodies" if len(parts) > 1 else "body"
+    return (
+        f"{_and_list(pins)} are under the {bodies}, so each wire ends in the free hole beside "
+        "it, and a short lead offcut underneath joins that hole to its pin."
     )
 
 
@@ -1729,14 +1775,10 @@ def _face_note_message(
 ) -> str:
     face = _face_word(preferred)
     other = _face_word("bottom" if preferred == "top" else "top")
-    reached = (
-        f"its pins under {_and_list(beside)} are reached through a via beside them."
-        if beside
-        else ""
-    )
+    reached = reached_beside_message(beside) if beside else ""
     if reason == "kept":
         kept = f" on {total - off} of its {total} connections" if off else ""
-        return f"{net} is wired on the {face} side{kept}; {reached}"
+        return f"{net} is wired on the {face} side{kept}. {reached}"
     said = f"{net} prefers the {face} side, but "
     if reason == "mixed":
         why = (
@@ -1761,7 +1803,7 @@ def _face_note_message(
             said += f"{why}, so it is wired on the {other} side."
         else:
             said += f"{off} of its {total} connections are wired on the {other} side: {why}."
-    return said + (f" {reached[0].upper()}{reached[1:]}" if beside else "")
+    return said + (f" {reached}" if beside else "")
 
 
 @dataclass(frozen=True, slots=True)

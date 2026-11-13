@@ -254,9 +254,11 @@ TEMPLATES: tuple[str, ...] = (
     "{net} prefers the {faceside} side, but no clear way was found there, so it is wired on the {faceside_b} side.",
     "{net} prefers the {faceside} side, but {count} of its {total} connections are wired on the {faceside_b} side: {covered} because its pins there are under {refs}, {open} because no clear way was found for them there.",
     "{net} prefers the {faceside} side, but it is wired on the {faceside_b} side: {covered} of its connections because its pins there are under {refs}, {open} because no clear way was found for them there.",
-    "{net} is wired on the {faceside} side; its pins under {refs} are reached through a via beside them.",
-    "{net} is wired on the {faceside} side on {count} of its {total} connections; its pins under {refs} are reached through a via beside them.",
-    "Its pins under {refs} are reached through a via beside them.",
+    "{net} is wired on the {faceside} side on {count} of its {total} connections.",
+    "{net} is wired on the {faceside} side.",
+    "{pins} are under the bodies, so each wire ends in the free hole beside it, and a short lead offcut underneath joins that hole to its pin.",
+    "{pins} are under the body, so each wire ends in the free hole beside it, and a short lead offcut underneath joins that hole to its pin.",
+    "{pins} is under the body, so its wire ends in the free hole beside it, and a short lead offcut underneath joins that hole to the pin.",
     "{count} needed an insulated wire or jumper",
     "{count} pad to measure for isolation",
     "{count} pads to measure for isolation",
@@ -491,6 +493,8 @@ _FIELDS: dict[str, str] = {
     "faceside": r"component|solder",
     "faceside_b": r"component|solder",
     "refs": r"\S+(?:, \S+)*(?: and \S+)?",
+    # The pins reached beside a body, by name: "J2.6", "J2.6, J2.7 and U1.4".
+    "pins": r"\S+\.\S+(?:, \S+\.\S+)*(?: and \S+\.\S+)?",
     "covered": r"\d+",
     "open": r"\d+",
 }
@@ -556,6 +560,8 @@ def _word(field: str, value: str) -> str:
         joined = value.replace(" and ", f" {t('and')} ")
         several = ", " in value or " and " in value
         return (t("the bodies of {refs}") if several else t("the body of {refs}")).format(refs=joined)
+    if field == "pins":
+        return value.replace(" and ", f" {t('and')} ")
     if field == "board":
         # A board nobody named is called by its place, which the engine says in English.
         numbered = re.fullmatch(r"Board (\d+)", value)

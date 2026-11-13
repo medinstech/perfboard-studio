@@ -145,7 +145,8 @@ A solder run has no such line, since it is soldered to everything it passes.
   the other face until the next flip. A net's Properties has a **Face** row, **Either**,
   **Component Side** or **Solder Side**, and Auto-wire keeps the net on its face wherever it
   can. Under the row it says what the last wiring did with the face: kept it, naming a pin
-  under a part that it reached by a jumper to the free hole beside it, or left it, and why.
+  under a part whose wire ends in the free hole beside it, joined to the pin by a lead
+  offcut underneath, or left it, and why.
   Copper laid before the Face was set stays where it is, and the row offers **Redo Wiring of**
   the net to move it.
 

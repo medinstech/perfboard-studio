@@ -20996,7 +20996,7 @@ def test_the_face_row_says_what_auto_wire_did_with_the_face() -> None:
     looked ignored (#14). Under the buttons now, the note in the window's words -- and a pin
     reached beside a body is never a "via", which on this board is a solder run changing
     face. No Redo: planned again with the face set, it comes back the same."""
-    from perfboard_studio.ui.main import face_note_said, reached_beside, reached_beside_said
+    from perfboard_studio.ui.main import face_note_said, reached_beside_said
 
     window = _window_on(_shield_with_gnd_on_top())
     try:
@@ -21013,7 +21013,7 @@ def test_the_face_row_says_what_auto_wire_did_with_the_face() -> None:
         pins = window._beside_pins(note)
         assert pins and all(pin.startswith("J2.") for pin in pins)
         assert reached_beside_said(pins) in said
-        assert reached_beside(len(pins) > 1) in said and "via" not in said
+        assert "lead offcut" in said and "via" not in said.split()
         assert editor.redo_face.isHidden()
     finally:
         _close(window)
@@ -21076,11 +21076,28 @@ def test_a_face_set_on_copper_already_laid_says_it_stays_and_offers_to_redo_it(
         _close(window)
 
 
+def test_a_pin_reached_beside_a_body_is_said_as_the_engine_says_it() -> None:
+    """One sentence for a pin reached from the hole beside its body, in the window and in
+    the engine's note alike, so one translation serves both: one pin, two under one body,
+    and two of different parts under "the bodies"."""
+    from perfboard_studio.autoroute import reached_beside_message
+    from perfboard_studio.ui.main import reached_beside_said
+
+    for pins, opening in (
+        (("J2.6",), "J2.6 is under the body, so its wire ends"),
+        (("J2.6", "J2.7"), "J2.6 and J2.7 are under the body, so each wire ends"),
+        (("J2.6", "U1.4"), "J2.6 and U1.4 are under the bodies, so each wire ends"),
+    ):
+        said = reached_beside_said(pins)
+        assert said == reached_beside_message(pins) and said.startswith(opening)
+        assert "lead offcut" in said and "via" not in said.split()
+
+
 def test_a_net_that_kept_its_face_is_told_so_under_its_face_row() -> None:
     """The NE555's GND keeps the component side throughout and reaches J1's pin, under the
     header's plastic, from the hole beside it: the one note about a preference working."""
     from perfboard_studio.ui.i18n import counted, t
-    from perfboard_studio.ui.main import reached_beside, reached_beside_said
+    from perfboard_studio.ui.main import reached_beside_said
 
     ne555 = _golden_document("ne555")
     window = _window_on(
@@ -21104,7 +21121,8 @@ def test_a_net_that_kept_its_face_is_told_so_under_its_face_row() -> None:
         assert said == window._face_note_text(note)
         assert said.startswith(t("Wired {face}, as set.").format(face=t("on the component side")))
         assert said.endswith(reached_beside_said(window._beside_pins(note)))
-        assert window._beside_pins(note)[0].startswith("J1.") and reached_beside() in said
+        assert window._beside_pins(note)[0].startswith("J1.") and "lead offcut" in said
+        assert window._beside_pins(note) == note.beside_pins
         assert editor.redo_face.isHidden()
         # Kept, not off: the status line and the bar do not count it as given up.
         status = window.statusBar().currentMessage()

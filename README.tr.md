@@ -146,8 +146,8 @@ ve dolu çizilen bir iletken *bu senin önünde* der.
 baktığınız yüze gider; bir nete de kendi yüzü verilebilir — Özellikler'de **Fark Etmez**,
 **Parça Yüzü** ya da **Lehim Yüzü** — ve otomatik kablolama onu elinden geldiğince o yüzde
 tutar. Bir iz yüz değiştirmeyi kendi netinin bir pininden ya da rehberin önce doldurtup sonra
-ölçtürdüğü boş bir delikten yapar; oturmuş bir parçanın o yüzde örttüğü bir pine, yanındaki
-boş delikten bir jumper ile ulaşılır. Bir net kendi yüzünde kalamadığında otomatik
+ölçtürdüğü boş bir delikten yapar; oturmuş bir parçanın o yüzde örttüğü bir pine giden tel
+yanındaki boş delikte biter ve alttaki kısa bir bacak artığı o deliği pine bağlar. Bir net kendi yüzünde kalamadığında otomatik
 kablolama hangi bağlantıların oradan ayrıldığını ve nedenini söyler.
 
 ![Lehim yüzeyi; karşı yüzdeki bakır taralı](./docs/images/editor-solder-side.png)

@@ -172,9 +172,10 @@ closed without a bump.
 - **A net's Face row says what Auto-wire did with the face, and why.** Under the Face
   buttons, Properties says what the last Auto-wire or Redo Wiring did with the face the net
   prefers: kept it, or left it because its pins there are under a part's body, because no
-  clear way was found, or some of each. The pins it reached beside a body are named ("J2.6 is
-  reached by a jumper to the free hole beside it, joined to the pin underneath"), and the
-  Problems drawer's Faces group says the same sentence with the net named. Copper laid
+  clear way was found, or some of each. The pins it reached beside a body are named, with
+  the reason and the guide's word for the offcut ("J2.6 is under the body, so its wire ends
+  in the free hole beside it, and a short lead offcut underneath joins that hole to the
+  pin"), and the Problems drawer's Faces group says the same sentence with the net named. Copper laid
   before the Face was set stays where it is, since Auto-wire keeps the copper it finds: the
   row says so with **Redo Wiring of** the net under it, setting the Face says so on the
   status line, and an Auto-wire that leaves such a net says "GND is already wired on the
@@ -281,8 +282,10 @@ closed without a bump.
   English and Turkish. A part is named only for the connections whose pins it covers, and
   the rest are counted apart ("1 because its pins there are under J2, 3 because no clear way
   was found for them there"). A pin under a body that was reached from the hole beside it is
-  said too ("Its pins under J1 are reached through a via beside them"), even when the net
-  kept its face, since that is copper on the other side.
+  said too ("J1.2 is under the body, so its wire ends in the free hole beside it, and a
+  short lead offcut underneath joins that hole to the pin"; "under the bodies" when the
+  pins are several parts'), even when the net kept its face, since that is copper on the
+  other side.
 - **A net set to a face stays there wherever it can, and the setting costs no warning.**
   Auto-wire ranks a connection kept on its net's face ahead of any other, unless it would put
   a pad beside another net's; the style it picks has no more warnings than the others, then

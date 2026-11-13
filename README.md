@@ -148,7 +148,8 @@ on the face you are looking at, and a net can be given a face of its own — **E
 **Component Side** or **Solder Side** in its Properties — which Auto-wire keeps it on
 wherever it can. A trace changes face through a pin of its own net, or through an empty hole
 the guide has you fill and then probe; a pin that a seated part covers on that face is
-reached by a jumper to the free hole beside it. Where a net could not stay on its face,
+reached by a wire that ends in the free hole beside it, and a short lead offcut underneath
+joins that hole to the pin. Where a net could not stay on its face,
 Auto-wire says which connections left it and why.
 
 ![The solder side, with far-side copper hatched](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/editor-solder-side.png)

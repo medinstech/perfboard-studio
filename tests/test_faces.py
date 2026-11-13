@@ -730,8 +730,10 @@ def test_a_net_wired_off_its_face_blames_a_part_only_for_the_connections_it_cove
     assert note.message == (
         "GND prefers the component side, but 4 of its 5 connections are wired on the solder "
         "side: 1 because its pins there are under J2, 3 because no clear way was found for "
-        "them there. Its pins under J2 are reached through a via beside them."
+        "them there. J2.6 is under the body, so its wire ends in the free hole beside it, and "
+        "a short lead offcut underneath joins that hole to the pin."
     )
+    assert note.beside_pins == ("J2.6",)
     _blamed_fairly(doc, plan, note)
     assert any(c.side == "top" for c in plan.conductors if c.net_id == note.net_id)
 
@@ -748,7 +750,15 @@ def test_a_net_wired_mostly_off_its_face_counts_what_it_kept() -> None:
         f"are wired on the solder side: {note.off_covered} because its pins there are under "
     )
     assert f", {note.off_face - note.off_covered} because no clear way was found" in note.message
-    assert note.beside and note.message.endswith(" are reached through a via beside them.")
+    # Pins under three parts' bodies, named in board order: "the bodies", not "the body".
+    assert note.beside_pins == ("J3.1", "J4.1", "Q1.3")
+    assert note.message.endswith(
+        " J3.1, J4.1 and Q1.3 are under the bodies, so each wire ends in the free hole "
+        "beside it, and a short lead offcut underneath joins that hole to its pin."
+    )
+    # Not "via": the via count and its mark are a solder run changing face at a pad, and
+    # this is a wire ending beside the pin and an offcut -- the window says the same.
+    assert "via" not in note.message.split()
     _blamed_fairly(doc, plan, note)
     gnd_on_top = [c for c in plan.conductors if c.net_id == note.net_id and c.side == "top"]
     assert gnd_on_top, "what it kept is on top"
@@ -764,8 +774,8 @@ def test_a_net_kept_on_its_face_says_which_pins_it_reached_beside_their_body() -
 
     assert (note.reason, note.off_face, note.covered_by, note.beside) == ("kept", 0, (), ("J1",))
     assert note.message == (
-        "GND is wired on the component side; its pins under J1 are reached through a via "
-        "beside them."
+        "GND is wired on the component side. J1.2 is under the body, so its wire ends in the "
+        "free hole beside it, and a short lead offcut underneath joins that hole to the pin."
     )
 
 
@@ -776,7 +786,7 @@ def test_a_note_says_no_pin_was_reached_beside_a_body_where_none_was() -> None:
     notes = face_notes(doc, plan, LOOKUP)
     assert [note.net_name for note in notes] == ["GND"]
     assert notes[0].beside == ()
-    assert not notes[0].message.endswith("beside them.")
+    assert notes[0].beside_pins == () and "lead offcut" not in notes[0].message
 
 
 def test_no_net_preferring_a_face_is_no_note() -> None:
@@ -810,7 +820,7 @@ def _said_in_turkish(message: str) -> str:
         set_language(before)
 
 
-@pytest.mark.parametrize("beside", [(), ("J1",)])
+@pytest.mark.parametrize("beside", [(), ("J1.2",)])
 @pytest.mark.parametrize("reason", ["no-pads", "covered", "no-way", "mixed"])
 @pytest.mark.parametrize(("off", "total"), [(4, 4), (3, 5)])
 def test_every_face_note_is_said_in_turkish(
@@ -838,17 +848,37 @@ def test_every_face_note_is_said_in_turkish(
         assert "2 tanesi oradaki pinleri" in said
         assert f"{off - 2} tanesi orada açık bir yol bulunamadığı için" in said
     assert (f"{total} bağlantısından {off} tanesi" in said) == (off != total)
-    assert said.endswith("J1 gövdesinin altındaki pinlerine yanlarındaki bir via ile ulaşıldı.") == bool(beside)
+    assert said.endswith(" J1.2 gövdenin altında kaldığı için tel yanındaki boş delikte biter; altta kısa bir bacak artığı o deliği pine bağlar.") == bool(beside)
 
 
+@pytest.mark.parametrize(
+    ("pins", "english", "turkish"),
+    [
+        (("J1.2",), "J1.2 is under the body, so its wire ends",
+         "J1.2 gövdenin altında kaldığı için tel yanındaki boş delikte biter; altta kısa bir "
+         "bacak artığı o deliği pine bağlar."),
+        (("J1.2", "J1.3"), "J1.2 and J1.3 are under the body, so each wire ends",
+         "J1.2 ve J1.3 gövdenin altında kaldığı için her tel yanındaki boş delikte biter; altta "
+         "kısa birer bacak artığı o deliği pinine bağlar."),
+        # Pins of two parts are under two bodies -- "the bodies", "gövdelerin".
+        (("J2.6", "U1.4"), "J2.6 and U1.4 are under the bodies, so each wire ends",
+         "J2.6 ve U1.4 gövdelerin altında kaldığı için her tel yanındaki boş delikte biter; "
+         "altta kısa birer bacak artığı o deliği pinine bağlar."),
+    ],
+)
 @pytest.mark.parametrize(("off", "total"), [(0, 4), (1, 4)])
-def test_a_note_about_a_face_kept_is_said_in_turkish(off: int, total: int) -> None:
-    message = _face_note_message("GND", "top", off, total, "kept", (), 0, ("J1", "C2"))
+def test_a_note_about_a_face_kept_is_said_in_turkish(
+    off: int, total: int, pins: tuple[str, ...], english: str, turkish: str
+) -> None:
+    """The pins reached beside a body, with the reason and the guide's word for the offcut:
+    one pin, two under one body, and two under two parts' bodies."""
+    message = _face_note_message("GND", "top", off, total, "kept", (), 0, pins)
+    assert english in message and "via" not in message.split()
 
     said = _said_in_turkish(message)
 
     assert said.startswith("GND ")
-    assert said.endswith("J1 ve C2 gövdelerinin altındaki pinlerine yanlarındaki bir via ile ulaşıldı.")
+    assert said.endswith(" " + turkish)
     assert ("4 bağlantısından 3 tanesinde" in said) == bool(off)
 
 
