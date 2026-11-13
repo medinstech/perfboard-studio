@@ -6124,7 +6124,7 @@ def _art_plate(s: _ArtSolid) -> list[_Piece]:
             source=s.box(s.length, s.width, s.height),
             rgb=_hex_rgb(s.colour or ART_COLOURS["plate"], BODY_RGB),
             position=s.at(0.0, 0.0, s.height / 2),
-            material=TINNED,
+            material=GLOSS if s.colour else TINNED,
         )
     ]
 

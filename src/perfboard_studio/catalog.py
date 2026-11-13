@@ -3756,6 +3756,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                     + _MODULE_TOP
                 ),
                 aliases=("soil", "moisture", "SEN-13322", "toprak", "nem", "yağmur")),
+    CatalogPart("adafruit-tft-1-14", "Adafruit 1.14\" 240x135 color TFT (ST7789)", "display",
+                "mod-11x1-p1-r1-31.75x27.81x1.5-s8.5-o0x-11.49",
+                "A 1.14 inch 240 x 135 IPS color display on SPI with a microSD socket and a "
+                "3.3 V regulator and level shifter, eleven header pins",
+                _legs("VIN", "3V", "GND", "SCK", "MISO", "MOSI", "TFTCS", "RST", "DC", "SDCS",
+                      "LIT"),
+                ref_prefix="U", value="Adafruit 1.14 TFT",
+                source=(
+                    "Adafruit's own Eagle board (github.com/adafruit/Adafruit-1.14-inch-"
+                    "240x135-TFT-PCB, product 4383): its 1 x 11 header, each pad's net checked "
+                    "against the board's nets and the silkscreen beside it, the 31.75 x 27.81 "
+                    "mm outline and the display's outline; Adafruit's product photograph of "
+                    "the front, which prints the same eleven names in the same order"
+                ),
+                check=(
+                    "Pin 1 is VIN, the way the front's silkscreen reads with the display up "
+                    "and the header at the bottom; the back prints the same names from LIT. "
+                    "VIN takes 3 to 5 V, and the logic pins take 3 to 5 V too, through the "
+                    "board's level shifter. 3V is the output of its 3.3 V regulator, not an "
+                    "input. MISO is a 3.3 V output. DC is the display's data or command "
+                    "line, TFTCS its chip select, RST its reset (active low) and SDCS the "
+                    "microSD socket's chip select; both share SCK, MOSI and MISO. LIT is the "
+                    "backlight control. The microSD socket, the regulator, the level shifter "
+                    "and the passives are on the back and are not drawn; the board is drawn "
+                    "as its bounding rectangle, without the notch between its two mounting "
+                    "ears, and the screen as a plain dark glass. "
+                    + _MODULE_TOP
+                ),
+                aliases=("TFT", "ST7789", "240x135", "1.14", "display", "ekran", "LCD",
+                         "microSD")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

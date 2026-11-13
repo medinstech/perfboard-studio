@@ -1338,6 +1338,18 @@ def test_the_soil_sensor_is_the_header_pads_in_both_readings_of_its_order() -> N
     assert "sparkfun-soil-moisture" in {found.id for found in search_catalog("soil")}
 
 
+def test_the_1_14_inch_tft_reads_as_its_front_does() -> None:
+    """The board's nets, its silkscreen and Adafruit's photograph of the front agree on the
+    eleven names from the left with the display up; the back prints them the other way."""
+    part = catalog_part("adafruit-tft-1-14")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == [
+        "VIN", "3V", "GND", "SCK", "MISO", "MOSI", "TFTCS", "RST", "DC", "SDCS", "LIT"
+    ]
+    assert "Adafruit-1.14-inch-240x135-TFT-PCB" in part.source
+    assert "adafruit-tft-1-14" in {found.id for found in search_catalog("st7789")}
+
+
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-ccs811": (

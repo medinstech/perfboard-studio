@@ -1290,6 +1290,34 @@ SPARKFUN_SOIL_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's 1.14 inch 240 x 135 TFT breakout (product 4383), read off Adafruit's own Eagle
+#: board and its product photograph, and seen from the front with the eleven-pin header along
+#: the top, VIN at the right (``pin_one``). The glass is on the front and everything else, the
+#: microSD socket, the regulator, the level shifter and the passives, is on the back. The glass
+#: is the outline of the display's package (31.0 x 17.6 mm), drawn as a dark plate, and a
+#: mounting ear with a plated 2.5 mm hole stands at each far corner. The names are printed over
+#: the glass because it starts 2.4 mm from the header.
+ADAFRUIT_TFT_1_14_MODULE = ModuleArt(
+    key="adafruit-tft-1-14",
+    board_colour=ADAFRUIT_BLACK,
+    names=("adafruit 1.14",),
+    board=(31.75, 27.81),
+    pins=11,
+    frame="header",
+    pin_one=1,
+    names_over_parts=True,
+    parts=(
+        ArtPart("plate", 0.13, -0.32, 31.0, 17.6, 1.45, colour="#070b18"),
+        ArtPart("hole", -13.34, 11.37, 4.4, 4.4, 0.0, inset=0.95, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 13.34, 11.37, 4.4, 4.4, 0.0, inset=0.95, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit's Eagle board for the 1.14 inch TFT, github adafruit/Adafruit-1.14-inch-"
+        "240x135-TFT-PCB: the outline, the header, the display's package and the mounting "
+        "holes, with the front's face taken from Adafruit's product photograph 4383"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1921,6 +1949,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ADAFRUIT_MAX9814_MODULE,
     SPARKFUN_ACS712_MODULE,
     SPARKFUN_SOIL_MODULE,
+    ADAFRUIT_TFT_1_14_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

@@ -3709,6 +3709,37 @@ TURKISH: Mapping[str, str] = {
         "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "Adafruit 1.14\" 240x135 color TFT (ST7789)": (
+        "Adafruit 1,14\" 240x135 renkli TFT (ST7789)"
+    ),
+    "A 1.14 inch 240 x 135 IPS color display on SPI with a microSD socket and a 3.3 V "
+    "regulator and level shifter, eleven header pins": (
+        "SPI üzerinde, microSD yuvalı, 3,3 V regülatörlü ve seviye çeviricili 1,14 inçlik "
+        "240 x 135 IPS renkli ekran, on bir header pini"
+    ),
+    "Pin 1 is VIN, the way the front's silkscreen reads with the display up and the header "
+    "at the bottom; the back prints the same names from LIT. VIN takes 3 to 5 V, and the "
+    "logic pins take 3 to 5 V too, through the board's level shifter. 3V is the output of "
+    "its 3.3 V regulator, not an input. MISO is a 3.3 V output. DC is the display's data "
+    "or command line, TFTCS its chip select, RST its reset (active low) and SDCS the "
+    "microSD socket's chip select; both share SCK, MOSI and MISO. LIT is the backlight "
+    "control. The microSD socket, the regulator, the level shifter and the passives are on "
+    "the back and are not drawn; the board is drawn as its bounding rectangle, without the "
+    "notch between its two mounting ears, and the screen as a plain dark glass. The height "
+    "of what is on the board is an estimate, and so is its colour; the pins, the rows and "
+    "the board outline are measured.": (
+        "1. pin VIN'dir; ön yüzün baskısı, ekran yukarıda ve header altta okunduğunda "
+        "böyledir, arka yüz aynı adları LIT'ten başlayarak basar. VIN 3 ile 5 V alır, mantık "
+        "pinleri de kartın seviye çeviricisi sayesinde 3 ile 5 V alır. 3V, 3,3 V "
+        "regülatörün çıkışıdır, giriş değildir. MISO 3,3 V'luk bir çıkıştır. DC ekranın "
+        "veri/komut hattı, TFTCS çip seçimi, RST sıfırlaması (aktif düşük), SDCS ise "
+        "microSD yuvasının çip seçimidir; ikisi SCK, MOSI ve MISO'yu paylaşır. LIT, arka "
+        "ışık denetimidir. MicroSD yuvası, regülatör, seviye çevirici ve pasif parçalar "
+        "arka yüzdedir, çizilmemiştir; kart, iki montaj kulağı arasındaki girinti olmadan "
+        "kendini saran dikdörtgen olarak, ekran da düz koyu bir cam olarak çizilmiştir. "
+        "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
+        "çevresi ölçülmüştür."
+    ),
     "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
         "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
     ),
