@@ -9287,7 +9287,7 @@ def test_a_wire_clicked_then_a_pin_is_the_same_t() -> None:
     middle, _ends = _middle_of_drawn_wire(view)
     view._tee_click(view.tee_at(middle))
     assert view.pending_tee is not None
-    assert "click the pin that branches off it" in window.statusBar().currentMessage()
+    assert "then the pin that branches off it" in window.statusBar().currentMessage()
     view._wire_click(("R3", "1"))
 
     assert view.pending_tee is None

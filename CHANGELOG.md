@@ -90,12 +90,20 @@ closed without a bump.
   and the old one leaves it unless another wire still holds it. A branch on the wire
   follows it. A pin already on another net is refused rather than merging two nets, and an
   end let go anywhere but on a pin stays where it was.
+- **A label on the schematic names the net it is put on.** The Label tool now takes a click
+  on a wire as well as on a pin, and the name box opens on the net's own name. Typing a new
+  one on a pin that is already wired renames that net -- N3 labelled GND becomes GND, a
+  ground net -- where it used to be refused, because a pin cannot be on two nets. The class
+  follows the name by the same rule as a rename in the Nets panel, so a class set by hand
+  stays. A name another net already has is still refused rather than merging the two.
 - **Cutting the wire in the middle of a fully wired net splits it in two.** A net drawn
   as a chain of wires stayed one net when a wire in the middle was cut, so its two ends
   were still joined by a name nobody wrote and the sheet no longer showed. Where every pin
   of the net is a wire end, the cut now leaves two nets: the larger piece keeps the name,
   the smaller gets the next free one ("N3") with the net's class and current. A net with a
-  pin joined by name only stays whole, since the name still joins it. One Ctrl+Z.
+  pin joined by name only stays whole, since the name still joins it. One Ctrl+Z. The status
+  line says where the pins went -- "GND split in two: R3.1, R4.1 are now N3" -- as it does
+  when a wire's end is moved off a chain.
 - **Copper is drawn by dragging, pad to pad.** With a drawing tool armed, press on a hole,
   drag, and let go on another: a run, a wire or a jumper in one gesture, a corner wherever
   the drag turns, previewed and checked as it goes exactly as clicks are. A press let go

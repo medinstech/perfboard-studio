@@ -206,8 +206,10 @@ from perfboard_studio.commands import (
     OnBoardPayload,
     PartPlacement,
     PlacePartsPayload,
+    ReconnectSheetWirePayload,
     RenameDocumentPayload,
     ReplaceConductorsPayload,
+    ReshapeSheetWirePayload,
     RotateComponentPayload,
     RotateComponentsPayload,
     SetComponentSidePayload,
@@ -226,6 +228,7 @@ from perfboard_studio.commands import (
     left_off_board,
     next_net_name,
     preset_payload,
+    rename_net_payload,
 )
 from perfboard_studio.connectivity import FootprintLookup, extract_physical_nets
 from perfboard_studio.drc import (
@@ -306,6 +309,7 @@ from perfboard_studio.model import (
     Footprint,
     HoleCoord,
     MountingHole,
+    Net,
     NetClass,
     NetId,
     NetNode,
@@ -7135,6 +7139,8 @@ class MainWindow(QMainWindow):
         self.schematic_view.deleteRequested.connect(self.on_sheet_delete)
         self.schematic_view.wireDeleteRequested.connect(self._on_sheet_wires_delete)
         self.schematic_view.live_wires_for = self._live_wires
+        self.schematic_view.wireReshaped.connect(self._on_sheet_wire_reshaped)
+        self.schematic_view.wireEndMoved.connect(self._on_sheet_wire_end_moved)
         self.schematic_view.turnRequested.connect(self.on_schematic_rotate)
         self.schematic_view.footprintDropped.connect(self._on_sheet_footprint_dropped)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
@@ -7167,7 +7173,8 @@ class MainWindow(QMainWindow):
                 "arrow",
                 t("Select"),
                 t(
-                    "Pick symbols up, move them, rubber-band several at once. Delete takes "
+                    "Pick symbols up, move them, rubber-band several at once. Drag a wire to "
+                    "reshape it, or the selected wire's end onto another pin. Delete takes "
                     "the selection out of the design."
                 ),
             ),
@@ -7176,9 +7183,9 @@ class MainWindow(QMainWindow):
                 "connect",
                 t("Connect"),
                 t(
-                    "Click a pin, then the pin it joins — or a wire already drawn, and the "
-                    "pin branches off it in a T. Neither on a net yet? One gets made. "
-                    "Exactly what the board's connect tool does, because it is the same code."
+                    "Click a pin or a wire, then wherever the wire turns, then the pin or "
+                    "wire it ends on; a wire at either end makes a T. Neither on a net yet? "
+                    "One gets made, exactly as the board's connect tool makes it."
                 ),
             ),
             (
@@ -7771,7 +7778,9 @@ class MainWindow(QMainWindow):
 
     def _on_sheet_tee_started(self, wire: str) -> None:
         self.statusBar().showMessage(
-            t("On the wire {wire} — click the pin that branches off it.").format(wire=wire), 0
+            t("On the wire {wire} — click where it turns, then the pin that branches off it.")
+            .format(wire=wire),
+            0,
         )
 
     def _on_sheet_wire_teed(
@@ -7815,12 +7824,14 @@ class MainWindow(QMainWindow):
         """
         document = self.bus.system_document
         existing = sorted({net.name for net in document.nets})
+        node = NetNode(component_ref=ref, pin=pin)
+        current = next((net.name for net in document.nets if node in net.nodes), None)
         name, ok = QInputDialog.getItem(
             self,
             t("Connect by Name"),
             t("Net for {pin}:").format(pin=f"{ref}.{pin}"),
             existing,
-            0,
+            existing.index(current) if current in existing else 0,
             True,
         )
         if not ok or not name.strip():
@@ -7833,7 +7844,14 @@ class MainWindow(QMainWindow):
         document = self.bus.system_document
         node = NetNode(component_ref=ref, pin=pin)
         net = next((n for n in document.nets if n.name == name), None)
-        if net is None:
+        on = next((n for n in document.nets if node in n.nodes), None)
+        if net is None and on is not None:
+            # A NEW NAME ON A PIN THAT IS ON A NET NAMES THAT NET, as a label on a wire does
+            # in every schematic editor: the pin cannot be on two nets, and the name is what
+            # was asked for. Re-classed by the Nets panel's own rule (``rename_net_payload``),
+            # so N3 labelled GND is a ground net and a class set by hand stays.
+            result = self.bus.dispatch("net.update", rename_net_payload(on, name))
+        elif net is None:
             # Classed by its name, as a renamed net is: a pin labelled GND is a ground
             # symbol on the sheet, not the start of a wire to every other GND pin.
             result = self.bus.dispatch(
@@ -8148,12 +8166,12 @@ class MainWindow(QMainWindow):
         hint = {
             "select": "",
             "wire": t(
-                "Click a pin, then the pin it joins. Neither on a net yet? One gets made. "
-                "Esc cancels."
+                "Click a pin or a wire, then wherever the wire turns, then the pin or wire "
+                "it ends on. Backspace takes back a corner; Esc drops the wire."
             ),
             "label": t(
-                "Click a pin and name the net it belongs to. Two pins with one name are "
-                "one net. Esc cancels."
+                "Click a pin or a wire and name its net. Two pins with one name are one "
+                "net. Esc cancels."
             ),
             "text": t("Click where the text goes. Esc cancels."),
             "line": t("Drag out the shape. Esc cancels."),
@@ -8231,7 +8249,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(t("Cancelled."), 4000)
             return
         self.statusBar().showMessage(
-            t("From {pin} — click the pin or the wire it joins.").format(pin=f"{ref}.{pin}"),
+            t("From {pin} — click where it turns, then the pin or the wire it joins.").format(
+                pin=f"{ref}.{pin}"
+            ),
             0,
         )
 
@@ -10112,19 +10132,98 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        after = {
-            net.id: {(n.component_ref, n.pin) for n in net.nodes}
-            for net in self.bus.system_document.nets
-        }
-        left = [
-            t("{pin} left {net}").format(pin=f"{node.component_ref}.{node.pin}", net=net.name)
-            for net in before.values()
-            for node in net.nodes
-            if (node.component_ref, node.pin) not in after.get(net.id, set())
-        ]
-        said = ", ".join(left) if left else t("The pins stay joined by other wires")
+        said = self._say_what_left(before) or t("The pins stay joined by other wires")
         self.statusBar().showMessage(
             t("{said}. Ctrl+Z brings the wire back.").format(said=said), 8000
+        )
+
+    def _say_what_left(self, before: dict[str, Net]) -> str:
+        """What a cut or a moved wire end took off the nets that were ``before``: each pin
+        that left its net, and the pins a split put on a net of their own -- "GND split in
+        two: R3.1 is now N4". Empty when every pin is where it was."""
+        document = self.bus.system_document
+        after = {net.id: set(net.nodes) for net in document.nets}
+        new_nets = [net for net in document.nets if net.id not in before]
+        said: list[str] = []
+        for net in before.values():
+            moved: dict[str, list[str]] = {}
+            for node in net.nodes:
+                if node in after.get(net.id, set()):
+                    continue
+                pin = f"{node.component_ref}.{node.pin}"
+                home = next((n for n in new_nets if node in n.nodes), None)
+                if home is None:
+                    said.append(t("{pin} left {net}").format(pin=pin, net=net.name))
+                else:
+                    moved.setdefault(home.name, []).append(pin)
+            for new, pins in moved.items():
+                if len(pins) == 1:
+                    sentence = t("{net} split in two: {pins} is now {new}")
+                else:
+                    sentence = t("{net} split in two: {pins} are now {new}")
+                said.append(sentence.format(net=net.name, pins=", ".join(pins), new=new))
+        return ", ".join(said)
+
+    def _on_sheet_wire_reshaped(
+        self, a_ref: str, a_pin: str, b_ref: str, b_pin: str, path: object
+    ) -> None:
+        """A drawn wire dragged into a new shape (``viewsch.wireReshaped``): the drawing
+        only. A sheet still being arranged is frozen first, as for drawing or deleting a
+        wire, and that is its own undo step for the same reason."""
+        if not isinstance(path, list):
+            return
+        if not self.bus.system_document.sheet:
+            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        result = self.bus.dispatch(
+            "sheet.wire.reshape",
+            ReshapeSheetWirePayload(
+                a=NetNode(component_ref=a_ref, pin=a_pin),
+                b=NetNode(component_ref=b_ref, pin=b_pin),
+                path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+
+    def _on_sheet_wire_end_moved(
+        self,
+        a_ref: str,
+        a_pin: str,
+        b_ref: str,
+        b_pin: str,
+        end_ref: str,
+        end_pin: str,
+        to_ref: str,
+        to_pin: str,
+        path: object,
+    ) -> None:
+        """An end of the selected wire dragged onto another pin (``viewsch.wireEndMoved``):
+        ``sheet.wire.reconnect``, a change to the circuit, said as a cut says what it took
+        off. Frozen first, as for any other change to a wire."""
+        if not isinstance(path, list):
+            return
+        if not self.bus.system_document.sheet:
+            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        before = {net.id: net for net in self.bus.system_document.nets}
+        result = self.bus.dispatch(
+            "sheet.wire.reconnect",
+            ReconnectSheetWirePayload(
+                a=NetNode(component_ref=a_ref, pin=a_pin),
+                b=NetNode(component_ref=b_ref, pin=b_pin),
+                end=NetNode(component_ref=end_ref, pin=end_pin),
+                to=NetNode(component_ref=to_ref, pin=to_pin),
+                path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        said = self._say_what_left(before)
+        self.statusBar().showMessage(
+            t("{said}. Ctrl+Z brings the wire back.").format(said=said)
+            if said
+            else did(result.description),
+            8000,
         )
 
     def _drawn_wire_at(self, where: Point2) -> SheetWire | None:

@@ -1235,12 +1235,12 @@ TURKISH: Mapping[str, str] = {
     "Put a part in the design without deciding where it goes on the board yet.": (
         "Kart üzerinde nereye geleceğine karar vermeden tasarıma bir parça ekler."
     ),
-    "Click a pin, then the pin it joins — or a wire already drawn, and the pin "
-    "branches off it in a T. Neither on a net yet? One gets made. Exactly what the "
-    "board's connect tool does, because it is the same code.": (
-        "Bir pine tıklayın, sonra birleşeceği pine — ya da çizilmiş bir tele; pin o telden "
-        "T ile dallanır. İkisi de bir nette değilse yeni bir net oluşur. Kartın bağlama "
-        "aracıyla birebir aynı davranış — çünkü aynı kod."
+    "Click a pin or a wire, then wherever the wire turns, then the pin or wire it ends "
+    "on; a wire at either end makes a T. Neither on a net yet? One gets made, exactly "
+    "as the board's connect tool makes it.": (
+        "Bir pine ya da tele tıklayın, sonra telin döndüğü her yere, sonra bittiği pine ya "
+        "da tele; iki uçtan birinde tel varsa T oluşur. İkisi de bir nette değilse yeni bir "
+        "net oluşur, tıpkı kartın bağlama aracının yaptığı gibi."
     ),
     "Take the selected part out of the design, along with its connections. A "
     "part that is on the board comes off it and stays in the design instead.": (
@@ -1260,10 +1260,12 @@ TURKISH: Mapping[str, str] = {
     # welcome dialog's own note says. "Net" is the Nets panel's column heading and reads
     # the same in Turkish.
     "Select": "Seç",
-    "Pick symbols up, move them, rubber-band several at once. Delete takes "
-    "the selection out of the design.": (
-        "Sembolleri tutar, taşır, kementle birden çoğunu seçer. Delete seçili olanı "
-        "tasarımdan çıkarır."
+    "Pick symbols up, move them, rubber-band several at once. Drag a wire to reshape "
+    "it, or the selected wire's end onto another pin. Delete takes the selection out "
+    "of the design.": (
+        "Sembolleri tutar, taşır, kementle birden çoğunu seçer. Bir teli sürükleyerek "
+        "biçimini, seçili telin ucunu başka bir pine sürükleyerek bağlantısını değiştirin. "
+        "Delete seçili olanı tasarımdan çıkarır."
     ),
     "Label": "Etiket",
     "Join a pin to a net by NAME instead of drawing a line to it. Two pins "
@@ -1289,9 +1291,14 @@ TURKISH: Mapping[str, str] = {
         "Seçili sembolleri kendi merkezlerine göre aynalar; pinleri taraf değiştirir."
     ),
     "Select a symbol on the sheet first.": "Önce sayfada bir sembol seçin.",
-    "Click a pin and name the net it belongs to. Two pins with one name are "
-    "one net. Esc cancels.": (
-        "Bir pine tıklayın ve ait olduğu netin adını yazın. Aynı ada sahip iki pin tek "
+    "Click a pin or a wire, then wherever the wire turns, then the pin or wire it "
+    "ends on. Backspace takes back a corner; Esc drops the wire.": (
+        "Bir pine ya da tele tıklayın, sonra telin döndüğü her yere, sonra bittiği pine ya "
+        "da tele. Backspace son köşeyi geri alır; Esc teli bırakır."
+    ),
+    "Click a pin or a wire and name its net. Two pins with one name are one net. "
+    "Esc cancels.": (
+        "Bir pine ya da tele tıklayın ve netinin adını yazın. Aynı ada sahip iki pin tek "
         "nettir. Esc iptal eder."
     ),
     "Click where the text goes. Esc cancels.": (
@@ -1383,6 +1390,8 @@ TURKISH: Mapping[str, str] = {
     "Remove &Line Only": "Yalnızca Çizgiyi &Kaldır",
     "{pin} left {net}": "{pin}, {net} netinden ayrıldı",
     "The pins stay joined by other wires": "Pinler başka tellerle bağlı kalır",
+    "{net} split in two: {pins} is now {new}": "{net} ikiye bölündü: {pins} artık {new}",
+    "{net} split in two: {pins} are now {new}": "{net} ikiye bölündü: {pins} artık {new}",
     "{said}. Ctrl+Z brings the wire back.": "{said}. Ctrl+Z teli geri getirir.",
     "Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back.": (
         "Tel silindi. Pinler adla bağlı kalır; Ctrl+Z teli geri getirir."
@@ -1608,11 +1617,13 @@ TURKISH: Mapping[str, str] = {
         "Bu kartta tasarımdaki parçalar için yer yok. Kartı büyütün ya da parçaları "
         "teker teker yerleştirin."
     ),
-    "From {pin} — click the pin or the wire it joins.": (
-        "{pin} pininden — birleşeceği pine ya da tele tıklayın."
+    "From {pin} — click where it turns, then the pin or the wire it joins.": (
+        "{pin} pininden — telin döndüğü yerlere, sonra birleşeceği pine ya da tele "
+        "tıklayın."
     ),
-    "On the wire {wire} — click the pin that branches off it.": (
-        "{wire} teli üzerinde — ondan dallanacak pine tıklayın."
+    "On the wire {wire} — click where it turns, then the pin that branches off it.": (
+        "{wire} teli üzerinde — telin döndüğü yerlere, sonra ondan dallanacak pine "
+        "tıklayın."
     ),
     "Cancelled.": "İptal edildi.",
     "Filter parts…  (555, BC547, resistor, dip-8)": "Parçaları süz…  (555, BC547, direnç, dip-8)",
