@@ -118,20 +118,36 @@ A solder run has no such line, since it is soldered to everything it passes.
 - **Compare With Before.** After an Auto-wire or a redo, **Wiring ▸ Compare With Before**
   draws the copper that was there before and is gone now, dashed, over the wiring that
   replaced it. The same item hides it again.
-- **Copper by hand.** Pick a tool from the Wiring menu: **Solder Trace** (T), **Reinforced Solder
-  Trace** (Shift+T), **Bare Wire** (W), **Insulated Wire** (Shift+W) or **Jumper Over the
-  Parts** (J). A solder trace and a wire go in runs: a click is where it turns, a wire's
-  corners lie on the grid like a routed one's, and Enter, a right-click or a double-click ends
-  it. Before you click, the hole where the copper would go wrong is marked: red where it
-  would join two nets, cross copper it may not cross or lie on another net's joint, amber where
-  a wire would run along another wire. The banner over the board says what the click would
-  do, and while you draw it counts the ends, the pads or millimetres, and the net.
-  Drawing on from the end of a run lengthens that run rather than starting another, and the
-  copper lands on the net it meets. Copper drawn exactly over copper already there is not laid: the banner says it is already
-  there, and Enter adds nothing and says what joins it. A selected piece has handles on its
-  ends and corners to reshape it, and a click on copper stacked on copper takes the next one
-  down each time. The tool stays armed, and Ctrl+Z names what it took back by its kind and
-  ends.
+- **Copper by hand.** Pick a tool from the rail beside the board, where each is drawn as what
+  it lays and says its name and key as soon as you point at it, or from the Wiring menu:
+  **Solder Trace** (T), **Reinforced Solder Trace** (Shift+T), **Bare Wire** (W), **Insulated
+  Wire** (Shift+W) or **Jumper Over the Parts** (J). Press on a hole, drag to another and let
+  go: that is one piece, with a corner wherever the drag turns. Clicking works too: a click is
+  where it turns, and Enter, a right-click or a double-click ends it. A wire's corners lie on
+  the grid like a routed one's. Before you let go or click, the hole where the copper would go
+  wrong is marked: red where it would join two nets, cross copper it may not cross or lie on
+  another net's joint, amber where a wire would run along another wire. The banner over the
+  board says what it would do, and while you draw it counts the ends, the pads or
+  millimetres, and the net. Drawing on from the end of a run lengthens that run rather than
+  starting another, and the copper lands on the net it meets. Copper drawn exactly over
+  copper already there is not laid: the banner says it is already there, and Enter adds
+  nothing and says what joins it. The tool stays armed, and Ctrl+Z names what it took back by
+  its kind and ends.
+- **Move copper by dragging it.** In **Select**, press on copper and it comes with you, with
+  no click to select it first: an end, from anywhere on its pad, a wire's corner, or a
+  straight stretch slid sideways, the stretches beside it following so the ends stay on their
+  pads. The cursor says what a press would pick up, a part is moved by its body, and Esc puts
+  the copper back. A selected piece has handles on its ends and corners too, and a click on
+  copper stacked on copper takes the next one down each time. Delete takes copper up without
+  asking; Ctrl+Z brings it back.
+- **Both faces.** On a board with pads on both faces, what you draw goes on the face you are
+  looking at, and Ctrl+F turns the board over with it; **Draw on** under the banner puts it on
+  the other face until the next flip. A net's Properties has a **Face** row, **Either**,
+  **Component Side** or **Solder Side**, and Auto-wire keeps the net on its face wherever it
+  can. Under the row it says what the last wiring did with the face: kept it, naming a pin
+  under a part that it reached by a jumper to the free hole beside it, or left it, and why.
+  Copper laid before the Face was set stays where it is, and the row offers **Redo Wiring of**
+  the net to move it.
 
 ## 6. Open the build guide
 
