@@ -1144,6 +1144,51 @@ ADAFRUIT_INA219_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
+#: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
+#: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
+#: the header, the level shifter's BSS138 and the pull-up array at the left, a STEMMA QT socket
+#: on each side, mouth outwards, the power LED, and the sensor in the middle, Sensirion's
+#: 10.1 x 10.1 x 6.5 mm package, which is the tallest thing on it. The solder jumpers are not
+#: drawn. The sizes of the rest are the packages'.
+ADAFRUIT_SCD4X_MODULE = ModuleArt(
+    key="adafruit-scd4x",
+    board_colour=ADAFRUIT_BLACK,
+    names=("scd-4", "scd4"),
+    board=(25.4, 22.86),
+    pins=5,
+    frame="header",
+    pin_one=1,
+    # The regulator and the capacitors stand a few millimetres from the header, where a
+    # name would be printed: the board is drawn as it is, and the names go over its parts.
+    names_over_parts=True,
+    parts=(
+        ArtPart("shield", 0.0, 0.76, 10.1, 10.1, 6.5),
+        ArtPart("sot23-5", 6.99, -5.21, 2.9, 2.8, 1.1, along_v=True, facing=1),
+        ArtPart("chip-c", 10.54, -5.08, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 3.43, -5.46, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 5.97, -1.27, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-c", -0.25, -5.97, 1.6, 0.8, 0.45),
+        ArtPart("chip-c", 3.56, 6.86, 2.0, 1.25, 0.85),
+        ArtPart("sot363", -7.11, -4.83, 2.0, 2.1, 0.95),
+        ArtPart("chip-r", -7.62, 4.83, 3.2, 1.6, 0.6),
+        ArtPart("jst-sh", -10.16, 0.0, 4.25, 6.0, 2.9, facing=-1),
+        ArtPart("jst-sh", 10.16, 0.0, 4.25, 6.0, 2.9, facing=1),
+        ArtPart("led", 10.80, 4.32, 1.6, 0.8, 0.5, colour="#3fae49"),
+        ArtPart("chip-r", 10.80, 5.59, 1.6, 0.8, 0.5),
+        ArtPart("hole", -10.16, -8.89, 3.6, 3.6, 0.0, inset=0.3, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, -8.89, 3.6, 3.6, 0.0, inset=0.3, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", -10.16, 8.89, 3.6, 3.6, 0.0, inset=0.3, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, 8.89, 3.6, 3.6, 0.0, inset=0.3, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit SCD-41 Eagle board, github adafruit/Adafruit-SCD-4x-PCB, 'Adafruit SCD-41.brd', "
+        "CC BY-SA (the board, the header, every top-side part's place, package and turn); "
+        "Sensirion's SCD41 product page, 10.1 x 10.1 x 6.5 mm (the sensor); KiCad's JST "
+        "SM04B-SRSS-TB model (the sockets)"
+    ),
+)
+
 #: The STEMMA QT revision (two M2.5 holes a side, 25.4 x 20.32 mm): a STEMMA QT socket on
 #: each side, mouth outwards, a resistor array for the pull-ups, and the green power LED.
 ADAFRUIT_INA219_QT_MODULE = ModuleArt(
@@ -1724,6 +1769,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_LOGIC_LEVEL_MODULE,
     ADAFRUIT_INA219_QT_MODULE,
     ADAFRUIT_INA219_MODULE,
+    ADAFRUIT_SCD4X_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

@@ -1273,6 +1273,16 @@ def test_the_ads1115_is_one_board_on_two_rows_of_six_i2c_first() -> None:
     assert "adafruit-ads1115" in {found.id for found in search_catalog("ADS1015")}
 
 
+def test_the_scd4x_is_one_row_of_five_in_the_silkscreens_order() -> None:
+    """Adafruit's board prints VIN 3Vo GND SCL SDA along its 1 x 5 header, and its pinout page
+    gives the SCD-40, SCD-41 and SCD-43 the same pins: one entry for the board."""
+    part = catalog_part("adafruit-scd4x")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["VIN", "3Vo", "GND", "SCL", "SDA"]
+    assert "Adafruit-SCD-4x-PCB" in part.source and "0x62" in part.check
+    assert {"adafruit-scd4x"} <= {found.id for found in search_catalog("SCD-41")}
+
+
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-ccs811": (

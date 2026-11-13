@@ -1080,6 +1080,32 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "is bridged on the back, and the two STEMMA QT sockets carry the same I2C. " + _MODULE_TOP
                 ),
                 aliases=("INA219", "current sensor", "power monitor", "STEMMA QT", "Qwiic")),
+    CatalogPart("adafruit-scd4x", "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)", "sensor",
+                "mod-5x1-p1-r1-25.4x22.86x6.5-s8.5-o0x-8.89",
+                "True CO2, temperature and humidity on I2C, address 0x62: five pins",
+                _legs("VIN", "3Vo", "GND", "SCL", "SDA"), ref_prefix="U",
+                value="Adafruit SCD-4x",
+                source=(
+                    "Adafruit's own Eagle board for its SCD-4x breakouts "
+                    "(github.com/adafruit/Adafruit-SCD-4x-PCB, 'Adafruit SCD-41'): the 25.4 x "
+                    "22.86 mm board, its 1 x 5 header and the names on its silkscreen (VIN 3Vo "
+                    "GND SCL SDA), each pad's net checked against the board's nets, and "
+                    "Adafruit's pinout page, which gives the SCD-40, SCD-41 and SCD-43 the same "
+                    "pins; the sensor's 10.1 x 10.1 x 6.5 mm is Sensirion's"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen. 3Vo is the output of the "
+                    "board's 3.3 V regulator, good for at least 100 mA by Adafruit's guide. "
+                    "The board's I2C logic is at 3.3 V by default, which works with 5 V "
+                    "controllers; a solder jumper on the back moves it to VIN. SCL and SDA each "
+                    "have a 10k pull-up, and the address is 0x62. The sensor takes its power "
+                    "from VIN unless a second jumper is cut and bridged the other way. The "
+                    "SCD-40 and the SCD-41 are the same board; the SCD-41 adds a wider range "
+                    "and single-shot measurements. The two STEMMA QT sockets carry the same I2C "
+                    "as the header, and the sensor stands 6.5 mm up. " + _MODULE_TOP
+                ),
+                aliases=("SCD-40", "SCD-41", "SCD40", "SCD41", "SCD4x", "CO2 sensor", "CO2",
+                         "STEMMA QT", "Qwiic")),
     CatalogPart("gy-521", "GY-521 MPU-6050", "sensor", "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x-6.7",
                 "Accelerometer and gyroscope, three axes each, on I2C",
                 _legs("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"), ref_prefix="U",

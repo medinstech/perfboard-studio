@@ -3510,6 +3510,31 @@ TURKISH: Mapping[str, str] = {
         "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
+        "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
+    ),
+    "True CO2, temperature and humidity on I2C, address 0x62: five pins": (
+        "I2C üzerinde gerçek CO2, sıcaklık ve nem, adres 0x62: beş pin"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen. 3Vo is the output of the board's 3.3 V "
+    "regulator, good for at least 100 mA by Adafruit's guide. The board's I2C logic is at "
+    "3.3 V by default, which works with 5 V controllers; a solder jumper on the back moves "
+    "it to VIN. SCL and SDA each have a 10k pull-up, and the address is 0x62. The sensor "
+    "takes its power from VIN unless a second jumper is cut and bridged the other way. The "
+    "SCD-40 and the SCD-41 are the same board; the SCD-41 adds a wider range and "
+    "single-shot measurements. The two STEMMA QT sockets carry the same I2C as the header, "
+    "and the sensor stands 6.5 mm up. The height of what is on the board is an estimate, "
+    "and so is its colour; the pins, the rows and the board outline are measured.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır. 3Vo, kartın 3,3 V regülatörünün "
+        "çıkışıdır; Adafruit'in rehberine göre en az 100 mA verir. Kartın I2C mantığı "
+        "varsayılan olarak 3,3 V'tadır ve 5 V denetleyicilerle çalışır; arkadaki bir lehim "
+        "köprüsü onu VIN'e taşır. SCL ve SDA'nın her birinde 10k yukarı çekme direnci "
+        "vardır, adres 0x62'dir. Sensör gücünü, ikinci bir köprü kesilip öbür yana "
+        "lehimlenmedikçe VIN'den alır. SCD-40 ile SCD-41 aynı karttır; SCD-41 daha geniş "
+        "bir aralık ve tek seferlik ölçüm ekler. İki STEMMA QT soketi header'la aynı I2C'yi "
+        "taşır, sensör de 6,5 mm yüksektedir. Kartın üstündekilerin yüksekliği tahmindir, "
+        "rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Adafruit ADS1115 16-bit ADC (STEMMA QT)": (
         "Adafruit ADS1115 16 bit ADC (STEMMA QT)"
     ),
