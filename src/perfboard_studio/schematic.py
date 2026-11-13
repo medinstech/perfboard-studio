@@ -3240,6 +3240,148 @@ def _spoils(
     )
 
 
+def _square_tidy(points: Sequence[Point2]) -> tuple[Point2, ...]:
+    """``_tidy``, and then every corner that does not turn taken out: a run that goes on in
+    the same direction is one run. A point where the wire turns back on itself stays, since
+    taking it out would make a run that overlaps itself into one that does not go as far."""
+    out: list[Point2] = []
+    for point in _tidy(points):
+        if len(out) >= 2:
+            before, middle = out[-2], out[-1]
+            in_line = (
+                abs(before.x - middle.x) < 1e-9 and abs(middle.x - point.x) < 1e-9
+            ) or (abs(before.y - middle.y) < 1e-9 and abs(middle.y - point.y) < 1e-9)
+            onward = (middle.x - before.x) * (point.x - middle.x) + (middle.y - before.y) * (
+                point.y - middle.y
+            ) > 0
+            if in_line and onward:
+                out[-1] = point
+                continue
+        out.append(point)
+    return tuple(out)
+
+
+def _runs_across(start: Point2, end: Point2) -> bool:
+    return abs(start.y - end.y) < 1e-9
+
+
+def moved_corner(path: Sequence[Point2], index: int, to: Point2) -> tuple[Point2, ...]:
+    """The drawn path with its corner ``index`` dragged to ``to`` (snapped to the grid).
+
+    THE ENDS STAY WHERE THEY ARE -- a pin, or the point a T lands on -- and every run stays
+    across or down. A corner between two corners takes its neighbours' shared coordinate
+    with it, so the runs either side slide rather than slant. A corner next to an end
+    cannot move that end, so an elbow goes in instead, and the run out of the end keeps
+    the direction it left in: a wire leaving a pin sideways still leaves it sideways.
+    """
+    points = list(path)
+    if not 0 < index < len(points) - 1:
+        return tuple(points)
+    to = snap_to_grid(to)
+    last = len(points) - 1
+    before, here, after = points[index - 1], points[index], points[index + 1]
+
+    def toward_end(end: Point2, corner: Point2, *, stubbed: bool) -> list[Point2]:
+        """The points from the end ``end`` to the moved corner, leaving the end the way the
+        run to ``corner`` left it: straight on to the elbow, or ``stubbed`` one square out
+        first and round, which is the way that does not run back over itself when the
+        corner went past the end's own line."""
+        across = _runs_across(end, corner)
+        if not stubbed:
+            return [end, _p(to.x, end.y) if across else _p(end.x, to.y)]
+        if across:
+            out = _p(end.x + math.copysign(_STUB_MM, corner.x - end.x), end.y)
+            return [end, out, _p(out.x, to.y)]
+        out = _p(end.x, end.y + math.copysign(_STUB_MM, corner.y - end.y))
+        return [end, out, _p(to.x, out.y)]
+
+    def toward_corner(neighbour: Point2) -> Point2:
+        # A corner between corners: it slides along with the moved one.
+        return _p(neighbour.x, to.y) if _runs_across(neighbour, here) else _p(to.x, neighbour.y)
+
+    heads = (
+        [[*toward_end(before, here, stubbed=stubbed)] for stubbed in (False, True)]
+        if index - 1 == 0
+        else [[*points[: index - 1], toward_corner(before)]]
+    )
+    tails = (
+        [list(reversed(toward_end(after, here, stubbed=stubbed))) for stubbed in (False, True)]
+        if index + 1 == last
+        else [[toward_corner(after), *points[index + 2 :]]]
+    )
+    candidates = [_square_tidy([*head, to, *tail]) for head in heads for tail in tails]
+    return next((path for path in candidates if not _turns_back(path)), candidates[0])
+
+
+def _turns_back(path: Sequence[Point2]) -> bool:
+    """Whether the wire anywhere runs straight back the way it came."""
+    return any(
+        (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y) < -1e-9
+        and (
+            (abs(a.x - b.x) < 1e-9 and abs(b.x - c.x) < 1e-9)
+            or (abs(a.y - b.y) < 1e-9 and abs(b.y - c.y) < 1e-9)
+        )
+        for a, b, c in zip(path, path[1:], path[2:], strict=False)
+    )
+
+
+#: How much of a run stays put at an end the run is dragged away from: one grid square,
+#: so the wire still leaves its pin the way the pin's lead points before it turns.
+_STUB_MM: Mm = GRID_MM
+
+
+def moved_run(path: Sequence[Point2], index: int, to: Point2) -> tuple[Point2, ...]:
+    """The drawn path with its run ``index`` (from point ``index`` to the next) dragged
+    sideways so that it passes through ``to``, snapped to the grid.
+
+    A run slides only across itself -- along itself it would just be the same line. The
+    corners at its two ends go with it, so the runs before and after grow or shrink. Where
+    the run starts or ends at an END of the wire, that end stays where it is: one grid
+    square of the run stays at it and turns to meet the run where it now is, so dragging
+    the straight wire between two pins down makes a U rather than tearing it off them.
+    """
+    points = list(path)
+    if not 0 <= index < len(points) - 1:
+        return tuple(points)
+    to = snap_to_grid(to)
+    start, end = points[index], points[index + 1]
+    across = _runs_across(start, end)
+    if abs((to.y - start.y) if across else (to.x - start.x)) < 1e-9:
+        return tuple(points)
+
+    def shifted(point: Point2) -> Point2:
+        return _p(point.x, to.y) if across else _p(to.x, point.y)
+
+    last = len(points) - 1
+    length = abs(end.x - start.x) + abs(end.y - start.y)
+    fixed_ends = (index == 0) + (index + 1 == last)
+    # A stub only where what is left of the run between the stubs is a square at least:
+    # shorter, the two would meet and the wire would run out and straight back.
+    step = _STUB_MM if length - fixed_ends * _STUB_MM >= _STUB_MM - 1e-9 else 0.0
+
+    def stub(fixed: Point2, toward: Point2) -> list[Point2]:
+        """Out of the end ``fixed`` along the run by ``step``, which may be nothing."""
+        if step < 1e-9:
+            return [fixed]
+        ux = (toward.x - fixed.x) / length
+        uy = (toward.y - fixed.y) / length
+        return [fixed, _p(fixed.x + ux * step, fixed.y + uy * step)]
+
+    head = points[:index]
+    if index == 0:
+        lead = stub(start, end)
+        head = [*lead, shifted(lead[-1])]
+    else:
+        head.append(shifted(start))
+    tail = points[index + 2 :]
+    if index + 1 == last:
+        trail = stub(end, start)
+        tail = [shifted(trail[-1]), *reversed(trail)]
+    else:
+        tail = [shifted(end), *tail]
+    return _square_tidy([*head, *tail])
+
+
 def _hand_drawn_sheet(
     doc: PerfDocument,
     symbols: dict[str, _Placed],

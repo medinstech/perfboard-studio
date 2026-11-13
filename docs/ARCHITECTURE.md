@@ -1556,6 +1556,20 @@ slant (`diagonal-wire`): nothing the application lays has one -- 95 wires frozen
 22 example and fixture sheets, the router, the T and the move's re-lay -- and the move's
 sliding, a T's landing and the junction marks all read a run as across or down.
 
+**A drawn wire is reshaped by dragging it** (`schematic.moved_corner`, `moved_run`,
+`sheet.wire.reshape`). In Select a press on a wire selects it, as it did; dragged, a
+corner within the pick distance goes where the pointer is, and anywhere else the run under
+it slides sideways, its corners with it. The two ends never move -- they are pins, or the
+point a T lands on -- so where the dragged part meets one an elbow goes in instead: a run
+off a pin keeps one grid square at the pin and turns, so dragging the straight wire between
+two pins down makes a U, and a corner next to a pin leaves it the way the lead points,
+stepping one square out and round where the straight elbow would run back over itself.
+The geometry is pure and in the engine, so it is tested without a view. The command is the
+drawing only: it keeps the wire's pins and its T, so no net changes, and it stores the path
+the way the wire runs whichever end the view handed it from. A T on a reshaped wire is not
+rewritten: the sheet lands every T on its wire as it draws (`_laid_onto`), which is what
+already keeps one on a wire whose symbol moved.
+
 **Delete cuts a wire; Remove Line Only rubs it out.** `sheet.wire.cut` takes the wire with
 its T's and takes off the net every pin that only they joined; `sheet.wire.delete` leaves
 the circuit and takes the line. A net whose every pin is a wire end is SPLIT where a cut

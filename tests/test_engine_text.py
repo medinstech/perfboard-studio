@@ -51,6 +51,7 @@ from perfboard_studio.commands import (
     PartPlacement,
     PlacePartsPayload,
     RenameDocumentPayload,
+    ReshapeSheetWirePayload,
     RotateComponentPayload,
     RotateComponentsPayload,
     SetBoardPayload,
@@ -287,6 +288,20 @@ def _session() -> list[str]:
         path=(Point2(30.48, 15.24), Point2(40.64, 15.24)),
     )
     run("sheet.wire", DrawSheetWirePayload(wire=wire))
+    run(
+        "sheet.wire.reshape",
+        ReshapeSheetWirePayload(
+            a=wire.a,
+            b=wire.b,
+            path=(
+                Point2(30.48, 15.24),
+                Point2(33.02, 15.24),
+                Point2(33.02, 20.32),
+                Point2(40.64, 20.32),
+                Point2(40.64, 15.24),
+            ),
+        ),
+    )
     run("sheet.wire.delete", DeleteSheetWiresPayload(wires=bus.document.sheet_wires))
     run("sheet.wire", DrawSheetWirePayload(wire=wire))
     run("sheet.wire.cut", CutSheetWiresPayload(wires=bus.document.sheet_wires))

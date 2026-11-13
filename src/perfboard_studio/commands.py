@@ -1121,6 +1121,18 @@ class CutSheetWiresPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class ReshapeSheetWirePayload:
+    """A drawn wire laid on a new path: a corner or a run of it dragged. The wire is named
+    by its two pins, as everywhere on the sheet, and keeps them -- and the T it may be --
+    so the circuit cannot change. ``path`` runs from ``a`` to ``b`` or the other way; it is
+    stored the way the wire was drawn."""
+
+    a: NetNode
+    b: NetNode
+    path: tuple[Point2, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AddSheetNotePayload:
     """A caption or a box on the drawing. Nothing derives anything from it."""
 
@@ -3123,6 +3135,45 @@ class _DrawSheetWire:
         return f"Wire {_pin_name(p.wire.a)} to {_pin_name(p.wire.b)}"
 
 
+class _ReshapeSheetWire:
+    """Lay a drawn wire on another path: what dragging a corner or a run of it does.
+
+    THE DRAWING ONLY. The two pins stay the wire's ends, and a T stays a T onto the same
+    wire, so no net is touched; a path that does not start and end where the wire does is
+    still accepted, because the sheet puts a wire's ends on its pins every time it is drawn
+    (``schematic._reanchored``), exactly as after a symbol moves.
+    """
+
+    type = "sheet.wire.reshape"
+
+    def apply(
+        self, doc: PerfDocument, p: ReshapeSheetWirePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        key = frozenset((p.a, p.b))
+        wire = next((w for w in doc.sheet_wires if frozenset((w.a, w.b)) == key), None)
+        if wire is None:
+            raise CommandError(
+                "no-such-wire",
+                f"No wire is drawn from {_pin_name(p.a)} to {_pin_name(p.b)}.",
+            )
+        path = p.path if p.a == wire.a else tuple(reversed(p.path))
+        if len(path) < 2:
+            raise CommandError(
+                "path-too-short", "A wire on the sheet needs at least two points."
+            )
+        reshaped = dataclasses.replace(wire, path=path)
+        _check_square(reshaped)
+        if reshaped == wire:
+            raise CommandError("nothing-to-do", "The wire is already drawn that way.")
+        return dataclasses.replace(
+            doc,
+            sheet_wires=tuple(reshaped if w is wire else w for w in doc.sheet_wires),
+        )
+
+    def describe(self, p: ReshapeSheetWirePayload, doc: PerfDocument) -> str:
+        return f"Reshape the wire from {_pin_name(p.a)} to {_pin_name(p.b)}"
+
+
 def _check_square(wire: SheetWire) -> None:
     """Every run of a drawn wire is across or down the sheet, never slanted.
 
@@ -4381,6 +4432,7 @@ DESIGN_COMMANDS = frozenset(
         "sheet.wire",
         "sheet.wire.cut",
         "sheet.wire.delete",
+        "sheet.wire.reshape",
         "symbol.auto",
         "symbol.move",
     }
@@ -4824,6 +4876,7 @@ auto_symbols: CommandDefinition[AutoSymbolsPayload] = _AutoSymbols()
 draw_sheet_wire: CommandDefinition[DrawSheetWirePayload] = _DrawSheetWire()
 delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWires()
 cut_sheet_wires: CommandDefinition[CutSheetWiresPayload] = _CutSheetWires()
+reshape_sheet_wire: CommandDefinition[ReshapeSheetWirePayload] = _ReshapeSheetWire()
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
@@ -4895,6 +4948,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     draw_sheet_wire,
     delete_sheet_wires,
     cut_sheet_wires,
+    reshape_sheet_wire,
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,

@@ -94,6 +94,8 @@ from perfboard_studio.schematic import (
     SchematicDrawing,
     Symbol,
     Wire,
+    moved_corner,
+    moved_run,
     no_connect_arms,
     rail_glyph_bars,
     route_sheet_wire,
@@ -972,6 +974,9 @@ class SchematicView(QGraphicsView):
     #: to the point on the wire, as (x, y) pairs.) What it means to the circuit is the
     #: window's business again: the pin joins the wire's net.
     wireTeed = Signal(str, str, str, str, str, str, list)
+    #: A drawn wire was dragged by a corner or a run into a new shape: (ref a, pin a,
+    #: ref b, pin b, the new path as (x, y) pairs). Its ends and its net stay as they were.
+    wireReshaped = Signal(str, str, str, str, list)
     #: The wire tool's first click landed on a wire rather than a pin. Carries the wire's
     #: two ends as "R1.2 – U1.4", for the status bar.
     teeStarted = Signal(str)
@@ -1054,6 +1059,13 @@ class SchematicView(QGraphicsView):
         #: A pin pressed in Select: a drag from it is a wire (``mouseMoveEvent``), a click
         #: on it is a click on its symbol.
         self._pin_press: tuple[str, str] | None = None
+        #: A drawn wire pressed in Select: its two pins, the path it is drawn on, and what
+        #: the press took hold of -- a corner or a run, by index (``_grab``). A drag past
+        #: the start distance reshapes it (``_reshaping``); a click only selects it.
+        self._press_wire: (
+            tuple[tuple[NetNode, NetNode], tuple[Point2, ...], str, int] | None
+        ) = None
+        self._reshaping = False
         #: The last route ``_pin_to_pin`` found: the drawing itself (held, so a new one is
         #: never mistaken for it), the two pins, the route.
         self._route_memo: (
@@ -1373,7 +1385,12 @@ class SchematicView(QGraphicsView):
     def gesture_in_flight(self) -> bool:
         """Whether the left button is in the middle of something Escape can call off: a
         drag of symbols, a rubber band, or a shape being pulled out."""
-        return self._dragging or self._band_from is not None or self._shape_from is not None
+        return (
+            self._dragging
+            or self._reshaping
+            or self._band_from is not None
+            or self._shape_from is not None
+        )
 
     def select_all(self) -> None:
         """Every symbol on the sheet (Edit > Select All)."""
@@ -1391,6 +1408,8 @@ class SchematicView(QGraphicsView):
         self._press_note = None
         self._press_scene = None
         self._pin_press = None
+        self._press_wire = None
+        self._reshaping = False
         if self.item is not None:
             self.item.drag_offset = None
             self.item.live_wires = None
@@ -1733,6 +1752,8 @@ class SchematicView(QGraphicsView):
         run = self.wire_at(where)
         if run is not None:
             self._select_wire(run[0], where)
+            # Held, so that a drag reshapes it: a corner pressed moves, else the run.
+            self._press_wire = (run[0], run[1], *_grab(run[1], where))
             event.accept()
             return
 
@@ -1943,6 +1964,11 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        if self._press_wire is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._drag_wire(event, where)
+            event.accept()
+            return
+
         if self.item is not None and self.tool == "select" and not event.buttons():
             over = self.wire_at(where)
             self._show_wire_selection(over[1] if over is not None else ())
@@ -1982,6 +2008,26 @@ class SchematicView(QGraphicsView):
                 ]
             )
         self.item.drag_offset = offset
+        self.item.update()
+
+    def _reshaped(self, where: QPointF) -> tuple[Point2, ...]:
+        """The pressed wire's path with what the press took hold of moved to ``where``."""
+        if self._press_wire is None:
+            return ()
+        _ends, path, kind, index = self._press_wire
+        to = Point2(x=where.x(), y=where.y())
+        return moved_corner(path, index, to) if kind == "corner" else moved_run(path, index, to)
+
+    def _drag_wire(self, event: QMouseEvent, where: QPointF) -> None:
+        """Show the pressed wire as it would be drawn with its corner or run where the
+        pointer is. Nothing is dispatched until the button comes up."""
+        if self._press_at is None or self.item is None:
+            return
+        moved = event.position().toPoint() - self._press_at
+        if not self._reshaping and moved.manhattanLength() < QApplication.startDragDistance():
+            return
+        self._reshaping = True
+        self.item.ghost_path = tuple(_point(point) for point in self._reshaped(where))
         self.item.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
@@ -2072,6 +2118,19 @@ class SchematicView(QGraphicsView):
 
         if self._press_note is not None:
             self._clear_ghosts()
+            event.accept()
+            return
+
+        if self._press_wire is not None:
+            held, reshaping = self._press_wire, self._reshaping
+            path = self._reshaped(where) if reshaping else ()
+            self._clear_ghosts()
+            if path and path != held[1]:
+                a, b = held[0]
+                self.wireReshaped.emit(
+                    a.component_ref, a.pin, b.component_ref, b.pin,
+                    [(point.x, point.y) for point in path],
+                )
             event.accept()
             return
 
@@ -2542,6 +2601,24 @@ def _tidied(points: Sequence[QPointF]) -> tuple[QPointF, ...]:
                     continue
             break
     return tuple(kept)
+
+
+def _grab(path: Sequence[Point2], where: QPointF) -> tuple[str, int]:
+    """What a press on a drawn wire takes hold of: a corner within ``PICK_MM`` -- never
+    one of the two ends, which are its pins and stay on them -- or else the run nearest."""
+    corners = [
+        (math.hypot(point.x - where.x(), point.y - where.y()), index)
+        for index, point in enumerate(path)
+        if 0 < index < len(path) - 1
+    ]
+    near = min(corners, default=None)
+    if near is not None and near[0] <= PICK_MM:
+        return "corner", near[1]
+    runs = [
+        (_distance_to_segment(where, _point(start), _point(end)), index)
+        for index, (start, end) in enumerate(itertools.pairwise(path))
+    ]
+    return "run", min(runs, default=(0.0, 0))[1]
 
 
 def _distance_to_segment(point: QPointF, start: QPointF, end: QPointF) -> float:

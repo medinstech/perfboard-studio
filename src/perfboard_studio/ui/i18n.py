@@ -5951,6 +5951,7 @@ TURKISH: Mapping[str, str] = {
     "Rub out the wire from {a} to {b} and {branches} branch(es) off it": "{a}–{b} telini ve ondan çıkan {branches} dalı sil",
     "Rub out the wire from {a} to {b}": "{a}–{b} telini sil",
     "Delete the wire from {a} to {b}": "{a}–{b} telini sil",
+    "Reshape the wire from {a} to {b}": "{a}–{b} telini yeniden biçimlendir",
     "Delete {count} wire on the sheet": "Şemadaki {count} teli sil",
     "Delete {count} wires on the sheet": "Şemadaki {count} teli sil",
     "Draw a {shape} on the sheet": "Şemaya bir {shape} çiz",

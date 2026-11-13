@@ -80,6 +80,11 @@ closed without a bump.
   the wire off, so a wire went only where the route put it; two clicks with no corner still
   route it round the parts. Backspace takes back the last corner, and Esc or a right-click
   drops the wire, the tool staying armed for the next.
+- **A wire on the schematic is reshaped by dragging it.** In Select, drag a corner of a
+  drawn wire to move it, or drag anywhere else on the wire to slide that stretch sideways.
+  The ends stay on their pins and the wire stays square, so dragging the straight wire
+  between two pins down makes a U. Only the drawing changes, never the connection, and one
+  undo puts it back. Esc during the drag calls it off.
 - **Cutting the wire in the middle of a fully wired net splits it in two.** A net drawn
   as a chain of wires stayed one net when a wire in the middle was cut, so its two ends
   were still joined by a name nobody wrote and the sheet no longer showed. Where every pin
