@@ -20720,8 +20720,9 @@ def test_auto_wire_says_when_wire_on_both_faces_laid_nothing_on_the_component_si
 
 
 def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() -> None:
-    """The shield's GND set to the component side comes back wired underneath: every GND
-    pin there is under J2's plastic. The window says so -- on the status line and in a
+    """The shield's GND set to the component side comes back mostly wired underneath: one
+    connection because its pin there is under J2's plastic, the rest because no clear way
+    was found on top ("mixed"). The window says so -- on the status line and in a
     Faces group of the Problems drawer -- and counts it as nothing: a preference is a price,
     never a rule."""
     from perfboard_studio.ui import theme
@@ -20745,7 +20746,7 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         said_of, notes = window._face_notes
         assert said_of is window.bus.document
         [note] = notes
-        assert (note.net_name, note.reason, note.covered_by) == ("GND", "covered", ("J2",))
+        assert (note.net_name, note.reason, note.covered_by) == ("GND", "mixed", ("J2",))
         # The engine's own note, from the document the plan was made FROM.
         assert window.bus.document.conductors
         assert counted(
@@ -20798,7 +20799,7 @@ def test_redo_wiring_of_one_net_says_it_is_off_its_face_as_auto_wire_does(
     monkeypatch, gnd_copper: str
 ) -> None:
     """Set GND to the component side on the wired shield and redo GND alone: it comes back
-    underneath, exactly where it was, for the same reason Auto-wire's did (J2's plastic) --
+    underneath, exactly where it was, for the same reasons Auto-wire's did (J2's plastic, and no clear way) --
     the case that most needs the why, since nothing on the board moved -- and is told so the
     same way: the status line and the Faces group."""
     from perfboard_studio.commands import UpdateNetPayload
@@ -20822,7 +20823,7 @@ def test_redo_wiring_of_one_net_says_it_is_off_its_face_as_auto_wire_does(
         said_of, notes = window._face_notes
         assert said_of is window.bus.document
         [note] = notes
-        assert (note.net_name, note.reason, note.covered_by) == ("GND", "covered", ("J2",))
+        assert (note.net_name, note.reason, note.covered_by) == ("GND", "mixed", ("J2",))
         assert counted(
             1,
             t("{count} net wired off the face it prefers: why is in Problems"),
