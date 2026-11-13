@@ -134,6 +134,7 @@ from perfboard_studio.autoroute import (
     describe_reroute,
     face_notes,
     holes_to_avoid,
+    nets_off_their_face,
     plan_autoroute,
     plan_best_autoroute,
     plan_reroute,
@@ -520,6 +521,101 @@ def _user_documents() -> Path:
     if documents and Path(documents).is_dir():
         return Path(documents)
     return Path.home()
+
+
+def _on_face(side: BoardSide) -> str:
+    return t("on the component side") if side == "top" else t("on the solder side")
+
+
+def _parts_said(refs: Sequence[str]) -> str:
+    """The parts whose bodies sit over a net's pins, by reference: "the body of J2", "the
+    bodies of C1 and J1" -- Turkish puts body or bodies on the word after the list."""
+    joined = refs[0] if len(refs) == 1 else f"{', '.join(refs[:-1])} {t('and')} {refs[-1]}"
+    template = t("the bodies of {refs}") if len(refs) > 1 else t("the body of {refs}")
+    return template.format(refs=joined)
+
+
+def reached_beside() -> str:
+    """How a net that kept its face reaches a pin under a seated body: the ONE place the
+    window says it, since the word for it is still being settled. Not "via": the via count
+    and its mark are a solder run changing face at a pad, and this is a jumper ending in
+    the free hole beside the pin and an offcut joining the two underneath."""
+    return t("a jumper to the free hole beside it, joined to the pin underneath")
+
+
+def reached_beside_said(refs: Sequence[str], face: str, *, everywhere: bool) -> str:
+    """The pins under ``refs`` that the net reached from ``face`` anyway; ``everywhere``
+    when the net kept the face throughout, and otherwise only where it did."""
+    return (
+        t("Each of its pins under {parts} is reached by {how}.")
+        if everywhere
+        else t("Where it stays {face}, each of its pins under {parts} is reached by {how}.")
+    ).format(parts=_parts_said(refs), face=face, how=reached_beside())
+
+
+def face_note_said(note: FaceNote, *, named: bool = False) -> str:
+    """What Auto-wire did with a net's preferred face, from the note's facts rather than
+    its English (``autoroute.face_notes``): under the net's Face row, where the net goes
+    without saying, and ``named`` in the Problems drawer's Faces group."""
+    face = _on_face(note.preferred)
+    other = _on_face("bottom" if note.preferred == "top" else "top")
+    off, total = note.off_face, note.total
+    parts = _parts_said(note.covered_by) if note.covered_by else ""
+    if note.reason == "kept":
+        said = (
+            t("Wired {face} on {kept} of its {total} connections.").format(
+                face=face, kept=total - off, total=total
+            )
+            if off
+            else t("Wired {face}, as set.").format(face=face)
+        )
+    elif note.reason == "no-pads":
+        said = t("This board has no pads {face}, so all of it is wired {other}.").format(
+            face=face, other=other
+        )
+    elif note.reason == "mixed":
+        said = (
+            t(
+                "All {total} of its connections are wired {other}: {covered} because a pin "
+                "is under {parts} there, {open} because no clear way was found there."
+            )
+            if off == total
+            else t(
+                "{off} of its {total} connections are wired {other}: {covered} because a pin "
+                "is under {parts} there, {open} because no clear way was found there."
+            )
+        ).format(
+            off=off, total=total, other=other, covered=note.off_covered,
+            open=off - note.off_covered, parts=parts,
+        )
+    elif note.reason == "covered":
+        said = (
+            t("All of it is wired {other}: its pins {face} are under {parts}.")
+            if off == total
+            else t(
+                "{off} of its {total} connections are wired {other}: their pins {face} are "
+                "under {parts}."
+            )
+        ).format(off=off, total=total, other=other, face=face, parts=parts)
+    else:
+        said = (
+            t("All of it is wired {other}: no clear way was found {face}.")
+            if off == total
+            else t(
+                "{off} of its {total} connections are wired {other}: no clear way was found "
+                "for them {face}."
+            )
+        ).format(off=off, total=total, other=other, face=face)
+    if note.beside:
+        said += " " + reached_beside_said(note.beside, face, everywhere=not off)
+    if named:
+        prefers = (
+            t("{net} prefers the component side.")
+            if note.preferred == "top"
+            else t("{net} prefers the solder side.")
+        )
+        said = f"{prefers.format(net=note.net_name)} {said}"
+    return said
 
 
 def did(description: str) -> str:
@@ -8497,12 +8593,9 @@ class MainWindow(QMainWindow):
         result = self.bus.dispatch(
             "net.update", UpdateNetPayload(id=net_id, preferred_side=side)
         )
-        self.statusBar().showMessage(
-            f"{did(result.description)} — {t('applies the next time you auto-wire')}"
-            if result.ok
-            else refused(result),
-            8000,
-        )
+        if not result.ok:
+            # Done is said by on_bus_changed, as for the Face row's buttons.
+            self.statusBar().showMessage(refused(result), 8000)
 
     def on_schematic_place_all(self) -> None:
         """Move the whole design onto the board, arranged. The step this panel exists to
@@ -9507,6 +9600,7 @@ class MainWindow(QMainWindow):
                 can_redo_without=lambda conductor_id: self._can_redo_without(conductor_id),
                 joins_other_face=lambda conductor_id: self._joins_other_face(conductor_id),
                 lies_across=lambda conductor_id: self._lies_across(conductor_id),
+                face_said=lambda net_id: self._face_said(net_id),
                 wiring_styles=lambda: self.wiring_styles(),
                 current_style=lambda: self._routing_style,
                 select_wiring=lambda key: self._select_wiring(key),
@@ -10805,7 +10899,11 @@ class MainWindow(QMainWindow):
         # document to work that out -- so placing R4 has to move the banner on to R5.
         self._refresh_mode_banner()
         if entry is not None:
-            self.statusBar().showMessage(did(entry.description), 6000)
+            face_set = self._face_set_said(entry)
+            if face_set:
+                self.statusBar().showMessage(f"{did(entry.description)} — {face_set}", 8000)
+            else:
+                self.statusBar().showMessage(did(entry.description), 6000)
 
     #: Commands after which a net's existing copper describes a board that no longer
     #: exists. Not a guess: the bus says exactly which command ran.
@@ -11007,7 +11105,7 @@ class MainWindow(QMainWindow):
             to_review=len(
                 {cid for note in self._last_wiring for cid in note.conductor_ids}
             ),
-            off_face=len(self._current_face_notes()),
+            off_face=len(self._off_face_notes()),
         )
         size = _board_size_name(self.bus.document.board)
         side = t("component side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
@@ -11331,10 +11429,15 @@ class MainWindow(QMainWindow):
         notes = self._current_face_notes()
         if not notes:
             return
-        rows = [say(note.message) for note in notes]
+        rows = [face_note_said(note, named=True) for note in notes]
+        off = len(self._off_face_notes())
         root = QTreeWidgetItem([
             t("Faces"),
-            counted(len(notes), t("{count} net off its face"), t("{count} nets off their face")),
+            counted(off, t("{count} net off its face"), t("{count} nets off their face"))
+            if off
+            else counted(
+                len(notes), t("{count} net kept its face"), t("{count} nets kept their face")
+            ),
         ])
         root.setToolTip(
             1,
@@ -11353,6 +11456,77 @@ class MainWindow(QMainWindow):
             root.addChild(leaf)
         root.setExpanded(True)
 
+    def _face_said(self, net_id: str) -> tuple[str, bool]:
+        """What the net's Face row says under its buttons, and whether it offers Redo
+        Wiring of the net there.
+
+        The last Auto-wire's note about the net while the board is the one it was said of;
+        otherwise, a net whose copper is all on the other face is told that the copper stays
+        until the net is wired again -- Auto-wire keeps the copper it finds (#14), so a Face
+        set on a wired board moved nothing and said nothing -- with the button that wires it
+        again. Not offered beside a note: that wiring was planned with the face set, and
+        planned again it comes back the same."""
+        document = self.bus.document
+        if not has_component_side_copper(document.board):
+            return "", False
+        note = next((n for n in self._current_face_notes() if n.net_id == net_id), None)
+        if note is not None:
+            return face_note_said(note), False
+        off = next((o for o in nets_off_their_face(document) if o.net_id == net_id), None)
+        if off is None:
+            return "", False
+        return (
+            t(
+                "All of its copper is {other}. Copper already laid stays where it is until "
+                "the net is wired again."
+            ).format(other=_on_face("bottom" if off.preferred == "top" else "top")),
+            True,
+        )
+
+    def _already_off_face_said(self, only_net_ids: tuple[NetId, ...] | None = None) -> str:
+        """The nets wired before their Face was set, all their copper on the other face and
+        no note from this wiring to say why: Auto-wire keeps the copper it finds, so it
+        leaves them there, and says so with the way to move them. "" when there are none."""
+        noted = {note.net_id for note in self._current_face_notes()}
+        off = [
+            o for o in nets_off_their_face(self.bus.document)
+            if o.net_id not in noted and (only_net_ids is None or o.net_id in only_net_ids)
+        ]
+        if not off:
+            return ""
+        if len(off) > 1:
+            return t("{count} nets are already wired off their face: Redo Wiring moves them").format(
+                count=len(off)
+            )
+        [net] = off
+        return t("{net} is already wired {other}: Redo Wiring of {net} moves it").format(
+            net=net.net_name, other=_on_face("bottom" if net.preferred == "top" else "top")
+        )
+
+    def _face_set_said(self, entry: HistoryEntry) -> str:
+        """After a net's Face was set: what that does to the board, "" for any other
+        command. Copper already on the other face stays there until the net is wired again,
+        and that is said rather than left for the next Auto-wire to keep quiet about."""
+        if entry.record.type != "net.update":
+            return ""
+        payload = entry.record.payload
+        net_id = getattr(payload, "id", None)
+        if net_id is None and isinstance(payload, dict):
+            net_id = payload.get("id")
+        before = next((n for n in entry.before.nets if n.id == net_id), None)
+        after = next((n for n in entry.after.nets if n.id == net_id), None)
+        if before is None or after is None or before.preferred_side == after.preferred_side:
+            return ""
+        return self._already_off_face_said((after.id,)) or t(
+            "applies the next time you auto-wire"
+        )
+
+    def _off_face_notes(self) -> tuple[FaceNote, ...]:
+        """The current notes about a net wired off its face: not the ones about a net that
+        KEPT it ("kept"), which are news about copper on the other face, not about the face
+        given up -- counted as off its face, the NE555's GND on top throughout read as one."""
+        return tuple(note for note in self._current_face_notes() if note.reason != "kept")
+
     def _current_face_notes(self) -> tuple[FaceNote, ...]:
         """The last Auto-wire's face notes while the board is still the one they were said
         of: any edit since may have moved the copper they are about."""
@@ -11368,15 +11542,30 @@ class MainWindow(QMainWindow):
         notes = face_notes(planned_on, plan, self.lookup)
         self._face_notes = (self.bus.document, notes) if notes else (None, ())
         self._refresh_problems_bar()
+        # The net's Face row says the note too, and Properties was told about this
+        # document before the note was made.
+        self._refresh_properties()
         if not notes:
             return ""
         if self._last_lvs is not None:
             self._refresh_drc_panel(self._last_violations, self._last_lvs)
-        return counted(
-            len(notes),
-            t("{count} net wired off the face it prefers: why is in Problems"),
-            t("{count} nets wired off the face they prefer: why is in Problems"),
-        )
+        off = len(self._off_face_notes())
+        said = [
+            counted(
+                off,
+                t("{count} net wired off the face it prefers: why is in Problems"),
+                t("{count} nets wired off the face they prefer: why is in Problems"),
+            )
+        ] if off else []
+        if len(notes) > off:
+            said.append(
+                counted(
+                    len(notes) - off,
+                    t("{count} net kept the face it prefers: how is in Problems"),
+                    t("{count} nets kept the face they prefer: how is in Problems"),
+                )
+            )
+        return "  ·  ".join(said)
 
     def _add_wiring_notes(self, needle: str, expanded: set[str]) -> None:
         """The Wiring group: what is worth a look in the copper, each row selecting the
@@ -12618,6 +12807,9 @@ class MainWindow(QMainWindow):
         )
         self._report_unrouted(plan)
         faces_said = faces_said or self._both_faces_unused(before)
+        kept_off = self._already_off_face_said(only_net_ids)
+        if kept_off:
+            faces_said = f"{faces_said}  ·  {kept_off}" if faces_said else kept_off
         if faces_said:
             # After the unwired count, which takes the line when there is one: the face
             # is the lesser news, and both are in the drawer.

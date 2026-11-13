@@ -20726,9 +20726,8 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
     Faces group of the Problems drawer -- and counts it as nothing: a preference is a price,
     never a rule."""
     from perfboard_studio.ui import theme
-    from perfboard_studio.ui.engine_text import say
     from perfboard_studio.ui.i18n import counted, t
-    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY, face_note_said
 
     shield = _example_document("arduino-io-shield")
     bare = dataclasses.replace(
@@ -20762,7 +20761,10 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         }
         faces = groups["FACES"]
         assert faces.text(0) == t("Faces")
-        assert [faces.child(i).text(1) for i in range(faces.childCount())] == [say(note.message)]
+        # The window's sentence, the one under the net's Face row, with the net named.
+        assert [faces.child(i).text(1) for i in range(faces.childCount())] == [
+            face_note_said(note, named=True)
+        ]
 
         # A click on the row lights the net.
         window._on_drc_item_clicked(faces.child(0), 1)
@@ -20790,6 +20792,144 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
             tree.topLevelItem(i).data(0, ROLE_FINDING_KEY) != "FACES"
             for i in range(tree.topLevelItemCount())
         )
+    finally:
+        _close(window)
+
+
+def _shield_with_gnd_on_top():  # type: ignore[no-untyped-def]
+    shield = _example_document("arduino-io-shield")
+    return dataclasses.replace(
+        shield,
+        conductors=(),
+        nets=tuple(
+            dataclasses.replace(n, preferred_side="top" if n.name == "GND" else None)
+            for n in shield.nets
+        ),
+    )
+
+
+def test_the_face_row_says_what_auto_wire_did_with_the_face() -> None:
+    """A Face set and Auto-wire run, the net's Properties said nothing about it: the setting
+    looked ignored (#14). Under the buttons now, the note in the window's words -- and a pin
+    reached beside a body is never a "via", which on this board is a solder run changing
+    face. No Redo: planned again with the face set, it comes back the same."""
+    from perfboard_studio.ui.main import face_note_said, reached_beside
+
+    window = _window_on(_shield_with_gnd_on_top())
+    try:
+        window.act_both_faces.setChecked(True)
+        window.on_autoroute_all()
+        [note] = window._current_face_notes()
+        assert note.reason == "mixed" and note.beside
+        editor = _inspect_net(window, note.net_id)
+        said = editor.face_said.text()
+        assert not editor.face_said.isHidden() and said == face_note_said(note)
+        assert reached_beside() in said and "via" not in said
+        assert editor.redo_face.isHidden()
+    finally:
+        _close(window)
+
+
+def test_a_face_set_on_copper_already_laid_says_it_stays_and_offers_to_redo_it(
+    monkeypatch,
+) -> None:
+    """Setting GND's Face on a wired board moved nothing, Auto-wire kept the copper it
+    found, and neither said so. Now the Face row says the copper stays until the net is
+    wired again and puts Redo Wiring of GND under it; the status line says it on the Face
+    and on every Auto-wire that leaves the net where it is."""
+    from perfboard_studio.commands import DeleteConductorsPayload
+    from perfboard_studio.ui.i18n import t
+    from perfboard_studio.ui.main import face_note_said
+
+    window = _window_on(_example_document("arduino-io-shield"))
+    monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
+    try:
+        window.act_both_faces.setChecked(True)
+        gnd = next(n for n in window.bus.document.nets if n.name == "GND")
+        editor = _inspect_net(window, gnd.id)
+        assert editor.face_said.isHidden() and editor.redo_face.isHidden()
+
+        editor._face_buttons["top"].click()
+        stays = t("{net} is already wired {other}: Redo Wiring of {net} moves it").format(
+            net="GND", other=t("on the solder side")
+        )
+        assert stays in window.statusBar().currentMessage()
+        editor = _inspect_net(window, gnd.id)
+        assert editor.face_said.text().startswith(
+            t(
+                "All of its copper is {other}. Copper already laid stays where it is until "
+                "the net is wired again."
+            ).format(other=t("on the solder side"))
+        )
+        assert not editor.redo_face.isHidden()
+        assert editor.redo_face.text() == t("Redo Wiring of {net}").format(net="GND")
+
+        # Auto-wire finishing another net leaves GND where it is, and says so.
+        other = next(
+            n for n in window.bus.document.nets
+            if n.id != gnd.id and any(c.net_id == n.id for c in window.bus.document.conductors)
+        )
+        window.bus.dispatch(
+            "conductor.deleteMany",
+            DeleteConductorsPayload(
+                ids=tuple(c.id for c in window.bus.document.conductors if c.net_id == other.id)
+            ),
+        )
+        window.on_autoroute_all()
+        assert stays in window.statusBar().currentMessage()
+
+        # The button wires GND again with its face; then the row says what that came to.
+        editor = _inspect_net(window, gnd.id)
+        editor.redo_face.click()
+        [note] = window._current_face_notes()
+        editor = _inspect_net(window, gnd.id)
+        assert editor.face_said.text() == face_note_said(note)
+        assert editor.redo_face.isHidden()
+    finally:
+        _close(window)
+
+
+def test_a_net_that_kept_its_face_is_told_so_under_its_face_row() -> None:
+    """The NE555's GND keeps the component side throughout and reaches J1's pin, under the
+    header's plastic, from the hole beside it: the one note about a preference working."""
+    from perfboard_studio.ui.i18n import counted, t
+    from perfboard_studio.ui.main import face_note_said, reached_beside
+
+    ne555 = _golden_document("ne555")
+    window = _window_on(
+        dataclasses.replace(
+            ne555,
+            conductors=(),
+            nets=tuple(
+                dataclasses.replace(n, preferred_side="top" if n.name == "GND" else None)
+                for n in ne555.nets
+            ),
+        )
+    )
+    try:
+        window.act_both_faces.setChecked(True)
+        window.act_style["solder"].trigger()
+        window.on_autoroute_all()
+        [note] = window._current_face_notes()
+        assert (note.reason, note.off_face, note.beside) == ("kept", 0, ("J1",))
+        editor = _inspect_net(window, note.net_id)
+        said = editor.face_said.text()
+        assert said == face_note_said(note)
+        assert said.startswith(t("Wired {face}, as set.").format(face=t("on the component side")))
+        assert reached_beside() in said
+        assert editor.redo_face.isHidden()
+        # Kept, not off: the status line and the bar do not count it as given up.
+        status = window.statusBar().currentMessage()
+        assert counted(
+            1,
+            t("{count} net kept the face it prefers: how is in Problems"),
+            t("{count} nets kept the face they prefer: how is in Problems"),
+        ) in status
+        assert t("{count} net wired off the face it prefers: why is in Problems").format(
+            count=1
+        ) not in status
+        off = counted(1, t("{count} net off its face"), t("{count} nets off their face"))
+        assert off not in window.problems_bar.facts.text()
     finally:
         _close(window)
 

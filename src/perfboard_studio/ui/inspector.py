@@ -157,6 +157,10 @@ class InspectorHooks:
     #: What a conductor lies across on its way, in a sentence ("" when nothing): the
     #: holes a wire passes over between its ends, and what is in them.
     lies_across: Callable[[str], str] = lambda _conductor: ""
+    #: What a net's Face row says under its buttons -- what the last Auto-wire did with
+    #: the face, or that its copper is on the other one -- and whether to offer Redo
+    #: Wiring of the net there.
+    face_said: Callable[[str], tuple[str, bool]] = lambda _net: ("", False)
     #: Where this copper joins the other face through a via ("" where it does not).
     joins_other_face: Callable[[str], str] = lambda _conductor: ""
     #: Whether this wire's net can be wired again without it (Redo Wiring Without This Wire).
@@ -1757,9 +1761,13 @@ class _NetEditor(QWidget):
         # Which face Auto-wire lays the net on: shown only on a board with pads on the
         # component side, since anywhere else there is one face and nothing to choose.
         faces = QWidget()
-        face_row = QHBoxLayout(faces)
+        face_column = QVBoxLayout(faces)
+        face_column.setContentsMargins(0, 0, 0, 0)
+        face_column.setSpacing(4)
+        face_row = QHBoxLayout()
         face_row.setContentsMargins(0, 0, 0, 0)
         face_row.setSpacing(2)
+        face_column.addLayout(face_row)
         self.net_face = QButtonGroup(self)
         self.net_face.setExclusive(True)
         self._face_buttons: dict[BoardSide | None, QToolButton] = {}
@@ -1773,6 +1781,18 @@ class _NetEditor(QWidget):
             self.net_face.addButton(button)
             self._face_buttons[side] = button
             face_row.addWidget(button)
+        # Under the buttons, what the face came to: a Face set and nothing said about
+        # it looked ignored (#14), above all when the copper was already laid.
+        self.face_said = _fact()
+        face_column.addWidget(self.face_said)
+        self.redo_face = QToolButton()
+        self.redo_face.setAutoRaise(True)
+        self.redo_face.setToolTip(
+            t("Takes up this net's copper and wires it again with its Face as it is "
+              "set. Asked first; one Ctrl+Z puts it back.")
+        )
+        self.redo_face.clicked.connect(self._redo_for_face)
+        face_column.addWidget(self.redo_face, 0, Qt.AlignmentFlag.AlignLeft)
         self.face_problem = _Problem()
         self._form = form
         self._face_row = form.rowCount()
@@ -1840,6 +1860,11 @@ class _NetEditor(QWidget):
             self._form.setRowVisible(
                 self._face_row, has_component_side_copper(document.board)
             )
+            said, redo = self._inspector.hooks.face_said(net.id)
+            self.face_said.setText(said)
+            self.face_said.setVisible(bool(said))
+            self.redo_face.setText(t("Redo Wiring of {net}").format(net=net.name))
+            self.redo_face.setVisible(redo)
             if not self.current.hasFocus():
                 self.current.setValue(net.current_a if net.current_a is not None else 0.0)
             self.voltage_stated.setChecked(net.voltage_v is not None)
@@ -1882,6 +1907,10 @@ class _NetEditor(QWidget):
         self.face_problem.show_problem(
             self._update(UpdateNetPayload(id=net.id, preferred_side=side)) or ""
         )
+
+    def _redo_for_face(self) -> None:
+        if self._net is not None:
+            self._inspector.hooks.net_wiring("redo", self._net.id)
 
     def _commit_current(self) -> None:
         net = self._net
