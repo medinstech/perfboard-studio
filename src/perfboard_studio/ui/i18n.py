@@ -3510,6 +3510,32 @@ TURKISH: Mapping[str, str] = {
         "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "Adafruit DRV8871 DC motor driver": (
+        "Adafruit DRV8871 DC motor sürücüsü"
+    ),
+    "One brushed DC motor, 6.5 to 45 V, 3.6 A peak: four header pins": (
+        "Fırçalı bir DC motor, 6,5 ile 45 V, 3,6 A tepe: dört header pini"
+    ),
+    "Pin 1 is IN2, the way the silkscreen reads with the header at the bottom; the board's "
+    "own pad numbering runs the other way, from GND. The motor goes on the MOTOR terminal "
+    "block, not on the header: OUT1 and OUT2 are not brought to it. VM and GND on the "
+    "header are the same nets as the POWER terminal block, 6.5 to 45 V, so power the board "
+    "from either, and do not join VM to a controller's supply pin while an external supply "
+    "is connected. IN1 drives OUT1 and IN2 drives OUT2, logic up to 5.5 V. The current "
+    "limit is set by the Rlim resistor, 30k as shipped, about 2 A: the silkscreen gives "
+    "64k divided by the limit in amps. The height of what is on the board is an estimate, "
+    "and so is its colour; the pins, the rows and the board outline are measured.": (
+        "1. pin IN2'dir; baskı, header altta olacak biçimde okunduğunda böyledir, kartın "
+        "kendi pad numaralaması ise GND'den başlayarak ters yöne gider. Motor header'a "
+        "değil MOTOR vidalı klemensine bağlanır: OUT1 ve OUT2 header'a çıkarılmamıştır. "
+        "Header'daki VM ve GND, POWER vidalı klemensiyle aynı netlerdir, 6,5 ile 45 V; "
+        "kartı ikisinden biriyle besleyin ve dış besleme bağlıyken VM'yi bir "
+        "denetleyicinin besleme pinine bağlamayın. IN1, OUT1'i; IN2, OUT2'yi sürer, mantık "
+        "en çok 5,5 V. Akım sınırını Rlim direnci belirler, kartla 30k gelir, yaklaşık "
+        "2 A: baskı, 64k'yı amper cinsinden sınıra bölmeyi söyler. Kartın üstündekilerin "
+        "yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi "
+        "ölçülmüştür."
+    ),
     "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
         "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
     ),

@@ -1283,6 +1283,16 @@ def test_the_scd4x_is_one_row_of_five_in_the_silkscreens_order() -> None:
     assert {"adafruit-scd4x"} <= {found.id for found in search_catalog("SCD-41")}
 
 
+def test_the_drv8871_header_reads_in2_in1_vm_gnd_as_the_silkscreen_has_it() -> None:
+    """Adafruit's photograph and Eagle board print IN2 IN1 VM GND left to right with the header
+    at the bottom; the Eagle board's own pad numbers run the other way (pad 1 is GND)."""
+    part = catalog_part("adafruit-drv8871")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["IN2", "IN1", "VM", "GND"]
+    assert "Adafruit-DRV8871-Breakout-PCB" in part.source and "Rlim" in part.check
+    assert "adafruit-drv8871" in {found.id for found in search_catalog("drv8871")}
+
+
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-ccs811": (

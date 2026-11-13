@@ -1144,6 +1144,39 @@ ADAFRUIT_INA219_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's DRV8871 motor driver breakout, read off Adafruit's own Eagle board
+#: (Adafruit-DRV8871-Breakout-PCB, 'Adafruit DRV8871') and checked on its photograph, seen from
+#: above with the four-pin header along the top, IN2 at the right (``pin_one``): the driver in
+#: its HSOP-8 with its pin 1 towards IN2, the bypass capacitor and the 63 V electrolytic by
+#: it, the two blue 3.5 mm terminal blocks on the far edge (the motor's at the right, the power's
+#: at the left, their mouths outwards) and an M2.5 hole at each end of the header. The current
+#: limit resistor is not drawn. Sizes are the packages': the driver TI's DDA, the can the
+#: 6.6 mm footprint's (its height is an estimate), the terminals 4UCON's drawing 19963.
+ADAFRUIT_DRV8871_MODULE = ModuleArt(
+    key="adafruit-drv8871",
+    board_colour=ADAFRUIT_BLUE,
+    names=("drv8871",),
+    board=(20.32, 24.13),
+    pins=4,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("soic8", 5.46, -1.14, 4.9, 6.0, 1.7, facing=1, across=-1),
+        ArtPart("chip-c", 1.40, 0.38, 2.0, 1.25, 0.5, along_v=True),
+        ArtPart("can", -4.32, -0.89, 6.6, 6.6, 7.7, facing=-1),
+        ArtPart("terminal", 4.37, 8.35, 7.0, 7.0, 8.5, along_v=True, facing=1, pitch=3.5),
+        ArtPart("terminal", -4.27, 8.35, 7.0, 7.0, 8.5, along_v=True, facing=1, pitch=3.5),
+        ArtPart("hole", -7.62, -9.53, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", 7.62, -9.53, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["tin"]),
+    ),
+    source=(
+        "Adafruit DRV8871 Eagle board, github adafruit/Adafruit-DRV8871-Breakout-PCB, "
+        "'Adafruit DRV8871.brd', CC BY-SA (the board, the header, every top-side part's place, "
+        "package and turn) and Adafruit's product photograph; TI DRV8871 datasheet, DDA (the "
+        "driver); 4UCON drawing 19963 (the terminal blocks)"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1770,6 +1803,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ADAFRUIT_INA219_QT_MODULE,
     ADAFRUIT_INA219_MODULE,
     ADAFRUIT_SCD4X_MODULE,
+    ADAFRUIT_DRV8871_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

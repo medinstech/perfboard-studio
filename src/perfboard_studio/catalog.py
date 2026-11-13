@@ -3592,6 +3592,31 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "until the traces are cut for sense resistors. " + _MODULE_TOP
                 ),
                 aliases=("motor driver", "H-bridge", "DC motor", "stepper")),
+    CatalogPart("adafruit-drv8871", "Adafruit DRV8871 DC motor driver", "connector",
+                "mod-4x1-p1-r1-20.32x24.13x8.5-s8.5-o0x-9.53",
+                "One brushed DC motor, 6.5 to 45 V, 3.6 A peak: four header pins",
+                _legs("IN2", "IN1", "VM", "GND"), ref_prefix="U",
+                value="Adafruit DRV8871",
+                source=(
+                    "Adafruit's own Eagle board (github.com/adafruit/Adafruit-DRV8871-Breakout-"
+                    "PCB, 'Adafruit DRV8871'): its 1 x 4 header read left to right as the "
+                    "silkscreen prints it with the header at the bottom (IN2 IN1 VM GND), each "
+                    "pad's net checked against the board's nets and Adafruit's product "
+                    "photograph; the specifications from Adafruit's page and TI's DRV8871"
+                ),
+                check=(
+                    "Pin 1 is IN2, the way the silkscreen reads with the header at the bottom; "
+                    "the board's own pad numbering runs the other way, from GND. The motor "
+                    "goes on the MOTOR terminal block, not on the header: OUT1 and OUT2 are "
+                    "not brought to it. VM and GND on the header are the same nets as the "
+                    "POWER terminal block, 6.5 to 45 V, so power the board from either, and "
+                    "do not join VM to a controller's supply pin while an external supply is "
+                    "connected. IN1 drives OUT1 and IN2 drives OUT2, logic up to 5.5 V. The "
+                    "current limit is set by the Rlim resistor, 30k as shipped, about 2 A: "
+                    "the silkscreen gives 64k divided by the limit in amps. "
+                    + _MODULE_TOP
+                ),
+                aliases=("DRV8871", "motor driver", "H-bridge", "DC motor", "3.6A")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

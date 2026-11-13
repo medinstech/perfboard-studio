@@ -133,6 +133,7 @@ def _footprint(footprint_id: str):
         ("Adafruit SCD-4x", "adafruit-scd4x"),
         ("SCD-41", "adafruit-scd4x"),
         ("SCD40", "adafruit-scd4x"),
+        ("Adafruit DRV8871", "adafruit-drv8871"),
         ("ESP32-S3-DevKitC-1", "esp32-s3-devkitc-1"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
@@ -805,6 +806,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "adafruit-tca9548a": ADAFRUIT_BLUE,
         "adafruit-ads1115": ADAFRUIT_BLACK,
         "adafruit-scd4x": ADAFRUIT_BLACK,
+        "adafruit-drv8871": ADAFRUIT_BLUE,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
@@ -1265,6 +1267,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
     ("adafruit-tca9548a", "TCA9548A"): (-1, -1),  # Adafruit's board: U1's pad 1, towards VIN
     ("adafruit-ads1115", ""): (-1, 1),  # Adafruit's board: U1's pad 1, towards VIN and ADDR
+    ("adafruit-drv8871", ""): (-1, 1),  # Adafruit's photograph: U1's pin 1 towards IN2 and the header
     ("sparkfun-hx711", "HX711"): (-1, -1),  # SparkFun's board: U1's pad 1, towards AVDD and VCC
     # Adafruit's boards, both revisions: U1's pad 1, towards VIN+ and the shunt.
     ("adafruit-ina219", ""): (1, -1),
