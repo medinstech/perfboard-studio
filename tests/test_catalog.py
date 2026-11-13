@@ -1030,7 +1030,6 @@ def test_the_words_people_type_for_a_sensor_board_find_the_board_that_has_its_pi
     (the order differs between sellers and the check says so)."""
     four = "sensor-board-4pin"
     for words in (
-        "soil moisture",
         "FC-28",
         "YL-69",
         "MQ-2",
@@ -1047,6 +1046,17 @@ def test_the_words_people_type_for_a_sensor_board_find_the_board_that_has_its_pi
     part = catalog_part(four)
     assert part is not None
     assert "DOUT AOUT GND VCC" in part.check and "VCC GND D0 A0" in part.check
+
+
+def test_a_part_named_for_what_was_typed_comes_before_the_generic_board_that_lists_it() -> None:
+    """"soil moisture" is in the generic 4-pin board's aliases and in SparkFun's soil sensor's
+    own name: the part that is called that comes first, the generic board stays found."""
+    for words in ("soil moisture", "soil moisture sensor", "soil"):
+        found = [part.id for part in search_catalog(words)]
+        assert found[0] == "sparkfun-soil-moisture", words
+        assert "sensor-board-4pin" in found, words
+    # A word the exact part's name does not hold still finds the generic board first.
+    assert next(found.id for found in search_catalog("YL-69")) == "sensor-board-4pin"
 
 
 def test_the_tiny_rtc_says_what_ds_is_instead_of_calling_it_a_signal() -> None:

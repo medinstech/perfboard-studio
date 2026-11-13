@@ -4264,6 +4264,14 @@ def part_rank(
     )
     if (rank is None or rank > RANK_NAMED) and _takes_value(part.placed_value, text):
         return RANK_NAMED
+    # A part whose own name holds what was typed, whole and in a row ("soil moisture" in
+    # "SparkFun soil moisture sensor"), is found before a generic board that merely lists the
+    # words among its aliases: the exact name is the part a builder means.
+    if rank == RANK_NAMED:
+        phrase = _plain(fold(text)).split()
+        called = _plain(fold(" ".join((*names[:1], part.name))))
+        if phrase and re.search(rf"(?<!\w){r'\s+'.join(map(re.escape, phrase))}", called):
+            return RANK_NAME_STARTS
     return rank
 
 
