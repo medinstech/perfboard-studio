@@ -39,8 +39,9 @@ closed without a bump.
   Restart: it asks about unsaved work as closing the window does, checks the file again,
   runs the installer silently behind Windows' own administrator prompt, and the installer
   opens the new version when it is done. Saying no at the prompt leaves the window open and
-  the download kept, to try again. macOS, the AppImage, a `pip` install and a copy unzipped
-  somewhere else still stop at the verified download. The release notes are read in a dialog
+  the download kept, to try again. macOS, the AppImage and a copy unzipped somewhere else
+  still stop at the verified download, and a `pip` install, which gets no download, is told
+  to update with `pip install -U perfboard-studio`. The release notes are read in a dialog
   in the window, where they used to open on GitHub, and `PERFBOARD_STUDIO_RELEASES_URL`
   points the check at another feed for trying the flow.
 - **Play lowers each part into its holes, and lays the copper.** In the 3D view's build
