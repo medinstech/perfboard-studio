@@ -73,6 +73,13 @@ closed without a bump.
   driver. Drawn as themselves on the board: Adafruit's TCA9548A I2C multiplexer on its two
   rows of twelve, and SparkFun's HX711 load cell amplifier on its two five-pin headers. The
   XL6009 boost module goes in off the board, on four wires.
+- **A wire on the schematic is drawn corner by corner.** With the wire tool, click a pin or
+  a wire, then wherever the wire should turn, then the pin or wire it ends on: it goes
+  through every corner clicked, leaving and entering a pin along its lead and landing on a
+  wire square, and the preview follows it to the pointer. A click on bare sheet used to call
+  the wire off, so a wire went only where the route put it; two clicks with no corner still
+  route it round the parts. Backspace takes back the last corner, and Esc or a right-click
+  drops the wire, the tool staying armed for the next.
 - **Cutting the wire in the middle of a fully wired net splits it in two.** A net drawn
   as a chain of wires stayed one net when a wire in the middle was cut, so its two ends
   were still joined by a name nobody wrote and the sheet no longer showed. Where every pin

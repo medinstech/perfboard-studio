@@ -1529,6 +1529,33 @@ segment ran on, so the chain stays orthogonal and the middle is left exactly as 
 two-point path is the case that bites — `points[0]` and `points[-2]` are the same element, so
 the second fixup undoes the first — and it is handled before the loop, as an elbow.
 
+**And where sliding would spoil it, the wire is laid again** (`wires_after_move`). Sliding
+alone left a long drag's wire doubling back over itself, through a symbol or along another
+net's line. So a re-anchored path that backtracks (`_backtracks`), overlaps itself
+(`_overlaps_itself`), crosses a body (`_through_a_body`) or lies on another net's wire
+(`_on_another_nets_wire`) is routed again round the symbols, pin to pin or for a T onto the
+wire it lands on; a wire the move leaves clean keeps the middle somebody drew. The drag
+shows `drawing_after_move` and the drop stores `wires_after_move` in `symbol.move`'s
+`wires`, one function behind both, so the file is what the screen showed when the button
+came up.
+
+**A wire is drawn corner by corner** (`viewsch.cornered_path`). The tool's first click
+takes a pin or a wire; every click on bare sheet after it is a corner, snapped to the grid
+(a click inside a symbol's box is none, since a wire through a body reads as a short); a
+pin or a wire finishes it. Each leg is straight where its two points line up and an elbow
+where they do not, the elbow's first run square off the run before it, because a click
+somebody made is a corner and an elbow continuing the line would make it none. Out of a
+pin the wire follows the lead, into a pin it comes along the lead unless that would run
+back down the line just drawn, and onto a wire it lands square, as `_tee_path` does. A
+point in the middle of a straight run is not stored; one where the line turns back is,
+since it is still somebody's corner. With no corner clicked a pin-to-pin wire is routed
+round the symbols as before, so two clicks still mean what they meant. A miss used to
+call the wire off; Esc and a right-click do that now (the tool stays armed, and the second
+puts it down), and Backspace takes back the last corner. `sheet.wire` refuses a run on a
+slant (`diagonal-wire`): nothing the application lays has one -- 95 wires frozen from the
+22 example and fixture sheets, the router, the T and the move's re-lay -- and the move's
+sliding, a T's landing and the junction marks all read a run as across or down.
+
 **Delete cuts a wire; Remove Line Only rubs it out.** `sheet.wire.cut` takes the wire with
 its T's and takes off the net every pin that only they joined; `sheet.wire.delete` leaves
 the circuit and takes the line. A net whose every pin is a wire end is SPLIT where a cut

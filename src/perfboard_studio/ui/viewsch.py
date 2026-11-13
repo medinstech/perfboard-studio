@@ -1019,6 +1019,13 @@ class SchematicView(QGraphicsView):
         self.pending_pin: tuple[str, str] | None = None
         #: The wire tool's first click, when it was on a wire: the T it will be.
         self.pending_tee: Tee | None = None
+        #: The corners clicked since the wire tool's first click, in the order they were
+        #: clicked, snapped to the grid. Empty, a pin-to-pin wire is routed round the
+        #: symbols (``_pin_to_pin``); with any, the wire goes where it was clicked.
+        self.corners: list[QPointF] = []
+        #: Where the pointer last was, so a corner taken back with Backspace redraws the
+        #: preview to where the pointer still is.
+        self._pointer: QPointF | None = None
         self.selected_refs: list[str] = []
         self.selected_notes: list[int] = []
         #: The drawn wire that is selected, by its two pins, and the wires of a sheet still
@@ -1204,6 +1211,7 @@ class SchematicView(QGraphicsView):
         self.wiring = tool == "wire"
         self.set_pending_pin(None)
         self.pending_tee = None
+        self.corners = []
         self._clear_ghosts()
         if self.item is not None and self.item.hover_pin is not None:
             # A ring under the pointer means "the wire tool would take this"; with another
@@ -1282,6 +1290,85 @@ class SchematicView(QGraphicsView):
             self.netClicked.emit(net[0])
         self.selected_wire = ends
         self._show_wire_selection()
+
+    def wire_in_progress(self) -> bool:
+        """Whether the wire tool has its first click -- a pin or a wire -- and is waiting
+        for corners or the end."""
+        return self.pending_pin is not None or self.pending_tee is not None
+
+    def _drop_wire(self) -> None:
+        """Let go of the wire being drawn, corners and all; the tool stays armed. The
+        window is told as a miss always told it (``pinClicked`` with no pin)."""
+        self.set_pending_pin(None)
+        self.pending_tee = None
+        self.corners = []
+        self._clear_ghosts()
+        self.pinClicked.emit("", "")
+
+    def _add_corner(self, where: QPointF) -> None:
+        """A click on bare sheet while a wire is being drawn: a corner, on the grid."""
+        corner = _snapped(where)
+        if not self.corners or self.corners[-1] != corner:
+            self.corners.append(corner)
+        self._refresh_wire_ghost()
+
+    def _lead_horizontal(self, pin: tuple[str, str]) -> bool:
+        """Whether a pin's lead runs across the sheet: a wire leaves and enters it that way."""
+        if self.item is not None:
+            for symbol in self.item.drawing.symbols:
+                if symbol.ref != pin[0]:
+                    continue
+                for symbol_pin in symbol.pins:
+                    if symbol_pin.number == pin[1]:
+                        return symbol_pin.side in ("left", "right")
+        return True
+
+    def _cornered(
+        self,
+        start: tuple[str, str] | Tee,
+        end: tuple[str, str] | Tee | QPointF,
+    ) -> tuple[QPointF, ...]:
+        """The wire from its first click through the corners to ``end`` -- a pin, a T, or
+        the pointer -- in the order it was drawn. See ``cornered_path``."""
+        if self.item is None:
+            return ()
+        drawing = self.item.drawing
+        if isinstance(start, Tee):
+            origin, leaves_across = start.at, not start.horizontal
+        else:
+            anchor = pin_anchor(drawing, *start)
+            if anchor is None:
+                return ()
+            origin, leaves_across = anchor, self._lead_horizontal(start)
+        if isinstance(end, Tee):
+            return cornered_path(origin, leaves_across, self.corners, end.at, tee=end.horizontal)
+        if isinstance(end, QPointF):
+            return cornered_path(origin, leaves_across, self.corners, _snapped(end))
+        target = pin_anchor(drawing, *end)
+        if target is None:
+            return ()
+        return cornered_path(
+            origin, leaves_across, self.corners, target, arrives_across=self._lead_horizontal(end)
+        )
+
+    def _refresh_wire_ghost(self) -> None:
+        """Draw the wire being drawn, through its corners, as far as the pointer: to the pin
+        or the wire under it as the click there would finish it, else to the pointer."""
+        if self.item is None or self._pointer is None or not self.corners:
+            return
+        start: tuple[str, str] | Tee | None = self.pending_pin or self.pending_tee
+        if start is None:
+            return
+        where = self._pointer
+        aimed = self.pin_at(where)
+        tee = self.tee_at(where) if aimed is None else None
+        if aimed is not None and aimed != start:
+            self.item.ghost_path = self._cornered(start, aimed)
+        elif tee is not None and not isinstance(start, Tee):
+            self.item.ghost_path = self._cornered(start, tee)
+        else:
+            self.item.ghost_path = self._cornered(start, where)
+        self.item.update()
 
     def gesture_in_flight(self) -> bool:
         """Whether the left button is in the middle of something Escape can call off: a
@@ -1571,6 +1658,13 @@ class SchematicView(QGraphicsView):
             tee = self.tee_at(where) if pin is None else None
             if tee is not None:
                 self._tee_click(tee)
+            elif pin is None and self.wire_in_progress():
+                # BARE SHEET IS A CORNER while a wire is being drawn; it used to call the
+                # wire off, so a wire could only ever go where the route put it. Inside a
+                # symbol's box it is neither: a corner there would draw the wire through
+                # the part, which reads as a short.
+                if self.symbol_at(where) is None:
+                    self._add_corner(where)
             else:
                 self._wire_click(pin)
             event.accept()
@@ -1683,9 +1777,7 @@ class SchematicView(QGraphicsView):
             return
         if self.pending_tee is not None:
             # The wire was clicked first: this pin branches off it.
-            tee = self.pending_tee
-            self.pending_tee = None
-            self._emit_tee(pin, tee)
+            self._emit_tee(pin, self.pending_tee)
             return
         pending = self.pending_pin
         if pending is None or pending == pin:
@@ -1696,11 +1788,14 @@ class SchematicView(QGraphicsView):
             return
         start = pin_anchor(self.item.drawing, *pending)
         end = pin_anchor(self.item.drawing, *pin)
+        cornered = self._cornered(pending, pin) if self.corners else ()
         self.set_pending_pin(None)
+        self.corners = []
         self._clear_ghosts()
         if start is None or end is None:
             return
-        path = [(point.x(), point.y()) for point in self._pin_to_pin(pending, pin, start, end)]
+        drawn = cornered or self._pin_to_pin(pending, pin, start, end)
+        path = [(point.x(), point.y()) for point in drawn]
         self.wireDrawn.emit(pending[0], pending[1], pin[0], pin[1], path)
 
     def _pin_to_pin(
@@ -1731,14 +1826,26 @@ class SchematicView(QGraphicsView):
         if pending is not None:
             self._emit_tee(pending, tee)
             return
+        # Another wire clicked after the first: it is the start now, and corners clicked
+        # from the old one would hang off nothing.
+        self.corners = []
         self.pending_tee = tee
         self.teeStarted.emit(
             " – ".join(f"{end.component_ref}.{end.pin}" for end in tee.ends)
         )
 
     def _emit_tee(self, pin: tuple[str, str], tee: Tee) -> None:
+        # The corners were clicked from whichever end came first, and the stored path runs
+        # from the pin to the T whichever it was.
+        cornered: tuple[QPointF, ...] = ()
+        if self.corners:
+            if self.pending_tee is tee:
+                cornered = tuple(reversed(self._cornered(tee, pin)))
+            else:
+                cornered = self._cornered(pin, tee)
         self.set_pending_pin(None)
         self.pending_tee = None
+        self.corners = []
         self._clear_ghosts()
         if self.item is None:
             return
@@ -1749,7 +1856,8 @@ class SchematicView(QGraphicsView):
         start = pin_anchor(self.item.drawing, *pin)
         if start is None:
             return
-        path = [(point.x(), point.y()) for point in _tee_path(start, tee.at, tee.horizontal)]
+        drawn = cornered or _tee_path(start, tee.at, tee.horizontal)
+        path = [(point.x(), point.y()) for point in drawn]
         a, b = tee.ends
         self.wireTeed.emit(pin[0], pin[1], a.component_ref, a.pin, b.component_ref, b.pin, path)
 
@@ -1790,7 +1898,10 @@ class SchematicView(QGraphicsView):
                 self.item.hover_pin = hovered
                 self.item.update()
 
-        if (
+        self._pointer = where
+        if self.item is not None and self.tool == "wire" and self.corners:
+            self._refresh_wire_ghost()
+        elif (
             self.item is not None
             and (self.tool == "wire" or wiring_from_select)
             and self.pending_pin is not None
@@ -2033,6 +2144,10 @@ class SchematicView(QGraphicsView):
                 # Called off, and nothing else: the selection the drag was carrying stays,
                 # which is what a second Escape is for.
                 self._clear_ghosts()
+            elif self.wire_in_progress():
+                # The wire being drawn goes, corners and all, and the tool stays for the
+                # next one; a second Escape puts the tool down.
+                self._drop_wire()
             elif self.tool != "select":
                 self.set_tool("select")
             else:
@@ -2058,6 +2173,16 @@ class SchematicView(QGraphicsView):
                     if symbol.ref in self.selected_refs
                 ]
             )
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Backspace and self.wire_in_progress():
+            # The last corner taken back; with none left, nothing -- Escape drops the wire.
+            if self.corners:
+                self.corners.pop()
+                if self.item is not None and not self.corners:
+                    self.item.ghost_path = ()
+                    self.item.update()
+                self._refresh_wire_ghost()
             event.accept()
             return
         deleting = event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
@@ -2141,6 +2266,12 @@ class SchematicView(QGraphicsView):
         aiming at and leave the pending pin armed underneath it, which is the board's own
         rule about a mode owning the click.
         """
+        if self.wire_in_progress():
+            # A wire being drawn goes first, as Escape does; the next right-click puts the
+            # tool down.
+            self._drop_wire()
+            event.accept()
+            return
         if self.tool != "select":
             self.set_tool("select")
             event.accept()
@@ -2328,6 +2459,89 @@ def _tee_path(start: QPointF, at: QPointF, host_horizontal: bool) -> tuple[QPoin
         return (start, at)
     corner = QPointF(at.x(), start.y()) if host_horizontal else QPointF(start.x(), at.y())
     return (start, corner, at)
+
+
+def cornered_path(
+    start: QPointF,
+    leaves_across: bool,
+    corners: Sequence[QPointF],
+    end: QPointF,
+    *,
+    arrives_across: bool | None = None,
+    tee: bool | None = None,
+) -> tuple[QPointF, ...]:
+    """A wire drawn corner by corner: from ``start`` through every clicked corner to ``end``,
+    each leg straight where the two points line up and an elbow where they do not.
+
+    EVERY CLICK IS A CORNER, so an elbow's first run is across the run that came into the
+    point it leaves -- going on in the same line would make the clicked point no corner at
+    all. Out of a pin the first run follows its lead (``leaves_across``: the lead runs
+    across the sheet), out of a T it is square off the wire. The last leg comes into a pin
+    along its lead (``arrives_across``) and onto a wire square (``tee``: whether the wire
+    it lands on is horizontal), as ``_tee_path`` does; to the pointer, neither is asked.
+    Points that add nothing -- a repeat, or one in the middle of a straight run -- are
+    left out, so what is stored is the corners and the two ends."""
+    points = [start]
+    across = leaves_across
+    for corner in corners:
+        here = points[-1]
+        if _same(here.y(), corner.y()) or _same(here.x(), corner.x()):
+            # In line: one run, and the next one turns off it.
+            across = not _same(here.y(), corner.y())
+        else:
+            points.append(
+                QPointF(corner.x(), here.y()) if across else QPointF(here.x(), corner.y())
+            )
+            # The elbow's second run is the other way, so the next turns back to this one.
+        points.append(corner)
+    here = points[-1]
+    if tee is not None:
+        points.extend(_tee_path(here, end, tee)[1:])
+    elif _same(here.y(), end.y()) or _same(here.x(), end.x()):
+        points.append(end)
+    else:
+        last_across = arrives_across if arrives_across is not None else not across
+        corner = QPointF(here.x(), end.y()) if last_across else QPointF(end.x(), here.y())
+        if len(points) >= 2 and _turns_back(points[-2], here, corner):
+            # Into the pin along its lead would run back down the line just drawn; coming
+            # in from the side is the lesser fault.
+            corner = QPointF(end.x(), here.y()) if last_across else QPointF(here.x(), end.y())
+        points.extend((corner, end))
+    return _tidied(points)
+
+
+def _same(a: float, b: float) -> bool:
+    return abs(a - b) < 1e-6
+
+
+def _turns_back(a: QPointF, b: QPointF, c: QPointF) -> bool:
+    """Whether the run from ``b`` to ``c`` goes back the way ``a`` to ``b`` came."""
+    return (b.x() - a.x()) * (c.x() - b.x()) < -1e-9 or (b.y() - a.y()) * (c.y() - b.y()) < -1e-9
+
+
+def _tidied(points: Sequence[QPointF]) -> tuple[QPointF, ...]:
+    """The path without repeated points, or points in the middle of a straight run.
+
+    A point where the line turns back on itself is kept: it is somebody's corner, and taking
+    it out would quietly draw a different wire."""
+    kept: list[QPointF] = []
+    for point in points:
+        kept.append(point)
+        while len(kept) >= 2:
+            a, b = kept[-2], kept[-1]
+            if _same(a.x(), b.x()) and _same(a.y(), b.y()):
+                del kept[-1]
+                continue
+            if len(kept) >= 3:
+                first = kept[-3]
+                in_line = (_same(first.x(), a.x()) and _same(a.x(), b.x())) or (
+                    _same(first.y(), a.y()) and _same(a.y(), b.y())
+                )
+                if in_line and not _turns_back(first, a, b):
+                    del kept[-2]
+                    continue
+            break
+    return tuple(kept)
 
 
 def _distance_to_segment(point: QPointF, start: QPointF, end: QPointF) -> float:

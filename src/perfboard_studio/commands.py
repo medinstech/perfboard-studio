@@ -3003,6 +3003,7 @@ def _with_frozen_wires(doc: PerfDocument, wires: tuple[SheetWire, ...]) -> tuple
             raise CommandError(
                 "invalid-wire", f"A wire from {_pin_name(wire.a)} needs two pins and two points."
             )
+        _check_square(wire)
         if not any(wire.a in net.nodes and wire.b in net.nodes for net in doc.nets):
             raise CommandError(
                 "not-one-net",
@@ -3077,6 +3078,7 @@ class _DrawSheetWire:
             raise CommandError(
                 "path-too-short", "A wire on the sheet needs at least two points."
             )
+        _check_square(wire)
         if wire.tap is not None:
             _check_tee(doc, wire)
         plan = plan_pin_join(doc, wire.a, wire.b)
@@ -3119,6 +3121,23 @@ class _DrawSheetWire:
                 f"to {_pin_name(p.wire.tap)}"
             )
         return f"Wire {_pin_name(p.wire.a)} to {_pin_name(p.wire.b)}"
+
+
+def _check_square(wire: SheetWire) -> None:
+    """Every run of a drawn wire is across or down the sheet, never slanted.
+
+    The sheet is drawn on that promise: a symbol that moves slides a wire's end runs along
+    the axis each one runs on (``schematic._reanchored``), a T lands square on the run it
+    meets, and every wire the application lays -- routed, clicked corner by corner, or kept
+    by a freeze -- is square. A slanted run would be the one shape none of them handles."""
+    for start, end in zip(wire.path, wire.path[1:], strict=False):
+        if abs(start.x - end.x) > 1e-6 and abs(start.y - end.y) > 1e-6:
+            raise CommandError(
+                "diagonal-wire",
+                f"The wire from {_pin_name(wire.a)} runs on a slant between "
+                f"({start.x:g}, {start.y:g}) and ({end.x:g}, {end.y:g}); a wire on the sheet "
+                "runs across or down, turning at its corners.",
+            )
 
 
 def _check_tee(doc: PerfDocument, wire: SheetWire) -> None:
