@@ -213,7 +213,7 @@ def test_rubbing_out_a_wire_takes_the_tees_off_it_in_one_step() -> None:
     before = bus.document.sheet_wires
     host = next(w for w in before if w.tap is None)
     result = bus.dispatch("sheet.wire.delete", DeleteSheetWiresPayload(wires=(host,)))
-    assert result.ok and "2 branch(es)" in result.description
+    assert result.ok and "and 2 branches off it" in result.description
     assert bus.document.sheet_wires == ()
     # The circuit is left alone: rubbing out is about the drawing.
     assert len(bus.document.nets[0].nodes) == 4

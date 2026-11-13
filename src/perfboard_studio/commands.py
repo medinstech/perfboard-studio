@@ -3275,7 +3275,10 @@ class _DeleteSheetWires:
     def describe(self, p: DeleteSheetWiresPayload, doc: PerfDocument) -> str:
         named = {frozenset((wire.a, wire.b)) for wire in p.wires}
         branches = len(_with_branches(doc, named) - named)
-        tail = f" and {branches} branch(es) off it" if branches else ""
+        # "branch" takes "es", which ``count_noun`` does not know.
+        said = f"{branches} branch" if branches == 1 else f"{branches} branches"
+        off = "them" if len(p.wires) > 1 else "it"
+        tail = f" and {said} off {off}" if branches else ""
         if len(p.wires) == 1:
             wire = p.wires[0]
             return f"Rub out the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}{tail}"
