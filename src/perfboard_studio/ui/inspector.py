@@ -1099,6 +1099,8 @@ class _PartEditor(QWidget):
             button = QToolButton()
             button.setText(f"{degrees}°")
             button.setCheckable(True)
+            # One of a row of choices: the theme marks the chosen one (``segment``).
+            button.setProperty("segment", True)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             self.rotation.addButton(button, degrees)
             turn_row.addWidget(button)
@@ -1750,6 +1752,8 @@ class _NetEditor(QWidget):
             button.setText(t(label).replace("&", ""))
             button.setToolTip(t(description))
             button.setCheckable(True)
+            # One of a row of choices: the theme marks the chosen one (``segment``).
+            button.setProperty("segment", True)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.clicked.connect(lambda _checked=False, v=value: self._commit_class(v))
             self.net_class.addButton(button)
@@ -1776,6 +1780,8 @@ class _NetEditor(QWidget):
             button.setText(t(label))
             button.setToolTip(t(description))
             button.setCheckable(True)
+            # One of a row of choices: the theme marks the chosen one (``segment``).
+            button.setProperty("segment", True)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.clicked.connect(lambda _checked=False, v=side: self._commit_face(v))
             self.net_face.addButton(button)
@@ -1990,6 +1996,8 @@ class _BoardNoteEditor(QWidget):
             button = QToolButton()
             button.setText(f"{degrees}°")
             button.setCheckable(True)
+            # One of a row of choices: the theme marks the chosen one (``segment``).
+            button.setProperty("segment", True)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             self.rotation.addButton(button, degrees)
             turn_row.addWidget(button)

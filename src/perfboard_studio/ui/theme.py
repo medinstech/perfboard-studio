@@ -454,6 +454,13 @@ QToolButton {{
 }}
 QToolButton:hover {{ background: {k.bg_hover}; }}
 QToolButton:pressed {{ background: {k.bg_pressed}; }}
+/* One choice of a row in Properties -- a net's Class and Face, a part's rotation: the chosen
+   one is marked, or the row the Face note explains showed no face at all. */
+QToolButton[segment="true"]:checked {{
+    background: {k.accent_subtle};
+    color: {k.accent_text};
+    font-weight: {SEMIBOLD};
+}}
 
 QToolBar {{
     background: {k.bg_surface};
