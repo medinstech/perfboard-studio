@@ -3798,13 +3798,15 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "1 x 5 header JP1 and the way the joystick's two potentiometers are wired "
                     "(each wiper, the middle pad, on VERT or HORZ, the ends on VCC and GND) "
                     "as a cross-check of the pads' numbers, the header's turn from where "
-                    "it sits in the 25.4 x 31.75 mm outline, and the joystick's silkscreen outline"
+                    "it sits in the 25.4 x 31.75 mm outline, and the joystick's silkscreen outline; "
+                    "SparkFun's product photographs of the bare board and of the joystick "
+                    "fitted, whose silkscreen prints VCC, VERT, HORZ, SEL, GND along the header"
                 ),
                 check=(
                     "Pin 1 is VCC, the left end of the header with the joystick up and the "
                     "header at the bottom, which is pad 5 of SparkFun's header: pad 1 is GND, "
-                    "then SEL, HORZ, VERT, VCC. This order is SparkFun's own board read "
-                    "from its file, not checked against a photograph of the board. HORZ and "
+                    "then SEL, HORZ, VERT, VCC; SparkFun's photographs of the front print "
+                    "the names in the order given here. HORZ and "
                     "VERT are the two potentiometers' wipers, read with an analog input "
                     "and resting near half of VCC; SEL is the push button, pulled to GND "
                     "when the stick is pressed and open otherwise, so it needs a pull-up. "

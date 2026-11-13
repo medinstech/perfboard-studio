@@ -3750,9 +3750,9 @@ TURKISH: Mapping[str, str] = {
         "header pini, iki analog eksen ve bir seçme hattı"
     ),
     "Pin 1 is VCC, the left end of the header with the joystick up and the header at the "
-    "bottom, which is pad 5 of SparkFun's header: pad 1 is GND, then SEL, HORZ, VERT, VCC. "
-    "This order is SparkFun's own board read from its file, not checked against a "
-    "photograph of the board. HORZ and VERT are the two potentiometers' wipers, read with "
+    "bottom, which is pad 5 of SparkFun's header: pad 1 is GND, then SEL, HORZ, VERT, VCC; "
+    "SparkFun's photographs of the front print the names in the order given here. HORZ "
+    "and VERT are the two potentiometers' wipers, read with "
     "an analog input and resting near half of VCC; SEL is the push button, pulled to GND "
     "when the stick is pressed and open otherwise, so it needs a pull-up. Other boards "
     "sold as thumb joysticks, the KY-023 among them, order their pins differently and are "
@@ -3762,8 +3762,7 @@ TURKISH: Mapping[str, str] = {
     "the pins, the rows and the board outline are measured.": (
         "1. pin VCC'dir: joystick yukarıda ve header altta tutulduğunda header'ın sol ucu; "
         "bu, SparkFun'un header'ında 5. pedtir (1. ped GND, sonra SEL, HORZ, VERT, VCC). "
-        "Bu sıra SparkFun'un kendi kartının dosyasından okunmuştur, kartın bir fotoğrafıyla "
-        "denetlenmemiştir. HORZ ve VERT iki potansiyometrenin kayar uçlarıdır, bir analog "
+        "SparkFun'un ön yüz fotoğrafları adları burada verilen sırayla basar. HORZ ve VERT iki potansiyometrenin kayar uçlarıdır, bir analog "
         "girişle okunur ve VCC'nin yarısı civarında durur; SEL basma düğmesidir, çubuğa "
         "basılınca GND'ye çekilir, yoksa açıktır, bu yüzden pull-up ister. Başparmak "
         "joystick'i diye satılan başka kartlar, aralarında KY-023, pinlerini farklı "

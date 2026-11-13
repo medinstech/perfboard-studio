@@ -1350,12 +1350,12 @@ def test_the_1_14_inch_tft_reads_as_its_front_does() -> None:
     assert "adafruit-tft-1-14" in {found.id for found in search_catalog("st7789")}
 
 
-def test_the_thumb_joystick_is_sparkfuns_board_and_says_it_was_not_checked_on_a_photo() -> None:
+def test_the_thumb_joystick_is_sparkfuns_board_and_its_photographs_agree() -> None:
     part = catalog_part("sparkfun-thumb-joystick")
     assert part is not None
     assert [name for _, name in part.pin_names] == ["VCC", "VERT", "HORZ", "SEL", "GND"]
     assert "Thumb_Joystick_Breakout" in part.source
-    assert "not checked against a photograph" in part.check
+    assert "photographs of the front" in part.check and "photographs" in part.source
     assert "KY-023" in part.check and "not this part" in part.check
     assert "KY-023" not in " ".join(part.aliases)
     assert "sparkfun-thumb-joystick" in {found.id for found in search_catalog("joystick")}
