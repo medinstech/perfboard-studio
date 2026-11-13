@@ -19,8 +19,10 @@ from perfboard_studio.catalog import (
     CATEGORY_ORDER,
     catalog_part,
     free_reference,
+    package_search_rank,
     part_matches,
     search_catalog,
+    typed_value,
 )
 from perfboard_studio.footprints import body_extent, get_footprint
 from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
@@ -319,11 +321,13 @@ def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:
     assert found in [part.id for part in search_catalog(typed)]
 
 
-@pytest.mark.parametrize("typed", ["LM350", "LM3580", "BC5470", "10k", "100n"])
+@pytest.mark.parametrize("typed", ["LM350", "LM3580", "BC5470"])
 def test_a_different_number_is_not_the_same_part(typed) -> None:
     """A package letter after the number is the same part; another DIGIT is another part --
-    an LM350 is a regulator and not an LM35 -- and a quantity is no part at all."""
+    an LM350 is a regulator and not an LM35. (A quantity WITH A UNIT -- "10k", "100n" -- is
+    a value and finds what takes it: see ``test_a_value_with_its_unit_finds_what_takes_it``.)"""
     assert search_catalog(typed) == []
+    assert typed_value(typed) is None
 
 
 def test_a_part_whose_name_says_it_comes_before_one_whose_summary_does() -> None:
@@ -1508,3 +1512,104 @@ def test_the_dfplayers_pins_are_the_datasheets_table_in_the_footprints_numbering
         footprint_pin = 2 * row - 1 if number <= 8 else 2 * row
         assert names[str(footprint_pin)] == name, number
     assert "dfplayer-mini" in {found.id for found in search_catalog("DFPlayer")}
+
+
+def _packages_found(text: str) -> list[str]:
+    """The bare packages the Parts panel lists for ``text``, best first, as it ranks them."""
+    from perfboard_studio.footprints import standard_footprints
+
+    ranked = []
+    for index, footprint in enumerate(standard_footprints().values()):
+        rank = package_search_rank(
+            text,
+            footprint.body.archetype,
+            names=(footprint.name, footprint.id),
+            said=(footprint.body.archetype,),
+        )
+        if rank is not None:
+            ranked.append((rank, index, footprint.id))
+    return [found for _rank, _index, found in sorted(ranked)]
+
+
+def _families(ids: list[str]) -> set[str]:
+    from perfboard_studio.footprints import standard_footprints
+
+    lookup = standard_footprints()
+    return {lookup[found].body.archetype for found in ids}
+
+
+def test_a_generic_word_surfaces_each_family_of_capacitor() -> None:
+    """"capacitor" listed one ceramic disc after another and a newcomer never saw that the
+    electrolytic and the film capacitor exist."""
+    for word in ("capacitor", "kapasitör", "kapasitor", "kondansatör"):
+        assert _families(_packages_found(word)) == {
+            "disc-ceramic", "box-film", "radial-electrolytic"
+        }, word
+
+
+@pytest.mark.parametrize(
+    ("typed", "kind", "value"),
+    [
+        ("10uF", "capacitor", "10uF"), ("10µF", "capacitor", "10uF"), ("10 µF", "capacitor", "10uF"),
+        ("100nF", "capacitor", "100nF"), ("100n", "capacitor", "100nF"), ("4.7u", "capacitor", "4.7uF"),
+        ("47pF", "capacitor", "47pF"), ("10k", "resistor", "10k"), ("4k7", "resistor", "4k7"),
+        ("4.7k", "resistor", "4.7k"), ("220R", "resistor", "220R"), ("330 ohm", "resistor", "330R"),
+        ("1M", "resistor", "1M"), ("470Ω", "resistor", "470R"), ("100uH", "inductor", "100uH"),
+        ("100µH", "inductor", "100uH"),
+    ],
+)
+def test_a_value_with_its_unit_is_read_as_what_it_is_a_value_of(typed, kind, value) -> None:
+    found = typed_value(typed)
+    assert found is not None and found[:2] == (kind, value)
+
+
+@pytest.mark.parametrize("typed", ["555", "LM358", "2N2222", "1N4148", "3v3", "10", "5m", "74HC595"])
+def test_a_part_number_or_a_bare_number_is_no_value(typed) -> None:
+    assert typed_value(typed) is None
+
+
+def test_a_value_with_its_unit_finds_what_takes_it() -> None:
+    from perfboard_studio.footprints import standard_footprints
+
+    lookup = standard_footprints()
+    # Farads: the capacitors, and the one made for the value first.
+    for typed in ("10uF", "10µF", "10u"):
+        found = _packages_found(typed)
+        assert _families(found) <= {"disc-ceramic", "box-film", "radial-electrolytic"}, typed
+        assert lookup[found[0]].body.archetype == "radial-electrolytic", typed
+    for typed in ("100nF", "100n"):
+        assert lookup[_packages_found(typed)[0]].body.archetype in ("disc-ceramic", "box-film")
+    # Ohms: the resistors (and a pot), no diode with the same archetype.
+    for typed in ("10k", "4k7", "330 ohm", "220R"):
+        found = _packages_found(typed)
+        assert "r-axial-4" in found and "d-do41" not in found, typed
+    # Henries: the inductor in the catalog.
+    for typed in ("100uH", "100µH"):
+        assert "bourns-78f101j" in {part.id for part in search_catalog(typed)}
+    # A catalog part whose own value is the one typed: a pot placed as B10K is a 10k.
+    assert {"pot-panel", "rv09-pot"} <= {part.id for part in search_catalog("10k")}
+
+
+@pytest.mark.parametrize(
+    ("typed", "found"),
+    [
+        ("kapasitör", "c-elec-d5-p2"), ("kondansatör", "c-disc-p2"), ("elektrolitik", "c-elec-d5-p2"),
+        ("direnç", "r-axial-4"), ("direnc", "r-axial-4"), ("potansiyometre", "pot-3"),
+        ("buton", "sw-tactile"), ("röle", "relay-spdt"), ("kristal", "xtal-hc49"),
+        ("transistör", "to92"), ("diyot", "d-do41"),
+    ],
+)
+def test_a_turkish_beginners_word_finds_the_package(typed, found) -> None:
+    assert found in _packages_found(typed)
+
+
+@pytest.mark.parametrize(
+    ("typed", "found"),
+    [
+        ("sensör", "lm35"), ("sensor", "lm35"), ("röle", "srd-05vdc-sl-c"), ("role", "srd-05vdc-sl-c"),
+        ("transistör", "bc547"), ("buton", "tact-6x6"), ("LED", "led-5mm"), ("diyot", "1n4148"),
+        ("potansiyometre", "pot-panel"), ("ekran", "lcd-1602"), ("entegre", "ne555"),
+    ],
+)
+def test_a_turkish_beginners_word_finds_the_catalog_part(typed, found) -> None:
+    assert found in {part.id for part in search_catalog(typed)}

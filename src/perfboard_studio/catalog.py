@@ -3926,6 +3926,145 @@ def names_part(part: CatalogPart, text: str, *, fold: Callable[[str], str] = str
     (``ui.main.typed_names``)."""
     return _finds(part, text, (), fold, starts=True)
 
+#: What a beginner types that a package's own name does not say, per archetype, in both
+#: languages: "kapasitör" and "kondansatör" for a capacitor, "direnç", "buton", "röle". A
+#: package is called by what it is in English ("Disc ceramic capacitor, 2-hole pitch"), and a
+#: Turkish window showed it under the Turkish heading only -- so the word a Turkish beginner
+#: types found nothing. The Parts panel adds these to a package's names (``package_search_rank``).
+_PACKAGE_WORDS: dict[str, tuple[str, ...]] = {
+    # Resistors and diodes share these two archetypes: ``package_words`` tells them apart.
+    "axial-cylinder": ("resistor", "direnç"),
+    "axial-upright": ("resistor", "direnç"),
+    "disc-ceramic": ("capacitor", "ceramic", "kapasitör", "kondansatör", "seramik"),
+    "box-film": ("capacitor", "film", "kapasitör", "kondansatör", "polyester", "mylar"),
+    "radial-electrolytic": (
+        "capacitor", "electrolytic", "kapasitör", "kondansatör", "elektrolitik",
+    ),
+    "led-round": ("led", "diode", "diyot"),
+    "crystal-hc49": ("crystal", "kristal", "xtal", "quartz"),
+    "to92": ("transistor", "transistör"),
+    "to220": ("transistor", "transistör", "regulator", "regülatör"),
+    "dip": ("ic", "chip", "entegre"),
+    "pin-header": ("header", "konnektör", "connector"),
+    "box-header": ("header", "connector", "konnektör"),
+    "wire-to-board": ("connector", "konnektör"),
+    "screw-terminal": ("terminal", "klemens"),
+    "screw-terminal-vertical": ("terminal", "klemens"),
+    "potentiometer": ("potentiometer", "potansiyometre", "pot", "trimmer", "resistor", "direnç"),
+    "tactile-switch": ("button", "push button", "switch", "buton", "düğme", "anahtar"),
+    "relay-box": ("relay", "röle"),
+    "module-board": ("module", "modül"),
+}
+
+
+def package_words(archetype: str, name: str = "") -> tuple[str, ...]:
+    """The extra names a package of this archetype answers to, in both languages. An axial
+    package called a diode is a diode and not a resistor, though they share an archetype."""
+    if archetype in ("axial-cylinder", "axial-upright") and "diode" in name.lower():
+        return ("diode", "diyot")
+    return _PACKAGE_WORDS.get(archetype, ())
+
+
+#: A value as it is typed: 10uF, 100 nF, 4.7k, 4k7, 220R, 330 ohm, 100uH, 1M, "10µF". The digits
+#: after a prefix or an R are the decimals ("4k7"), at most two, so "2N2222" and "1N4148" --
+#: part numbers -- are not values.
+_VALUE = re.compile(
+    r"^(?P<num>\d+(?:[.,]\d+)?)\s*(?P<prefix>[pnuµμmkKMG]?)\s*"
+    r"(?P<unit>[fFhHΩω]|[oO][hH][mM][sS]?|[rR])?(?P<tail>\d{1,2})?$"
+)
+
+#: What a value's unit says it is the value OF, as the word the parts are found by.
+_KIND_WORDS: dict[str, tuple[str, ...]] = {
+    "capacitor": ("capacitor", "kapasitor", "kondansator"),
+    "resistor": ("resistor", "direnc"),
+    "inductor": ("inductor", "bobin", "enduktans"),
+}
+
+#: The archetypes that take a value of each kind, and the part of the range each is made for
+#: (farads, ohms): a 10 uF capacitor is an electrolytic, a 100 nF one a ceramic disc.
+_FAMILY_RANGE: dict[str, tuple[float, float]] = {
+    "disc-ceramic": (1e-12, 1e-6),
+    "box-film": (1e-9, 4.7e-6),
+    "radial-electrolytic": (1e-6, 1.0),
+}
+
+
+def typed_value(text: str) -> tuple[str, str, float] | None:
+    """What a search box holds when it is a VALUE with a unit, as ``(kind, value, number)``:
+    ``("capacitor", "10uF", 1e-05)`` for "10uF", "10 µF" or "10u"; ``("resistor", "4k7",
+    4700.0)`` for "4k7" and "4.7k"; ``("inductor", "100uH", 0.0001)`` for "100µH". ``None``
+    for anything else, a part number included: "555" has no unit and "LM358" is not one.
+
+    A unit that is spelled (F, H, Ω, R, ohm) says the kind; a letter alone says it where it
+    can only be one -- k and M a resistor, n, p and u a capacitor -- and "m" alone, which is
+    milli of anything, says nothing."""
+    match = _VALUE.match(text.strip())
+    if match is None:
+        return None
+    prefix = match["prefix"].replace("µ", "u").replace("μ", "u")
+    unit = (match["unit"] or "").lower()
+    tail = match["tail"]
+    if tail is not None and not (
+        (prefix and not unit) or (not prefix and unit == "r")
+    ):
+        return None
+    if unit in ("f",):
+        kind = "capacitor"
+    elif unit == "h":
+        kind = "inductor"
+    elif unit in ("ω", "r") or unit.startswith("ohm") or (not unit and prefix in ("k", "K", "M")):
+        kind = "resistor"
+    elif not unit and prefix in ("n", "p", "u"):
+        kind = "capacitor"
+    else:
+        return None
+    digits = match["num"].replace(",", ".") + ("." + tail if tail else "")
+    factors = {"": 1.0, "p": 1e-12, "n": 1e-9, "u": 1e-6, "m": 1e-3, "k": 1e3, "K": 1e3,
+               "M": 1e6, "G": 1e9}
+    number = float(digits) * factors[prefix]
+    whole = match["num"].replace(",", ".")
+    if kind == "capacitor":
+        shown = f"{whole}{prefix}F"
+    elif kind == "inductor":
+        shown = f"{whole}{prefix}H"
+    elif tail:
+        shown = f"{whole}{prefix or 'R'}{tail}"
+    else:
+        shown = f"{whole}{prefix}" if prefix else f"{whole}R"
+    return kind, shown, number
+
+
+def _takes_value(placed: str, text: str) -> bool:
+    """Whether a part's own value IS the value typed, whatever its spelling: a pot placed as
+    "B10K" is a 10k, "10k", "10K" and "10 kΩ" all say so, a taper letter ahead of it aside."""
+    wanted = typed_value(text)
+    if wanted is None:
+        return False
+    have = typed_value(re.sub(r"^[ABCW](?=\d)", "", placed.strip()))
+    return have is not None and have[0] == wanted[0] and abs(have[2] - wanted[2]) <= 1e-9 * max(
+        have[2], wanted[2]
+    )
+
+
+def package_fits_value(archetype: str, text: str) -> bool:
+    """Whether a package of this archetype is the one that takes the value typed: a 10 uF
+    capacitor is a can with a stripe, not a ceramic disc. True for a package of the right
+    family when the value is in the range that family is made for."""
+    found = typed_value(text)
+    if found is None or found[0] != "capacitor":
+        return found is not None
+    bounds = _FAMILY_RANGE.get(archetype)
+    return bounds is not None and bounds[0] <= found[2] <= bounds[1]
+
+
+_ASCII = str.maketrans("öüçşğıÖÜÇŞĞİ", "oucsgiOUCSGI")
+
+
+def _plain(text: str) -> str:
+    """Turkish letters as the ASCII a keyboard without them types, and µ as u: "kapasitor"
+    finds "kapasitör", "10µF" finds "10uF"."""
+    return text.translate(_ASCII).replace("µ", "u").replace("μ", "u")
+
 
 #: Words for a kind of part that its parts' names and summaries do not say: nothing in a
 #: 7805's "Linear regulator, +5 V" says VOLTAGE regulator, which is what is typed.
@@ -3933,7 +4072,21 @@ _CATEGORY_WORDS: dict[str, tuple[str, ...]] = {
     "regulator": ("voltage regulator", "voltaj regülatörü"),
     # A push button is a "Tact buton" in Turkish and an "anahtar" to somebody looking for
     # one, which is also the word in a switching transistor's Turkish summary.
-    "switch": ("anahtar",),
+    "switch": ("anahtar", "buton", "düğme", "button"),
+    # What a Turkish beginner types for each kind: "sensör", "röle", "transistör".
+    "sensor": ("sensör",),
+    "relay": ("röle",),
+    "transistor": ("transistör",),
+    "mosfet": ("mosfet", "transistör"),
+    "diode": ("diyot",),
+    "display": ("ekran",),
+    "module": ("modül",),
+    "connector": ("konnektör", "header"),
+    "ic": ("entegre", "chip"),
+    "passive": ("pasif",),
+    "sound": ("ses", "hoparlör", "buzzer"),
+    "led": ("led", "diyot"),
+    "power": ("güç", "besleme"),
 }
 
 
@@ -4029,21 +4182,52 @@ def search_rank(
     Parts tree, the package picker and the MCP server's ``list_catalog`` put the same thing
     first for the same words. An empty search finds everything, equally.
     """
-    words = fold(text).split()
+    def folded(value: str) -> str:
+        return _plain(fold(value))
+
+    words = folded(text).split()
     if not words:
         return RANK_NAME_STARTS
-    numbered = {_squeezed(fold(number)) for number in numbers}
+    numbered = {_squeezed(folded(number)) for number in numbers}
     numbered = {number for number in numbered if len(number) >= 4}
-    if names and fold(names[0]).startswith(" ".join(words)):
+    if names and folded(names[0]).startswith(" ".join(words)):
         return RANK_NAME_STARTS
-    called = fold(" ".join(names))
+    called = folded(" ".join(names))
+    # A value typed with its unit finds what takes that value: "10uF" a capacitor, "4k7" a
+    # resistor, by the word for the kind in what the part is CALLED, never in what it says.
+    found = typed_value(text)
+    if found is not None:
+        kind_words = _KIND_WORDS[found[0]]
+        if any(re.search(rf"(?<!\w){word}", called) for word in kind_words):
+            return RANK_NAMED
     if _all_found(words, called, numbered, starts=True):
         return RANK_NAMED
     if _all_found(words, called, numbered, starts=False):
         return RANK_IN_NAME
-    if _all_found(words, fold(" ".join((*names, *said))), numbered, starts=False):
+    if _all_found(words, folded(" ".join((*names, *said))), numbered, starts=False):
         return RANK_SAID
     return None
+
+
+def package_search_rank(
+    text: str,
+    archetype: str,
+    *,
+    names: Sequence[str],
+    said: Sequence[str] = (),
+    fold: Callable[[str], str] = str.lower,
+) -> int | None:
+    """``search_rank`` for a bare package: its names and the words for its archetype
+    (``package_words``), and when the search is a value ("10uF"), the package made for
+    that value first -- an electrolytic for 10 uF, a ceramic disc for 100 nF -- so Enter
+    on it places the one a builder wants."""
+    rank = search_rank(
+        text, names=(*names, *package_words(archetype, names[0] if names else "")),
+        said=said, fold=fold,
+    )
+    if rank is None or typed_value(text) is None:
+        return rank
+    return RANK_NAME_STARTS if package_fits_value(archetype, text) else max(rank, RANK_NAMED)
 
 
 def _all_found(words: Sequence[str], haystack: str, numbers: set[str], *, starts: bool) -> bool:
@@ -4071,13 +4255,16 @@ def part_rank(
     window adds the name in its own language FIRST, so "direnç" starts "Direnç ..." -- and
     as what it says, its summary and any ``said`` (the summary in the window's language)."""
     kind = (part.category, *_CATEGORY_WORDS.get(part.category, ()))
-    return search_rank(
+    rank = search_rank(
         text,
         names=(*names, part.name, part.id, *kind, *part.aliases),
         said=(part.summary, *said),
         numbers=(part.id, part.placed_value),
         fold=fold,
     )
+    if (rank is None or rank > RANK_NAMED) and _takes_value(part.placed_value, text):
+        return RANK_NAMED
+    return rank
 
 
 def search_catalog(text: str = "", category: CatalogCategory | None = None) -> list[CatalogPart]:

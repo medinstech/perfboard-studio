@@ -170,8 +170,8 @@ from perfboard_studio.catalog import (
     free_reference,
     names_part,
     not_offered,
+    package_search_rank,
     part_rank,
-    search_rank,
 )
 from perfboard_studio.command import CommandContext, CommandError, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
@@ -1219,8 +1219,11 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     def package_rank(footprint: Footprint, *said: str) -> int | None:
         # In either language, as the catalog rows are: "direnç" finds a resistor as
         # "resistor" does.
-        return search_rank(
+        # With the words a beginner types for it in both languages ("kapasitör") and a
+        # value with its unit ("10uF") finding the package made for that value first.
+        return package_search_rank(
             text,
+            footprint.body.archetype,
             names=(footprint_label(footprint.name), footprint.name, footprint.id),
             said=(footprint.body.archetype, *said),
             fold=_folded,
