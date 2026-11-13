@@ -1318,6 +1318,32 @@ ADAFRUIT_TFT_1_14_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's thumb joystick breakout (BOB-09110), read off SparkFun's own Eagle board and seen
+#: from above with the five-pin header along the top, VCC at the right (``pin_one``): the
+#: joystick's silkscreen outline (20.7 x 25.4 mm, its stick on the axis its pads are laid
+#: round) fills the board from just above the header to the far edge, and a #4 stand-off hole
+#: stands in each corner by the header. The two holes by the far edge are under the joystick's
+#: outline and are not drawn. How tall the joystick is and how wide its stick is are estimates.
+SPARKFUN_THUMB_JOYSTICK_MODULE = ModuleArt(
+    key="sparkfun-thumb-joystick",
+    board_colour=SPARKFUN_RED,
+    names=("sparkfun thumb joystick",),
+    board=(25.4, 31.75),
+    pins=5,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("button", 0.8, 3.17, 20.7, 25.4, 15.0, colour="#1b1c20"),
+        ArtPart("hole", -10.16, -13.34, 3.9, 3.9, 0.0, inset=0.3),
+        ArtPart("hole", 10.16, -13.34, 3.9, 3.9, 0.0, inset=0.3),
+    ),
+    source=(
+        "SparkFun's Eagle board for the thumb joystick breakout, github sparkfun/Thumb_"
+        "Joystick_Breakout (Joystick-Breakout-v12.brd, binary, read by hand): the outline, the "
+        "joystick's silkscreen outline and place, the header and the stand-off holes"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1950,6 +1976,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_ACS712_MODULE,
     SPARKFUN_SOIL_MODULE,
     ADAFRUIT_TFT_1_14_MODULE,
+    SPARKFUN_THUMB_JOYSTICK_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

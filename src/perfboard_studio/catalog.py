@@ -3786,6 +3786,35 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("TFT", "ST7789", "240x135", "1.14", "display", "ekran", "LCD",
                          "microSD")),
+    CatalogPart("sparkfun-thumb-joystick", "SparkFun thumb joystick breakout (BOB-09110)", "sensor",
+                "mod-5x1-p1-r1-25.4x31.75x15-s8.5-o0x-14.61",
+                "An analog thumb joystick with a push button on a 1 inch by 1.25 inch board: "
+                "five header pins, two analog axes and a select line",
+                _legs("VCC", "VERT", "HORZ", "SEL", "GND"), ref_prefix="U",
+                value="SparkFun Thumb Joystick",
+                source=(
+                    "SparkFun's own Eagle board (github.com/sparkfun/Thumb_Joystick_Breakout, "
+                    "Joystick-Breakout-v12.brd, a binary file read by hand): the nets of its "
+                    "1 x 5 header JP1 and the way the joystick's two potentiometers are wired "
+                    "(each wiper, the middle pad, on VERT or HORZ, the ends on VCC and GND) "
+                    "as a cross-check of the pads' numbers, the header's turn from where "
+                    "it sits in the 25.4 x 31.75 mm outline, and the joystick's silkscreen outline"
+                ),
+                check=(
+                    "Pin 1 is VCC, the left end of the header with the joystick up and the "
+                    "header at the bottom, which is pad 5 of SparkFun's header: pad 1 is GND, "
+                    "then SEL, HORZ, VERT, VCC. This order is SparkFun's own board read "
+                    "from its file, not checked against a photograph of the board. HORZ and "
+                    "VERT are the two potentiometers' wipers, read with an analog input "
+                    "and resting near half of VCC; SEL is the push button, pulled to GND "
+                    "when the stick is pressed and open otherwise, so it needs a pull-up. "
+                    "Other boards sold as thumb joysticks, the KY-023 among them, order "
+                    "their pins differently and are not this part: compare the names printed "
+                    "on yours with these. The joystick's height and the stick's size are "
+                    "estimates, and the two mounting holes under the joystick are not drawn. "
+                    + _MODULE_TOP
+                ),
+                aliases=("joystick", "thumb", "analog stick", "kumanda")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

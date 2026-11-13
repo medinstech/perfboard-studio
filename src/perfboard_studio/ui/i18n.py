@@ -3740,6 +3740,37 @@ TURKISH: Mapping[str, str] = {
         "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
         "çevresi ölçülmüştür."
     ),
+    "SparkFun thumb joystick breakout (BOB-09110)": (
+        "SparkFun başparmak joystick kartı (BOB-09110)"
+    ),
+    "An analog thumb joystick with a push button on a 1 inch by 1.25 inch board: five "
+    "header pins, two analog axes and a select line": (
+        "1 inç x 1,25 inçlik bir kartta basma düğmeli analog başparmak joystick'i: beş "
+        "header pini, iki analog eksen ve bir seçme hattı"
+    ),
+    "Pin 1 is VCC, the left end of the header with the joystick up and the header at the "
+    "bottom, which is pad 5 of SparkFun's header: pad 1 is GND, then SEL, HORZ, VERT, VCC. "
+    "This order is SparkFun's own board read from its file, not checked against a "
+    "photograph of the board. HORZ and VERT are the two potentiometers' wipers, read with "
+    "an analog input and resting near half of VCC; SEL is the push button, pulled to GND "
+    "when the stick is pressed and open otherwise, so it needs a pull-up. Other boards "
+    "sold as thumb joysticks, the KY-023 among them, order their pins differently and are "
+    "not this part: compare the names printed on yours with these. The joystick's height "
+    "and the stick's size are estimates, and the two mounting holes under the joystick are "
+    "not drawn. The height of what is on the board is an estimate, and so is its colour; "
+    "the pins, the rows and the board outline are measured.": (
+        "1. pin VCC'dir: joystick yukarıda ve header altta tutulduğunda header'ın sol ucu; "
+        "bu, SparkFun'un header'ında 5. pedtir (1. ped GND, sonra SEL, HORZ, VERT, VCC). "
+        "Bu sıra SparkFun'un kendi kartının dosyasından okunmuştur, kartın bir fotoğrafıyla "
+        "denetlenmemiştir. HORZ ve VERT iki potansiyometrenin kayar uçlarıdır, bir analog "
+        "girişle okunur ve VCC'nin yarısı civarında durur; SEL basma düğmesidir, çubuğa "
+        "basılınca GND'ye çekilir, yoksa açıktır, bu yüzden pull-up ister. Başparmak "
+        "joystick'i diye satılan başka kartlar, aralarında KY-023, pinlerini farklı "
+        "sıralar ve bu parça değildir: kendi kartınızın üzerindeki adları bunlarla "
+        "karşılaştırın. Joystick'in yüksekliği ve çubuğun boyu tahmindir, joystick'in "
+        "altında kalan iki montaj deliği çizilmemiştir. Kartın üstündekilerin yüksekliği "
+        "tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
         "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
     ),
