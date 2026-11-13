@@ -122,7 +122,7 @@ closed without a bump.
   glass; and SparkFun's ACS712 current sensor, thumb joystick and soil moisture sensor, the
   last on its three header pads with its gold probe fingers drawn. The ACS712 and the
   joystick are SparkFun's own boards by name: the ACS712's check says clone boards differ,
-  and the joystick's clones are other parts in the catalog. The AI-Thinker ESP32-CAM goes in as its two rows of eight pins: AI-Thinker publishes no
+  and the joystick's that other thumb-joystick boards order their pins differently. The AI-Thinker ESP32-CAM goes in as its two rows of eight pins: AI-Thinker publishes no
   drawing of them, so their 22.86 mm spacing comes from two community footprints, and its
   check says so. The DFPlayer Mini MP3 player goes in as the sixteen-pin module it is, from
   its datasheet and DFRobot's drawing, drawn as a plain block since nothing measures what
