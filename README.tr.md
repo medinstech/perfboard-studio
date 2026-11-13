@@ -142,6 +142,14 @@ Bakır lehim yüzeyindedir; bu yüzden lehim yüzeyi bir "ayna modu" değil, tam
 görünümdür — ve **bakmadığınız** yüzdeki bakır taralı çizilir, çünkü kart saydam değildir
 ve dolu çizilen bir iletken *bu senin önünde* der.
 
+**Ve bakır her iki yüze de gider.** Her iki yüzünde de ped olan bir kartta çizdiğiniz,
+baktığınız yüze gider; bir nete de kendi yüzü verilebilir — Özellikler'de **Fark Etmez**,
+**Parça Yüzü** ya da **Lehim Yüzü** — ve otomatik kablolama onu elinden geldiğince o yüzde
+tutar. Bir iz yüz değiştirmeyi kendi netinin bir pininden ya da rehberin önce doldurtup sonra
+ölçtürdüğü boş bir delikten yapar; oturmuş bir parçanın o yüzde örttüğü bir pine, yanındaki
+boş delikten bir jumper ile ulaşılır. Bir net kendi yüzünde kalamadığında otomatik
+kablolama hangi bağlantıların oradan ayrıldığını ve nedenini söyler.
+
 ![Lehim yüzeyi; karşı yüzdeki bakır taralı](./docs/images/editor-solder-side.png)
 
 3D görünüm bir resim değil, bir kontrol aracıdır. Yukarıdan bakışın hiçbir şekilde
@@ -222,8 +230,10 @@ ettiğinizi* söyler — ve onu söylediğiniz yer de burasıdır: **Parça Ekle
 netlist'ten çizilir, yani senkron tutulacak bir şey yoktur; bir sembolü taşıyın, döndürün ya
 da bir tel çekin, o andan itibaren sayfa sizindir — **Düzenle** onu yerleşime geri verene
 kadar; her bağlantı yerinde kalır ve tek adımda geri alınır. Tel pinden pine ya da çizilmiş
-bir telin üstüne gider — bir **T**, düştüğü yerde bir noktayla — çizilemeyecek kadar kalabalık bir net
-de pindeki bir etiketle adına göre bağlanır. Toprak ve besleme ray simgesine dönüşür, tel olarak çizilmez: okunabilir bir sayfa
+bir telin üstüne gider — bir **T**, düştüğü yerde bir noktayla — ve tıkladığınız her yerde
+döner. Çizildikten sonra sürüklenerek yeniden biçimlenir ya da ucu başka bir pine taşınır;
+Delete onu keser ve hangi pinlerin netten ayrıldığını söyler. Çizilemeyecek kadar kalabalık
+bir net de pindeki ya da teldeki bir etiketle adına göre bağlanır. Toprak ve besleme ray simgesine dönüşür, tel olarak çizilmez: okunabilir bir sayfa
 ile her şeyin üzerinden geçen on bir çizgi arasındaki fark budur. Polarite parça
 kütüphanesinin kendi pin ADLARINDAN okunur; böylece bir LED'in katodu da bir diyotun katodu
 da bantlı uca gelir — bunlar karşıt pinlerdir ve pin 1'e bakarak tahmin eden bir kural
@@ -346,7 +356,7 @@ düğme sıradaki adımı yapar. Elle yapıldığında akış şöyle:
 Şemayı açın (`Ctrl+2`) ve devreyi çizin: parçaları Kütüphaneden sayfaya
 sürükleyin ya da art arda ekleyin: **Parça Ekle…**, parçanın ne olduğunu yazın, Enter;
 istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizilmiş bir telin
-üstüne tel çekin (iki ucuna tıklayarak ya da sürükleyerek; bir besleme pininde birleşen
+üstüne tel çekin (iki ucuna ve aradaki her dönüşe tıklayarak ya da sürükleyerek; bir besleme pininde birleşen
 net o pinin adını alır, VCC ya da GND) — ya da bir pini
 **Etiket** ile adına göre bir nete bağlayın, ya da sağ tıklayıp GND ve +5V'ye bağlayın —
 sonra **Karta Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
@@ -355,6 +365,12 @@ aynı iyilikte kurulduğu en küçük karttır.
 Oradan **Kart ▸
 Parçaları Yeniden Diz** (`Ctrl+Shift+A`), **Kablolama ▸ Hepsini Otomatik Kablola** (`Ctrl+R`),
 ardından **Dosya ▸ Dışa Aktar ▸ Montaj Rehberi…** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
+
+Ya da bakırı kendiniz döşeyin. Kartın yanındaki araçlar döşedikleri şey olarak çizilir —
+lehim boncukları, bükülmüş bir tel, kılıflı bir tel, bir parçanın üstünden kemerle geçen bir
+jumper — ve üzerine gelince adlarını söyler. Bir deliğe basıp bir başkasına sürükleyin:
+önizleme, daha bırakmadan, bakırın nerede başka bir nete değeceğini söyler. **Seç** aracında
+bakıra basmak bir ucu, bir köşeyi ya da bütün bir düz parçayı tutup taşır.
 
 Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya ▸ KiCad'den
 İçe Aktar…** (`Ctrl+I`) ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
@@ -446,7 +462,7 @@ src/perfboard_studio/ui/         Qt uygulaması: 2D editör, VTK 3D görünüm, 
 src/perfboard_studio/mcp/        MCP sunucusu (docs/MCP.md)
 src/perfboard_studio/catalog.py  gerçek parçalar, adlarıyla ve veri sayfalarıyla
 examples/                  içe aktarılacak netlist'ler ve çıktıkları kartlar
-tests/                     ~6400 test; motor mypy --strict temiz
+tests/                     ~8400 test; motor mypy --strict temiz
 packages/                  Python portunun karşısında kanıtlandığı referans olarak
                            saklanan orijinal TypeScript motoru
 ```
@@ -477,9 +493,10 @@ footprint'leri de böyle gelir.
 ## Nereye gidiyor
 
 Biten: editör, kütüphane, bağlantısallık ve LVS, DRC, router ve yerleştirme
-optimizasyonu, tasarım üzerinde kurularak seçilen hazır kart, render edilmiş adım
+optimizasyonu, sürükleyerek çizilip taşınan bakır, her nete kendi yüzü verilen iki yüzlü
+kablolama, tasarım üzerinde kurularak seçilen hazır kart, render edilmiş adım
 görselleri, 1:1 tel çizimleri, montaj oynatması ve kaldığınız yeri tutmasıyla montaj
-rehberi, 1:1 PDF çıktısı, kutusunu çizmek için kartın STEP modeli, T ve etiketleriyle şema
+rehberi, 1:1 PDF çıktısı, kutusunu çizmek için kartın STEP modeli, tel tel çizilip düzenlenen, T ve etiketleriyle şema
 paneli ve yanındaki sayfa dışa aktarımı, aralarında tek bir seçimle yan yana kart, şema ve
 3D, pin adları kartta basılan gerçek parça kataloğu, üzerinde ne varsa o olarak çizilen pin
 başlıklarındaki modüller, karta yazılan etiketler, parça parça okunan KiCad netlist'leri,
@@ -490,7 +507,8 @@ taşınır ya da lehimlenebilir bir breadboard'a delik delik lehimlenir —,
 sunucusu, TR/EN yerelleştirme, bir `v*` etiketiyle çalışan üç platformluk paketleme, ve
 yeni sürümü haber verip indiren güncelleme denetimi
 (**Yardım ▸ Güncellemeleri Denetle…**; indirdiğini sürümün `SHA256SUMS` dosyasıyla
-doğrulayıp size teslim eder — çalıştırmak sizin tıklamanız).
+doğrular, Windows'ta da **Kur ve Yeniden Başlat** onu sistemin kendi onay penceresinin
+ardından kurar — sizin tıklamanız olmadan hiçbir şey çalışmaz).
 
 Sırada, proje planının koyduğu sırayla:
 

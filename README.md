@@ -143,6 +143,14 @@ The solder side is where the copper is, so it is a first-class view rather than 
 mode — and copper on the face you are *not* looking at is hatched, because a board is
 opaque and a trace drawn solid says *this is in front of you*.
 
+**And copper goes on either face.** On a board with pads on both faces, what you draw goes
+on the face you are looking at, and a net can be given a face of its own — **Either**,
+**Component Side** or **Solder Side** in its Properties — which Auto-wire keeps it on
+wherever it can. A trace changes face through a pin of its own net, or through an empty hole
+the guide has you fill and then probe; a pin that a seated part covers on that face is
+reached by a jumper to the free hole beside it. Where a net could not stay on its face,
+Auto-wire says which connections left it and why.
+
 ![The solder side, with far-side copper hatched](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/editor-solder-side.png)
 
 The 3D view is a checking tool, not a picture. Four rules exist that a top-down view
@@ -221,8 +229,10 @@ every other EDA tool works and is the order this one could not do until now.
 is drawn from the netlist, so there is nothing to keep in step; move a symbol, turn one or
 draw a wire, and from then on the sheet is yours — until **Arrange** hands it back to the
 layout, every connection kept, in one undo step. A wire goes from pin to pin, or onto a
-wire already drawn — a **T**, with a dot where it lands — and a net too busy to draw is
-joined by name with a label at the pin. Ground and power become rail symbols instead of wires, which is the difference
+wire already drawn — a **T**, with a dot where it lands — turning wherever you click. Once
+drawn it is dragged into a new shape, or its end onto another pin, and Delete cuts it and
+says which pins left the net. A net too busy to draw is joined by name with a label at the
+pin or on the wire. Ground and power become rail symbols instead of wires, which is the difference
 between a sheet you can read and eleven lines crossing everything. Polarity comes from the
 parts library's own pin names, so an LED's cathode and a diode's cathode both end up on the
 barred end — they are opposite pins, and a rule that guessed from pin 1 would draw one of
@@ -346,13 +356,19 @@ whichever comes next. By hand, it goes like this.
 Open the schematic (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
 of the Library, or press **Add Part…**, type what the part is and press Enter, one after
 another; move and turn them where you want them, **Connect** from pin to pin or onto a wire
-already drawn (click both ends, or drag; a net joined at a supply pin takes its name, VCC
-or GND) — or **Label** a pin to join it to a net by name, or right-click it for GND and
+already drawn (click both ends and wherever it turns between them, or drag; a net joined
+at a supply pin takes its name, VCC or GND) — or **Label** a pin to join it to a net by name, or right-click it for GND and
 +5V — then **Place on the Board**, which first
 asks which stock board to use: your circuit is placed, wired and checked on a roomy board
 and on each smaller one, and the suggestion is the smallest it builds as well on. From there
 **Board ▸ Rearrange Parts** (`Ctrl+Shift+A`), **Wiring ▸ Auto-wire Everything** (`Ctrl+R`),
 and **File ▸ Export ▸ Build Guide…** (`Ctrl+B`). No KiCad anywhere in that.
+
+Or lay the copper yourself. The tools beside the board are drawn as what they lay — solder
+beads, a bent wire, a sleeved wire, a jumper arched over a part — and name themselves when
+pointed at. Press on a hole and drag to another: the preview says, before you let go, where
+the copper would join another net. In **Select**, a press on copper picks up an end, a
+corner or a whole stretch and moves it.
 
 With a circuit that already exists, start at **File ▸ Import from KiCad…** (`Ctrl+I`) on
 `examples/ne555-astable.net` instead: each part arrives in the design as what its value and
@@ -443,7 +459,7 @@ src/perfboard_studio/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF
 src/perfboard_studio/mcp/        the MCP server (docs/MCP.md)
 src/perfboard_studio/catalog.py  the real parts, by name, each with its datasheet
 examples/                  netlists to import, and the boards they become
-tests/                     ~6400 tests; the engine is mypy --strict clean
+tests/                     ~8400 tests; the engine is mypy --strict clean
 packages/                  the original TypeScript engine, kept as the reference the
                            Python port is proved against
 ```
@@ -473,10 +489,11 @@ KiCad netlist's SOIC, SSOP, TSSOP and MSOP footprints arrive as one.
 ## Where it is going
 
 Done: the editor, the library, connectivity and LVS, DRC, the router and the placement
-optimiser, the stock board chosen by building the design on it, the build guide with
+optimiser, copper drawn and moved by dragging, wiring on both faces with a face for each
+net, the stock board chosen by building the design on it, the build guide with
 rendered step images, 1:1 wire drawings, assembly playback and your place in it kept, the
 1:1 PDF export, the board as a STEP model to draw its enclosure round, the schematic panel
-with T's and labels and the sheet export beside it, board, schematic and 3D side by side
+drawn and edited wire by wire, with T's and labels, and the sheet export beside it, board, schematic and 3D side by side
 with one selection between them, a catalog of real parts with their pin names printed on
 the board, modules on header strips drawn as what is on them, labels written on the board,
 KiCad netlists read part by part, parts described by their own measurements when the
@@ -484,8 +501,9 @@ library does not have them, parts on the panel wired to the board, solderless br
 the circuit tried on one and then taken to perfboard, or soldered hole for hole on a
 solderable one —, crash recovery, the MCP server, TR/EN localisation, the
 three-platform packaging that a `v*` tag runs, and the update check that tells you a release exists and fetches it (**Help ▸ Check
-for Updates…**; it verifies the download against the release's `SHA256SUMS` and then hands
-it to you — running it stays your click).
+for Updates…**; it verifies the download against the release's `SHA256SUMS`, and on
+Windows **Install and Restart** puts it in place behind the system's own prompt — nothing
+runs without your click).
 
 Next, in the order the project plan puts them:
 
