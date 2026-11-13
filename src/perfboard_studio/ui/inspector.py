@@ -73,6 +73,7 @@ from perfboard_studio.commands import (
     UpdateNetPayload,
     UpdatePartPayload,
     UpdateSheetNotePayload,
+    rename_net_payload,
     wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup
@@ -96,7 +97,6 @@ from perfboard_studio.model import (
     SheetNote,
     has_component_side_copper,
 )
-from perfboard_studio.parsers.kicad import infer_net_class
 from perfboard_studio.phrasebook import guide_language, phrasebook
 from perfboard_studio.system import (
     FIRST_BOARD,
@@ -1860,21 +1860,12 @@ class _NetEditor(QWidget):
         return self._inspector.dispatch("net.update", payload)
 
     def _commit_name(self, typed: str) -> str | None:
-        """The name, and the class with it while the class still says only what the old
-        name implied: N3 renamed GND becomes a ground net, and a GND somebody deliberately
-        made a signal stays one when it is renamed AGND."""
+        """The name, and the class with it by the rule a label on the sheet keeps too
+        (``commands.rename_net_payload``)."""
         net = self._net
         if net is None:
             return None
-        follows = net.net_class == infer_net_class(net.name)
-        implied = infer_net_class(typed)
-        return self._update(
-            UpdateNetPayload(
-                id=net.id,
-                name=typed,
-                net_class=implied if follows and implied != net.net_class else None,
-            )
-        )
+        return self._update(rename_net_payload(net, typed))
 
     def _commit_class(self, value: NetClass) -> None:
         net = self._net

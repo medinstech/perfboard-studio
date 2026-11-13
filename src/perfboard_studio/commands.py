@@ -130,6 +130,7 @@ from .model import (
     normalized_pin_names,
     supply_net_class,
 )
+from .parsers.kicad import infer_net_class
 from .system import (
     FIRST_BOARD,
     board_document,
@@ -5249,6 +5250,22 @@ def count_noun(count: int, noun: str) -> str:
     label in both forms, and Turkish says them alike, since it takes the singular after a
     number."""
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def rename_net_payload(net: Net, name: str) -> UpdateNetPayload:
+    """``net.update`` renaming ``net`` to ``name``, and re-classing it with the name while
+    its class is still only what the old name implied (``infer_net_class``): N3 renamed GND
+    becomes a ground net, and a GND somebody deliberately made a signal stays one when it is
+    renamed AGND. Built once, for the Nets panel and for a label on the sheet, so the two
+    cannot disagree about whether a rename moves a net's class -- and with it the gauge DRC
+    asks for and what auto-wire lays first."""
+    follows = net.net_class == infer_net_class(net.name)
+    implied = infer_net_class(name)
+    return UpdateNetPayload(
+        id=net.id,
+        name=name,
+        net_class=implied if follows and implied != net.net_class else None,
+    )
 
 
 def preset_payload(
