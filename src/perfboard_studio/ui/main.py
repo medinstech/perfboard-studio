@@ -2943,6 +2943,8 @@ class MainWindow(QMainWindow):
         #: and what the one armed now is saying until its first click.
         self._tools_introduced: set[str] = set()
         self._tool_intro = ""
+        #: The board tool armed at the last look (``_show_board_for_a_tool``), () for none.
+        self._tool_in_hand: tuple[object, ...] = ()
         self.scene.drawArmed.connect(self._on_draw_armed)
         self.scene.conductorDrawn.connect(self._on_conductor_drawn)
         self.scene.drawChecked.connect(self._on_draw_checked)
@@ -6656,6 +6658,7 @@ class MainWindow(QMainWindow):
         Derived from the scene rather than remembered, so the banner cannot disagree with
         what a click will actually do -- the scene is the thing holding the mode.
         """
+        self._show_board_for_a_tool()
         text = self._mode_text()
         self.view.show_mode(text)
         self._sync_select_tool()
@@ -6673,6 +6676,35 @@ class MainWindow(QMainWindow):
         # Somebody mid-mode is plainly not stuck, and two blocks of text over one board is
         # one too many.
         self._refresh_empty_hint()
+
+    def _show_board_for_a_tool(self) -> None:
+        """Bring the board forward when one of its tools has just been armed out of sight.
+
+        A tool armed from its key or a menu with the sheet in front -- where a new design
+        opens -- drew its banner over a board nobody could see, and the clicks it waited
+        for had nowhere to land. Only on ARMING, a tool that was not armed a moment ago:
+        a tool already in hand never pulls the board back over a view brought forward on
+        purpose. And not for placing: picking a part in the library arms it, and that is
+        how a part is put on the SHEET too, so the board coming forward on every pick in
+        the library would take the sheet away from the step that uses it.
+        """
+        scene = self.scene
+        tool = (
+            scene.armed_draw_kind,
+            scene.armed_net_id,
+            scene.connect_armed,
+            scene.measure_armed,
+            scene.cut_armed,
+        )
+        armed = any(tool)
+        if (
+            armed
+            and tool != getattr(self, "_tool_in_hand", ())
+            and hasattr(self, "dock_board")
+            and not self.board_is_showing()
+        ):
+            self.show_board()
+        self._tool_in_hand = tool if armed else ()
 
     def _mode_text(self) -> str:
         if self.scene.connect_armed:
@@ -6716,12 +6748,12 @@ class MainWindow(QMainWindow):
             word = conductor_word(laid, self._guide_language())
             # What is said about the face after the tool's name; kept when a tool's first
             # arming says what it lays in place of its name.
-            far_note = ""
+            far_note = where_note = ""
             if has_component_side_copper(self.bus.document.board):
                 # The banner names the face: on this board it is one of two, and it follows
                 # the view only until Draw on says otherwise.
                 where = t("on the component side") if face == "top" else t("on the solder side")
-                far_note = f"  ·  {where}"
+                far_note = where_note = f"  ·  {where}"
                 if kind == "bare-wire" and self.scene.side == "top":
                     # The one tool that does not follow the view: bare copper never lies
                     # among the parts' standing leads.
@@ -6745,8 +6777,11 @@ class MainWindow(QMainWindow):
                     f"{t('Enter or right-click finishes, Esc cancels')}"
                 )
             if self._tool_intro:
-                # The first time this session: what it lays, in place of its name.
-                return f"{self._tool_intro}{far_note}  ·  {how}"
+                # The first time this session: what it lays, in place of its name. The bare
+                # wire's introduction names its face itself, and said again beside it the
+                # banner ran to three lines saying "solder side" three ways.
+                said = far_note.removeprefix(where_note) if kind == "bare-wire" else far_note
+                return f"{self._tool_intro}{said}  ·  {how}"
             return f"{t('Drawing')} {word}  ·  {how}"
 
         if self.scene.cut_armed:
@@ -8090,7 +8125,14 @@ class MainWindow(QMainWindow):
         The button group already keeps that true among the buttons; this keeps the VIEW in
         step with it, which is the half that matters, and puts the tool's one line of
         instruction in the status bar.
+
+        A drawing tool brings the sheet forward, as a board tool brings the board: Circuit ▸
+        Drawing Tools reaches these from the board too, and armed behind it the tool waited
+        for a click on a sheet nobody could see. The pointer does not, being what Escape
+        puts back from anywhere.
         """
+        if tool != "select" and not self.schematic_is_showing():
+            self.show_schematic()
         self.schematic_view.set_tool(cast("SheetTool", tool))
         shape_names = {"rectangle": t("Box"), "line": t("Line"), "circle": t("Circle")}
         if tool in shape_names:
@@ -14784,8 +14826,25 @@ class MainWindow(QMainWindow):
         """Connect, on whichever canvas has the keyboard: the sheet's when it does, the
         board's otherwise -- one key, C, for the one gesture the two canvases share, as
         Select All and Fit are. Two actions on one key would be an ambiguous shortcut,
-        which Qt answers by doing nothing."""
-        if hasattr(self, "schematic_view") and self.schematic_view.hasFocus():
+        which Qt answers by doing nothing.
+
+        With the keyboard on neither canvas, the one in sight: a new design opens on the
+        sheet, and C pressed with the keyboard in the parts list or on a panel's tab armed
+        the board's tool behind it."""
+        # The window's focus widget, so the board's viewport counts as the board. A canvas
+        # behind another tab cannot take the keyboard at all: setFocus() on it leaves the
+        # keyboard elsewhere, which is the case the canvas in sight answers.
+        focus = self.focusWidget()
+        on_board = focus is not None and (focus is self.view or self.view.isAncestorOf(focus))
+        sheet_in_sight = hasattr(self, "schematic_view") and (
+            self.schematic_view.hasFocus()
+            or (
+                not on_board
+                and self.schematic_is_showing()
+                and not self.board_is_showing()
+            )
+        )
+        if sheet_in_sight:
             # The board's tool is left as it was; the toggle the key made goes back.
             self.act_connect.setChecked(self.scene.connect_armed)
             self.on_sheet_tool("select" if self.schematic_view.tool == "wire" else "wire")

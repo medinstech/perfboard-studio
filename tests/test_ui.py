@@ -10810,6 +10810,9 @@ def test_c_arms_connect_on_whichever_canvas_has_the_keyboard() -> None:
         window.act_connect.trigger()
         assert window.schematic_view.tool == "select"
 
+        # The board in front to take the keyboard: given it while the sheet is in front,
+        # the keyboard is on neither canvas, and C is the tool of the one in sight.
+        window.show_board()
         window.view.setFocus()
         QApplication.processEvents()
         window.act_connect.trigger()
@@ -15535,6 +15538,119 @@ def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(m
             QApplication.sendEvent(button, QEvent(QEvent.Type.Leave))
         assert "Esc" in sheet.pill_text(sheet.buttons[0])
         assert shown == []
+    finally:
+        _close(window)
+
+
+def _blank_window_on_the_sheet():  # type: ignore[no-untyped-def]
+    """A new design's window, shown, with the sheet in front of the board -- where a new
+    design opens."""
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    window = _window_on(create_empty_document(DocumentMeta(name="front", created="", modified="")))
+    window.show()
+    window.show_schematic()
+    assert window.schematic_is_showing() and not window.board_is_showing()
+    return window
+
+
+def test_a_board_tool_armed_out_of_sight_brings_the_board_forward() -> None:
+    """Armed from its key or a menu with the sheet in front, a board tool drew its banner
+    over a board nobody could see. It brings the board forward -- on arming only: a tool in
+    hand never pulls the board back over the sheet brought forward on purpose."""
+    window = _blank_window_on_the_sheet()
+    try:
+        for arm in (
+            lambda: window.act_draw["solder-trace"].trigger(),
+            lambda: window.act_draw["insulated-wire"].trigger(),
+            lambda: window.act_draw["bare-wire"].trigger(),
+            lambda: window.act_measure.trigger(),
+        ):
+            window.on_stop_tool()
+            window.show_schematic()
+            arm()
+            assert window.scene.in_a_mode
+            assert window.board_is_showing() and not window.schematic_is_showing()
+        # The tool still in hand, the sheet brought forward: it stays there.
+        window.show_schematic()
+        window._refresh_mode_banner()
+        assert window.schematic_is_showing() and not window.board_is_showing()
+    finally:
+        _close(window)
+
+
+def test_picking_a_part_in_the_library_leaves_the_sheet_in_front() -> None:
+    """Picking a row arms placing it on the board, and it is how a part goes on the SHEET
+    too: the board must not come forward on every pick."""
+    window = _blank_window_on_the_sheet()
+    try:
+        window._select_library_footprint("r-axial-5")
+        assert window.scene.armed_footprint_id == "r-axial-5"
+        assert window.schematic_is_showing() and not window.board_is_showing()
+    finally:
+        _close(window)
+
+
+def test_c_with_the_sheet_in_front_is_the_sheets_wire_tool_and_a_menu_tool_shows_the_sheet() -> None:
+    """C is one key for the two canvases' Connect. With the sheet in sight and the board
+    not, it is the sheet's, wherever the keyboard is; and a sheet tool taken from the
+    Circuit menu with the board in front brings the sheet forward, as a board tool brings
+    the board."""
+    from PySide6.QtTest import QTest
+
+    window = _blank_window_on_the_sheet()
+    try:
+        window.library_tree.setFocus()
+        QApplication.processEvents()
+        QTest.keyClick(window.library_tree, Qt.Key.Key_C)
+        QApplication.processEvents()
+        assert window.schematic_view.tool == "wire"
+        assert not window.scene.connect_armed
+        assert window.schematic_is_showing() and not window.board_is_showing()
+
+        window.on_stop_tool()
+        window.show_board()
+        window.act_sheet_tool["label"].trigger()
+        assert window.schematic_view.tool == "label"
+        assert window.schematic_is_showing() and not window.board_is_showing()
+        # And Escape, which puts the pointer back from anywhere, moves nothing.
+        window.show_board()
+        window.on_stop_tool()
+        assert window.board_is_showing() and window.schematic_view.tool == "select"
+    finally:
+        _close(window)
+
+
+def test_the_bare_wires_first_banner_names_the_solder_side_once() -> None:
+    """Its introduction already says where a bare wire goes; with the face said again beside
+    it the banner ran to three lines. The note that an insulated wire goes over the parts
+    stays: that is what the component side in view needs to hear."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.commands import create_empty_document, document_on_preset
+    from perfboard_studio.model import DocumentMeta
+    from perfboard_studio.ui.i18n import t
+    from perfboard_studio.ui.main import TOOL_INTRODUCTIONS
+
+    preset = next(
+        p for p in STANDARD_PRESETS if p.name == "5 x 7 cm" and p.family == "double-sided-fr4"
+    )
+    window = _window_on(
+        document_on_preset(
+            create_empty_document(DocumentMeta(name="bare", created="", modified="")), preset
+        )
+    )
+    try:
+        assert window.scene.side == "top"
+        window.on_draw_mode("bare-wire", True)
+        first = window._mode_text()
+        assert first.startswith(TOOL_INTRODUCTIONS["bare-wire"]())
+        assert first.count(t("on the solder side")) == 1, first
+        assert t("a bare wire goes under the board only: an insulated wire goes over the parts") in first
+        # After the first time, the banner names the tool and its face as every tool does.
+        window.on_draw_mode("bare-wire", False)
+        window.on_draw_mode("bare-wire", True)
+        assert t("on the solder side") in window._mode_text()
     finally:
         _close(window)
 
