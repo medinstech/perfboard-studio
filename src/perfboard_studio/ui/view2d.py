@@ -4088,6 +4088,8 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         painter.setBrush(QBrush(_art_colour("hole")))
         painter.drawEllipse(QPointF(0.0, 0.0), radius - ring, radius - ring)
+    elif kind == "plate":
+        _art_box(painter, -half_l, half_l, half_w, QColor(part.colour) if part.colour else _art_colour("plate"))
     elif kind == "terminal":
         # From above: the blue block, a slotted screw head per way over its pin, the test
         # slot behind each, and the dark of the wire mouths along the face they open in.

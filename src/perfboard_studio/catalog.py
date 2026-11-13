@@ -3728,6 +3728,34 @@ CATALOG: tuple[CatalogPart, ...] = (
                     + _MODULE_TOP
                 ),
                 aliases=("ACS712", "current sensor", "hall effect", "akım sensörü", "amper")),
+    CatalogPart("sparkfun-soil-moisture", "SparkFun soil moisture sensor (SEN-13322)", "sensor",
+                "mod-3x1-p1-r1-22.86x60.96x1.5-s8.5-o-2.54x-24.13",
+                "A soil moisture probe with an analog output: three header pads at the top "
+                "of a 61 mm board whose gold fingers go in the soil",
+                _legs("SIG", "GND", "VCC"), ref_prefix="U",
+                value="SparkFun Soil Moisture",
+                source=(
+                    "SparkFun's own Eagle board (github.com/sparkfun/Soil_Moisture_Sensor): "
+                    "its 1 x 3 header footprint JP1 and its net names, the screw terminal "
+                    "JP2's silkscreen and nets as a second reading of the same order, the "
+                    "22.86 x 60.96 mm outline and the probe's mask openings; SparkFun's "
+                    "product page for the SEN-13637 version with the terminal fitted"
+                ),
+                check=(
+                    "Pin 1 is SIG. The board's silkscreen reads VCC, GND, SIG from the left "
+                    "with the probe pointing down; turned the other way up, with the header "
+                    "pads at the bottom, that puts SIG on the left. SEN-13322 is the board "
+                    "with these three pads left for a header of your own; the 3.5 mm screw "
+                    "terminal beside them (SEN-13637 has one fitted) carries the same three "
+                    "signals but is not on the 2.54 mm grid, so it is not a pin. The two gold "
+                    "fingers are a variable resistor: the wetter the soil, the lower its "
+                    "resistance and the higher the analog level on SIG. Keep the pads and the "
+                    "electronics out of the soil. The two stand-off holes take a #4 screw. "
+                    "The board names no supply range, so use the supply the maker's guide "
+                    "gives. "
+                    + _MODULE_TOP
+                ),
+                aliases=("soil", "moisture", "SEN-13322", "toprak", "nem", "yağmur")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

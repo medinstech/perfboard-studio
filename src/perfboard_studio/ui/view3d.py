@@ -6117,6 +6117,18 @@ def _art_hole(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+def _art_plate(s: _ArtSolid) -> list[_Piece]:
+    """An exposed flat of metal on the module's board, a hair proud of it."""
+    return [
+        _Piece(
+            source=s.box(s.length, s.width, s.height),
+            rgb=_hex_rgb(s.colour or ART_COLOURS["plate"], BODY_RGB),
+            position=s.at(0.0, 0.0, s.height / 2),
+            material=TINNED,
+        )
+    ]
+
+
 def _art_capsule(s: _ArtSolid) -> list[_Piece]:
     """An electret microphone capsule standing on the module: a turned metal can with its
     top edge rounded off, and its face -- bare mesh or the black foam over it, at
@@ -6371,6 +6383,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "sot23-8": _art_gull_wing,
     "msop10": _art_gull_wing,
     "capsule": _art_capsule,
+    "plate": _art_plate,
     "qfn": _art_qfn,
     "tqfp32": _art_tqfp32,
     "rf-module": _art_rf_module,

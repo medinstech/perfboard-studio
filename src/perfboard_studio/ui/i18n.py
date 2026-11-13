@@ -3679,6 +3679,36 @@ TURKISH: Mapping[str, str] = {
         "değildir. Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, "
         "sıralar ve kart çevresi ölçülmüştür."
     ),
+    "SparkFun soil moisture sensor (SEN-13322)": (
+        "SparkFun toprak nem sensörü (SEN-13322)"
+    ),
+    "A soil moisture probe with an analog output: three header pads at the top of a 61 mm "
+    "board whose gold fingers go in the soil": (
+        "Analog çıkışlı bir toprak nemi probu: toprağa giren altın parmaklı 61 mm'lik "
+        "kartın üstünde üç header pedi"
+    ),
+    "Pin 1 is SIG. The board's silkscreen reads VCC, GND, SIG from the left with the "
+    "probe pointing down; turned the other way up, with the header pads at the bottom, "
+    "that puts SIG on the left. SEN-13322 is the board with these three pads left for a "
+    "header of your own; the 3.5 mm screw terminal beside them (SEN-13637 has one fitted) "
+    "carries the same three signals but is not on the 2.54 mm grid, so it is not a pin. "
+    "The two gold fingers are a variable resistor: the wetter the soil, the lower its "
+    "resistance and the higher the analog level on SIG. Keep the pads and the electronics "
+    "out of the soil. The two stand-off holes take a #4 screw. The board names no supply "
+    "range, so use the supply the maker's guide gives. The height of what is on the board "
+    "is an estimate, and so is its colour; the pins, the rows and the board outline are "
+    "measured.": (
+        "1. pin SIG'dir. Kartın baskısı, prob aşağı bakarken soldan VCC, GND, SIG okunur; "
+        "ters çevrilip header pedleri altta kaldığında SIG solda olur. SEN-13322, bu üç "
+        "pedi kendi header'ınız için boş bırakan karttır; yanındaki 3,5 mm'lik vidalı "
+        "klemens (SEN-13637'de takılıdır) aynı üç sinyali taşır ama 2,54 mm ızgarasında "
+        "değildir, bu yüzden pin sayılmaz. İki altın parmak değişken bir dirençtir: toprak "
+        "ne kadar ıslaksa direnci o kadar düşük, SIG'deki analog seviye o kadar yüksektir. "
+        "Pedleri ve elektroniği toprağın dışında tutun. İki stand-off deliği #4 vida alır. "
+        "Kart besleme aralığı belirtmez, üreticinin kılavuzundaki beslemeyi kullanın. "
+        "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
+        "çevresi ölçülmüştür."
+    ),
     "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
         "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
     ),

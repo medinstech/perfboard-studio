@@ -1329,6 +1329,15 @@ def test_the_acs712_is_sparkfuns_board_by_name_and_says_clones_differ() -> None:
     assert "sparkfun-acs712" in {found.id for found in search_catalog("current sensor")}
 
 
+def test_the_soil_sensor_is_the_header_pads_in_both_readings_of_its_order() -> None:
+    part = catalog_part("sparkfun-soil-moisture")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["SIG", "GND", "VCC"]
+    assert "github.com/sparkfun/Soil_Moisture_Sensor" in part.source
+    assert "screw" in part.check and "not on the 2.54 mm grid" in part.check
+    assert "sparkfun-soil-moisture" in {found.id for found in search_catalog("soil")}
+
+
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-ccs811": (

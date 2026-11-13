@@ -83,6 +83,8 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:  * ``chip-r``      -- a 0805 resistor; ``chip-c`` the same size of ceramic capacitor.
 #:  * ``pads``        -- an unfitted header: tinned rings round empty holes, 2.54 mm apart,
 #:                       as many as fit the part's length and width.
+#:  * ``plate``       -- an exposed flat of gold on the module's board (a soil probe's
+#:                       finger), ``height`` thick.
 #:  * ``silk``        -- printing on the module's own board, ``text`` and nothing else.
 #:  * ``hole``        -- a mounting hole through the module's board, ``length`` across its
 #:                       ring: bare board ``HOLE_EDGE_MM`` wide round it (a GY-521's), or a
@@ -142,6 +144,9 @@ ArtKind = Literal[
     # An electret microphone capsule seen from its front: a round metal can, its sound port
     # in the middle of the face. ``length`` is its diameter, ``height`` how far it stands.
     "capsule",
+    # An exposed flat of metal on the module's board -- a soil probe's gold finger: ``length``
+    # along its axis, ``width`` across, ``height`` how far it stands off the board.
+    "plate",
     "qfn",
     "tqfp32",
     "rf-module",
@@ -245,6 +250,7 @@ ART_COLOURS: dict[str, str] = {
     "epoxy": "#1d1e22",
     "trimmer": "#2f6fd0",
     "brass": "#c9a45a",
+    "plate": "#c9a24a",
     "slot": "#4a3a1c",
     "resistor": "#17181b",
     "mlcc": "#b48c5a",
@@ -1253,6 +1259,37 @@ SPARKFUN_ACS712_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's soil moisture sensor (SEN-13322), read off SparkFun's own Eagle board and seen from
+#: above with the three header pads along the top, SIG at the right (``pin_one``), the board
+#: running 61 mm away from them: the switching transistor and its two 0603 resistors beside the
+#: pads, a #4 stand-off hole in each top corner, and the probe, two fingers of bare gold the
+#: board's length that narrow to a tip. The screw terminal of the SEN-13637 is not drawn.
+SPARKFUN_SOIL_MODULE = ModuleArt(
+    key="sparkfun-soil-moisture",
+    board_colour=SPARKFUN_RED,
+    names=("sparkfun soil moisture",),
+    board=(22.86, 60.96),
+    pins=3,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("sot23", 0.0, -19.05, 2.4, 2.9, 1.1, along_v=True, facing=-1),
+        ArtPart("chip-r", -2.54, -19.05, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-r", 2.54, -19.05, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("hole", -8.89, -27.94, 3.9, 3.9, 0.0, inset=0.3),
+        ArtPart("hole", 8.89, -27.94, 3.9, 3.9, 0.0, inset=0.3),
+        ArtPart("plate", -7.62, 4.445, 36.8, 7.62, 0.05, along_v=True),
+        ArtPart("plate", 7.62, 4.445, 36.8, 7.62, 0.05, along_v=True),
+        ArtPart("plate", -7.62, 26.67, 7.6, 2.54, 0.05, along_v=True),
+        ArtPart("plate", 7.62, 26.67, 7.6, 2.54, 0.05, along_v=True),
+    ),
+    source=(
+        "SparkFun's Eagle board for the soil moisture sensor, github sparkfun/Soil_Moisture_"
+        "Sensor: the outline, the transistor, the resistors, the stand-off holes and the "
+        "probe's mask openings (drawn as two rectangles and a narrower tip each)"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1883,6 +1920,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ADAFRUIT_MAX4466_MODULE,
     ADAFRUIT_MAX9814_MODULE,
     SPARKFUN_ACS712_MODULE,
+    SPARKFUN_SOIL_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,
