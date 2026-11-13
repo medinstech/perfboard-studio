@@ -73,6 +73,12 @@ closed without a bump.
   driver. Drawn as themselves on the board: Adafruit's TCA9548A I2C multiplexer on its two
   rows of twelve, and SparkFun's HX711 load cell amplifier on its two five-pin headers. The
   XL6009 boost module goes in off the board, on four wires.
+- **Cutting the wire in the middle of a fully wired net splits it in two.** A net drawn
+  as a chain of wires stayed one net when a wire in the middle was cut, so its two ends
+  were still joined by a name nobody wrote and the sheet no longer showed. Where every pin
+  of the net is a wire end, the cut now leaves two nets: the larger piece keeps the name,
+  the smaller gets the next free one ("N3") with the net's class and current. A net with a
+  pin joined by name only stays whole, since the name still joins it. One Ctrl+Z.
 - **Copper is drawn by dragging, pad to pad.** With a drawing tool armed, press on a hole,
   drag, and let go on another: a run, a wire or a jumper in one gesture, a corner wherever
   the drag turns, previewed and checked as it goes exactly as clicks are. A press let go

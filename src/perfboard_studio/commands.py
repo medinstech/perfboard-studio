@@ -3205,13 +3205,20 @@ class _CutSheetWires:
       has it as an end. The end of a T that lands ON a wire is the pin it starts from
       (``a``); the pin ``b`` it names is joined through the wire it lands on, which is
       still there or went with it.
-    - A pin still joined by another drawn wire stays: both ends of a wire that something
-      else also joins are left as they are, and only the line goes. A net drawn as a chain
-      A-B, B-C, C-D stays one net when B-C goes: the netlist says one net and a person
-      cutting a wire in the middle of it gets the line off the sheet, not a split circuit.
+    - A pin still joined by another drawn wire stays on a net: both ends of a wire that
+      something else also joins keep their connections, and only the line goes.
     - A pin joined by NAME ONLY has no wire to cut and is never touched.
     - A net left with no pin is dropped, as a two-pin net is when its one wire goes: an
       empty net is a name in the Nets panel that means nothing.
+    - A NET WHOSE EVERY PIN IS A WIRE END IS SPLIT where the cut leaves its wires in two
+      pieces (``_split_by_wires``): the chain A-B, B-C, C-D cut at B-C becomes A-B and C-D.
+      There the wires were the whole of the connection, and a cut that left A joined to D
+      by a name nobody wrote would keep a join the sheet no longer shows. The larger piece
+      keeps the net -- its id, its name, its class -- and the smaller one is a new net
+      named by ``next_net_name``, with the class, current, voltage and face copied; equal
+      pieces leave the name with the one holding the net's first pin. One pin joined by
+      name only and the name still joins everything, so the net stays whole (above).
+      Every wire left is then on one net, so a split never leaves a wire nothing draws.
 
     One command, one undo step: the lines and the connections they drew go together.
     """
@@ -3241,15 +3248,30 @@ class _CutSheetWires:
             for node in (w.a, w.b) if w.tap is None else (w.a,):
                 if node not in touched:
                     leaving.setdefault(net.id, set()).add((node.component_ref, node.pin))
+        cut_from = {
+            net.id
+            for w in gone
+            for net in doc.nets
+            if w.a in net.nodes and w.b in net.nodes
+        }
         nets: list[Net] = []
         for net in doc.nets:
-            out = leaving.get(net.id)
-            if not out:
+            out = leaving.get(net.id, set())
+            if net.id not in cut_from:
                 nets.append(net)
                 continue
             remaining = tuple(n for n in net.nodes if (n.component_ref, n.pin) not in out)
-            if remaining:
-                nets.append(dataclasses.replace(net, nodes=remaining))
+            if not remaining:
+                continue
+            pieces = _split_by_wires(remaining, kept)
+            nets.append(dataclasses.replace(net, nodes=pieces[0]))
+            for piece in pieces[1:]:
+                named = dataclasses.replace(doc, nets=(*doc.nets, *nets))
+                nets.append(
+                    dataclasses.replace(
+                        net, id=ctx.next_id("net"), name=next_net_name(named), nodes=piece
+                    )
+                )
         return dataclasses.replace(doc, nets=tuple(nets), sheet_wires=kept)
 
     def describe(self, p: CutSheetWiresPayload, doc: PerfDocument) -> str:
@@ -3257,6 +3279,41 @@ class _CutSheetWires:
             wire = p.wires[0]
             return f"Delete the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}"
         return f"Delete {count_noun(len(p.wires), 'wire')} on the sheet"
+
+
+def _split_by_wires(
+    nodes: tuple[NetNode, ...], wires: tuple[SheetWire, ...]
+) -> list[tuple[NetNode, ...]]:
+    """A net's pins in the pieces its drawn wires hold together, the piece that keeps the
+    net first -- or the pins as one piece when any of them is joined by name only.
+
+    Only wires with both ends among ``nodes`` count: those are the net's, and a T's ``b``
+    is one of them because a T joins its pin to the net ``b`` is on. Each piece keeps the
+    order the pins have in the net. The larger piece comes first; of two the same size,
+    the one holding the net's first pin."""
+    keys = {(n.component_ref, n.pin) for n in nodes}
+    parent = {key: key for key in keys}
+
+    def root(key: tuple[str, str]) -> tuple[str, str]:
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    ends: set[tuple[str, str]] = set()
+    for wire in wires:
+        a, b = (wire.a.component_ref, wire.a.pin), (wire.b.component_ref, wire.b.pin)
+        if a in keys and b in keys:
+            ends.update((a, b))
+            parent[root(a)] = root(b)
+    if ends != keys:
+        return [nodes]
+    pieces: dict[tuple[str, str], list[NetNode]] = {}
+    for node in nodes:
+        pieces.setdefault(root((node.component_ref, node.pin)), []).append(node)
+    order = list(pieces.values())
+    order.sort(key=lambda piece: (-len(piece), nodes.index(piece[0])))
+    return [tuple(piece) for piece in order]
 
 
 class _AddSheetNote:

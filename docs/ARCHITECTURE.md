@@ -1529,6 +1529,17 @@ segment ran on, so the chain stays orthogonal and the middle is left exactly as 
 two-point path is the case that bites — `points[0]` and `points[-2]` are the same element, so
 the second fixup undoes the first — and it is handled before the loop, as an elbow.
 
+**Delete cuts a wire; Remove Line Only rubs it out.** `sheet.wire.cut` takes the wire with
+its T's and takes off the net every pin that only they joined; `sheet.wire.delete` leaves
+the circuit and takes the line. A net whose every pin is a wire end is SPLIT where a cut
+leaves its wires in two pieces (`commands._split_by_wires`): there the wires were the whole
+connection, and keeping A joined to D by a name nobody wrote after the wire between them
+went would be a join the sheet no longer shows. The larger piece keeps the net's id and
+name, the smaller is a new net from `next_net_name` with the class, current, voltage and
+face copied, and two pieces of a size leave the name with the one holding the net's first
+pin. One pin joined by name only and the name joins it all, so it stays whole; either way
+every wire left is on one net, and no wire is left that nothing draws.
+
 **`_orient_body` is the whole of rotation and mirroring.** Mirror first, then turn, which is
 the order `ComponentInstance` uses on the board: two places in this application answer "which
 way round is this", and having them disagree would mean a part whose symbol and whose
