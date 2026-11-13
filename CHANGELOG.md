@@ -32,6 +32,47 @@ closed without a bump.
   press let go where it went down still only selects. The cursor says what a press would
   pick up: a cross for an end or a corner, a two-headed arrow for a stretch, the four-way
   arrow for a part, which is now moved by its body.
+- **Install and Restart, on Windows.** When a newer release is out, the header shows an
+  "Update 0.25.0" pill and Home opens with a card at the top saying which version it is and
+  what changed, with the one button that does what comes next. On a copy installed with the
+  Windows installer, once the download's checksum has matched, the strip offers Install and
+  Restart: it asks about unsaved work as closing the window does, checks the file again,
+  runs the installer silently behind Windows' own administrator prompt, and the installer
+  opens the new version when it is done. Saying no at the prompt leaves the window open and
+  the download kept, to try again. macOS, the AppImage, a `pip` install and a copy unzipped
+  somewhere else still stop at the verified download. The release notes are read in a dialog
+  in the window, where they used to open on GitHub, and `PERFBOARD_STUDIO_RELEASES_URL`
+  points the check at another feed for trying the flow.
+- **Play lowers each part into its holes, and lays the copper.** In the 3D view's build
+  playback each part drops in from about 15 mm above the board over 700 ms, easing down,
+  and its solder appears when it lands; a solder run or a wire is drawn from its first hole
+  to its last, 30 ms a millimetre, so a two-hole link is a flick and a long wire is not a
+  crawl. Step forward does the same, and any new input -- a step, the slider, Pause, an
+  edit -- finishes a drop still running. A board of 40 steps plays as smoothly as one of 4.
+- **A wire on the schematic can be selected and cut.** A click on a wire used to select its
+  net and nothing else, so no wire could be deleted. It now selects the wire, drawn thick
+  with its corners, on a frozen sheet and on the drawn-for-you sheet the examples open on
+  (Delete freezes it first, as drawing a wire does). Delete cuts the wire with its
+  branches, and a pin it was the only wire to leaves the net; the status line says which
+  ("R3.2 left GND"). A pin still joined by other wires stays, a two-pin net cut in its
+  only wire is dropped, and Ctrl+Z brings it all back. Right-click ▸ Remove Line Only
+  still takes the line alone.
+- **Wires on the schematic follow a moved symbol, and are laid again where the move would
+  spoil them.** A wire whose end moved used to slide its two end segments and keep its
+  middle, so a long drag left it doubling back over itself, through a symbol or along
+  another net's line. Now such a wire is laid again round the symbols, and a wire the move
+  leaves clean keeps the corners it was drawn with. The drag shows the wires the drop
+  saves, and the move stores them, so the file holds what the screen showed.
+- **28 more modules and breakouts in the catalog**, with their pins named from the maker's
+  own board files or manual and a check that says what each pin wants. As the header their
+  cable plugs into: Adafruit's MPR121 touch sensor, RFM9x LoRa radio, ILI9341 2.8 inch TFT,
+  MAX98357 amplifier, TMC2209 stepper driver, CCS811, LSM6DS3, BNO055, AS5600 and QMC5883P,
+  TCS34725 colour, MAX31855 thermocouple and HMC5883L compass, MCP4725 DAC, ADXL345
+  accelerometer, SHT31-D, AHT20, BH1750 and VL53L0X breakouts; SparkFun's TEMT6000, AD8232
+  and MAX30105 boards; the HC-12 433 MHz radio, an FTDI basic header and the PCA9685 servo
+  driver. Drawn as themselves on the board: Adafruit's TCA9548A I2C multiplexer on its two
+  rows of twelve, and SparkFun's HX711 load cell amplifier on its two five-pin headers. The
+  XL6009 boost module goes in off the board, on four wires.
 - **Copper is drawn by dragging, pad to pad.** With a drawing tool armed, press on a hole,
   drag, and let go on another: a run, a wire or a jumper in one gesture, a corner wherever
   the drag turns, previewed and checked as it goes exactly as clicks are. A press let go
@@ -201,6 +242,10 @@ closed without a bump.
   second later. The chevron beside the
   solder and wire buttons lists their tools, each with its key and a line on what it lays.
   The first time a tool is picked, the banner over the board says what it lays.
+- **Picking a tool brings its canvas forward.** A board tool armed while the schematic is in
+  front brings the Board view forward, and a schematic drawing tool armed from the board
+  brings the Sheet forward, so a tool is never armed on a canvas out of sight. C, with
+  neither canvas focused, arms connecting on the one in sight.
 
 - **Auto-wire no longer builds a tower of wires.** Lying across another wire's end puts the
   new wire above it, so the router now prices that by how high the wire underneath already
@@ -291,8 +336,10 @@ closed without a bump.
   drawer's words with the drawer's count.
 - **A count is said as words: "1 part", "3 parts", never "3 part(s)".** The undo labels a
   part or a component gives ("Place and arrange 8 parts from the schematic", "Rotate 1
-  component", "Paste 2 parts and 1 connection"), every count the window's status line and
-  questions say, the Parts panel's pin counts and the 2D view's measure and drag banner.
+  component", "Paste 2 parts and 1 connection"), the schematic's ("Delete 1 wire on the
+  sheet", "Move 3 symbols on the sheet"), an agent's ("Place 3 imported parts", in Turkish
+  in a Turkish window), every count the window's status line and questions say, the Parts
+  panel's pin counts and the 2D view's measure and drag banner.
 - **A board opened while Home is showing comes to the front.** Home's own cards left Home
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying
