@@ -1293,6 +1293,20 @@ def test_the_drv8871_header_reads_in2_in1_vm_gnd_as_the_silkscreen_has_it() -> N
     assert "adafruit-drv8871" in {found.id for found in search_catalog("drv8871")}
 
 
+def test_the_microphone_boards_read_as_the_front_silkscreen_does() -> None:
+    """Both of Adafruit's photographs of the front -- microphone up, header at the bottom --
+    read OUT GND VCC and AR Out Gain Vdd GND left to right; the back prints them the other way
+    round. The boards' nets confirm every pad, and the amplifier is on the back."""
+    mic = catalog_part("adafruit-max4466")
+    agc = catalog_part("adafruit-max9814")
+    assert mic is not None and agc is not None
+    assert [name for _, name in mic.pin_names] == ["OUT", "GND", "VCC"]
+    assert [name for _, name in agc.pin_names] == ["AR", "OUT", "GAIN", "VDD", "GND"]
+    assert "Adafruit-MAX4466-Electret-Mic-Amplifier-PCBs" in mic.source
+    assert "Adafruit-MAX9814-AGC-Microphone-PCB" in agc.source
+    assert {"adafruit-max4466", "adafruit-max9814"} <= {found.id for found in search_catalog("microphone")}
+
+
 def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-ccs811": (

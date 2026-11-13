@@ -6117,6 +6117,30 @@ def _art_hole(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+def _art_capsule(s: _ArtSolid) -> list[_Piece]:
+    """An electret microphone capsule standing on the module: a turned metal can with its
+    top edge rounded off, and its face -- bare mesh or the black foam over it, at
+    ``colour`` -- a hair proud of the rim."""
+    r = min(s.length, s.width) / 2
+    h = s.height
+    profile = [(0.0, 0.0), (r, 0.0), (r, h - 0.3), (r - 0.3, h), (0.0, h)]
+    return [
+        _Piece(
+            source=_lathe(profile),
+            rgb=_ART_SHIELD_RGB,
+            position=(s.x, s.y, s.z),
+            material=STEEL,
+        ),
+        _Piece(
+            source=_cylinder(r - 0.6, 0.05, resolution=40),
+            rgb=_hex_rgb(s.colour, LEAD_RGB) if s.colour else _ART_SHIELD_RGB,
+            position=(s.x, s.y, s.z + h + 0.0),
+            orientation=_ALONG_Z,
+            material=LAMINATE if s.colour else STEEL,
+        ),
+    ]
+
+
 def _art_terminal(s: _ArtSolid) -> list[_Piece]:
     """A screw terminal block on the module: the moulded block, per way a slotted steel
     screw head standing its decal's tenth and a half proud of the top over its pin, the
@@ -6346,6 +6370,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "so16": _art_gull_wing,
     "sot23-8": _art_gull_wing,
     "msop10": _art_gull_wing,
+    "capsule": _art_capsule,
     "qfn": _art_qfn,
     "tqfp32": _art_tqfp32,
     "rf-module": _art_rf_module,

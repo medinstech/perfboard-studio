@@ -3911,6 +3911,13 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         painter.drawPie(QRectF(-radius, -radius, 2 * radius, 2 * radius), -40 * 16, 80 * 16)
         painter.setBrush(QBrush(QColor(style.accent).darker(115)))
         painter.drawEllipse(QPointF(0.0, 0.0), radius - 0.75, radius - 0.75)
+    elif kind == "capsule":
+        radius = min(length, width) / 2
+        steel = _art_colour("shield")
+        painter.setBrush(QBrush(steel.darker(112)))
+        painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
+        painter.setBrush(QBrush(QColor(part.colour) if part.colour else steel))
+        painter.drawEllipse(QPointF(0.0, 0.0), radius - 0.6, radius - 0.6)
     elif kind == "inductor":
         side = min(length, width)
         corner = min(1.6, side * 0.14)

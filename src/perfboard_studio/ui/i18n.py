@@ -3536,6 +3536,59 @@ TURKISH: Mapping[str, str] = {
         "yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi "
         "ölçülmüştür."
     ),
+    "Adafruit MAX4466 microphone amplifier": (
+        "Adafruit MAX4466 mikrofon yükselticisi"
+    ),
+    "An electret microphone with an adjustable-gain amplifier, 25x to 125x, analog out: "
+    "three header pins": (
+        "Ayarlanabilir kazançlı yükselticili bir elektret mikrofon, 25x ile 125x, analog "
+        "çıkış: üç header pini"
+    ),
+    "Pin 1 is OUT, the way the front's silkscreen reads with the header at the bottom, "
+    "microphone side up; the back prints the same three names the other way round, VCC "
+    "first. VCC takes 2.4 to 5.5 V, and the quietest supply the project has gives the best "
+    "sound. The output sits at half of VCC when it is quiet and is not AC coupled: put "
+    "100 uF between OUT and an input that wants line level, or wire OUT straight to a "
+    "controller's ADC pin. The gain is the trimmer on the back, 25x to 125x. The amplifier "
+    "and its passives are on the back and are not drawn. The height of what is on the "
+    "board is an estimate, and so is its colour; the pins, the rows and the board outline "
+    "are measured.": (
+        "1. pin OUT'tur; ön yüzün baskısı, header altta ve mikrofon tarafı yukarıda "
+        "okunduğunda böyledir, arka yüz aynı üç adı ters sırayla, VCC önde basar. VCC 2,4 ile "
+        "5,5 V alır; projedeki en sessiz besleme en iyi sesi verir. Sessizken çıkış VCC'nin "
+        "yarısındadır ve AC bağlı değildir: OUT ile hat seviyesi isteyen bir giriş arasına "
+        "100 uF koyun ya da OUT'u doğrudan bir denetleyicinin ADC pinine bağlayın. Kazancı "
+        "arkadaki trimmer ayarlar, 25x ile 125x. Yükselticiyle pasif parçalar arka "
+        "yüzdedir, çizilmemiştir. Kartın üstündekilerin yüksekliği tahmindir, rengi de "
+        "öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
+    "Adafruit MAX9814 microphone amplifier": (
+        "Adafruit MAX9814 mikrofon yükselticisi"
+    ),
+    "An electret microphone with an automatic-gain amplifier, 40, 50 or 60 dB: five "
+    "header pins": (
+        "Otomatik kazançlı yükselticili bir elektret mikrofon, 40, 50 ya da 60 dB: beş "
+        "header pini"
+    ),
+    "Pin 1 is AR, the way the front's silkscreen reads with the header at the bottom, "
+    "microphone side up; the back prints the same five names from GND. VDD takes 2.7 to "
+    "5.5 V. GAIN left floating is 60 dB, tied to GND 50 dB, tied to VDD 40 dB. AR sets the "
+    "attack to release ratio of the automatic gain: left floating it is 1:4000, to VDD "
+    "1:2000, to GND 1:500. The output is up to 2 V peak to peak on a 1.25 V DC offset, so "
+    "an audio input that is AC coupled needs a capacitor in series. The amplifier and its "
+    "passives are on the back and are not drawn. The height of what is on the board is an "
+    "estimate, and so is its colour; the pins, the rows and the board outline are "
+    "measured.": (
+        "1. pin AR'dir; ön yüzün baskısı, header altta ve mikrofon tarafı yukarıda "
+        "okunduğunda böyledir, arka yüz aynı beş adı GND'den başlayarak basar. VDD 2,7 ile "
+        "5,5 V alır. GAIN boş bırakılırsa 60 dB, GND'ye bağlanırsa 50 dB, VDD'ye "
+        "bağlanırsa 40 dB olur. AR, otomatik kazancın atak/bırakma oranını belirler: boşta "
+        "1:4000, VDD'ye bağlı 1:2000, GND'ye bağlı 1:500. Çıkış, 1,25 V DC ofset üzerinde "
+        "en çok 2 V tepeden tepeye olduğundan, AC bağlı bir ses girişi için seriye bir "
+        "kondansatör gerekir. Yükselticiyle pasif parçalar arka yüzdedir, çizilmemiştir. "
+        "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
+        "çevresi ölçülmüştür."
+    ),
     "Adafruit SCD-40 / SCD-41 CO2 sensor (STEMMA QT)": (
         "Adafruit SCD-40 / SCD-41 CO2 sensörü (STEMMA QT)"
     ),

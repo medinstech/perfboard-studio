@@ -139,6 +139,9 @@ ArtKind = Literal[
     "sot23-8",
     # A 10-leg MSOP (TI's DGS, 3.0 mm body): the ADS1115's.
     "msop10",
+    # An electret microphone capsule seen from its front: a round metal can, its sound port
+    # in the middle of the face. ``length`` is its diameter, ``height`` how far it stands.
+    "capsule",
     "qfn",
     "tqfp32",
     "rf-module",
@@ -1177,6 +1180,54 @@ ADAFRUIT_DRV8871_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's electret microphone amplifiers, MAX4466 (product 1063) and MAX9814 (1713), read
+#: off Adafruit's own Eagle boards and seen from the FRONT, the face the microphone capsule
+#: stands on and the pin names are printed on: the amplifier and its passives are on the
+#: back, which this view does not show. Header along the top, the first pin -- the one on the
+#: left with the header at the bottom, as the front's silkscreen reads -- at the right
+#: (``pin_one``). The capsule is Kingstate's / CUI's 9.7 mm one, 4.5 mm tall; the MAX4466's
+#: carries a black foam windshield, the MAX9814's is bare mesh.
+ADAFRUIT_MAX4466_MODULE = ModuleArt(
+    key="adafruit-max4466",
+    board_colour=ADAFRUIT_BLACK,
+    names=("max4466",),
+    board=(13.97, 21.59),
+    pins=3,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("capsule", 0.0, 3.3, 9.7, 9.7, 4.5, colour="#09090b"),
+        ArtPart("hole", -4.83, 8.51, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 4.83, 8.51, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit MAX4466 Eagle board, github adafruit/Adafruit-MAX4466-Electret-Mic-Amplifier-"
+        "PCBs, 'Adafruit MAX4466 Mic Amp.brd', CC BY-SA (the board, the header, the capsule's "
+        "place and the mounting holes) and Adafruit's product photographs 1063-06 and 1063-07 "
+        "(the front: capsule with its foam, the three pins' names)"
+    ),
+)
+
+ADAFRUIT_MAX9814_MODULE = ModuleArt(
+    key="adafruit-max9814",
+    board_colour=ADAFRUIT_BLUE,
+    names=("max9814",),
+    board=(14.1, 25.4),
+    pins=5,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("capsule", -0.06, 5.46, 9.7, 9.7, 4.5),
+        ArtPart("hole", -5.02, 10.67, 3.0, 3.0, 0.0, inset=0.4, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 5.02, 10.67, 3.0, 3.0, 0.0, inset=0.4, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit MAX9814 Eagle board, github adafruit/Adafruit-MAX9814-AGC-Microphone-PCB (the "
+        "board, the header, the capsule's place and the mounting holes) and Adafruit's product "
+        "photographs 1713-04 (the front) and 1713-05 (the back)"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1804,6 +1855,8 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ADAFRUIT_INA219_MODULE,
     ADAFRUIT_SCD4X_MODULE,
     ADAFRUIT_DRV8871_MODULE,
+    ADAFRUIT_MAX4466_MODULE,
+    ADAFRUIT_MAX9814_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

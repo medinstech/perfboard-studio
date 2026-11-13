@@ -3617,6 +3617,54 @@ CATALOG: tuple[CatalogPart, ...] = (
                     + _MODULE_TOP
                 ),
                 aliases=("DRV8871", "motor driver", "H-bridge", "DC motor", "3.6A")),
+    CatalogPart("adafruit-max4466", "Adafruit MAX4466 microphone amplifier", "sensor",
+                "mod-3x1-p1-r1-13.97x21.59x4.5-s8.5-o0.13x-9.27",
+                "An electret microphone with an adjustable-gain amplifier, 25x to 125x, "
+                "analog out: three header pins",
+                _legs("OUT", "GND", "VCC"), ref_prefix="U",
+                value="Adafruit MAX4466",
+                source=(
+                    "Adafruit's own Eagle board (github.com/adafruit/Adafruit-MAX4466-Electret-"
+                    "Mic-Amplifier-PCBs, 'Adafruit MAX4466 Mic Amp'): its 1 x 3 header, each "
+                    "pad's net checked against the board's nets, and Adafruit's product "
+                    "photograph of the front (1063-07); the specifications from Adafruit's page"
+                ),
+                check=(
+                    "Pin 1 is OUT, the way the front's silkscreen reads with the header at the "
+                    "bottom, microphone side up; the back prints the same three names the other "
+                    "way round, VCC first. VCC takes 2.4 to 5.5 V, and the quietest supply the "
+                    "project has gives the best sound. The output sits at half of VCC when it "
+                    "is quiet and is not AC coupled: put 100 uF between OUT and an input that "
+                    "wants line level, or wire OUT straight to a controller's ADC pin. The gain "
+                    "is the trimmer on the back, 25x to 125x. The amplifier and its "
+                    "passives are on the back and are not drawn. " + _MODULE_TOP
+                ),
+                aliases=("microphone", "mic", "electret", "audio", "MAX4466")),
+    CatalogPart("adafruit-max9814", "Adafruit MAX9814 microphone amplifier", "sensor",
+                "mod-5x1-p1-r1-14.1x25.4x4.5-s8.5-o0.19x-11.3",
+                "An electret microphone with an automatic-gain amplifier, 40, 50 or 60 dB: "
+                "five header pins",
+                _legs("AR", "OUT", "GAIN", "VDD", "GND"), ref_prefix="U",
+                value="Adafruit MAX9814",
+                source=(
+                    "Adafruit's own Eagle board (github.com/adafruit/Adafruit-MAX9814-AGC-"
+                    "Microphone-PCB): its 1 x 5 header, each pad's net checked against the "
+                    "board's nets, and Adafruit's product photographs of the front and the "
+                    "back (1713-04, 1713-05); the specifications from Adafruit's page and "
+                    "Analog Devices' MAX9814 datasheet"
+                ),
+                check=(
+                    "Pin 1 is AR, the way the front's silkscreen reads with the header at the "
+                    "bottom, microphone side up; the back prints the same five names from GND. "
+                    "VDD takes 2.7 to 5.5 V. GAIN left floating is 60 dB, tied to GND 50 dB, "
+                    "tied to VDD 40 dB. AR sets the attack to release ratio of the "
+                    "automatic gain: left floating it is 1:4000, to VDD 1:2000, to GND 1:500. The output is up to 2 V "
+                    "peak to peak on a 1.25 V DC offset, so an audio input that is AC coupled "
+                    "needs a capacitor in series. "
+                    "The amplifier and its passives are on the back and are not drawn. "
+                    + _MODULE_TOP
+                ),
+                aliases=("microphone", "mic", "electret", "audio", "AGC", "MAX9814")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

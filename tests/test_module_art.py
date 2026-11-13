@@ -134,6 +134,8 @@ def _footprint(footprint_id: str):
         ("SCD-41", "adafruit-scd4x"),
         ("SCD40", "adafruit-scd4x"),
         ("Adafruit DRV8871", "adafruit-drv8871"),
+        ("Adafruit MAX4466 microphone amplifier", "adafruit-max4466"),
+        ("MAX9814 AGC mic", "adafruit-max9814"),
         ("ESP32-S3-DevKitC-1", "esp32-s3-devkitc-1"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
@@ -277,6 +279,10 @@ def _bounds(part) -> tuple[float, float, float, float]:
     return min(xs), max(xs), min(ys), max(ys)
 
 
+#: The parts drawn as circles, whose boxes meet before their edges do.
+_ROUND_KINDS = frozenset({"capsule", "hole"})
+
+
 def _polygon_meets_box(points, box) -> bool:
     """Whether a convex polygon and an axis-aligned box share any area -- separating axes,
     written here rather than borrowed from ``moduleart`` so the two are checked against
@@ -330,6 +336,12 @@ def test_no_two_parts_on_a_module_stand_in_one_place(art, footprint_id: str, nam
             # A part that is not turned is its own box, so measuring the turned one against
             # it is exact.
             turned, square = (other, part) if other.diagonal else (part, other)
+            if part.kind in _ROUND_KINDS and other.kind in _ROUND_KINDS:
+                # Two round parts are measured as circles: a capsule beside a mounting hole
+                # shares a corner of their boxes and nothing of their metal.
+                gap = math.hypot(part.x - other.x, part.y - other.y)
+                assert gap >= (part.size_x + other.size_x) / 2, (part, other)
+                continue
             assert not _polygon_meets_box(outline(turned), _bounds(square)), (part, other)
 
 
@@ -807,6 +819,8 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "adafruit-ads1115": ADAFRUIT_BLACK,
         "adafruit-scd4x": ADAFRUIT_BLACK,
         "adafruit-drv8871": ADAFRUIT_BLUE,
+        "adafruit-max4466": ADAFRUIT_BLACK,
+        "adafruit-max9814": ADAFRUIT_BLUE,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
