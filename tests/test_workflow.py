@@ -343,3 +343,30 @@ def test_a_circuit_whose_parts_have_no_value_is_not_drawn_yet() -> None:
     # A long list is cut short rather than run across the card.
     many = dataclasses.replace(facts, valueless=tuple(f"R{n}" for n in range(1, 9)))
     assert "R1, R2, R3, R4, R5 and 3 more" in step_hint("circuit", many)
+
+
+def test_a_part_on_nothing_is_still_to_join_until_somebody_goes_on_without_it() -> None:
+    """Next went on to "Choose a Board" with three parts of a blinker on no net, and from the
+    first wire the step was red with "Show Problems" over a drawing half done (the newcomer
+    walk). While drawing, the parts on nothing are the work left: the step is current, Next
+    joins pins and the hint names them. Gone on from without them, they are the problem."""
+    facts = dataclasses.replace(
+        EMPTY, parts_off_board=8, nets=5, to_join=("R3", "C2", "D1"), valueless=("R1",)
+    )
+    assert statuses(facts)["circuit"] == "current"
+    assert next_step(workflow_steps(facts)) == "circuit"
+    circuit = workflow_steps(facts)[0]
+    # Joining comes before the values.
+    assert circuit.action == "Connect the Pins"
+    assert circuit.summary == "8 parts · 3 still to join"
+    assert "R3, C2 and D1" in step_hint("circuit", facts)
+
+    left = dataclasses.replace(facts, circuit_left=True)
+    assert statuses(left)["circuit"] == "problem"
+    assert workflow_steps(left)[0].action == "Show Problems"
+    assert "R3, C2 and D1" in step_hint("circuit", left)
+
+    # Joined, the values are what is left -- in the plain voice, gone on from or not.
+    joined = dataclasses.replace(left, to_join=())
+    assert statuses(joined)["circuit"] == "current"
+    assert workflow_steps(joined)[0].action == "Set the Values"

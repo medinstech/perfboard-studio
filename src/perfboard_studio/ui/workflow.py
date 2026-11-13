@@ -115,6 +115,16 @@ class WorkflowFacts:
     #: passed over an empty resistor and the guide's first step read "R1 -- I6 -> L6"
     #: (the newcomer walk).
     valueless: tuple[str, ...] = ()
+    #: Parts with a pin connected to nothing (ERC's ``part-unconnected``,
+    #: ``supply-unconnected`` and ``supply-pin-open``), by reference. While the circuit is
+    #: being drawn they are what is left to join, and the step stays current naming them:
+    #: Next went on to "Choose a Board" with three parts of a blinker on no net at all.
+    to_join: tuple[str, ...] = ()
+    #: Whether somebody went on from the Circuit step with ``to_join`` or ``valueless``
+    #: still there. Until then an unwired pin is work left, said in a neutral voice; after
+    #: it, it is a problem, red -- a pin left open on the way to a board is a mistake, and
+    #: halfway through drawing one is not.
+    circuit_left: bool = False
 
 
 #: How many references a step names before it says how many more.
@@ -187,8 +197,12 @@ def step_action(key: StepKey, facts: WorkflowFacts | None = None) -> str:
     no nets sent people back to the one thing they had already done. And with an error in
     it, the next thing is reading what is wrong.
     """
-    if key == "circuit" and facts is not None and facts.erc_errors:
+    if key == "circuit" and facts is not None and (
+        facts.erc_errors or (facts.circuit_left and facts.to_join)
+    ):
         return t("Show Problems")
+    if key == "circuit" and facts is not None and facts.to_join:
+        return t("Connect the Pins")
     if key == "circuit" and facts is not None and facts.nets and facts.valueless:
         return t("Set the Values")
     if key == "circuit" and facts is not None and facts.parts_off_board + facts.parts_on_board:
@@ -251,6 +265,15 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     parts = facts.parts_off_board + facts.parts_on_board
     if key == "circuit" and parts and facts.erc_errors:
         return t("The circuit has a mistake to put right first. Show Problems says what and where.")
+    if key == "circuit" and parts and facts.to_join and facts.circuit_left:
+        return t(
+            "Still connected to nothing: {parts}. Show Problems says which pins; join them "
+            "on the sheet before the board."
+        ).format(parts=refs_said(facts.to_join))
+    if key == "circuit" and parts and facts.to_join:
+        return t(
+            "Still to join: {parts}. Click a pin, then the pin it connects to."
+        ).format(parts=refs_said(facts.to_join))
     if key == "circuit" and parts and facts.nets and facts.valueless:
         return t(
             "Still without a value: {parts}. Select each and type its value in Properties: "
@@ -306,8 +329,13 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     parts = facts.parts_off_board + facts.parts_on_board
     # A circuit with an error in it is not drawn yet, whatever else is: an unpowered chip is
     # still unpowered on the finest board, and nothing downstream will say so.
-    circuit_bad = parts > 0 and facts.erc_errors > 0
-    circuit_done = parts > 0 and facts.nets > 0 and not circuit_bad and not facts.valueless
+    # A pin connected to nothing is the drawing not being finished -- until somebody goes
+    # on without it (``circuit_left``), when it is a part left off the circuit.
+    circuit_todo = bool(facts.to_join or facts.valueless)
+    circuit_bad = parts > 0 and (
+        facts.erc_errors > 0 or (facts.circuit_left and bool(facts.to_join))
+    )
+    circuit_done = parts > 0 and facts.nets > 0 and not circuit_bad and not circuit_todo
     board_done = facts.board_chosen or facts.parts_on_board > 0
     place_done = (
         facts.parts_on_board > 0 and facts.parts_off_board == 0 and not facts.empty_board
@@ -331,9 +359,13 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     part_count = _counted(parts, t("{count} part"), t("{count} parts"))
     if parts == 0:
         circuit = t("no parts yet")
-    elif circuit_bad:
+    elif circuit_bad and facts.erc_errors:
         errors = _counted(facts.erc_errors, t("{count} error"), t("{count} errors"))
         circuit = f"{part_count} · {errors}"
+    elif facts.to_join:
+        circuit = f"{part_count} · " + _counted(
+            len(facts.to_join), t("{count} still to join"), t("{count} still to join")
+        )
     elif facts.nets and facts.valueless:
         circuit = f"{part_count} · " + _counted(
             len(facts.valueless), t("{count} without a value"), t("{count} without a value")

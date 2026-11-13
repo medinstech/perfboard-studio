@@ -451,6 +451,7 @@ from .workflow import (
     WorkflowFacts,
     build_action,
     next_step,
+    refs_said,
     step_hint,
     step_title,
     workflow_steps,
@@ -2620,6 +2621,13 @@ def _lvs_title(kind: str) -> str:
     return titles.get(kind, kind)
 
 
+#: The circuit check's rules that are the drawing not finished yet rather than a mistake
+#: in it: a pin connected to nothing, and a value not typed in. Work left while the circuit
+#: is drawn (``MainWindow._erc_shown``), and a problem once somebody goes on without it.
+JOIN_RULES = frozenset({"part-unconnected", "supply-unconnected", "supply-pin-open"})
+STILL_TO_DO_RULES = JOIN_RULES | {"value-missing"}
+
+
 def _severity_word(severity: str) -> str:
     return t("error") if severity == "error" else t("warning")
 
@@ -2983,6 +2991,10 @@ class MainWindow(QMainWindow):
         #: ``workflow.WorkflowFacts.board_chosen``. Not stored: a board with parts on it
         #: has been chosen by definition, and one without has been chosen by nobody yet.
         self._board_chosen = False
+        #: Whether somebody went on from the Circuit step with a pin connected to nothing or
+        #: a value missing -- ``WorkflowFacts.circuit_left``. Cleared once nothing is left
+        #: to do, and on a new document.
+        self._circuit_left = False
         #: Whether the build guide has been in front on this document, and whether the
         #: Save the last step offered was cancelled -- ``WorkflowFacts.guide_opened`` and
         #: ``save_declined``. Not stored, like ``_board_chosen``.
@@ -3522,8 +3534,8 @@ class MainWindow(QMainWindow):
             ),
             drc_unwired=sum(1 for v in violations if v.rule in UNWIRED_RULES),
             lvs_problems=problems,
-            erc_errors=sum(1 for f in self._last_erc if f.severity == "error"),
-            erc_warnings=sum(1 for f in self._last_erc if f.severity == "warning"),
+            erc_errors=sum(1 for f in self._erc_shown() if f.severity == "error"),
+            erc_warnings=sum(1 for f in self._erc_shown() if f.severity == "warning"),
             lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
             shorts_wait_for_wiring=is_stripboard(board),
             guide_showing=self._is_in_front(getattr(self, "dock_guide", None)),
@@ -3543,7 +3555,55 @@ class MainWindow(QMainWindow):
             valueless=tuple(
                 ref for f in self._last_erc if f.rule == "value-missing" for ref in f.refs
             ),
+            to_join=self._refs_to_join(),
+            circuit_left=self._circuit_left,
         )
+
+    def _circuit_being_drawn(self) -> bool:
+        """Whether the circuit is still being drawn: nobody has gone on from its step, and
+        no part is on a board yet. A board with parts on it is past drawing by definition,
+        which is also how a file opened with an open pin says so at once."""
+        return not self._circuit_left and not every_component(self.bus.system_document)
+
+    def _erc_shown(self) -> tuple[ErcFinding, ...]:
+        """The circuit's findings as problems: all of them, except while the circuit is
+        being drawn, when a pin connected to nothing and a value not typed yet are the work
+        left (``STILL_TO_DO_RULES``) rather than a fault. From the first wire of a blinker
+        the step turned red and every part on the sheet had an orange ring, halfway through
+        drawing it (the newcomer walk). A short or two outputs together are wrong however
+        much is left to draw, so those stay red at once."""
+        if not self._circuit_being_drawn():
+            return self._last_erc
+        return tuple(f for f in self._last_erc if f.rule not in STILL_TO_DO_RULES)
+
+    def _refs_to_join(self) -> tuple[str, ...]:
+        """The parts with a pin connected to nothing, each once, in the check's order."""
+        refs = (
+            ref for f in self._last_erc if f.rule in JOIN_RULES for ref in f.refs
+        )
+        return tuple(dict.fromkeys(refs))
+
+    def _leave_the_circuit(self) -> None:
+        """Somebody is going on from the Circuit step: what was still to do there becomes a
+        problem, said in the status bar by name and shown in red. Nothing is refused -- the
+        board is still theirs to choose -- but a part left off the circuit is not news to
+        find out at the bench."""
+        if self._circuit_left or not self._circuit_being_drawn():
+            return
+        refs = self._refs_to_join()
+        if not refs:
+            return
+        self._circuit_left = True
+        self.statusBar().showMessage(
+            t("Still connected to nothing: {parts}. Show Problems says which pins.").format(
+                parts=refs_said(refs)
+            ),
+            10000,
+        )
+        self._refresh_problems_bar()
+        if self._last_lvs is not None:
+            self._refresh_drc_panel(self._last_violations, self._last_lvs)
+        self._refresh_schematic_panel()
 
     def _empty_board(self) -> BoardId | None:
         """The first board of a system with no part on it, or None: a single board with
@@ -3630,6 +3690,8 @@ class MainWindow(QMainWindow):
     def on_workflow_step(self, key: str) -> None:
         """A step pressed: go where that step is done. Nothing is changed by going there."""
         step = cast(StepKey, key)
+        if step != "circuit":
+            self._leave_the_circuit()
         if step == "circuit":
             self.show_schematic()
         elif step == "board":
@@ -3650,10 +3712,11 @@ class MainWindow(QMainWindow):
         step = cast(StepKey, key)
         # The last step's own action, which depends on what is in front (``build_action``).
         after = build_action(self.workflow_facts()) if step == "build" else "open-guide"
-        if step == "circuit" and any(f.severity == "error" for f in self._last_erc):
+        facts = self.workflow_facts()
+        if step == "circuit" and (facts.erc_errors or (facts.circuit_left and facts.to_join)):
             # What step_action promised: the circuit's errors, beside the sheet they are on.
             self.show_circuit_findings()
-        elif step == "circuit" and (facts := self.workflow_facts()).nets and facts.valueless:
+        elif step == "circuit" and facts.nets and facts.valueless and not facts.to_join:
             # Joined and not yet said what they are: the first in Properties, the keyboard
             # in its Value, as a double-click on it does.
             self.show_schematic()
@@ -3719,6 +3782,7 @@ class MainWindow(QMainWindow):
         on, so the board somebody had just picked was first seen at Place, a step later --
         the newcomer walkthrough's second stall.
         """
+        self._leave_the_circuit()
         document = self.bus.document
         chosen = False
         if document.parts and not document.components:
@@ -7503,7 +7567,7 @@ class MainWindow(QMainWindow):
         drawing = build_schematic(self.bus.system_document, self.lookup)
         # The circuit's findings ringed on the pins they are about: the sheet is where the
         # circuit is drawn, so it is where an unpowered VCC is looked for.
-        self.schematic_view.set_findings(self._last_erc)
+        self.schematic_view.set_findings(self._erc_shown())
         # On a sheet still being arranged, the wires it would keep if it were frozen now,
         # so a wire there is selected like any other (see ``SchematicView.unfrozen_wires``).
         self.schematic_view.set_unfrozen_wires(
@@ -10877,6 +10941,8 @@ class MainWindow(QMainWindow):
         # The circuit's check, ahead of the board's: it is what the Circuit step, the first
         # rows of the findings and the status bar's first count are measured on.
         self._last_erc = run_erc(document, self.lookup)
+        if not any(f.rule in STILL_TO_DO_RULES for f in self._last_erc):
+            self._circuit_left = False
         # DRC and the ratsnest are a board's, on the board shown; ERC above and LVS below are
         # the system's, on the whole document.
         shown = board_document(document, self._shown_board)
@@ -11095,8 +11161,9 @@ class MainWindow(QMainWindow):
         landed, over a board nobody had done anything wrong to yet.
         """
         waiting = self._work_left()
-        erc_errors = sum(1 for f in self._last_erc if f.severity == "error")
-        erc_warns = len(self._last_erc) - erc_errors
+        erc_shown = self._erc_shown()
+        erc_errors = sum(1 for f in erc_shown if f.severity == "error")
+        erc_warns = len(erc_shown) - erc_errors
         drc_errors = sum(1 for v in self._last_violations if v.severity == "error")
         # A gap the guide checks at the bench is not wrong, so it is counted apart rather
         # than in the badge: ne555-astable, a shipped example, opened on "Problems 1".
@@ -11316,13 +11383,16 @@ class MainWindow(QMainWindow):
         means the circuit step is not done, and Next sends people to this group to read it.
         """
         findings = self._last_erc
-        errors = sum(1 for f in findings if f.severity == "error")
+        shown = self._erc_shown()
+        errors = sum(1 for f in shown if f.severity == "error")
+        to_do = len(findings) - len(shown)
         root = QTreeWidgetItem(
             [
                 t("Circuit check (ERC)"),
                 counted(errors, t("{count} error"), t("{count} errors"))
                 + " · "
-                + counted(len(findings) - errors, t("{count} warning"), t("{count} warnings")),
+                + counted(len(shown) - errors, t("{count} warning"), t("{count} warnings"))
+                + (" · " + t("{count} still to do").format(count=to_do) if to_do else ""),
             ]
         )
         root.setToolTip(0, t("Whether the circuit itself is right, before any board is asked about."))
@@ -11338,13 +11408,22 @@ class MainWindow(QMainWindow):
             if needle and needle not in haystack:
                 continue
             by_rule.setdefault(finding.rule, []).append(finding)
+        drawing = self._circuit_being_drawn()
         for rule, items in by_rule.items():
             severity = items[0].severity
-            rule_item = QTreeWidgetItem(
-                [f"{_erc_title(rule)} ({_severity_word(severity)})", f"{len(items)}"]
-            )
+            # While the circuit is drawn, the work left: listed, in the plain voice.
+            waiting = drawing and rule in STILL_TO_DO_RULES
+            word = t("still to do") if waiting else _severity_word(severity)
+            rule_item = QTreeWidgetItem([f"{_erc_title(rule)} ({word})", f"{len(items)}"])
             rule_item.setToolTip(0, rule)
-            rule_item.setForeground(0, QColor(theme.colour("danger" if severity == "error" else "warning")))
+            rule_item.setForeground(
+                0,
+                QColor(
+                    theme.colour(
+                        "secondary" if waiting else "danger" if severity == "error" else "warning"
+                    )
+                ),
+            )
             rule_item.setData(0, ROLE_FINDING_KEY, f"erc:{rule}")
             root.addChild(rule_item)
             for finding in items:
@@ -11370,7 +11449,10 @@ class MainWindow(QMainWindow):
         for index in range(root.childCount()):
             child = root.child(index)
             key = child.data(0, ROLE_FINDING_KEY) if child is not None else None
-            if child is not None and ERC_SEVERITY.get(str(key).removeprefix("erc:")) == "error":
+            rule = str(key).removeprefix("erc:")
+            if child is not None and (
+                ERC_SEVERITY.get(rule) == "error" or (self._circuit_left and rule in JOIN_RULES)
+            ):
                 child.setExpanded(True)
         self.drc_tree.scrollToItem(root)
 
@@ -15127,6 +15209,7 @@ class MainWindow(QMainWindow):
         # Nobody has chosen the NEW document's board -- unless it has parts on it, which
         # ``workflow_steps`` already counts as chosen.
         self._board_chosen = False
+        self._circuit_left = False
         self._guide_opened = False
         self._save_declined = False
         self._other_boards_checked.clear()

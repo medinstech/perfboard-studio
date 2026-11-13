@@ -8888,26 +8888,40 @@ def _unpowered_555() -> PerfDocument:
 
 
 def test_a_circuit_error_comes_first_in_the_findings_and_is_where_next_goes() -> None:
-    """Before any board: the findings open on the circuit's group, the status bar counts
-    it, the Circuit step is the problem, and Next opens what is wrong beside the sheet --
-    and connecting the pin clears all four."""
+    """Before any board, a supply pin on nothing is work left while the circuit is drawn:
+    listed in the findings in the plain voice, counted as no error, the step current and
+    naming the chip. Going on from the step makes it the problem it then is -- the status
+    bar counts it, the Circuit step is red, and Next opens what is wrong beside the sheet
+    -- and connecting the pin clears all of it."""
     from perfboard_studio.commands import AddNetPayload
     from perfboard_studio.model import NetNode
+    from perfboard_studio.ui.i18n import t
     from perfboard_studio.ui.main import _erc_title
 
     window = _window_on(_unpowered_555())
     try:
         root = window.drc_tree.topLevelItem(0)
         assert root.data(0, _finding_key_role()) == "ERC"
-        assert root.isExpanded(), "an error in the circuit is shown, not folded away"
         group = _drc_group(window, "erc:supply-unconnected")
         assert group is not None
-        assert group.text(0).startswith(_erc_title("supply-unconnected"))
+        assert group.text(0) == f'{_erc_title("supply-unconnected")} ({t("still to do")})'
         assert group.toolTip(0) == "supply-unconnected"
+        assert window.problems_bar.errors == 0
+        assert window.workflow_bar.next_key == "circuit"
+        assert window.workflow_bar.buttons["circuit"].property("status") == "current"
+        assert window.workflow_bar.next_button.text() == t("Connect the Pins")
+        assert window.workflow_facts().to_join == ("U1",)
+
+        # Going on to the checks with the pin still open: now it is a problem.
+        window.on_workflow_step("check")
+        assert "U1" in window.statusBar().currentMessage()
         errors_before = window.problems_bar.errors
         assert errors_before >= 1
         assert window.workflow_bar.next_key == "circuit"
         assert window.workflow_bar.buttons["circuit"].property("status") == "problem"
+        group = _drc_group(window, "erc:supply-unconnected")
+        assert group.text(0).startswith(_erc_title("supply-unconnected"))
+        assert t("still to do") not in group.text(0)
 
         window.set_problems_open(False)
         window.on_workflow_next("circuit")
@@ -8931,6 +8945,7 @@ def test_a_circuit_error_comes_first_in_the_findings_and_is_where_next_goes() ->
         assert _drc_group(window, "erc:supply-unconnected") is None
         assert window.problems_bar.errors == errors_before - 1
         assert window.workflow_bar.next_key == "board"
+        assert not window._circuit_left
     finally:
         _close(window)
 
@@ -9060,13 +9075,18 @@ def test_a_pin_with_an_error_and_a_warning_is_an_error_and_says_both() -> None:
 def test_the_sheet_rings_the_pin_erc_is_about_and_its_tooltip_says_why() -> None:
     """The findings panel says U1 pin 8; the sheet is where somebody drawing the circuit is
     looking, so the pin is ringed there and hovering it says what is wrong -- and the ring
-    goes the moment the pin is connected."""
+    goes the moment the pin is connected. Not while the circuit is still being drawn: a pin
+    on nothing is then the work left, and every part of a half-drawn blinker had a ring
+    (the newcomer walk). Going on from the step rings it."""
     from perfboard_studio.commands import AddNetPayload
     from perfboard_studio.model import NetNode
     from perfboard_studio.ui.viewsch import pin_anchor
 
     window = _open_schematic(_unpowered_555())
     try:
+        item = window.schematic_view.item
+        assert item is not None and item.pin_marks == {} and item.part_marks == {}
+        window._leave_the_circuit()
         item = window.schematic_view.item
         assert item is not None
         assert item.pin_marks == {
