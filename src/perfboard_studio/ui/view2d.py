@@ -8192,12 +8192,14 @@ class BoardView(QGraphicsView):
         # leaves a tool from anywhere and fires before this view sees the key, so a drag
         # could not be called off: let go, and the part landed wherever the pointer was.
         # Accepting the override is how a focused widget takes a key back -- the sheet does
-        # the same for R -- and only while there is a drag to cancel.
+        # the same for R -- and only while there is a drag to cancel. Copper picked up in the
+        # Select tool is a drag as well: without it here, Escape went to the window, which
+        # had no tool to leave, and the release then put the copper down where it was.
         if (
             event.type() == QEvent.Type.ShortcutOverride
             and isinstance(event, QKeyEvent)
             and event.key() == Qt.Key.Key_Escape
-            and self.board_scene.drag_in_flight()
+            and (self.board_scene.drag_in_flight() or self.board_scene.reshaping)
         ):
             event.accept()
             return True

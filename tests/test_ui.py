@@ -19483,6 +19483,59 @@ def test_a_run_slid_onto_another_nets_pad_is_red_before_it_is_let_go() -> None:
         _close(window)
 
 
+def test_escape_through_the_window_calls_off_copper_picked_up_mid_drag() -> None:
+    """A wire's end picked up in Select, dragged, and Escape pressed before letting go: the
+    wire stays where it was and nothing goes on the undo stack. The scene's own Escape did
+    this, but the window's shortcut took the key first, so in the running window the
+    release put the end down anyway -- a real key through the shortcut machinery, not
+    ``cancel_reshape()``, is what this is about."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    H = view2d.HoleCoord
+    window = _window_on(create_empty_document(DocumentMeta(name="esc", created="", modified="")))
+    window.show()
+    try:
+        window.on_draw_mode("bare-wire", True)
+        window.scene.draw_click(H(2, 2))
+        window.scene.draw_click(H(8, 2))
+        assert window.scene.commit_drawing() is not None
+        window.on_draw_mode("bare-wire", False)
+        [wire] = window.bus.document.conductors
+        view = window.view
+        board = window.bus.document.board
+
+        def at(hole):  # type: ignore[no-untyped-def]
+            return QPointF(view.mapFromScene(hole_to_screen(hole, board, window.scene.side)))
+
+        def mouse(kind, pos, buttons=Qt.MouseButton.LeftButton):  # type: ignore[no-untyped-def]
+            return QMouseEvent(
+                kind, pos, view.viewport().mapToGlobal(pos.toPoint()), Qt.MouseButton.LeftButton,
+                buttons, Qt.KeyboardModifier.NoModifier,
+            )
+
+        steps = len(window.bus.history())
+        view.setFocus()
+        view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, at(H(8, 2))))
+        view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, at(H(8, 5))))
+        assert window.scene.reshaping
+        QApplication.processEvents()
+        QTest.keyClick(view.viewport(), Qt.Key.Key_Escape)
+        assert not window.scene.reshaping
+        view.mouseReleaseEvent(
+            mouse(QEvent.Type.MouseButtonRelease, at(H(8, 5)), Qt.MouseButton.NoButton)
+        )
+        assert window.bus.document.conductors == (wire,)
+        assert len(window.bus.history()) == steps
+    finally:
+        _close(window)
+
+
 def test_a_click_on_copper_without_a_drag_still_selects_it() -> None:
     from PySide6.QtCore import QEvent, QPointF
     from PySide6.QtGui import QMouseEvent
