@@ -11744,7 +11744,11 @@ class MainWindow(QMainWindow):
         self._face_notes = (self.bus.document, notes) if notes else (None, ())
         self._refresh_problems_bar()
         # The net's Face row says the note too, and Properties was told about this
-        # document before the note was made.
+        # document before the note was made. Its content is shown again, not only the
+        # selection: the panel takes the same selection as nothing to do, and after Redo
+        # Wiring of the net in front the row stayed empty until somebody clicked away.
+        if hasattr(self, "properties"):
+            self.properties.refresh(self.bus.document)
         self._refresh_properties()
         if not notes:
             return ""

@@ -21136,9 +21136,15 @@ def test_a_face_set_on_copper_already_laid_says_it_stays_and_offers_to_redo_it(
         editor = _inspect_net(window, gnd.id)
         editor.redo_face.click()
         [note] = window._current_face_notes()
+        # Said in the row that is showing, with GND still selected: selecting it again
+        # (as this test did) hid that the row stayed empty until somebody clicked away.
+        editor = window.inspector.net_editor
+        assert window.inspector.shown is editor
+        assert editor.face_said.text() == window._face_note_text(note)
+        assert not editor.face_said.isHidden()
+        assert editor.redo_face.isHidden()
         editor = _inspect_net(window, gnd.id)
         assert editor.face_said.text() == window._face_note_text(note)
-        assert editor.redo_face.isHidden()
     finally:
         _close(window)
 
