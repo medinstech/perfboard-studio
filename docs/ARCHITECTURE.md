@@ -1402,6 +1402,27 @@ Six things are load-bearing, each with a test in `tests/test_erc.py`:
   is exempted by name; it fires on `dense`, `sparse` and nine `random-*` fixtures, which are
   random parts with no connector, and nothing reads ERC on them.
 
+**While the circuit is still being drawn, what is left to draw is not a fault.** Nobody has
+gone on from its step and no part is on a board: then a pin connected to nothing and a value
+not yet typed (`part-unconnected`, `supply-unconnected`, `supply-pin-open` and
+`value-missing`, `main.STILL_TO_DO_RULES`) are the work left. The findings list them as
+"still to do" in the plain colour, the bar does not count them, the sheet does not ring them,
+and the Circuit step stays current, its Next on "Connect the Pins" or "Set the Values" and
+its hint naming the parts. Going on from the step anyway makes them the problems they are:
+red, named in the status bar, and Next opens them (`MainWindow._leave_the_circuit`). Nothing
+is refused. A short, a reversed part or two supplies on one net is wrong however much is left
+to draw, so it stays red at once; and a board with parts on it is past drawing, so a file
+opened with an open pin shows it as before. The first attempt was the plain rule above: from
+the first wire of a half-drawn blinker the step was red with a ring on every part, and once
+the chip had ground Next went on to choosing a board with three parts on no net (the newcomer
+walk). Pinned by `test_a_circuit_error_comes_first_in_the_findings_and_is_where_next_goes`.
+
+`value-missing` is a warning on a resistor, a capacitor, an inductor, a diode, a crystal or a
+pot with no value (`erc.VALUE_ARCHETYPES`), because for those the value is what the builder
+fits, and a guide step reading "R1 -- I6 -> L6" says nothing. A chip, a module, a connector,
+a switch or an LED is named by its package or its pins, so it is never asked. No example and
+no golden fixture gains it.
+
 Engine messages are English like DRC's; the panel's titles are `ui/main._erc_title`, held to
 `erc.RULES` by `test_every_rule_and_every_lvs_finding_has_a_title_in_words`. No golden moved:
 the NE555 fixture has no ERC error, so its guide carries no `erc-error`.

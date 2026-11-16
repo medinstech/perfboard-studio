@@ -22,6 +22,18 @@ closed without a bump.
 
 ### Added
 
+- **A first circuit is guided while it is drawn.** A resistor, capacitor, inductor, diode,
+  crystal or pot with no value is a new circuit-check warning, `value-missing`, and the
+  Circuit step asks for it: Next reads "Set the Values" and a click puts the first in
+  Properties with the cursor in its Value. A chip, a module, a connector, a switch or an LED
+  is never asked. While the circuit is being drawn -- nobody has gone on from its step and no
+  part is on a board -- a pin connected to nothing and a missing value are "still to do" in
+  the findings, in the plain colour, uncounted and not ringed on the sheet, and the step
+  stays on "Connect the Pins", naming the parts left to join. Going on without them says the
+  parts by name and makes them the problem; nothing is refused. A short, a reversed part or
+  two supplies on one net is red at once, as before. From the first wire of a half-drawn
+  blinker the step used to be red with a ring on every part, and once the chip had ground
+  Next went on to "Choose a Board" with three parts on no net.
 - **Copper moves under the hand, like a part.** In the Select tool a press on copper picks
   it up at once, with no click to select it first: on an end -- anywhere on its pad, a part's
   pin included -- it moves that end; on a wire's or a jumper's corner, the corner; on a
@@ -319,6 +331,20 @@ closed without a bump.
 
 ### Changed
 
+- **A finished board leads with "Ready to build".** With nothing wrong and nothing left to
+  wire, the bar under the board says so with a green tick, and the wires worth a look are
+  "optional: 4 wires to look at" in the plain colour rather than an orange "Wiring to
+  review". The Build step's hint starts with "Ready to build." and offers the look after, and
+  in Properties the counts and Try every wiring style… fold under one "Worth a look, if you
+  like" link. Before the board is ready they are listed as before.
+- **The board question speaks in wiring work.** "Wiring at 108% of the roomy board's cost"
+  is now "builds just as well, with 8% more wiring work", or "harder to wire: 31% more
+  wiring work". The verdicts are unchanged.
+- **The Problems bar says what fits.** At 1366 px it stopped mid-word ("Matches the circuit:
+  7 o"); now its facts are said short when they do not fit ("7/8 nets match", "4 to look
+  at"), the last are dropped if that is still too long, and the tooltip lists them all.
+- **An empty board stops saying "Choose a Board" once one is chosen**, and says that the
+  blue button at the top right puts the parts on it.
 - **The board's tools can be told apart at a glance.** Connect, Solder Trace, Bare Wire and
   Insulated Wire were each a line between two dots. Now solder is beads along a row of
   pads, a wire is bent from hole to hole, an insulated wire wears a sleeve, a jumper arches
