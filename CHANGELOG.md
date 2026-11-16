@@ -459,6 +459,11 @@ closed without a bump.
   the board named them as "the bodies of" the parts, from a field a face note shares, and
   now names the parts. A hole hint said the bare "tıkla" where every status line says
   "tıklayın", and the bar's short "tezgâhta 1" now says one of what.
+- **What the schematic could not draw is said in the window's language.** The line under
+  the sheet that lists what it drew differently -- a net with only one pin drawn as a stub, a
+  pin not on the sheet, parts parked at the right-hand edge -- was English in a Turkish
+  window. It is said in Turkish there now; `--headless` and the MCP server keep the engine's
+  English.
 - **One Ctrl+Z takes back the first edit of an example sheet.** The first change to a wire
   on a sheet drawn for you -- dragging the middle of a wire on atmega328-relay, say -- turns
   it into a hand-drawn sheet: rails become short stubs at their pins and names move. That was

@@ -7670,7 +7670,9 @@ class MainWindow(QMainWindow):
                 t("power and ground drawn as {count} rail symbols"),
             )
         if drawing.notes:
-            summary += "\n" + "\n".join(f"• {note}" for note in drawing.notes[:4])
+            # The engine's notes are English, as everything it says is; said here, where they
+            # are shown, as findings are.
+            summary += "\n" + "\n".join(f"• {say(note)}" for note in drawing.notes[:4])
             if len(drawing.notes) > 4:
                 summary += "\n• " + t("…and {count} more").format(count=len(drawing.notes) - 4)
         self.schematic_summary.setText(summary)

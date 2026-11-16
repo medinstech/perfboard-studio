@@ -313,6 +313,15 @@ TEMPLATES: tuple[str, ...] = (
     "The router found no route.",
     "Skipped {count} unconnected nets",
     "Skipped {count} unconnected net",
+    # -- what the sheet says about what it could not draw (``SchematicDrawing.notes``) ----
+    "{net}: only one pin, so it is drawn as a stub",
+    "{net}: no pin of this net could be drawn",
+    "{net}: {ref} pin {pin_no} is not on the sheet",
+    "{ref}: wired by a net, but neither on the board nor in the design",
+    "{ref}: footprint '{footprint}' is not in the registry",
+    "{ref}: the netlist names pin(s) {numbers}, which {footprint} does not have",
+    "{ref}: names pin(s) {numbers}, which {footprint} does not have",
+    "{count} part(s) have no place on this sheet yet and are parked at the right-hand edge: {refs_listed}",
     # -- what a command says when it refuses: the ones a person meets in the window --------
     "{a} is on {net_a} and {b} is on {net_b}. Joining two nets is a change to the circuit — disconnect one of the pins first.",
     "{net_a} and {net_b} are a supply and a ground: joining them would short one to the other. To move a single pin across, disconnect it from its net first.",
