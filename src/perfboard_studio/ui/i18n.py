@@ -6235,17 +6235,28 @@ TURKISH: Mapping[str, str] = {
                                                    "bağlantı)",
     "Autoroute (no matching nets)": "Otomatik kablolama (eşleşen net yok)",
     "Autoroute (no netlist imported)": "Otomatik kablolama (netlist yok)",
-    "Re-route {count} net(s)": "{count} neti yeniden kablola",
+    "Re-route {count} net":
+        "{count} neti yeniden kablola",
+    "Re-route {count} nets":
+        "{count} neti yeniden kablola",
     "Re-route {net}": "{net} netini yeniden kablola",
-    "Autoroute stripboard: {cuts} cut(s), {links} link(s)": "Şeritli kartı otomatik kablola: {cuts} "
-                                                            "kesim, {links} köprü",
+    "Autoroute stripboard: {cuts} cut, {links} link":
+        "Şeritli kartı otomatik kablola: {cuts} kesim, {links} köprü",
+    "Autoroute stripboard: {cuts} cut, {links} links":
+        "Şeritli kartı otomatik kablola: {cuts} kesim, {links} köprü",
+    "Autoroute stripboard: {cuts} cuts, {links} link":
+        "Şeritli kartı otomatik kablola: {cuts} kesim, {links} köprü",
+    "Autoroute stripboard: {cuts} cuts, {links} links":
+        "Şeritli kartı otomatik kablola: {cuts} kesim, {links} köprü",
     "Cut track at {hole}": "{hole} deliğinde şeridi kes",
     "Cut {cuts} track and fit {links} link": "{cuts} şerit kes, {links} köprü tak",
     "Cut {cuts} track and fit {links} links": "{cuts} şerit kes, {links} köprü tak",
     "Cut {cuts} tracks and fit {links} link": "{cuts} şerit kes, {links} köprü tak",
     "Cut {cuts} tracks and fit {links} links": "{cuts} şerit kes, {links} köprü tak",
-    "Autoroute breadboard: {count} jumper(s)": "Breadboard'u otomatik kablola: {count} "
-                                               "jumper",
+    "Autoroute breadboard: {count} jumper":
+        "Breadboard'u otomatik kablola: {count} jumper",
+    "Autoroute breadboard: {count} jumpers":
+        "Breadboard'u otomatik kablola: {count} jumper",
     "Fit {count} jumper": "{count} jumper tak",
     "Fit {count} jumpers": "{count} jumper tak",
     "Remove cut {id}": "{id} kesimini kaldır",

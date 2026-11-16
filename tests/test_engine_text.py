@@ -123,6 +123,12 @@ def test_a_field_is_only_what_it_may_be(turkish: None) -> None:
     assert say("Delete R1 and its 2 connections") == "R1 parçasını ve 2 bağlantısını sil"
     assert say("Delete R1 and its 1 connection") == "R1 parçasını ve 1 bağlantısını sil"
     assert say("Add ground net GND with 1 pin") == "1 pinli toprak neti GND ekle"
+    assert say("Re-route 3 nets") == "3 neti yeniden kablola"
+    assert say("Re-route GND") == "GND netini yeniden kablola"
+    assert say("Autoroute stripboard: 1 cut, 4 links") == (
+        "Şeritli kartı otomatik kablola: 1 kesim, 4 köprü"
+    )
+    assert say("Autoroute breadboard: 1 jumper") == "Breadboard'u otomatik kablola: 1 jumper"
     assert say("Delete R1") == "R1 parçasını sil"
     assert say("Place R4 at C7") == "R4 parçasını C7 deliğine yerleştir"
 

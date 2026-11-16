@@ -64,6 +64,7 @@ from .commands import (
     NewWireConductor,
     ReplaceConductorsPayload,
     add_conductor,
+    count_noun,
     create_document_id_generator,
 )
 from .connectivity import FootprintLookup, PhysicalPinRef
@@ -854,7 +855,7 @@ def plan_reroute(
     plan = plan_autoroute(stripped, lookup, options, only_net_ids=only_net_ids)
     names = [net.name for net in doc.nets if net.id in targets]
     label = (
-        f"Re-route {len(names)} net(s)"
+        f"Re-route {count_noun(len(names), 'net')}"
         if len(names) != 1
         else f"Re-route {names[0]}"
     )

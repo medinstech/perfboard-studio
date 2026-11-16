@@ -62,6 +62,7 @@ from .commands import (
     NewConductor,
     NewWireConductor,
     add_conductor,
+    count_noun,
     create_document_id_generator,
 )
 from .connectivity import FootprintLookup, PhysicalPinRef, extract_physical_nets
@@ -157,7 +158,7 @@ def plan_joined_reroute(
     )
     plan = plan_joined_board(stripped, lookup, only_net_ids, wire_path)
     names =[net.name for net in doc.nets if net.id in targets]
-    label = f"Re-route {len(names)} net(s)" if len(names) != 1 else f"Re-route {names[0]}"
+    label = f"Re-route {count_noun(len(names), 'net')}" if len(names) != 1 else f"Re-route {names[0]}"
     return dataclasses.replace(plan, remove_ids=remove_ids, label=label)
 
 
@@ -293,7 +294,7 @@ def plan_breadboard(
         planned_cuts=(),
         links=tuple(links),
         problems=tuple(problems),
-        label=f"Autoroute breadboard: {len(conductors)} jumper(s)",
+        label=f"Autoroute breadboard: {count_noun(len(conductors), 'jumper')}",
     )
 
 

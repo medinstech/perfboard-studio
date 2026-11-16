@@ -49,6 +49,7 @@ from .commands import (
     NewConductor,
     NewWireConductor,
     add_conductor,
+    count_noun,
     create_document_id_generator,
 )
 from .connectivity import FootprintLookup, PhysicalPinRef, extract_physical_nets
@@ -214,7 +215,10 @@ def plan_stripboard(
         planned_cuts=tuple(planned_cuts),
         links=tuple(links),
         problems=tuple(problems),
-        label=f"Autoroute stripboard: {len(cuts)} cut(s), {len(conductors)} link(s)",
+        label=(
+            f"Autoroute stripboard: {count_noun(len(cuts), 'cut')}, "
+            f"{count_noun(len(conductors), 'link')}"
+        ),
     )
 
 
