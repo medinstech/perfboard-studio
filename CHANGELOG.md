@@ -25,7 +25,8 @@ closed without a bump.
 - **A first circuit is guided while it is drawn.** A resistor, capacitor, inductor, diode,
   crystal or pot with no value is a new circuit-check warning, `value-missing`, and the
   Circuit step asks for it: Next reads "Set the Values" and a click puts the first in
-  Properties with the cursor in its Value. A chip, a module, a connector, a switch or an LED
+  Properties with the cursor in its Value, the status line saying what to type ("Type the
+  value of R1 and press Enter: 470, 10k, 100nF."). A chip, a module, a connector, a switch or an LED
   is never asked. While the circuit is being drawn -- nobody has gone on from its step and no
   part is on a board -- a pin connected to nothing and a missing value are "still to do" in
   the findings, in the plain colour, uncounted and not ringed on the sheet, and the step
@@ -438,6 +439,12 @@ closed without a bump.
 
 ### Fixed
 
+- **The Turkish window no longer calls a part without a value worthless.** It was
+  "değersiz" on the Circuit step and in the Library's placing hint, which reads as
+  "worthless"; it is "değer eksik", a value missing. The check's line for parts not yet on
+  the board named them as "the bodies of" the parts, from a field a face note shares, and
+  now names the parts. A hole hint said the bare "tıkla" where every status line says
+  "tıklayın", and the bar's short "tezgâhta 1" now says one of what.
 - **A label on the board is no longer edited by a drag of something else.** A label whose
   offset from its hole was off the quarter-millimetre step it snaps to -- both of the
   nano-relay example's -- counted as moved from the moment it was drawn, so every drag of a
