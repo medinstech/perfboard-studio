@@ -2323,7 +2323,7 @@ class _DeletePart:
             1 for net in doc.nets for node in net.nodes if node.component_ref == part.ref
         )
         if wired:
-            return f"Delete {part.ref} and its {wired} connection(s)"
+            return f"Delete {part.ref} and its {count_noun(wired, 'connection')}"
         return f"Delete {part.ref}"
 
 
@@ -2510,7 +2510,7 @@ class _AddConductors:
     def describe(self, p: AddConductorsPayload, doc: PerfDocument) -> str:
         if p.label:
             return p.label
-        return f"Add {len(p.conductors)} conductor(s)"
+        return f"Add {count_noun(len(p.conductors), 'conductor')}"
 
 
 class _SetConductorPath:
@@ -2589,7 +2589,7 @@ class _DeleteConductors:
     def describe(self, p: DeleteConductorsPayload, doc: PerfDocument) -> str:
         if p.label:
             return p.label
-        return f"Delete {len(p.ids)} conductor(s)"
+        return f"Delete {count_noun(len(p.ids), 'conductor')}"
 
 
 class _ReplaceConductors:
@@ -2634,7 +2634,7 @@ class _ReplaceConductors:
     def describe(self, p: ReplaceConductorsPayload, doc: PerfDocument) -> str:
         if p.label:
             return p.label
-        return f"Replace {len(p.remove_ids)} conductor(s) with {len(p.conductors)}"
+        return f"Replace {count_noun(len(p.remove_ids), 'conductor')} with {len(p.conductors)}"
 
 
 # ---------------------------------------------------------------------------
@@ -3613,7 +3613,7 @@ class _DeleteSheetNotes:
         return dataclasses.replace(doc, sheet_notes=kept)
 
     def describe(self, p: DeleteSheetNotesPayload, doc: PerfDocument) -> str:
-        return f"Delete {len(p.ids)} note(s) from the sheet"
+        return f"Delete {count_noun(len(p.ids), 'note')} from the sheet"
 
 
 def _label_on_substrate(at: HoleCoord, offset_x_mm: Mm, offset_y_mm: Mm, board: Board) -> bool:
@@ -3742,7 +3742,7 @@ class _DeleteBoardNotes:
         return dataclasses.replace(doc, board_notes=kept)
 
     def describe(self, p: DeleteBoardNotesPayload, doc: PerfDocument) -> str:
-        return f"Delete {len(p.ids)} label(s) from the board"
+        return f"Delete {count_noun(len(p.ids), 'label')} from the board"
 
 
 def _pin_name(node: NetNode) -> str:
@@ -3813,7 +3813,7 @@ class _AddNet:
         return dataclasses.replace(doc, nets=(*doc.nets, net))
 
     def describe(self, p: AddNetPayload, doc: PerfDocument) -> str:
-        pins = f" with {len(p.nodes)} pin(s)" if p.nodes else ""
+        pins = f" with {count_noun(len(p.nodes), 'pin')}" if p.nodes else ""
         return f"Add {p.net_class} net {p.name.strip()}{pins}"
 
 
@@ -3887,8 +3887,10 @@ class _DeleteNet:
         existing = next((n for n in doc.nets if n.id == p.id), None)
         name = existing.name if existing is not None else p.id
         freed = sum(1 for c in doc.conductors if c.net_id == p.id)
+        if freed == 1:
+            return f"Delete net {name} (1 conductor keeps its copper)"
         if freed:
-            return f"Delete net {name} ({freed} conductor(s) keep their copper)"
+            return f"Delete net {name} ({freed} conductors keep their copper)"
         return f"Delete net {name}"
 
 
@@ -4078,8 +4080,11 @@ class _ApplyStripboardPlan:
         if p.label:
             return p.label
         if has_breadboard_pattern(doc.board):
-            return f"Fit {len(p.conductors)} jumper(s)"
-        return f"Cut {len(p.cuts)} track(s) and fit {len(p.conductors)} link(s)"
+            return f"Fit {count_noun(len(p.conductors), 'jumper')}"
+        return (
+            f"Cut {count_noun(len(p.cuts), 'track')} and fit "
+            f"{count_noun(len(p.conductors), 'link')}"
+        )
 
 
 class _DeleteCut:

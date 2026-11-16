@@ -120,7 +120,9 @@ def test_a_field_is_only_what_it_may_be(turkish: None) -> None:
     called R1 -- unless a kind can only be one of the six, which is what keeps them apart."""
     assert say("Add R1 10k to the schematic") == "Şemaya R1 10k ekle"
     assert say("Add R1 to the schematic") == "Şemaya R1 ekle"
-    assert say("Delete R1 and its 2 connection(s)") == "R1 parçasını ve 2 bağlantısını sil"
+    assert say("Delete R1 and its 2 connections") == "R1 parçasını ve 2 bağlantısını sil"
+    assert say("Delete R1 and its 1 connection") == "R1 parçasını ve 1 bağlantısını sil"
+    assert say("Add ground net GND with 1 pin") == "1 pinli toprak neti GND ekle"
     assert say("Delete R1") == "R1 parçasını sil"
     assert say("Place R4 at C7") == "R4 parçasını C7 deliğine yerleştir"
 

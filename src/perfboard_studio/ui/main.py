@@ -7937,7 +7937,7 @@ class MainWindow(QMainWindow):
             "symbol.move",
             MoveSymbolsPayload(
                 placements=tuple(turned),
-                label=f"Turn {len(refs)} symbol(s) on the sheet",
+                label=f"Turn {count_noun(len(refs), 'symbol')} on the sheet",
                 wires=self._sheet_wires_after(tuple(turned)),
             ),
         )
@@ -7960,7 +7960,7 @@ class MainWindow(QMainWindow):
             "symbol.move",
             MoveSymbolsPayload(
                 placements=flipped,
-                label=f"Flip {len(refs)} symbol(s) on the sheet",
+                label=f"Flip {count_noun(len(refs), 'symbol')} on the sheet",
                 wires=self._sheet_wires_after(flipped),
             ),
         )

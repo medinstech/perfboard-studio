@@ -512,7 +512,7 @@ def test_falls_back_to_a_count_when_no_label_is_given():
 
     result = bus.dispatch("conductor.addMany", AddConductorsPayload(conductors=two_traces()))
 
-    assert result.description == "Add 2 conductor(s)"
+    assert result.description == "Add 2 conductors"
 
 
 def test_refuses_an_empty_batch_rather_than_putting_a_no_op_on_the_undo_stack():
@@ -1184,7 +1184,7 @@ def test_a_net_can_be_declared_with_its_pins_in_one_step():
 
     assert result.ok, result.message
     assert bus.document.nets[0].nodes == (NetNode("U1", "8"), NetNode("C2", "2"))
-    assert result.description == "Add ground net GND with 2 pin(s)"
+    assert result.description == "Add ground net GND with 2 pins"
 
 
 def test_a_generated_net_id_cannot_collide_with_one_already_in_the_document():
@@ -1424,7 +1424,7 @@ def test_deleting_a_net_leaves_its_copper_and_releases_the_claim_on_it():
     assert bus.document.nets == ()
     assert len(bus.document.conductors) == 1
     assert bus.document.conductors[0].net_id is None
-    assert result.description == "Delete net GND (1 conductor(s) keep their copper)"
+    assert result.description == "Delete net GND (1 conductor keeps its copper)"
 
     bus.undo()
     assert bus.document.conductors[0].net_id == "net-1"
@@ -1718,7 +1718,7 @@ def test_deleting_a_part_takes_its_connections_with_it():
     result = bus.dispatch("part.delete", DeletePartPayload(id=bus.document.parts[0].id))
 
     assert result.ok, result.message
-    assert result.description == "Delete R1 and its 1 connection(s)"
+    assert result.description == "Delete R1 and its 1 connection"
     assert bus.document.nets[0].nodes == (NetNode("R2", "1"),)
 
 
