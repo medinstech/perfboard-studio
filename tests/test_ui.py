@@ -13276,6 +13276,104 @@ def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkey
         _close(window)
 
 
+@pytest.mark.parametrize("size", [(1366, 728), (1920, 1032)])
+def test_an_example_opened_from_home_leaves_the_views_the_room(monkeypatch, size) -> None:
+    """The release candidate opened an example from Home with the library across half of a
+    1920 px window -- 957 px of parts list beside 631 px of sheet. A window closed while
+    Home stood over its first showing had saved panels never given a size, and every start
+    after replayed them. Such a window saves no layout now, and a restored one with a side
+    panel over ``LAYOUT_SIDE_MAX_SHARE`` of the window gets the opening widths instead: on a
+    first start, after a restore, over a layout saved the old way, and with no Home at all."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
+    from perfboard_studio.ui.main import (
+        PROPERTIES_WIDTH,
+        SHOW_WELCOME_KEY,
+        WINDOW_STATE_KEY,
+        MainWindow,
+        app_settings,
+    )
+
+    monkeypatch.setattr(MainWindow, "_create_3d_widget", lambda self: None)
+    defaults: list[MainWindow] = []
+    pin = MainWindow._apply_default_sizes
+    monkeypatch.setattr(
+        MainWindow, "_apply_default_sizes", lambda self: (defaults.append(self), pin(self))[1]
+    )
+    width, height = size
+    store = app_settings()
+
+    def start(*, home: bool = True) -> MainWindow:
+        defaults.clear()
+        window = MainWindow(create_starter_document(DocumentMeta(name="untitled", created="", modified="")))
+        window.resize(width, height)
+        if home:
+            window.offer_home()
+            assert window.home_is_showing()
+        window.show()
+        _settle_events(QApplication)
+        return window
+
+    def open_the_blinker(window: MainWindow) -> None:
+        home = window._home_page
+        assert home is not None
+        for _ in range(100):
+            if home.cards:
+                break
+            QApplication.processEvents()
+        next(card for card in home.cards if card.example.path.stem == "ne555-blinker").click()
+        assert not window.home_is_showing()
+        _settle_events(QApplication, 60)
+
+    def assert_the_opening_widths(window: MainWindow) -> None:
+        library, properties = window.dock_library.width(), window.dock_properties.width()
+        front = next(dock for dock in window._view_docks() if window._is_in_front(dock))
+        assert abs(library - window.LAYOUT_LEFT_WIDTH) <= 40, (library, front.width(), properties)
+        assert abs(properties - PROPERTIES_WIDTH) <= 2, properties
+        assert front.width() >= width - library - properties - 24, front.width()
+
+    # A first start closed on Home keeps nothing: the next one is a first start again.
+    window = start()
+    never_sized = window._layout_before_home
+    assert never_sized is not None
+    _close(window)
+    assert store.value(WINDOW_STATE_KEY) is None
+
+    window = start()
+    open_the_blinker(window)
+    assert_the_opening_widths(window)
+    _close(window)
+    assert store.value(WINDOW_STATE_KEY) is not None
+
+    # A sound layout comes back as it was saved, through Home, not re-proportioned.
+    window = start()
+    open_the_blinker(window)
+    assert_the_opening_widths(window)
+    assert defaults == []
+    _close(window)
+
+    # The layout the old window saved on that first start, replayed: the opening widths,
+    # through Home and with Home turned off.
+    store.setValue(WINDOW_STATE_KEY, never_sized)
+    window = start()
+    open_the_blinker(window)
+    assert defaults == [window], "the replayed layout was put right"
+    assert_the_opening_widths(window)
+    _close(window)
+
+    store.setValue(WINDOW_STATE_KEY, never_sized)
+    store.setValue(SHOW_WELCOME_KEY, False)
+    window = start(home=False)
+    _settle_events(QApplication, 40)
+    try:
+        assert defaults == [window]
+        assert_the_opening_widths(window)
+    finally:
+        _close(window)
+
+
 def test_over_home_the_menus_and_the_search_are_where_they_are_over_the_board(monkeypatch) -> None:
     """The release-candidate sitting had to open an example to reach Help > Check for
     Updates: Home took the whole header, ☰ with it. ☰ and the search stay over Home now.

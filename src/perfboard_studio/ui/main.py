@@ -4133,6 +4133,8 @@ class MainWindow(QMainWindow):
             # never pinned; a window with nothing to divide has nothing to pin.
             self._sizes_after_home = False
             self._apply_default_sizes()
+        else:
+            self._check_side_widths()
         # Over the window it is about, not over Home.
         self.consider_moved_card()
 
@@ -4653,6 +4655,46 @@ class MainWindow(QMainWindow):
                 self._sizes_after_home = True
             else:
                 self._apply_default_sizes()
+        elif not self.home_is_showing():
+            # Home checks it as it goes (``leave_home``): under it, the panels are hidden.
+            self._check_side_widths()
+
+    #: The most of the window's width a side panel -- the library's column or Properties --
+    #: is let keep when a saved layout comes back. Past it the opening proportions are
+    #: applied instead: see ``_check_side_widths``.
+    LAYOUT_SIDE_MAX_SHARE = 0.45
+
+    def _check_side_widths(self) -> None:
+        """Put the side panels back to their opening widths if a restored layout has one of
+        them over ``LAYOUT_SIDE_MAX_SHARE`` of the window.
+
+        A layout is replayed to the pixel, and a bad one is replayed on every start: a window
+        closed while Home stood over its first showing saved panels that had never been
+        given a size (``_save_session`` no longer does), and the next start opened the
+        library across half of a 1920 px window with the board squeezed beside it -- 957 px
+        of parts list and its Pins column out in the middle of the screen. Nobody drags a
+        parts list that wide on purpose, and if somebody did, the drag is one move away.
+
+        Measured TWO turns on, like ``_on_view_opened``: the restored layout has to have
+        been laid out on the window's real size before its widths mean anything. And only
+        the panels on SCREEN: Nets and the Part List behind the library's tab are still
+        "visible" to Qt, parked off the window at whatever width they last had in front --
+        749 px, on a 1366 px window whose column was 300.
+        """
+
+        def check() -> None:
+            if self.home_is_showing():
+                return
+            limit = self.width() * self.LAYOUT_SIDE_MAX_SHARE
+            if any(
+                not dock.visibleRegion().isEmpty()
+                and not dock.isFloating()
+                and dock.width() > limit
+                for dock in (*self._side_docks(), self.dock_properties)
+            ):
+                self._apply_default_sizes()
+
+        QTimer.singleShot(0, lambda: QTimer.singleShot(0, check))
 
     #: The view panels, in the order the toolbar offers them. One tuple, so a rule about
     #: "the panels" cannot be applied to three of the four.
@@ -16500,13 +16542,19 @@ class MainWindow(QMainWindow):
         # nothing to the store, and a store only a closed window wrote to says who upgraded.
         whatsnew.note_this_version(settings)
         # The panels as they were before Home, if Home is showing: a window of nothing is
-        # not a layout anybody wants back.
-        layout = (
-            self._layout_before_home
-            if self.home_is_showing() and self._layout_before_home is not None
-            else self.saveState(WINDOW_STATE_VERSION)
-        )
-        settings.setValue(WINDOW_STATE_KEY, layout)
+        # not a layout anybody wants back. And NOTHING if Home stood over the window's first
+        # showing: its panels were laid out for a window never on screen and never given
+        # their opening widths, and that photograph, replayed on the next start, opened the
+        # library across half the window (``_check_side_widths``). Whatever was stored
+        # before stays; on a first start there was nothing, and the next one is a first
+        # start again.
+        layout: QByteArray | None
+        if self.home_is_showing():
+            layout = None if self._sizes_after_home else self._layout_before_home
+        else:
+            layout = self.saveState(WINDOW_STATE_VERSION)
+        if layout is not None:
+            settings.setValue(WINDOW_STATE_KEY, layout)
         settings.setValue(BOARD_COLOUR_KEY, chosen_board_colour() or "")
         settings.setValue(RATSNEST_KEY, self.act_ratsnest.isChecked())
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
