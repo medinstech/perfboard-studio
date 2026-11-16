@@ -6543,6 +6543,7 @@ class MainWindow(QMainWindow):
         corner.add_action(self.act_sch_zoom_in)
         corner.add_action(self.act_sch_fit)
         self.sheet_view_tools = corner
+        sheet.overlays = (tools, corner)
 
         self.act_sheet_more = QAction(icons.icon("more"), t("More"), self)
         self.act_sheet_more.setToolTip(t("Everything a right-click on the selection offers."))

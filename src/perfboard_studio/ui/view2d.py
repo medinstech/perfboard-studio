@@ -7900,6 +7900,32 @@ def picture_beside_the_pointer(picture: QPixmap) -> QPixmap:
     return padded
 
 
+def overlay_room(
+    view: QGraphicsView, overlays: Sequence[QWidget], viewport: QRect
+) -> tuple[int, int]:
+    """(across, down): the room the visible bars laid over ``view`` take from its viewport's
+    sides -- a bar along a side edge takes its width, one along the top or bottom its height.
+
+    One function for both canvases, the board's fit and the sheet's, so the two cannot drift
+    apart: the sheet fitted to the bare viewport ran under its zoom and Arrange bar at 1366
+    px, and on nano-relay C3's wire could not be grabbed.
+    """
+    across = down = 0
+    gap = 8
+    for bar in overlays:
+        if not bar.isVisible():
+            continue
+        corner = view.viewport().mapFromGlobal(bar.mapToGlobal(QPoint(0, 0)))
+        box = QRect(corner, bar.size())
+        if box.height() > box.width():
+            side = box.right() if box.center().x() < viewport.center().x() else viewport.right() - box.left()
+            across = max(across, side + gap)
+        else:
+            side = viewport.bottom() - box.top() if box.center().y() > viewport.center().y() else box.bottom()
+            down = max(down, side + gap)
+    return across, down
+
+
 class BoardView(QGraphicsView):
     #: Gap between the top of the viewport and the mode banner.
     BANNER_MARGIN_PX = 10
@@ -8303,22 +8329,9 @@ class BoardView(QGraphicsView):
         self.centerOn(point)
 
     def _overlay_room(self, viewport: QRect) -> tuple[int, int]:
-        """(across, down): the room the visible bars take from the viewport's sides --
-        a bar along a side edge takes its width, one along the top or bottom its height."""
-        across = down = 0
-        gap = 8
-        for bar in self.overlays:
-            if not bar.isVisible():
-                continue
-            corner = self.viewport().mapFromGlobal(bar.mapToGlobal(QPoint(0, 0)))
-            box = QRect(corner, bar.size())
-            if box.height() > box.width():
-                side = box.right() if box.center().x() < viewport.center().x() else viewport.right() - box.left()
-                across = max(across, side + gap)
-            else:
-                side = viewport.bottom() - box.top() if box.center().y() > viewport.center().y() else box.bottom()
-                down = max(down, side + gap)
-        return across, down
+        """(across, down): the room the visible bars take from the viewport's sides
+        (``overlay_room``)."""
+        return overlay_room(self, self.overlays, viewport)
 
     def _refresh_hover(self) -> None:
         """Re-read what is under a pointer that has not moved.

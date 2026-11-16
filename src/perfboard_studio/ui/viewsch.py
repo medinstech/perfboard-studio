@@ -110,7 +110,7 @@ from .scenetext import draw_flag_label, draw_outlined_label, label_font, label_p
 
 # The drag formats live with the board, which is what receives one of them and which
 # already owns the vocabulary a drop lands in (screen_to_hole). Two constants, three views.
-from .view2d import FOOTPRINT_MIME, PART_MIME, picture_beside_the_pointer
+from .view2d import FOOTPRINT_MIME, PART_MIME, overlay_room, picture_beside_the_pointer
 
 #: Which tool has the left button on the sheet.
 #:
@@ -1493,6 +1493,10 @@ class SchematicView(QGraphicsView):
             at = QPointF(a.x(), min(max(snapped.y(), min(a.y(), b.y())), max(a.y(), b.y())))
         return Tee(ends=ends, at=at, horizontal=horizontal)
 
+    #: Widgets laid over the view's edges -- the tool rail, the zoom and Arrange bar -- that
+    #: a fit leaves room for (``fit``, ``view2d.overlay_room``).
+    overlays: tuple[QWidget, ...] = ()
+
     def fit(self) -> None:
         if self.item is None:
             return
@@ -1506,7 +1510,22 @@ class SchematicView(QGraphicsView):
         # 8000 fits in 50 ms in a 300 px panel nobody was touching, and no frame drawn. A
         # fitted sheet is all on screen, so the bars would show nothing anyway.
         self._show_scroll_bars(False)
-        self.fitInView(sheet, Qt.AspectRatioMode.KeepAspectRatio)
+        # CLEAR OF THE BARS LAID OVER IT, as the board's fit is (``BoardView.fit_board``):
+        # fitted to the bare viewport, the sheet ran under the zoom and Arrange bar at 1366
+        # px and a wire there could not be grabbed. Each bar keeps its side's room and the
+        # opposite side's, so the sheet, centred, clears it.
+        viewport = self.viewport().rect()
+        across, down = overlay_room(self, self.overlays, viewport)
+        room = viewport.adjusted(across, down, -across, -down)
+        if room.width() < 80 or room.height() < 80:
+            self.fitInView(sheet, Qt.AspectRatioMode.KeepAspectRatio)
+        else:
+            scale = min(
+                (room.width() - 4) / sheet.width(), (room.height() - 4) / sheet.height()
+            )
+            self.resetTransform()
+            self.scale(scale, scale)
+            self.centerOn(sheet.center())
         self._fitted = True
         # Fit hands the view back to the sheet: the next resize fits it again.
         self._user_framed = False

@@ -459,6 +459,10 @@ closed without a bump.
   the board named them as "the bodies of" the parts, from a field a face note shares, and
   now names the parts. A hole hint said the bare "tıkla" where every status line says
   "tıklayın", and the bar's short "tezgâhta 1" now says one of what.
+- **A fitted schematic is clear of the bars over it.** On a 1366 x 768 screen the sheet was
+  fitted to the whole panel and ran under the zoom and Arrange bar in its corner, where a
+  wire could not be grabbed (C3's, on nano-relay). Fit now leaves the tool rail and that bar
+  their room, as the board view always has, by the same measure.
 - **Cutting the trunk of a T on the schematic says what went with it.** A branch drawn onto
   a wire goes when that wire is cut, since it would otherwise join nothing; on nano-relay,
   cutting COIL's trunk took the branch from Q1.1 and the whole net with it, and the status
