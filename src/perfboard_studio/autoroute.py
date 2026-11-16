@@ -422,9 +422,6 @@ class VariantScore:
     face_changes: int = 0
     #: Connections of a net that prefers a face laid with none of their copper on it.
     off_face: int = 0
-    #: Whether any net of the board prefers a face (``Net.preferred_side``): only then are
-    #: warnings and ``off_face`` gates in :meth:`key`.
-    face_preferred: bool = False
 
     @property
     def conductors(self) -> int:
@@ -445,7 +442,7 @@ class VariantScore:
             + self.face_changes * FACE_CHANGE_EFFORT
         )
 
-    def key(self) -> tuple[int, int, int, int, float]:
+    def key(self) -> tuple[int, int, int, int, int, float]:
         """Comparison key. Unrouted connections come FIRST and alone, as a gate rather than
         a term in the sum: a connection the user has to finish by hand is not something to
         be traded against a tidier board elsewhere, and PLAN.md Sec 13 names routing most
@@ -453,15 +450,20 @@ class VariantScore:
         perfboard autorouter fell into. DRC errors the plan adds come next, as a gate too:
         a board that cannot work is not a cheaper board. Below both, effort decides.
 
-        Where a net prefers a face (#14), two more gates stand between the errors and the
-        effort: the warnings the plan adds with its pads beside another net's, then the
-        connections it laid off their net's face. A preference may cost the builder wire and
-        bends, never a warning, and among plans no worse for it the one that keeps the face
-        wins. With no preference both are zero, so a board that asks for nothing is chosen
-        exactly as before, and so is every golden route.
+        Three more gates stand between the errors and the effort, in this order. The
+        warnings the plan adds and its pads beside another net's: a cheaper board that
+        hands its builder a warning is not the better board. Then the holes where a wire
+        lies across a pin or another conductor's end, each one a joint the builder must
+        solder before laying the wire. They come second and not in one sum with the
+        warnings, because a sum lets a plan buy back two of them with a warning, and with
+        a face preferred that is a warning bought for the face. Then, where a net prefers
+        a face (#14), the connections laid off it: a preference may cost wire and bends,
+        never a warning or a wire over a joint. With no preference ``off_face`` is zero on
+        every plan.
         """
-        warnings = self.risk_holes + self.drc_warnings if self.face_preferred else 0
-        return (self.unrouted, self.drc_errors, warnings, self.off_face, self.effort)
+        warnings = self.risk_holes + self.drc_warnings
+        over_joints = self.over_pins + self.over_ends
+        return (self.unrouted, self.drc_errors, warnings, over_joints, self.off_face, self.effort)
 
 
 @dataclass(frozen=True, slots=True)
@@ -476,6 +478,9 @@ class AutorouteVariant:
     style: RoutingStyle
     plan: AutoroutePlan
     score: VariantScore
+    #: Nets this style's plan laid a second time, clear of the holes beside another net it
+    #: first ran past (:func:`plan_best_autoroute`); empty for a plan as the style laid it.
+    rewired: tuple[NetId, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -489,6 +494,11 @@ class BestAutoroute:
     @property
     def considered(self) -> int:
         return len(self.variants)
+
+    @property
+    def rewired(self) -> tuple[NetId, ...]:
+        """The winner's nets laid again clear of their risk holes; empty when none were."""
+        return next((v.rewired for v in self.variants if v.plan is self.plan), ())
 
 
 def score_plan(
@@ -534,7 +544,6 @@ def score_plan(
         trace_pads=stats.trace_pads if stats else 0,
         face_changes=len(stats.vias) if stats else 0,
         off_face=_links_off_face(plan, doc),
-        face_preferred=any(net.preferred_side for net in doc.nets),
     )
 
 
@@ -596,6 +605,15 @@ def plan_best_autoroute(
     always a plan. Styles run one after another in this process: the four plans are not
     put on the placer's worker pool, whose mapper hands results back only when every job
     is done, which is the progress this exists to show.
+
+    One more plan is tried after the styles: the one that is least work to build, with
+    the nets that ran beside another net's pad laid again in its own style, clear of those
+    holes (:func:`_rewired_clear`). A style routes each net once, in an order, and a net
+    laid early does not know the pad a later net will need; laid again with the rest of
+    the board in place, a wire usually finds a way past. It competes on the same key, and
+    when it wins it takes its style's place among the variants, so there is still one
+    variant per style and ``rewired`` names what was laid again. It costs nothing on a
+    board whose cheapest plan runs past no pad of another net.
     """
     variants: list[AutorouteVariant] = []
     baseline = drc_counts(doc, lookup)
@@ -615,10 +633,76 @@ def plan_best_autoroute(
             )
         )
 
+    if should_stop is None or not should_stop():
+        repaired = _rewired_clear(doc, lookup, options, variants, baseline)
+        if repaired is not None:
+            index = next(i for i, v in enumerate(variants) if v.style == repaired.style)
+            # Only a strict win replaces the plan the style laid: a tie keeps it.
+            if repaired.score.key() < variants[index].score.key():
+                variants[index] = repaired
+
     # min() is stable, so an exact tie keeps the earliest style tried.
     winner = min(variants, key=lambda variant: variant.score.key())
     return BestAutoroute(
         style=winner.style, plan=winner.plan, variants=tuple(variants)
+    )
+
+
+def _effort_key(score: VariantScore) -> tuple[int, int, int, float]:
+    """The sweep's key with the warning and joint gates taken out: least work, routed."""
+    return (score.unrouted, score.drc_errors, score.off_face, score.effort)
+
+
+def _rewired_clear(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    options: AutorouteOptions,
+    variants: Sequence[AutorouteVariant],
+    baseline: Mapping[tuple[str, str], int],
+) -> AutorouteVariant | None:
+    """The least-work variant with its warned nets laid again clear of their risk holes.
+
+    The nets whose routes ran beside another net's pad keep nothing of theirs; every other
+    net keeps its copper exactly as the style laid it, and the warned ones are planned
+    again on that board, in the same style, with the holes they were warned about kept
+    clear (``RouterOptions.avoid_holes``). Built from ``doc`` as one batch of new copper,
+    like any plan, so its preview is what committing it makes. None when that plan runs
+    past no other net's pad, or when no variant routed anything.
+    """
+    first = min(variants, key=lambda variant: _effort_key(variant.score))
+    risky = {
+        outcome.net_id: tuple(hole for routed in outcome.routed for hole in routed.risk_holes)
+        for outcome in first.plan.nets
+    }
+    risky = {net_id: holes for net_id, holes in risky.items() if holes}
+    if not risky:
+        return None
+    kept = tuple(c for c in first.plan.conductors if c.net_id not in risky)
+    board, failed = _apply_candidate(doc, kept, _fresh_ctx(doc))
+    if failed is not None:
+        return None
+    router = options_for_style(first.style, options.router)
+    router = dataclasses.replace(
+        router,
+        avoid_holes=router.avoid_holes + tuple(h for holes in risky.values() for h in holes),
+    )
+    again = plan_autoroute(
+        board, lookup, dataclasses.replace(options, router=router), tuple(risky)
+    )
+    conductors = kept + again.conductors
+    document, failed = _apply_candidate(doc, conductors, _fresh_ctx(doc))
+    if failed is not None:
+        return None
+    laid_again = {outcome.net_id: outcome for outcome in again.nets}
+    outcomes = tuple(laid_again.get(outcome.net_id, outcome) for outcome in first.plan.nets)
+    plan = _plan_from(
+        document, conductors, outcomes, first.plan.summary.passes + again.summary.passes
+    )
+    return AutorouteVariant(
+        style=first.style,
+        plan=plan,
+        score=score_plan(plan, doc, lookup, baseline),
+        rewired=tuple(net.id for net in doc.nets if net.id in risky),
     )
 
 
@@ -649,8 +733,17 @@ def describe_best(best: BestAutoroute) -> str:
             + _drc_added(score)
             + _lain_across(score)
             + f"  -> effort {score.effort:.0f}"
+            + _rewired_said(variant)
         )
     return "\n".join(lines)
+
+
+def _rewired_said(variant: AutorouteVariant) -> str:
+    """"; 2 nets laid again clear of another net's pads" for a variant that was."""
+    count = len(variant.rewired)
+    if not count:
+        return ""
+    return f"; {count} net{'' if count == 1 else 's'} laid again clear of another net's pads"
 
 
 def _lain_across(score: VariantScore) -> str:
@@ -1463,23 +1556,32 @@ def _relay_wires(
 
 
 def _to_plan(attempt: _Attempt, passes: int) -> AutoroutePlan:
-    routed_links = [routed for outcome in attempt.outcomes for routed in outcome.routed]
-    worked_on = [outcome for outcome in attempt.outcomes if outcome.routed or outcome.unrouted]
+    return _plan_from(attempt.document, attempt.conductors, attempt.outcomes, passes)
+
+
+def _plan_from(
+    document: PerfDocument,
+    conductors: tuple[NewConductor, ...],
+    outcomes: tuple[NetOutcome, ...],
+    passes: int,
+) -> AutoroutePlan:
+    routed_links = [routed for outcome in outcomes for routed in outcome.routed]
+    worked_on = [outcome for outcome in outcomes if outcome.routed or outcome.unrouted]
 
     summary = AutorouteSummary(
-        nets_considered=len(attempt.outcomes),
-        nets_closed=sum(1 for outcome in attempt.outcomes if outcome.closed),
+        nets_considered=len(outcomes),
+        nets_closed=sum(1 for outcome in outcomes if outcome.closed),
         links_routed=len(routed_links),
-        links_unrouted=sum(len(outcome.unrouted) for outcome in attempt.outcomes),
+        links_unrouted=sum(len(outcome.unrouted) for outcome in outcomes),
         total_cost=sum(routed.cost for routed in routed_links),
         fallback_links=sum(1 for routed in routed_links if routed.strategy in FALLBACK_STRATEGIES),
         risk_holes=sum(len(routed.risk_holes) for routed in routed_links),
         passes=passes,
     )
     return AutoroutePlan(
-        document=attempt.document,
-        conductors=attempt.conductors,
-        nets=attempt.outcomes,
+        document=document,
+        conductors=conductors,
+        nets=outcomes,
         summary=summary,
         label=_label(worked_on, summary),
     )

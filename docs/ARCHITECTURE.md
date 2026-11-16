@@ -3212,6 +3212,36 @@ because it is built from the ends lain across, which are charged already.
 and `test_the_ne555_example_is_not_wired_with_fifteen_warnings_to_save_nine_wires` holds the
 case.
 
+**Effort decides last: a warning and a wire over a joint are gates ahead of it.** Priced as
+effort, a warning was five wires' worth (`DRC_WARNING_EFFORT`), so a style that saved more
+than that took it: on the whole scoreboard the sweep handed its builder 24 warnings, twelve
+of them on the relay board's supply, laid in lead-bend for 61 mm of wire. `VariantScore.key`
+now compares the warnings and risk holes a plan adds first, then the holes where a wire lies
+across a pin or another conductor's end, then (#14) the connections laid off a preferred
+face, and only then effort. They are separate gates and not one sum, so a plan cannot buy a
+warning back with two wires off joints. The cost is wire: 24 warnings became 3 for 874 mm
+more over the whole scoreboard, 302 mm of it on that supply, which went from 139 solder pads
+to a balanced plan with 5. `test_the_sweep_takes_no_warning_and_no_wire_over_a_joint_for_the_face_or_for_less_work`
+holds the order.
+
+**A gate needs a clean plan to choose, so the sweep makes one more.** On lm317-supply the
+gates alone would have traded balanced's one warning, a trace beside another net's pad, for
+the wire style's wire across a pin and another across an end -- clean of warnings, worse to
+build. A style routes its nets once, in an order, and a net laid early cannot see the pad a
+later one will need; laid again with the rest of the board in place it usually finds a way
+past. So after the four styles, `autoroute._rewired_clear` takes the least-work plan, keeps
+every net it did not warn about as that plan laid it, and plans the warned nets again in the
+same style with their risk holes kept clear (`RouterOptions.avoid_holes`, as Rip Up and
+Re-wire does). Built from the document as one batch of new copper like any plan, it competes
+on the same key and, on a strict win, takes its style's place among the variants -- one
+variant per style still, `AutorouteVariant.rewired` naming the nets laid again. On lm317 it
+wins with no warning and nothing lain across, for 25 mm. It is planned only when the
+least-work plan has a warned net: on atmega328-relay that costs nothing, and the dearest
+anywhere is under half a second. It does not rescue a style built of solder runs -- three
+rounds of it took the supply's lead-bend plan only from 12 warnings to 5 -- which is why it is
+one more candidate and not a pass every style goes through.
+`test_the_sweep_lays_a_warned_net_again_clear_of_its_risk_hole` holds the case.
+
 ## What the window remembers
 
 `main.app_settings()` is the one `QSettings` store — recent files, the session
@@ -3915,9 +3945,11 @@ What stayed is three things. `_face_rank` sorts a connection's candidates as on 
 and clean, off it and clean, then any with a pad beside another net's (`risk_holes`), ahead
 of the style and the price; a connection given up costs `off_face_link` (40) on top, which
 carries the choice into the comparisons made between whole plans of a net. `VariantScore.key`
-gates on the warnings and risk holes a plan adds, then on the connections it laid off their
-face, before effort -- only where some net prefers a face, so a board that asks for nothing
-is chosen as it always was, and so is every golden route. And the wire over the top may end
+gates on the warnings and risk holes a plan adds, then on the wires it lays across a joint,
+then on the connections it laid off their face, before effort. The first two once applied
+only where some net preferred a face; they now hold on every board (see "Auto-wire is held to
+a scoreboard"), and with no net preferring a face `off_face` is zero on every plan, so the
+golden routes, which are one style's plans, did not move. And the wire over the top may end
 in a free hole BESIDE a pin its body covers (`_jumper_landings`) and reach the pin with a
 one-pitch offcut of bare wire underneath (`_stub`), which is how a builder runs ground over
 the parts to a header. It is a wire and not a two-hole bridge of solder because R5' measures

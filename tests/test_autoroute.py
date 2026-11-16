@@ -1715,3 +1715,68 @@ def test_the_ne555_example_is_not_wired_with_fifteen_warnings_to_save_nine_wires
     assert by_style["lead-bend"].risk_holes > 10
     assert best.style == "balanced"
     assert by_style["balanced"].risk_holes == 0
+
+
+# ---------------------------------------------------------------------------
+# The least-work plan, its warned nets laid again clear of their risk holes
+# ---------------------------------------------------------------------------
+
+
+def _bare_example(name: str) -> PerfDocument:
+    path = Path(__file__).resolve().parents[1] / "examples" / f"{name}.perf"
+    doc = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    return dataclasses.replace(doc, conductors=())
+
+
+_GRID = AutorouteOptions(router=RouterOptions(wire_path="grid"))
+
+
+def test_the_sweep_lays_a_warned_net_again_clear_of_its_risk_hole() -> None:
+    """lm317-supply's least-work plan (balanced) runs one trace beside another net's pad,
+    and the next cheapest without a warning, the wire style, lays a wire across a pin and
+    another across a conductor's end. Its one warned net laid again with that hole kept
+    clear has neither: the sweep finds it, and it takes balanced's place among the
+    variants, so there is still one per style."""
+    doc = _bare_example("lm317-supply")
+    plain = plan_autoroute(doc, LOOKUP_STD, _GRID)
+    assert plain.summary.risk_holes, "lm317-supply's balanced plan no longer runs beside a pad"
+
+    best = plan_best_autoroute(doc, LOOKUP_STD, _GRID)
+
+    assert best.style == "balanced"
+    assert best.rewired, "the warned net was not laid again"
+    assert best.plan.summary.risk_holes == 0
+    winner = next(v for v in best.variants if v.plan is best.plan)
+    assert winner.score.drc_warnings == 0 and winner.score.unrouted == 0
+    assert winner.score.over_pins + winner.score.over_ends == 0
+    assert sorted(v.style for v in best.variants) == sorted(ALL_ROUTING_STYLES)
+    # Every net that was not warned keeps the copper balanced laid for it.
+    kept = [c for c in plain.conductors if c.net_id not in best.rewired]
+    assert [c for c in best.plan.conductors if c.net_id not in best.rewired] == kept
+    assert "laid again clear of another net's pads" in describe_best(best)
+
+
+def test_a_rewired_plan_commits_to_the_board_it_previews() -> None:
+    """Like every plan, one batch of new copper from the document it was made on, so the
+    preview is the board ``conductor.addMany`` gives -- ids included."""
+    doc = _bare_example("lm317-supply")
+    best = plan_best_autoroute(doc, LOOKUP_STD, _GRID)
+    assert best.rewired
+
+    bus = CommandBus(
+        doc, create_standard_registry(), CommandContext(next_id=create_document_id_generator(doc))
+    )
+    result = bus.dispatch("conductor.addMany", best.plan.payload())
+
+    assert result.ok, result
+    assert bus.document.conductors == best.plan.document.conductors
+
+
+def test_a_board_whose_cheapest_plan_is_clean_is_not_laid_again() -> None:
+    """Nothing to repair, nothing tried: every variant is the plan its style lays."""
+    doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
+
+    best = plan_best_autoroute(doc, LOOKUP_STD, _GRID)
+
+    assert not any(v.rewired for v in best.variants)
+    assert best.rewired == ()

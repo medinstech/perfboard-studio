@@ -617,6 +617,17 @@ closed without a bump.
   warnings where they carried 97 and half the pads soldered along (470 where 955), for more
   wire (192 wires where 144, 4.4 m where 3.3 m). The report and the agent's comparison say
   each style's bends and the joints and wire ends its wires lie across.
+- **"Try every style" no longer buys a warning with less wire.** A DRC warning was priced
+  as five wires' worth of effort, so a style that saved more than that took it. Plans are
+  now compared warnings first, then wires lying across a pin or another wire's end, then
+  connections off a net's face, and only then effort, on every board rather than only where
+  a net prefers a face. After the four styles one more plan is tried: the least-work one,
+  with the nets it was warned about wired again in the same style, clear of the pads that
+  warned. When it wins it takes its style's place, and the status line's tooltip adds how
+  many nets were laid again. Over the example and test boards the warnings it leaves fall
+  from 24 to 3 and no board gets worse, for about 0.9 m more wire, and the sweep takes no
+  longer. Most of the wire is the relay board's supply, which goes from bent leads with 12
+  warnings and 139 soldered pads to a balanced plan with none and 5.
 
 ## [0.24.0] - 2026-11-10
 

@@ -953,22 +953,35 @@ def test_a_net_with_any_copper_on_its_face_or_none_at_all_is_not_off_it() -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_with_a_preference_the_sweep_takes_no_warning_for_the_face_or_for_less_work() -> None:
-    """A plan that keeps the face beats one that does not only where it adds no warning,
-    and a pad beside another net's counts as one; with no net preferring a face neither is
-    asked and effort decides, as it always has."""
+def test_the_sweep_takes_no_warning_and_no_wire_over_a_joint_for_the_face_or_for_less_work() -> None:
+    """A warning the plan adds or a pad beside another net's, and then a wire lying across
+    a pin or another conductor's end, each come ahead of the face and of effort: a plan
+    that keeps the face beats one that does not only where it adds none of them, and with
+    no face preferred the cheapest plan that adds none of them wins over a cheaper one
+    that does. A warning is never bought back with wires off joints."""
     clean_off = VariantScore(unrouted=0, risk_holes=0, traces=9, wires=9, wire_mm=900.0, off_face=3)
     risky_on = VariantScore(unrouted=0, risk_holes=1, traces=2, wires=2, wire_mm=100.0)
     warned_on = VariantScore(unrouted=0, risk_holes=0, traces=2, wires=2, wire_mm=100.0, drc_warnings=1)
+    over_pin_on = VariantScore(unrouted=0, risk_holes=0, traces=2, wires=2, wire_mm=100.0, over_pins=1)
+    over_end_on = VariantScore(unrouted=0, risk_holes=0, traces=2, wires=2, wire_mm=100.0, over_ends=1)
     clean_on = VariantScore(unrouted=0, risk_holes=0, traces=9, wires=9, wire_mm=990.0)
 
-    def best(*scores: VariantScore, preferred: bool) -> VariantScore:
-        return min(
-            (dataclasses.replace(s, face_preferred=preferred) for s in scores),
-            key=VariantScore.key,
-        )
+    def best(*scores: VariantScore) -> VariantScore:
+        return min(scores, key=VariantScore.key)
 
-    assert best(clean_off, risky_on, warned_on, preferred=True).wire_mm == 900.0
-    assert best(clean_off, clean_on, preferred=True).wire_mm == 990.0
-    assert best(clean_off, risky_on, warned_on, clean_on, preferred=False).wire_mm == 100.0
+    flagged = (risky_on, warned_on, over_pin_on, over_end_on)
+    # A preference: the face is kept only where nothing is flagged for it.
+    assert best(clean_off, *flagged) is clean_off
+    assert best(clean_off, clean_on) is clean_on
+    # No preference (off_face zero everywhere): the clean plan, though nine times the wire.
+    no_pref = dataclasses.replace(clean_off, off_face=0)
+    assert best(*flagged, clean_on) is clean_on
+    assert best(*flagged, no_pref) is no_pref
+    # One wire over a joint is still better than two: a style is not all or nothing.
+    two = dataclasses.replace(over_pin_on, over_ends=1, wire_mm=50.0)
+    assert best(two, over_pin_on) is over_pin_on
+    # ...but no number of them is worse than a warning (lm317-supply: one warning, or a
+    # wire over a pin and another over an end).
+    assert best(warned_on, two) is two
+    assert best(dataclasses.replace(warned_on, off_face=0), dataclasses.replace(two, off_face=4)) is not warned_on
 
