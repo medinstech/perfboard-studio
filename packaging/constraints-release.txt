@@ -1,0 +1,80 @@
+# The exact versions the release bundles are built with: release.yml's Windows, Linux and
+# macOS jobs install `-e ".[dev,mcp]" -c packaging/constraints-release.txt`.
+#
+# Written from `pip freeze` of the venv the last release candidate was built in (Windows,
+# Python 3.12, `pip install -e ".[dev,mcp]"` with nothing pinned), so the tag ships the Qt
+# and VTK that candidate was tried with. A package the other platforms need and Windows
+# does not is left to pip; one only Windows installs (pywin32) is ignored elsewhere.
+# pyproject.toml keeps its ranges and ci.yml installs the latest, so a new release of a
+# dependency is met by CI first, and reaches a release only when this file is rewritten.
+#
+# The one pin that is not the freeze: ruff stays on ci.yml's lint pin (>=0.15,<0.16), so
+# the lint job, the edit hook and a venv made from this file all run one ruff.
+altgraph==0.17.5
+annotated-types==0.8.0
+anyio==4.16.0
+ast_serialize==0.13.1
+attrs==26.1.0
+certifi==2026.10.23
+cffi==2.1.1
+click==8.5.1
+colorama==0.4.6
+contourpy==1.4.0
+coverage==7.17.3
+cryptography==50.0.2
+cycler==0.12.1
+fonttools==4.68.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+httpx-sse==0.4.3
+idna==3.20
+iniconfig==2.3.1
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+kiwisolver==1.5.1
+librt==0.16.0
+matplotlib==3.11.2
+mcp==1.30.0
+mypy==2.4.1
+mypy_extensions==1.2.0
+numpy==2.5.5
+packaging==26.3
+pathspec==1.1.1
+pefile==2024.8.26
+pillow==13.0.0
+pluggy==1.7.0
+pycparser==3.12
+pydantic==2.14.3
+pydantic-settings==2.16.3
+pydantic_core==2.50.4
+Pygments==2.21.0
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.10
+PyJWT==2.15.1
+pyparsing==3.3.3
+PySide6==6.12.0
+PySide6_Addons==6.12.0
+PySide6_Essentials==6.12.0
+PySide6_Pdf==6.12.0.140
+PySide6_WebEngine==6.12.0.140
+pytest==9.2.0
+pytest-cov==7.1.0
+python-dateutil==4.0.0
+python-dotenv==1.2.4
+python-multipart==0.0.34
+pywin32==312
+pywin32-ctypes==0.2.3
+referencing==0.37.0
+rpds-py==2026.9.1
+ruff==0.15.15
+setuptools==84.2.1
+shiboken6==6.12.0
+sse-starlette==3.7.0
+starlette==1.10.0
+trove-classifiers==2026.9.21.13
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+tzdata==2026.6
+uvicorn==0.54.0
+vtk==9.7.2

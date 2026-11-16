@@ -194,12 +194,18 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            packaging/constraints-release.txt
 
+      # Pinned to the exact versions the last release candidate was built and tried with
+      # (packaging/constraints-release.txt), here and in the Linux and macOS jobs, so a tag
+      # ships the Qt and VTK that were tried rather than whatever PyPI has that hour. ci.yml
+      # stays on the latest, so the next PySide6 break shows up there first.
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,mcp]"
+          python -m pip install -e ".[dev,mcp]" -c packaging/constraints-release.txt
 
       # Both directions, and before anything expensive: a tag that does not match the
       # source, or a version with no changelog section, is a release that should not
@@ -378,7 +384,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            packaging/constraints-release.txt
 
       # Same list as ci.yml, for the same reason: PySide6 and VTK link against these even
       # when they never open a window, and without them PySide6 refuses to import at all.
@@ -394,7 +402,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,mcp]"
+          python -m pip install -e ".[dev,mcp]" -c packaging/constraints-release.txt
 
       - name: Check the tag against the source
         if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
@@ -484,12 +492,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            packaging/constraints-release.txt
 
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,mcp]"
+          python -m pip install -e ".[dev,mcp]" -c packaging/constraints-release.txt
 
       - name: Check the tag against the source
         if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
