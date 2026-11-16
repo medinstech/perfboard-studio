@@ -69,7 +69,9 @@ closed without a bump.
   arrow for a part, which is now moved by its body.
 - **Install and Restart, on Windows.** When a newer release is out, the header shows an
   "Update 0.25.0" pill and Home opens with a card at the top saying which version it is and
-  what changed, with the one button that does what comes next. On a copy installed with the
+  what changed, with the one button that does what comes next. While Home is in front the
+  strip over the board does not say it a second time; leaving Home brings it back, and a
+  download's progress, a file landed or a failure still show over Home. On a copy installed with the
   Windows installer, once the download's checksum has matched, the strip offers Install and
   Restart: it asks about unsaved work as closing the window does, checks the file again,
   runs the installer silently behind Windows' own administrator prompt, and the installer
@@ -523,6 +525,17 @@ closed without a bump.
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying
   a board had arrived. Whatever brings a document now takes Home away.
+- **Home keeps the menu and the search.** Home took the whole header away, its menu with
+  it, so Check for Updates could be reached only by opening an example first. Over Home the
+  header now keeps the menu and the search where they are over a board, and leaves out what
+  is about a board: its name, the steps, Undo and Redo. Opening something, the language, the
+  theme and Help run over Home; any other command, from the menu or the search, brings the
+  board back first and runs there, so it no longer changes a board nobody can see.
+- **An example drawn but not yet built is pictured on the window's own sheet.** Its card on
+  Home showed the print export, a white page glaring on the dark Home and narrower than the
+  boards beside it. It now shows the sheet as the window draws it, dark in the dark theme and
+  light in the light one, filling the card's picture as a board does. The export is
+  unchanged.
 - **One word for each face in English.** The Face buttons, the Draw on bar and the face notes
   said "component side" while the status bar, the Flip and 1:1 PDF menu items and the help
   glossary said "parts side". It is "component side" everywhere now, which is what the
