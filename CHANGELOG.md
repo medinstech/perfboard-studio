@@ -459,6 +459,11 @@ closed without a bump.
   the board named them as "the bodies of" the parts, from a field a face note shares, and
   now names the parts. A hole hint said the bare "tıkla" where every status line says
   "tıklayın", and the bar's short "tezgâhta 1" now says one of what.
+- **Cutting the trunk of a T on the schematic says what went with it.** A branch drawn onto
+  a wire goes when that wire is cut, since it would otherwise join nothing; on nano-relay,
+  cutting COIL's trunk took the branch from Q1.1 and the whole net with it, and the status
+  line named only the pins. It now names the branch and the net: "The branch from Q1.1 went
+  with it. COIL is gone: K1.2, D1.2, Q1.1 are on no net now."
 - **What the schematic could not draw is said in the window's language.** The line under
   the sheet that lists what it drew differently -- a net with only one pin drawn as a stub, a
   pin not on the sheet, parts parked at the right-hand edge -- was English in a Turkish

@@ -10431,6 +10431,8 @@ class MainWindow(QMainWindow):
             for ar, ap, br, bp in ends
         )
         freeze = self._sheet_freeze()
+        # The wires there are before the command: the freeze's, on a sheet it is freezing.
+        drawn = freeze.wires if freeze is not None else self.bus.system_document.sheet_wires
         if WIRE_DELETE == "rub-out":
             result = self.bus.dispatch(
                 "sheet.wire.delete", DeleteSheetWiresPayload(wires=wires, freeze=freeze)
@@ -10439,7 +10441,11 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(refused(result), 8000)
                 return
             self._say_on_sheet(
-                t("Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back."),
+                self._with_branches_said(
+                    t("Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back."),
+                    drawn,
+                    wires,
+                ),
                 freeze,
                 8000,
             )
@@ -10453,8 +10459,39 @@ class MainWindow(QMainWindow):
             return
         said = self._say_what_left(before) or t("The pins stay joined by other wires")
         self._say_on_sheet(
-            t("{said}. Ctrl+Z brings the wire back.").format(said=said), freeze, 8000
+            self._with_branches_said(
+                t("{said}. Ctrl+Z brings the wire back.").format(said=said), drawn, wires
+            ),
+            freeze,
+            8000,
         )
+
+    def _with_branches_said(
+        self, said: str, drawn: Sequence[SheetWire], named: Sequence[SheetWire]
+    ) -> str:
+        """``said``, opened with the branches a delete took with the wires it was given.
+
+        A T's branch lands ON its trunk, so it goes with it (``commands._with_branches``) --
+        the rule stays, because a branch left hanging in the air would join nothing to
+        anything. But it went without a word: cutting the trunk of COIL on nano-relay took
+        the branch to D1.2 as well and the net with it, and the status line named only pins.
+        The branches are named by the pin each starts from, as the sheet draws them.
+        """
+        left = {frozenset((w.a, w.b)) for w in self.bus.system_document.sheet_wires}
+        asked = {frozenset((w.a, w.b)) for w in named}
+        went = [
+            f"{w.a.component_ref}.{w.a.pin}"
+            for w in drawn
+            if frozenset((w.a, w.b)) not in left and frozenset((w.a, w.b)) not in asked
+        ]
+        if not went:
+            return said
+        branches = (
+            t("The branch from {pins} went with it.")
+            if len(went) == 1
+            else t("The branches from {pins} went with it.")
+        ).format(pins=", ".join(went))
+        return f"{branches} {said}"
 
     def _say_what_left(self, before: dict[str, Net]) -> str:
         """What a cut or a moved wire end took off the nets that were ``before``: each pin
@@ -10465,6 +10502,18 @@ class MainWindow(QMainWindow):
         new_nets = [net for net in document.nets if net.id not in before]
         said: list[str] = []
         for net in before.values():
+            if net.id not in after and not any(
+                node in new.nodes for new in new_nets for node in net.nodes
+            ):
+                # The whole net went -- its last wire cut -- so it is named as gone rather
+                # than every pin "left" a net that no longer exists.
+                listed = ", ".join(
+                    f"{n.component_ref}.{n.pin}" for n in dict.fromkeys(net.nodes)
+                )
+                said.append(
+                    t("{net} is gone: {pins} are on no net now").format(net=net.name, pins=listed)
+                )
+                continue
             moved: dict[str, list[str]] = {}
             for node in net.nodes:
                 if node in after.get(net.id, set()):

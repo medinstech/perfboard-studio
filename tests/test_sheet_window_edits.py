@@ -271,3 +271,55 @@ def test_the_label_dialog_opens_on_the_pins_own_net(window_for, monkeypatch) -> 
     ((items, current),) = asked
     own = next(n.name for n in window.bus.system_document.nets if _pin("R3", "1") in n.nodes)
     assert items[current] == own
+
+
+def test_a_cut_trunk_names_the_branch_that_went_with_it(window_for, monkeypatch) -> None:
+    """A T's branch lands on its trunk, so cutting the trunk takes the branch too -- the rule
+    stays, and the status line says so, and names the net that went."""
+    from perfboard_studio.ui import main
+
+    from .test_sheet_tee import _tee
+
+    monkeypatch.setattr(main, "WIRE_DELETE", "cut")
+    bus = _bus()
+    _wire(bus, _pin("R1", "1"), _pin("R2", "1"))
+    _tee(bus, _pin("R3", "1"), (_pin("R1", "1"), _pin("R2", "1")))
+    (net,) = bus.document.nets
+    trunk = _wire_between(bus, _pin("R1", "1"), _pin("R2", "1"))
+    window = window_for(bus.document)
+    window._on_sheet_wires_delete([(*_ends(trunk.a), *_ends(trunk.b))])
+    said = window.statusBar().currentMessage()
+    assert said.startswith("The branch from R3.1 went with it. "), said
+    assert f"{net.name} is gone: " in said, said
+    assert said.endswith("Ctrl+Z brings the wire back."), said
+    assert not window.bus.system_document.nets
+
+
+def test_cutting_the_coil_trunk_on_nano_relay_says_coil_went(window_for, monkeypatch) -> None:
+    """The walk's case, on the example sheet nobody has frozen."""
+    import pathlib
+
+    from perfboard_studio import persist
+    from perfboard_studio.schematic import wires_as_drawn
+    from perfboard_studio.ui import main
+
+    monkeypatch.setattr(main, "WIRE_DELETE", "cut")
+    golden = pathlib.Path(__file__).resolve().parent.parent / "examples" / "nano-relay.perf"
+    document = persist.deserialize_document(golden.read_text(encoding="utf-8")).document
+    window = window_for(document)
+    document = window.bus.system_document
+    drawing = build_schematic(document, window.lookup)
+    window.schematic_view.set_unfrozen_wires(wires_as_drawn(drawing, document))
+    window.schematic_view.set_drawing(drawing)
+    coil = next(net for net in document.nets if net.name == "COIL")
+    drawn = wires_as_drawn(drawing, document)
+    hosts = {frozenset((w.b, w.tap)) for w in drawn if w.tap is not None}
+    trunk = next(
+        w for w in drawn
+        if w.tap is None and frozenset((w.a, w.b)) in hosts and w.a in coil.nodes
+    )
+    window._on_sheet_wires_delete([(*_ends(trunk.a), *_ends(trunk.b))])
+    said = window.statusBar().currentMessage()
+    assert "went with it." in said, said
+    assert "COIL is gone: " in said, said
+    assert all(net.name != "COIL" for net in window.bus.system_document.nets)
