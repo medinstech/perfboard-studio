@@ -4149,7 +4149,12 @@ class MainWindow(QMainWindow):
         # panel has been CLOSED.
         anything_open = any(dock is not None and not dock.isHidden() for dock in panels)
         if anything_open:
-            hint.setMaximumSize(0, 0)
+            # No WIDTH, and every height it likes. The panels at the sides share a row with
+            # the middle, and a middle capped at no height caps that row: whatever height
+            # was left over went to the top dock area, so the update strip, the one panel
+            # there, grew to fill most of the window and pressed the board into the bottom
+            # fifth. With no width the middle still takes nothing anyone can see.
+            hint.setMaximumSize(0, self.UNCAPPED)
         else:
             hint.setMaximumSize(self.UNCAPPED, self.UNCAPPED)
 

@@ -572,6 +572,11 @@ class UpdateBar(QFrame):
         # Styled by name in the one stylesheet (``theme.stylesheet``).
         self.setObjectName("updateBar")
         self.setFrameShape(QFrame.Shape.NoFrame)
+        # Exactly as tall as what it says, in every state. The strip is the only panel in
+        # the window's top dock area, and a frame left to grow lets that area keep any
+        # height it was once given -- a layout saved while it had swallowed the window
+        # came back that way, with the panels pressed into the bottom fifth.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.hide()
 
         row = QHBoxLayout(self)

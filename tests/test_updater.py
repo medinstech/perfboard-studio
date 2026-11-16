@@ -1003,3 +1003,77 @@ def test_the_feed_can_be_pointed_elsewhere_for_trying_the_whole_flow(monkeypatch
     assert updater.releases_url() == "file:///tmp/feed.json"
     monkeypatch.setenv(updater.RELEASES_URL_VARIABLE, "  ")
     assert updater.releases_url() == RELEASES_API_URL
+
+
+# ---------------------------------------------------------------------------
+# The strip is as tall as what it says, over a board as over Home
+# ---------------------------------------------------------------------------
+
+
+def _settle() -> None:
+    for _ in range(5):
+        QApplication.processEvents()
+
+
+def _strip_states(bar: updater.UpdateBar):  # type: ignore[no-untyped-def]
+    """Every state the strip has, each put up the way the window puts it up."""
+    yield "available", lambda: bar.announce(NEXT_RELEASE, "0.7.0", downloadable=True)
+    yield "downloading", lambda: bar.show_progress(300_000, 1_000_000)
+    yield "downloaded", lambda: bar.show_downloaded("C:/Downloads/Setup.exe", True, can_install=True)
+    yield "not installed", lambda: bar.show_install_problem(
+        "Windows did not give permission, so nothing was installed.", retry=True
+    )
+    yield "changed and deleted", lambda: bar.show_install_problem(
+        "The installer changed after it was checked, so it was deleted and nothing was installed.",
+        retry=False,
+    )
+    yield "download failed", lambda: bar.show_failure("the connection was reset")
+
+
+@pytest.mark.parametrize("announced_first", [True, False])
+def test_over_a_board_the_strip_keeps_its_height_and_the_panels_keep_the_window(
+    window, announced_first: bool
+) -> None:
+    """An RC on a 1920 x 1032 window: the strip up and an example opened, and the strip
+    filled y 85-810 with the board pressed into 150 px at the bottom -- in the release's
+    state and again in "not installed". The middle of the window was capped at no height
+    once the panels opened, and the top dock area took what the side panels' row could not.
+    Every state, the strip announced before the example and after it."""
+    from perfboard_studio.ui.main import example_paths
+
+    window.resize(1920, 1032)
+    window.show()
+    _settle()
+    example = next(path for path in example_paths() if path.stem == "ne555-astable")
+    if announced_first:
+        window._on_update_checked(NEXT_RELEASE)
+        _settle()
+    window.on_open_example(example)
+    _settle()
+    if not announced_first:
+        window._on_update_checked(NEXT_RELEASE)
+        _settle()
+    strip, bar = window.update_strip, window.update_bar
+    for state, put_up in _strip_states(bar):
+        put_up()
+        _settle()
+        assert strip.isVisible(), state
+        assert strip.height() == strip.sizeHint().height(), state
+        assert window.dock_board.height() > window.height() * 0.6, state
+
+
+def test_a_strip_saved_tall_comes_back_as_tall_as_what_it_says(window) -> None:
+    """A layout saved while the strip had swallowed the window is on the machines that ran
+    the release candidate; given that height again, it keeps its own."""
+    from PySide6.QtCore import Qt
+
+    window.resize(1920, 1032)
+    window.show()
+    window._on_update_checked(NEXT_RELEASE)
+    _settle()
+    window.resizeDocks([window.update_strip], [700], Qt.Orientation.Vertical)
+    _settle()
+    restored = window.saveState()
+    window.restoreState(restored)
+    _settle()
+    assert window.update_strip.height() == window.update_strip.sizeHint().height()
