@@ -593,6 +593,8 @@ QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
 /* The shell, by name: ux's header, step bar, floating tools, problems drawer and
    properties panel. Their widgets carry the names and properties; the look lives here. */
 QWidget#header {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
+/* Over Home it stands where the steps were, and must not paint over the line under them. */
+QWidget#headerGap {{ background: transparent; }}
 QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
 QLabel#headerPlace {{ color: {k.text_secondary}; }}
 /* A newer release exists: a pill in the header and a card on Home, both in the accent. */

@@ -3381,6 +3381,10 @@ class MainWindow(QMainWindow):
         )
         # The pill opens the notes, which carry the one action that is possible now.
         self.header.updateRequested.connect(self._on_update_notes)
+        home_menu = QMenu(self)
+        home_menu.setToolTipsVisible(True)
+        home_menu.aboutToShow.connect(lambda: self._fill_home_menu(home_menu))
+        self.header.home_menu = home_menu
         strip = QToolBar(self)
         strip.setObjectName("headerToolbar")
         strip.setMovable(False)
@@ -3396,6 +3400,75 @@ class MainWindow(QMainWindow):
         bar.setFixedHeight(0)
         bar.hovered.connect(self._on_menu_bar_hovered)
         self._refresh_title()
+
+    # -- ☰ and the search over Home -----------------------------------------------
+    #
+    # Home keeps the header's ☰ and search, so File, View and Help are where they are over
+    # the board. A command that needs a board (Undo, Auto-wire, a panel) goes back to the
+    # window FIRST and runs there: run over Home it changed a board nobody could see, and
+    # leaving afterwards put the photographed layout back over whatever it had shown.
+    # Opening something, the language, the theme and Help stay on Home; a document that
+    # arrives leaves Home by itself (``_forget_document_state``).
+
+    def _keeps_home(self, action: QAction, inherited: bool) -> bool:
+        """Whether ``action``, in a menu that does (``inherited``) or not, runs over Home."""
+        import shiboken6
+
+        key = shiboken6.getCppPointer(action)[0]
+        if key in self._home_leavers:
+            return False
+        return key in self._home_keepers or inherited
+
+    def _run_from_home(self, action: QAction, keeps_home: bool) -> None:
+        if not keeps_home and self.home_is_showing():
+            self.leave_home()
+        action.trigger()
+
+    def _fill_home_menu(self, menu: QMenu) -> None:
+        """☰ over Home: the window's menus, each entry standing in for its original, with
+        the original's words, key, tick and whether it can be used now -- rebuilt each time
+        it opens, so those are as they are now. The key is said, not bound: a second action
+        on Ctrl+S would make the key ambiguous and neither would run."""
+        import shiboken6
+
+        for old in menu.findChildren(QMenu, options=Qt.FindChildOption.FindDirectChildrenOnly):
+            old.deleteLater()
+        menu.clear()
+        submenus = {
+            shiboken6.getCppPointer(each.menuAction())[0]: each
+            for each in self.findChildren(QMenu)
+        }
+
+        def mirror(source: QMenu, into: QMenu, keeps: bool) -> None:
+            if source is self.menu_recent:
+                self._refresh_recent_menu()
+            for action in source.actions():
+                if action.isSeparator():
+                    into.addSeparator()
+                    continue
+                if not action.isVisible() or not action.text():
+                    continue
+                sub = submenus.get(shiboken6.getCppPointer(action)[0])
+                if sub is not None:
+                    inner = into.addMenu(sub.title())
+                    inner.setToolTipsVisible(True)
+                    mirror(sub, inner, self._keeps_home(action, keeps))
+                    continue
+                keys = action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+                proxy = into.addAction(
+                    action.icon(), f"{action.text()}\t{keys}" if keys else action.text()
+                )
+                proxy.setToolTip(action.toolTip())
+                proxy.setEnabled(action.isEnabled())
+                proxy.setCheckable(action.isCheckable())
+                proxy.setChecked(action.isChecked())
+                stays = self._keeps_home(action, keeps)
+                proxy.triggered.connect(
+                    lambda _checked=False, a=action, k=stays: self._run_from_home(a, k)
+                )
+
+        for top in self._top_menus:
+            mirror(top, menu.addMenu(top.title()), self._keeps_home(top.menuAction(), False))
 
     def _palette_entries(self) -> list[Entry]:
         """What the palette offers: every enabled entry of every menu under ☰, by its own
@@ -3416,7 +3489,7 @@ class MainWindow(QMainWindow):
         }
         entries: list[Entry] = []
 
-        def walk(menu: QMenu, path: tuple[str, ...], seen: set[int]) -> None:
+        def walk(menu: QMenu, path: tuple[str, ...], seen: set[int], keeps: bool) -> None:
             for action in menu.actions():
                 if action.isSeparator() or not action.isVisible() or not action.text():
                     continue
@@ -3424,7 +3497,8 @@ class MainWindow(QMainWindow):
                 if sub is not None:
                     key = shiboken6.getCppPointer(sub)[0]
                     if key not in seen:
-                        walk(sub, (*path, plain(sub.title())), seen | {key})
+                        walk(sub, (*path, plain(sub.title())), seen | {key},
+                             self._keeps_home(action, keeps))
                     continue
                 if not action.isEnabled():
                     continue
@@ -3442,14 +3516,16 @@ class MainWindow(QMainWindow):
                         keys=action.shortcut().toString(
                             QKeySequence.SequenceFormat.NativeText
                         ),
-                        run=action.trigger,
+                        run=partial(self._run_from_home, action,
+                                    self._keeps_home(action, keeps)),
                         icon=None if action.icon().isNull() else action.icon(),
                         also=also,
                     )
                 )
 
         for top in self._top_menus:
-            walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]})
+            walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]},
+                 self._keeps_home(top.menuAction(), False))
 
         document = self.bus.system_document
         # A part by what somebody remembers of it: "R37" from a finding, "10k" from the
@@ -3470,7 +3546,8 @@ class MainWindow(QMainWindow):
                     label=f"{component.ref}  {component.value}".strip(),
                     where=f"{on}  ·  {package(component.footprint_id)}",
                     keys="",
-                    run=partial(self._palette_go_to_component, component.id),
+                    run=partial(self._from_home, partial(self._palette_go_to_component,
+                                                         component.id)),
                     kind="part",
                 )
             )
@@ -3480,7 +3557,8 @@ class MainWindow(QMainWindow):
                     label=f"{part.ref}  {part.value}".strip(),
                     where=f"{t('Part in the design')}  ·  {package(part.footprint_id)}",
                     keys="",
-                    run=partial(self._on_part_list_design_part, part.id),
+                    run=partial(self._from_home, partial(self._on_part_list_design_part,
+                                                         part.id)),
                     kind="part",
                 )
             )
@@ -3490,11 +3568,16 @@ class MainWindow(QMainWindow):
                     label=net.name,
                     where=t("Net"),
                     keys="",
-                    run=partial(self._palette_go_to_net, net.id),
+                    run=partial(self._from_home, partial(self._palette_go_to_net, net.id)),
                     kind="net",
                 )
             )
         return entries
+
+    def _from_home(self, go: Callable[[], object]) -> None:
+        """A part or a net found from Home is shown on the window, not behind Home."""
+        self.leave_home()
+        go()
 
     def _palette_go_to_component(self, component_id: str) -> None:
         self.show_board()
@@ -3939,8 +4022,9 @@ class MainWindow(QMainWindow):
             self._layout_before_home = self.saveState(WINDOW_STATE_VERSION)
             for dock in self.findChildren(QDockWidget):
                 dock.hide()
-            self.header_strip.hide()
             self.statusBar().hide()
+        # The header stays, for ☰ and the search; what it says about a board goes.
+        self.header.set_home(True)
         self._home = home
         stack.setCurrentWidget(home)
         stack.setMaximumSize(self.UNCAPPED, self.UNCAPPED)
@@ -3952,7 +4036,7 @@ class MainWindow(QMainWindow):
         if not self.home_is_showing():
             return
         self._central_stack.setCurrentIndex(0)
-        self.header_strip.show()
+        self.header.set_home(False)
         self.statusBar().show()
         if self._layout_before_home is not None:
             self._restore_layout(self._layout_before_home)
@@ -6344,6 +6428,25 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         act_about = help_menu.addAction(t("&About Perfboard Studio"))
         act_about.triggered.connect(self.on_about)
+
+        # What runs over Home without going to the window first (``_keeps_home``): opening
+        # something, which leaves Home by itself once a document arrives and stays when the
+        # dialog is cancelled; the language and the theme; Help, but for What Moved, whose
+        # card points at the window.
+        import shiboken6
+
+        def pointer(action: QAction) -> int:
+            return int(shiboken6.getCppPointer(action)[0])
+
+        self._home_keepers: set[int] = {
+            pointer(each)
+            for each in (
+                act_new_project, act_new, act_open, act_open_project, act_import, act_quit,
+                self.menu_recent.menuAction(), self.menu_examples.menuAction(),
+                language_menu.menuAction(), theme_menu.menuAction(), help_menu.menuAction(),
+            )
+        }
+        self._home_leavers: set[int] = {pointer(act_moved)}
 
     def _build_canvas_tools(self) -> None:
         """The board's tools on the board, and how it is looked at in its corner.

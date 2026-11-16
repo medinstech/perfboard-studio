@@ -13232,9 +13232,9 @@ def test_a_document_opened_through_any_door_takes_home_away() -> None:
 
 
 def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkeypatch) -> None:
-    """Home is the whole window: no panel, no header, no status bar around it. Leaving it
-    puts back exactly what was there, and a window closed while it shows saves the panels
-    it covered, not a window of nothing."""
+    """Home is the whole window: no panel and no status bar around it, and of the header
+    only ☰ and the search. Leaving it puts back exactly what was there, and a window closed
+    while it shows saves the panels it covered, not a window of nothing."""
     from PySide6.QtWidgets import QApplication, QDockWidget, QLabel
 
     from perfboard_studio.ui.main import WINDOW_STATE_KEY, app_settings
@@ -13249,7 +13249,12 @@ def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkey
         assert window.home_is_showing()
         assert window.centralWidget().maximumWidth() > 0
         assert all(d.isHidden() for d in window.findChildren(QDockWidget))
-        assert window.header_strip.isHidden() and window.statusBar().isHidden()
+        assert window.statusBar().isHidden()
+        header = window.header
+        assert not window.header_strip.isHidden()
+        assert not header.menu_button.isHidden() and not header.search.isHidden()
+        assert header.steps.isHidden() and header.undo_button.isHidden()
+        assert header.title.isHidden() and header.steps.next_button.isHidden()
 
         covered = window._layout_before_home
         window._save_session()  # what a close while Home shows would keep
@@ -13259,12 +13264,84 @@ def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkey
         _settle_events(QApplication)
         assert not window.home_is_showing()
         assert not window.header_strip.isHidden() and not window.statusBar().isHidden()
+        assert not header.steps.isHidden() and not header.undo_button.isHidden()
+        assert not header.title.isHidden() and header.gap.isHidden()
         open_after = {d.objectName() for d in window.findChildren(QDockWidget) if not d.isHidden()}
         assert open_after == open_before
         assert window.is_showing(window.dock_schematic)
         assert window.centralWidget().maximumWidth() == 0
         window.leave_home()  # again: nothing
         assert not window.home_is_showing()
+    finally:
+        _close(window)
+
+
+def test_over_home_the_menus_and_the_search_are_where_they_are_over_the_board(monkeypatch) -> None:
+    """The release-candidate sitting had to open an example to reach Help > Check for
+    Updates: Home took the whole header, ☰ with it. ☰ and the search stay over Home now.
+    What opens something, the language, the theme and Help run over Home; a command that
+    needs the board goes back to the window FIRST -- run behind Home it changed a board
+    nobody saw, and leaving afterwards put the photographed panels back over what it
+    showed."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QAction, QKeySequence
+    from PySide6.QtWidgets import QApplication, QMenu
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        window.show_board()
+        _settle_events(QApplication)
+        window.show_home(window._make_home())
+        _settle_events(QApplication)
+
+        menu = window.header.home_menu
+        assert menu is not None
+        assert window.header.open_menu() is menu
+        menu.hide()
+        menu.aboutToShow.emit()  # filled again: no menu is left twice
+        direct = Qt.FindChildOption.FindDirectChildrenOnly
+        tops = {each.title(): each for each in menu.findChildren(QMenu, options=direct)}
+        _settle_events(QApplication)  # the first filling's menus are gone now
+        tops = {each.title(): each for each in menu.findChildren(QMenu, options=direct)}
+        assert list(tops) == [top.title() for top in window._top_menus]
+
+        def proxy(top: str, label: str) -> QAction:
+            found = [a for a in tops[top].actions() if a.text().split("\t")[0] == label]
+            assert found, (top, label)
+            return found[0]
+
+        undo = proxy("&Edit", "&Undo")
+        keys = window.act_undo.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        assert undo.text() == f"&Undo\t{keys}"
+        assert undo.shortcut().isEmpty()  # said, not bound a second time
+        assert undo.isEnabled() == window.act_undo.isEnabled()
+
+        # The search decides alike which of its commands stay on Home.
+        stays = {
+            entry.label: entry.run.args[1]
+            for entry in window._palette_entries()
+            if entry.kind == "command"
+        }
+        assert stays["Check for Updates…"] and stays["Open…"] and stays["About Perfboard Studio"]
+        assert stays["English (on)"] and stays["Dark (on)"]
+        assert not stays["What Moved in 0.23"] and not stays["Auto-wire Everything"]
+        assert not stays["Fit Board"]
+
+        # A panel asked for from Home: the window comes back first, and the panel is in
+        # front of it rather than under the restored layout.
+        proxy("&View", "Show &Schematic").trigger()
+        _settle_events(QApplication)
+        assert not window.home_is_showing()
+        assert window.is_showing(window.dock_schematic)
+
+        # A command that stays: run over Home, and Home stays.
+        window.show_home(window._make_home())
+        seen: list[bool] = []
+        probe = QAction(window)
+        probe.triggered.connect(lambda: seen.append(window.home_is_showing()))
+        window._run_from_home(probe, True)
+        window._run_from_home(probe, False)
+        assert seen == [True, False]
     finally:
         _close(window)
 

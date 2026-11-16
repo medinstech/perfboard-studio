@@ -64,6 +64,12 @@ class HeaderBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 0, 10, 0)
         layout.setSpacing(6)
+        # What the window last said, kept so that leaving Home says it again (``set_home``).
+        self._on_home = False
+        self._modified = False
+        self._version: str | None = None
+        #: What ☰ opens over Home, if the window gives one (``set_home``).
+        self.home_menu: QMenu | None = None
 
         #: Every menu of the window, as submenus of one. The menu bar still holds them --
         #: it is kept, at no height, because it is what makes Alt+F open File -- and an
@@ -105,6 +111,12 @@ class HeaderBar(QWidget):
 
         self.steps = steps
         layout.addWidget(steps, 1)
+        # Over Home the steps go, and this holds the search to the right instead.
+        self.gap = QWidget()
+        self.gap.setObjectName("headerGap")
+        self.gap.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.gap.hide()
+        layout.addWidget(self.gap, 1)
 
         # A newer release exists. Beside the search because that is where the eye is while
         # working; hidden until the window says so (``set_update``).
@@ -154,11 +166,13 @@ class HeaderBar(QWidget):
         which of several boards is in front, or System."""
         self.title.setText(name)
         self.place.setText(f"›  {place}" if place else "")
-        self.place.setVisible(bool(place))
-        self.unsaved.setVisible(modified)
+        self.place.setVisible(bool(place) and not self._on_home)
+        self._modified = modified
+        self.unsaved.setVisible(modified and not self._on_home)
 
     def set_update(self, version: str | None) -> None:
         """The pill for release ``version``, or none (``None``: nothing newer, or hidden)."""
+        self._version = version
         if version is None:
             self.update_pill.hide()
             return
@@ -168,12 +182,34 @@ class HeaderBar(QWidget):
                 version=version
             )
         )
-        self.update_pill.show()
+        self.update_pill.setVisible(not self._on_home)
+
+    def set_home(self, on: bool) -> None:
+        """Over Home, ☰ and the search stay where they are over the board, and nothing about
+        a board does: no name, steps, undo or next step, since Home is not a board. The pill
+        stands down too, because Home's own card says the release.
+
+        Home used to take the whole header away, and with it every menu: Check for Updates
+        could only be reached by opening an example first (the release-candidate sitting)."""
+        self._on_home = on
+        for widget in (self.title, self.steps, self.undo_button, self.redo_button,
+                       self.steps.next_button):
+            widget.setVisible(not on)
+        self.gap.setVisible(on)
+        self.place.setVisible(bool(self.place.text()) and not on)
+        self.unsaved.setVisible(self._modified and not on)
+        self.update_pill.setVisible(self._version is not None and not on)
 
     def open_menu(self, menu: QMenu | None = None) -> QMenu:
         """Every menu under ☰ -- or one of them, opened straight away, for Alt+its letter
-        -- dropped from the ☰ button, which is where a person looks for them."""
-        shown = menu if menu is not None else self.app_menu
+        -- dropped from the ☰ button, which is where a person looks for them. Over Home,
+        ☰ is ``home_menu``."""
+        if menu is not None:
+            shown = menu
+        elif self._on_home and self.home_menu is not None:
+            shown = self.home_menu
+        else:
+            shown = self.app_menu
         corner = self.menu_button.mapToGlobal(QPoint(0, self.menu_button.height()))
         shown.popup(corner)
         return shown
