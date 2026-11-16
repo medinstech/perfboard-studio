@@ -6186,6 +6186,18 @@ TURKISH: Mapping[str, str] = {
     "Delete net {name} (1 conductor keeps its copper)": "{name} netini sil (1 iletken bakırını korur)",
     "Delete net {name} ({count} conductors keep their copper)": "{name} netini sil ({count} iletken bakırını korur)",
     "Delete net {name}": "{name} netini sil",
+    "Join net {old} into {new}": "{old} netini {new} netine kat",
+    "{pins} and {count} more": "{pins} ve {count} tane daha",
+    "{old} joined {new}: {pins} is on {new} now.": "{old}, {new} netine katıldı: {pins} artık {new} netinde.",
+    "{old} joined {new}: {pins} are on {new} now.": "{old}, {new} netine katıldı: {pins} artık {new} netinde.",
+    "Its copper on the board is {new}'s too; the link still to wire shows on the board.": (
+        "Karttaki bakırı da artık {new} netinin; kablolanacak bağlantı kartta görünür."
+    ),
+    "Ctrl+Z separates them again.": "Ctrl+Z onları yeniden ayırır.",
+    "{net_a} and {net_b} are a supply and a ground: joining them would short one to the other. To move a single pin across, disconnect it from its net first.": (
+        "{net_a} ile {net_b} bir besleme ile bir toprak: birleştirmek birini ötekine kısa "
+        "devre eder. Tek bir pini taşımak için önce onu netinden ayırın."
+    ),
     "Connect {count} pins to {net}": "{count} pini {net} netine bağla",
     "Disconnect {count} pins from {net}": "{count} pini {net} netinden ayır",
     "Disconnect {pin} from {net}": "{pin} pinini {net} netinden ayır",

@@ -76,6 +76,7 @@ from .model import (
     ComponentInstance,
     Footprint,
     Net,
+    NetClass,
     NetId,
     NetNode,
     PerfDocument,
@@ -83,6 +84,7 @@ from .model import (
     SupplyKind,
     is_negative_rail,
     pin_name_of,
+    shorts_supplies,
     supply_kind,
 )
 from .system import circuit_parts, connector_of
@@ -551,6 +553,15 @@ def _check_chip_supplies(circuit: _Circuit, ref: str, pins: tuple[_Pin, ...]) ->
             )
 
 
+#: The class a net named after a supply pin of each kind has (``model.supply_net_class``).
+#: A negative pin's net may be either, so the rule never fires on one.
+_KIND_CLASS: dict[SupplyKind, NetClass] = {
+    "positive": "power",
+    "ground": "ground",
+    "negative": "power",
+}
+
+
 def _check_wrong_net(circuit: _Circuit, ref: str, pins: tuple[_Pin, ...]) -> None:
     """``supply-on-wrong-net``: a supply pin on a net of the opposite class."""
     placed: list[tuple[_Pin, SupplyKind, Net]] = []
@@ -566,12 +577,12 @@ def _check_wrong_net(circuit: _Circuit, ref: str, pins: tuple[_Pin, ...]) -> Non
     if positive & other:
         return
     for pin, kind, net in placed:
-        if kind == "positive" and net.net_class == "ground":
-            where, what = "a ground net", "its supply is connected to ground"
-        elif kind == "ground" and net.net_class == "power":
-            where, what = "a power net", "its ground is connected to a supply"
-        else:
+        if kind == "negative" or not shorts_supplies(_KIND_CLASS[kind], net.net_class):
             continue
+        if kind == "positive":
+            where, what = "a ground net", "its supply is connected to ground"
+        else:
+            where, what = "a power net", "its ground is connected to a supply"
         circuit.report(
             "supply-on-wrong-net",
             f"{ref} pin {pin.number} ({pin.name}) is on {net.name}, {where}: {what}.",

@@ -22,6 +22,15 @@ closed without a bump.
 
 ### Added
 
+- **A label with another net's name joins that net.** Labelling a wire or a pin VCC or GND
+  is how most schematics put it on VCC or GND, and on a wire that was already on a net the
+  label refused ("disconnect it first"). Now the wire's whole net joins the one named, as
+  one step that one Ctrl+Z separates again, and the status line says which pins went ("N1
+  joined VCC: R1.1, U1.4 are on VCC now."). Copper already laid for the net that joined
+  stays where it is and belongs to the net it joined; where the board does not yet connect
+  the two, it shows as a link still to wire, and the board check says so. A supply and its
+  ground are never joined this way: labelling a VCC wire GND is refused as the short it
+  would be, saying how to move a single pin instead.
 - **A first circuit is guided while it is drawn.** A resistor, capacitor, inductor, diode,
   crystal or pot with no value is a new circuit-check warning, `value-missing`, and the
   Circuit step asks for it: Next reads "Set the Values" and a click puts the first in

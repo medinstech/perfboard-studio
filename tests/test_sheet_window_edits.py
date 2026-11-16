@@ -4,7 +4,8 @@ another pin, a cut that splits a net, and a label on a pin that is already wired
 What is pinned: a reshape on a sheet still being arranged freezes it in the same command, so
 one undo puts the arranged sheet back -- on an example sheet too; a moved end and a cut say in the status bar which pins left and which went to a
 net of their own; a new name on a wired pin names that pin's net, re-classed by the Nets
-panel's rule; and a name another net already has is still refused for a pin on a net.
+panel's rule; a name another net already has joins the pin's net to it (``net.merge``),
+unless the two are a supply and its ground.
 """
 
 from __future__ import annotations
@@ -207,16 +208,49 @@ def test_a_new_name_on_a_wired_pin_names_its_net_and_classes_it(window_for) -> N
     assert set(after.nodes) == set(net.nodes)
 
 
-def test_a_name_another_net_has_is_still_refused_for_a_wired_pin(window_for) -> None:
+def test_a_name_another_net_has_joins_the_pins_net_to_it_in_one_step(window_for) -> None:
+    """Labelling the R1.1 wire VCC is how most people put it on VCC: its net (N1) joins VCC
+    whole, as one undo step, and the status line says which pins went."""
     bus = _bus()
     _wire(bus, _pin("R1", "1"), _pin("R2", "1"))
     _wire(bus, _pin("R3", "1"), _pin("R4", "1"))
     other = next(n for n in bus.document.nets if _pin("R3", "1") in n.nodes)
-    assert bus.dispatch("net.update", UpdateNetPayload(id=other.id, name="GND")).ok
+    assert bus.dispatch(
+        "net.update", UpdateNetPayload(id=other.id, name="VCC", net_class="power")
+    ).ok
+    window = window_for(bus.document)
+    before = window.bus.system_document.nets
+    gone = next(n for n in before if _pin("R1", "1") in n.nodes)
+    window.join_pin_to_net_named("R1", "1", "VCC")
+    (vcc,) = window.bus.system_document.nets
+    assert (vcc.id, vcc.name, vcc.net_class) == (other.id, "VCC", "power")
+    assert set(vcc.nodes) == {_pin("R1", "1"), _pin("R2", "1"), _pin("R3", "1"), _pin("R4", "1")}
+    said = window.statusBar().currentMessage()
+    assert said.startswith(f"{gone.name} joined VCC: R1.1, R2.1 are on VCC now."), said
+    assert said.endswith("Ctrl+Z separates them again."), said
+    assert window.bus.history()[-1] == f"Join net {gone.name} into VCC"
+    window.on_undo()
+    assert window.bus.system_document.nets == before
+
+
+def test_a_ground_name_on_a_supply_wire_is_refused_as_a_short(window_for) -> None:
+    bus = _bus()
+    _wire(bus, _pin("R1", "1"), _pin("R2", "1"))
+    _wire(bus, _pin("R3", "1"), _pin("R4", "1"))
+    supply = next(n for n in bus.document.nets if _pin("R1", "1") in n.nodes)
+    ground = next(n for n in bus.document.nets if _pin("R3", "1") in n.nodes)
+    assert bus.dispatch(
+        "net.update", UpdateNetPayload(id=supply.id, name="VCC", net_class="power")
+    ).ok
+    assert bus.dispatch(
+        "net.update", UpdateNetPayload(id=ground.id, name="GND", net_class="ground")
+    ).ok
     window = window_for(bus.document)
     before = window.bus.system_document.nets
     window.join_pin_to_net_named("R1", "1", "GND")
     assert window.bus.system_document.nets == before
+    said = window.statusBar().currentMessage()
+    assert said.startswith("VCC and GND are a supply and a ground"), said
 
 
 def test_the_label_dialog_opens_on_the_pins_own_net(window_for, monkeypatch) -> None:

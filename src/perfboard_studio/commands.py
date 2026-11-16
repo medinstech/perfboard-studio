@@ -128,6 +128,7 @@ from .model import (
     declared_pin_name,
     has_component_side_copper,
     normalized_pin_names,
+    shorts_supplies,
     supply_net_class,
 )
 from .parsers.kicad import infer_net_class
@@ -1472,6 +1473,20 @@ class UpdateNetPayload:
 @dataclass(frozen=True, slots=True)
 class DeleteNetPayload:
     id: NetId
+
+
+@dataclass(frozen=True, slots=True)
+class MergeNetsPayload:
+    """Join the net ``id`` into the net ``into``: its pins go onto ``into`` and it is gone.
+
+    What labelling a wire with another net's name means -- calling a wire VCC is how most
+    people put it on VCC -- and what no other command could do: ``net.connect`` refuses a pin
+    that is on a net, and disconnecting every pin first would be a dozen undo steps and a
+    circuit that is wrong in between.
+    """
+
+    id: NetId
+    into: NetId
 
 
 @dataclass(frozen=True, slots=True)
@@ -3943,6 +3958,81 @@ class _DeleteNet:
         return f"Delete net {name}"
 
 
+class _MergeNets:
+    """Join one net into another, as one step.
+
+    THE NET THAT STAYS IS THE ONE NAMED. ``into`` keeps its id, name and class; the merged
+    net's pins are added after its own, and a current, a voltage or a face ``into`` does not
+    declare is taken from the net that went, so no check the merged net was under is lost
+    with it.
+
+    ITS COPPER BECOMES THE SURVIVOR'S. Every conductor that claimed the merged net
+    (``net_id``), on every board of a system, now claims ``into``: nothing is moved or
+    deleted, and re-route treats it as ``into``'s routing. The board does not yet JOIN the two
+    pieces -- it was laid for two nets -- and that is not hidden: connectivity extracts what
+    the copper connects, so LVS reports ``into`` split in two and the ratsnest draws the link
+    still to be made, until somebody wires it.
+
+    A SUPPLY AND ITS GROUND ARE NEVER JOINED (``model.shorts_supplies``, the predicate ERC's
+    ``supply-on-wrong-net`` reads): that is a short, not a connection, and the refusal says
+    how to move a single pin across instead. Two supplies of one class (+5V and VCC) are not
+    refused, as ERC does not report them: they are often one rail under two names.
+    """
+
+    type = "net.merge"
+
+    def apply(self, doc: PerfDocument, p: MergeNetsPayload, ctx: CommandContext) -> PerfDocument:
+        gone = require_net(doc, p.id)
+        kept = require_net(doc, p.into)
+        if gone.id == kept.id:
+            raise CommandError("same-net", f"{kept.name} cannot be joined into itself.")
+        if shorts_supplies(gone.net_class, kept.net_class):
+            raise CommandError(
+                "two-supplies",
+                f"{gone.name} and {kept.name} are a supply and a ground: joining them would "
+                f"short one to the other. To move a single pin across, disconnect it from its "
+                f"net first.",
+            )
+        held = set(kept.nodes)
+        merged = dataclasses.replace(
+            kept,
+            nodes=kept.nodes + tuple(node for node in gone.nodes if node not in held),
+            current_a=kept.current_a if kept.current_a is not None else gone.current_a,
+            voltage_v=kept.voltage_v if kept.voltage_v is not None else gone.voltage_v,
+            preferred_side=(
+                kept.preferred_side if kept.preferred_side is not None else gone.preferred_side
+            ),
+        )
+        nets = tuple(merged if net.id == kept.id else net for net in doc.nets if net.id != gone.id)
+
+        def claimed(conductors: tuple[Conductor, ...]) -> tuple[Conductor, ...]:
+            if not any(c.net_id == gone.id for c in conductors):
+                return conductors
+            return tuple(
+                dataclasses.replace(c, net_id=kept.id) if c.net_id == gone.id else c
+                for c in conductors
+            )
+
+        return dataclasses.replace(
+            doc,
+            nets=nets,
+            conductors=claimed(doc.conductors),
+            boards=tuple(
+                dataclasses.replace(extra, conductors=claimed(extra.conductors))
+                if any(c.net_id == gone.id for c in extra.conductors)
+                else extra
+                for extra in doc.boards
+            ),
+        )
+
+    def describe(self, p: MergeNetsPayload, doc: PerfDocument) -> str:
+        gone = next((n for n in doc.nets if n.id == p.id), None)
+        kept = next((n for n in doc.nets if n.id == p.into), None)
+        return (
+            f"Join net {gone.name if gone else p.id} into {kept.name if kept else p.into}"
+        )
+
+
 class _ConnectPins:
     type = "net.connect"
 
@@ -4623,6 +4713,7 @@ DESIGN_COMMANDS = frozenset(
         "net.connect",
         "net.delete",
         "net.disconnect",
+        "net.merge",
         "net.update",
         "netlist.import",
         "part.add",
@@ -5100,6 +5191,7 @@ import_netlist: CommandDefinition[ImportNetlistPayload] = _ImportNetlist()
 add_net: CommandDefinition[AddNetPayload] = _AddNet()
 update_net: CommandDefinition[UpdateNetPayload] = _UpdateNet()
 delete_net: CommandDefinition[DeleteNetPayload] = _DeleteNet()
+merge_nets: CommandDefinition[MergeNetsPayload] = _MergeNets()
 connect_pins: CommandDefinition[ConnectPinsPayload] = _ConnectPins()
 disconnect_pins: CommandDefinition[DisconnectPinsPayload] = _DisconnectPins()
 add_cut: CommandDefinition[AddCutPayload] = _AddCut()
@@ -5174,6 +5266,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_net,
     update_net,
     delete_net,
+    merge_nets,
     connect_pins,
     disconnect_pins,
     add_cut,

@@ -791,6 +791,18 @@ def supply_net_class(name: str | None) -> NetClass | None:
     return "power" if names_a_negative_rail(name) else "ground"
 
 
+def shorts_supplies(a: NetClass, b: NetClass) -> bool:
+    """Whether one net of class ``a`` and one of class ``b`` are a supply and the ground it is
+    measured from, so that one net holding both is a short.
+
+    One answer with two askers: ERC's ``supply-on-wrong-net`` reports a supply pin on a net of
+    this opposite class, and ``net.merge`` refuses to join two such nets -- labelling a wire on
+    VCC "GND" is the same short drawn the other way, and a check that disagreed with the
+    command about it would be two applications in one window.
+    """
+    return {a, b} == {"power", "ground"}
+
+
 @dataclass(frozen=True, slots=True)
 class SymbolPlacement:
     """Where one part's symbol sits on the sheet, and which way round it is.

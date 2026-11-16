@@ -165,6 +165,7 @@ TEMPLATES: tuple[str, ...] = (
     "Delete net {name} (1 conductor keeps its copper)",
     "Delete net {name} ({count} conductors keep their copper)",
     "Delete net {name}",
+    "Join net {old} into {new}",
     "Connect {count} pins to {net}",
     "Connect {pin} to {net}",
     "Disconnect {count} pins from {net}",
@@ -314,6 +315,7 @@ TEMPLATES: tuple[str, ...] = (
     "Skipped {count} unconnected net",
     # -- what a command says when it refuses: the ones a person meets in the window --------
     "{a} is on {net_a} and {b} is on {net_b}. Joining two nets is a change to the circuit — disconnect one of the pins first.",
+    "{net_a} and {net_b} are a supply and a ground: joining them would short one to the other. To move a single pin across, disconnect it from its net first.",
     "{ref} is locked.",
     "{ref} is on the solder side, which is what mirrors it; move it to the component side instead.",
     "{ref} cannot go on the solder side of a breadboard: a breadboard has no underside to put a part on.",

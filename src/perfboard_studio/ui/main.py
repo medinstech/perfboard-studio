@@ -200,6 +200,7 @@ from perfboard_studio.commands import (
     DrawSheetWirePayload,
     ImportNetlistPayload,
     LockComponentsPayload,
+    MergeNetsPayload,
     MirrorComponentPayload,
     MirrorComponentsPayload,
     MoveComponentPayload,
@@ -8138,6 +8139,13 @@ class MainWindow(QMainWindow):
                 t("{pin} is already on {net}.").format(pin=f"{ref}.{pin}", net=name), 6000
             )
             return
+        elif on is not None:
+            # A NAME ANOTHER NET HAS JOINS THAT NET, which is how most people put a wire on
+            # VCC or GND: calling it so. The pin's whole net goes onto the named one in one
+            # command (``net.merge``), its copper with it; a supply and its ground are
+            # refused there, as the short they would be.
+            self._merge_into(on, net)
+            return
         else:
             result = self.bus.dispatch(
                 "net.connect", ConnectPinsPayload(id=net.id, nodes=(node,))
@@ -8146,6 +8154,37 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(did(result.description), 6000)
+
+    def _merge_into(self, gone: Net, kept: Net) -> None:
+        """``net.merge`` of ``gone`` into ``kept``, said on the status line by what moved:
+        the pins that are on ``kept`` now, and the copper, when the merged net had some --
+        it is ``kept``'s routing from here on, and the board does not join the two pieces
+        until somebody wires the link the ratsnest now shows."""
+        document = self.bus.system_document
+        had_copper = any(c.net_id == gone.id for c in document.conductors) or any(
+            c.net_id == gone.id for extra in document.boards for c in extra.conductors
+        )
+        result = self.bus.dispatch("net.merge", MergeNetsPayload(id=gone.id, into=kept.id))
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        pins = [f"{node.component_ref}.{node.pin}" for node in gone.nodes]
+        listed = ", ".join(pins[:6])
+        if len(pins) > 6:
+            listed = t("{pins} and {count} more").format(pins=listed, count=len(pins) - 6)
+        sentence = (
+            t("{old} joined {new}: {pins} is on {new} now.")
+            if len(pins) == 1
+            else t("{old} joined {new}: {pins} are on {new} now.")
+        )
+        said = [sentence.format(old=gone.name, new=kept.name, pins=listed)]
+        if had_copper:
+            said.append(
+                t("Its copper on the board is {new}'s too; the link still to wire shows on "
+                  "the board.").format(new=kept.name)
+            )
+        said.append(t("Ctrl+Z separates them again."))
+        self.statusBar().showMessage(" ".join(said), 10000)
 
     def on_sheet_note_drawn(
         self, kind: str, x0: float, y0: float, x1: float, y1: float

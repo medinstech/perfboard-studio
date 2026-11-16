@@ -1658,6 +1658,25 @@ that the sheet is drawn by hand from now on. A symbol dragged was already one co
 freeze in its own `wires`. `test_one_undo_takes_the_first_edit_of_an_example_sheet_back_whole`
 holds it on atmega328-relay and nano-relay.
 
+**A label with another net's name joins that net; a drawn wire between two nets still does
+not.** Calling a wire VCC or GND is how most people put it on VCC or GND, and the label used
+to refuse it ("R1.1 already belongs to net N1, disconnect it first"), because the only way
+to join two nets was to disconnect every pin of one and connect it again. `net.merge` is that
+join as one command: the net the label names stays (id, name, class), the other's pins go
+onto it, and a current, voltage or face it does not declare is taken from the net that went.
+Its copper is re-claimed, not touched: every conductor whose `net_id` was the merged net, on
+every board of a system, now claims the survivor, so re-route treats it as that net's routing.
+The board was wired for two nets and does not yet join the two pieces, and that is said
+rather than hidden: connectivity extracts what the copper joins, so LVS reports the survivor
+split and the ratsnest draws the link still to wire --
+`test_a_merged_net_the_board_does_not_join_is_an_open_not_a_match` holds it on the NE555.
+A supply and its ground are refused (`model.shorts_supplies`, the same predicate ERC's
+`supply-on-wrong-net` reads), with the way out in the refusal: disconnect the one pin to
+move it. Two supplies of one class (+5V and VCC) are joined, as ERC does not report them. A
+wire dragged from a pin on one net to a pin on another is still refused (`two-nets`): a
+label names a net and is asked for by name, while a drag that happens to end on the wrong
+pin is the commoner way to join two nets by mistake.
+
 **A note is a person writing on the drawing** (`model.SheetNote`). Nothing derives anything
 from one: not DRC, not LVS, and no command refuses one for overlapping anything. A drawing
 tool that argued with what was written on it would be worse than one with no notes at all.
