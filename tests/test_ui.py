@@ -8856,6 +8856,10 @@ def test_next_asks_for_the_values_a_drawn_circuit_left_empty() -> None:
         bar.next_button.click()
         editor = window.inspector.shown
         assert editor.ref.text() == "R1" and focused == ["value"]
+        # The status line says where the keyboard went, the part named.
+        assert window.statusBar().currentMessage() == t(
+            "Type the value of {ref} and press Enter: 470, 10k, 100nF."
+        ).format(ref="R1")
         editor.value.setText("1k")
         editor.value.editingFinished.emit()
         assert bar.next_key == "board"

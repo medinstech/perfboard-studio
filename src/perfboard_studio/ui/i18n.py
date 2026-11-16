@@ -1046,6 +1046,7 @@ TURKISH: Mapping[str, str] = {
     "Set the Values": "Değerleri Gir",
     "Still without a value: {parts}. Select each and type its value in Properties: 470, 10k, 100nF.": "Henüz değeri olmayanlar: {parts}. Her birini seçip değerini Özellikler'e yazın: 470, 10k, 100nF.",
     "{count} without a value": "{count} değer eksik",
+    "Type the value of {ref} and press Enter: 470, 10k, 100nF.": "{ref} için değeri yazıp Enter'a basın: 470, 10k, 100nF.",
     "{refs} and {count} more": "{refs} ve {count} tane daha",
     "Still connected to nothing: {parts}. Show Problems says which pins; join them on the sheet before the board.": "Hâlâ hiçbir yere bağlı değil: {parts}. Hangi pinler olduğunu Sorunları Göster söyler; karta geçmeden önce onları şemada bağlayın.",
     "Still to join: {parts}. Click a pin, then the pin it connects to.": "Bağlanacaklar: {parts}. Bir pine, sonra bağlandığı pine tıklayın.",

@@ -3748,6 +3748,11 @@ class MainWindow(QMainWindow):
             self._schematic_ref = ref
             self._on_schematic_part_activated(ref)
             self._sync_schematic_highlight()
+            # The keyboard moved to a field at the other side of the window, and the status
+            # line was empty (the Turkish newcomer walk): it says where, and how to finish.
+            self.statusBar().showMessage(
+                t("Type the value of {ref} and press Enter: 470, 10k, 100nF.").format(ref=ref)
+            )
         elif step == "circuit":
             self.show_schematic()
             document = self.bus.system_document
