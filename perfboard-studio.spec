@@ -180,7 +180,13 @@ a = Analysis(
               # VTK's Qt widget imports these only when `vtkmodules.qt.QVTKRWIBase` is
               # "QOpenGLWidget".  It is "QWidget" unless somebody sets it, and nothing
               # here does: VTK opens its own context on the system's OpenGL.  10 MB.
-              "PySide6.QtOpenGL", "PySide6.QtOpenGLWidgets"],
+              "PySide6.QtOpenGL", "PySide6.QtOpenGLWidgets",
+              # pydantic-settings' AWS Secrets Manager source imports these only when
+              # someone configures it, and the MCP server never does. CI's environment
+              # has neither, but a machine that happens to have boto3 installed packed
+              # 24 MB of it into a local build -- a dry run measured 84.9 MB of installer
+              # against CI's 62.0 MB.
+              "boto3", "botocore", "s3transfer"],
     noarchive=False,
 )
 
