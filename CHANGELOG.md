@@ -193,9 +193,10 @@ closed without a bump.
   row says so with **Redo Wiring of** the net under it, setting the Face says so on the
   status line, and an Auto-wire that leaves such a net says "GND is already wired on the
   solder side: Redo Wiring of GND moves it". A net that kept its face is no longer counted
-  as one off it, on the status line or the Problems bar. The chosen button in a row of
-  choices in Properties (a net's Class and Face, a part's rotation) is now marked, as a
-  toolbar's is.
+  as one off it, on the status line or the Problems bar. After Redo Wiring of the net in
+  front, the row says what the new wiring came to straight away, without clicking away and
+  back. The chosen button in a row of choices in Properties (a net's Class and Face, a
+  part's rotation) is now marked, as a toolbar's is.
 - **Draw on: Solder Side | Component Side.** On a board with pads on both faces, the two
   solder tools show this choice under the banner while they are armed, and lay the run on
   the face it names. It is the solder side at every start and is not kept: it never follows
@@ -458,7 +459,11 @@ closed without a bump.
   "worthless"; it is "değer eksik", a value missing. The check's line for parts not yet on
   the board named them as "the bodies of" the parts, from a field a face note shares, and
   now names the parts. A hole hint said the bare "tıkla" where every status line says
-  "tıklayın", and the bar's short "tezgâhta 1" now says one of what.
+  "tıklayın", the refusal for a pin already on another net said the bare "ayır" where it
+  now says "ayırın", and the bar's short "tezgâhta 1" now says one of what.
+- **The Problems bar's count badge shows its number.** It was a coloured sliver as wide as
+  its digits, with the count cut off at its rounded ends, at every window size and in both
+  languages; it now has room either side of the number.
 - **A fitted schematic is clear of the bars over it.** On a 1366 x 768 screen the sheet was
   fitted to the whole panel and ran under the zoom and Arrange bar in its corner, where a
   wire could not be grabbed (C3's, on nano-relay). Fit now leaves the tool rail and that bar
