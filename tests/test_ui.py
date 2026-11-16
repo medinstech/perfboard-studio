@@ -2287,6 +2287,33 @@ def test_in_turkish_the_undo_menu_says_what_it_undoes_in_turkish() -> None:
         set_language(before)
 
 
+def test_in_turkish_lvs_names_the_parts_not_on_the_board_as_parts() -> None:
+    """A circuit with nothing placed: the panel's LVS line read "BT1, R1, U1 gövdelerinin
+    henüz kartta yerleştirilmedi" -- the parts said as "the bodies of", a face note's
+    words, because both templates called the list ``refs``."""
+    from perfboard_studio.ui.engine_text import say_finding
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    set_language("tr")
+    try:
+        said = say_finding(
+            "Net 'VCC' references pin(s) BT1.1, R1.1, U1.8, but component(s) BT1, R1, U1 "
+            "are not placed on the board."
+        )
+        assert said == (
+            "'VCC' netinin bağlandığı BT1, R1, U1 henüz karta yerleştirilmedi "
+            "(pinler: BT1.1, R1.1, U1.8)."
+        )
+        said = say_finding(
+            "Net 'SIG' references pin(s) X6.1 on component(s) X6, whose footprint could not "
+            "be resolved."
+        )
+        assert said == "'SIG' netinin bağlandığı X6 için kılıf bulunamadı (pinler: X6.1)."
+    finally:
+        set_language(before)
+
+
 def test_in_turkish_the_guide_panel_is_in_turkish() -> None:
     """The panel is interface, even though the guide it lists is written by the engine.
     Phase headings and the summary were English in an otherwise Turkish window."""

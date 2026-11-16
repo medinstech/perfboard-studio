@@ -6407,8 +6407,8 @@ TURKISH: Mapping[str, str] = {
                                                                                                                                                                                           "lehim köprüsü; gücü vermeden önce "
                                                                                                                                                                                           "pedleri ayırın ve yalıtımı yeniden "
                                                                                                                                                                                           "ölçün.",
-    "Net '{net}' references pin(s) {pins}, but component(s) {refs} are not placed on the board.": "'{net}' netinin bağlandığı {refs} henüz kartta yerleştirilmedi (pinler: {pins}).",
-    "Net '{net}' references pin(s) {pins} on component(s) {refs}, whose footprint could not be resolved.": "'{net}' netinin bağlandığı {refs} için "
+    "Net '{net}' references pin(s) {pins}, but component(s) {partlist} are not placed on the board.": "'{net}' netinin bağlandığı {partlist} henüz karta yerleştirilmedi (pinler: {pins}).",
+    "Net '{net}' references pin(s) {pins} on component(s) {partlist}, whose footprint could not be resolved.": "'{net}' netinin bağlandığı {partlist} için "
                                                                                                            "kılıf bulunamadı (pinler: {pins}).",
     "Net '{net}' is unrouted: all {count} of its pins are present on the board but none of them are connected to each other yet.": "'{net}' neti henüz kablolanmadı: "
                                                                                                                                    "{count} pininin hepsi kartta ama "

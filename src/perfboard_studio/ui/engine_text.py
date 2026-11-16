@@ -399,8 +399,11 @@ FINDING_TEMPLATES: tuple[str, ...] = (
     'Conductor(s) {wires} form an isolated island at {holes} with no component pin attached -- likely a stray solder trace, wire or bridge left over from editing.',
     'CRITICAL SHORT (power tied to ground): {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.',
     'SHORT: {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.',
-    "Net '{net}' references pin(s) {pins}, but component(s) {refs} are not placed on the board.",
-    "Net '{net}' references pin(s) {pins} on component(s) {refs}, whose footprint could not be resolved.",
+    # ``partlist``, not ``refs``: ``refs`` is said as "the bodies of ..." (a face note's
+    # covered pins), and "BT1, R1, U1 gövdelerinin henüz kartta yerleştirilmedi" was the
+    # Turkish panel's first LVS line on a circuit with nothing placed yet.
+    "Net '{net}' references pin(s) {pins}, but component(s) {partlist} are not placed on the board.",
+    "Net '{net}' references pin(s) {pins} on component(s) {partlist}, whose footprint could not be resolved.",
     "Net '{net}' is unrouted: all {count} of its pins are present on the board but none of them are connected to each other yet.",
     "Net '{net}' is open: its pins are split across {count} separate physical connections instead of one -- {groups}.",
     "Net '{net}' declares {amps} A but solder trace {wire} ({buildup} buildup{spine}) has an estimated cross-section of {area} mm² (~{cap} A capacity at {density} A/mm²) — inadequate. Estimated resistance ~{mohm} mΩ over {length} mm, giving a ~{mv} mV drop at rated current.{recommendation}",
