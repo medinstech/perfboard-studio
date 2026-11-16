@@ -43,7 +43,10 @@ closed without a bump.
   types find parts and packages, with or without their marks: kapasitör, kondansatör,
   direnç, potansiyometre, buton, röle, sensör, transistör, diyot, kristal, ekran, entegre.
   And a part whose own name holds what was typed comes first: "soil moisture" gives
-  SparkFun's sensor before the generic board that lists it among its aliases.
+  SparkFun's sensor before the generic board that lists it among its aliases. A value typed
+  this way becomes the value of the part it places, on the board and on the sheet, in the
+  same undo step, so the Circuit step does not ask for it again; it goes only on a package
+  that kind of value is fitted on, and a part with a value of its own (a 1N4007) keeps it.
 - **Copper moves under the hand, like a part.** In the Select tool a press on copper picks
   it up at once, with no click to select it first: on an end -- anywhere on its pad, a part's
   pin included -- it moves that end; on a wire's or a jumper's corner, the corner; on a
