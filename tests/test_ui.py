@@ -15754,8 +15754,10 @@ def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(m
     beside it at once, and the tooltip is not shown as well -- the pointer, which has no
     key of its own, gives Escape, the key that comes back to it."""
     from PySide6.QtCore import QEvent, QPoint
-    from PySide6.QtGui import QHelpEvent
+    from PySide6.QtGui import QHelpEvent, QKeySequence
     from PySide6.QtWidgets import QApplication, QToolTip
+
+    from perfboard_studio.ui import canvastools
 
     shown: list[str] = []
     monkeypatch.setattr(QToolTip, "showText", lambda *args, **_kw: shown.append(str(args)))
@@ -15773,7 +15775,8 @@ def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(m
             assert not pill.isHidden(), action.text()
             name = action.text().replace("&", "")
             assert name in pill.text()
-            key = action.shortcut().toString() or "Esc"
+            # As the platform writes it: "⌘M" on macOS, "Ctrl+M" elsewhere.
+            key = canvastools.tool_key(action) or "Esc"
             assert key in pill.text(), pill.text()
             # Beside the bar, level with the button.
             assert pill.x() > tools.geometry().right()
@@ -15789,7 +15792,7 @@ def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(m
         window.act_draw["insulated-wire"].trigger()
         window.on_stop_tool()
         QApplication.sendEvent(window.wire_tools, QEvent(QEvent.Type.Enter))
-        assert "Shift+W" in pill.text()
+        assert QKeySequence("Shift+W").toString(QKeySequence.SequenceFormat.NativeText) in pill.text()
         # And the sheet's rail, the same way: one behaviour on every canvas rail.
         sheet = window.sheet_tools
         assert sheet.name_pill is not None
@@ -15956,7 +15959,7 @@ def test_a_group_lists_its_tools_with_their_names_keys_and_what_they_lay() -> No
             kind = next(k for k, a in window.act_draw.items() if a is row.action_)
             assert row.name.text() == canvastools.tool_name(row.action_)
             assert row.note.text() == TOOL_NOTES[kind]()
-            assert row.key.text() == row.action_.shortcut().toString()
+            assert row.key.text() == canvastools.tool_key(row.action_)
         # Beside the bar, not over it.
         assert flyout.geometry().left() >= window.board_tools.mapToGlobal(
             window.board_tools.rect().topRight()
