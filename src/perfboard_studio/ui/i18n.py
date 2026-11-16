@@ -1586,28 +1586,31 @@ TURKISH: Mapping[str, str] = {
     ),
     # -- choosing the board the circuit goes on --------------------------------
     "Which board is this going on?": "Bu devre hangi karta girecek?",
-    "Your circuit was placed, wired and checked on the roomy board and on the "
-    "sizes below it. The suggested one is the smallest that builds as well: every "
-    "part placed, every connection made, no warning the roomy board does not have, "
-    "and at most {percent}% dearer to wire.": (
-        "Devreniz geniş kartta ve ondan küçük boylarda yerleştirildi, kablolandı ve "
-        "denetlendi. Önerilen, aynı iyilikte kurulan en küçük boy: her parça yerinde, "
-        "her bağlantı yapılmış, geniş kartta olmayan hiçbir uyarı yok, ve kablolaması en "
-        "fazla %{percent} daha pahalı."
+    "Your circuit was placed, wired and checked on a big board and on each "
+    "smaller size. The suggested one is the smallest that builds just as well: "
+    "every part fits, every connection is made, nothing new to warn about, and "
+    "at most {percent}% more wiring work.": (
+        "Devreniz büyük bir kartta ve daha küçük her boyda yerleştirildi, kablolandı ve "
+        "denetlendi. Önerilen, aynı iyilikte kurulan en küçük boy: her parça sığıyor, "
+        "her bağlantı yapılıyor, yeni bir uyarı yok ve kablolama işi en fazla %{percent} "
+        "daha fazla."
     ),
     "Stopped before every board was tried; the suggestion is the smallest tried.": (
         "Her kart denenmeden durduruldu; öneri, denenenler arasındaki en küçük kart."
     ),
     "Trying your circuit on smaller boards…": "Devreniz daha küçük kartlarda deneniyor…",
     "Trying your circuit on a {board} board…": "Devreniz {board} kartta deneniyor…",
-    "the roomy board the smaller ones are measured against": (
-        "küçük kartların kıyaslandığı geniş kart"
+    "the big board the smaller sizes are compared with": (
+        "küçük boyların kıyaslandığı büyük kart"
     ),
-    "builds as well, wiring at {percent}% of the roomy board's cost": (
-        "aynı iyilikte kuruluyor, kablolaması geniş karta göre %{percent}"
+    "builds just as well, with no more wiring work": (
+        "aynı iyilikte kuruluyor, kablolama işi artmıyor"
     ),
-    "wires dearer: {percent}% of the roomy board's cost": (
-        "kablolaması pahalı: geniş karta göre %{percent}"
+    "builds just as well, with {percent}% more wiring work": (
+        "aynı iyilikte kuruluyor, kablolama işi %{percent} daha fazla"
+    ),
+    "harder to wire: {percent}% more wiring work": (
+        "kablolaması daha zor: %{percent} daha fazla kablolama işi"
     ),
     "warns: {rules}": "uyarı veriyor: {rules}",
     "{count} connection would not wire": "{count} bağlantı kablolanamıyor",

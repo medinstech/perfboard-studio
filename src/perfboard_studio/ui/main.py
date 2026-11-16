@@ -2221,10 +2221,10 @@ class BoardSizeDialog(QDialog):
         blurb.setWordWrap(True)
         blurb.setToolTip(
             t(
-                "Your circuit was placed, wired and checked on the roomy board and on the "
-                "sizes below it. The suggested one is the smallest that builds as well: every "
-                "part placed, every connection made, no warning the roomy board does not have, "
-                "and at most {percent}% dearer to wire."
+                "Your circuit was placed, wired and checked on a big board and on each "
+                "smaller size. The suggested one is the smallest that builds just as well: "
+                "every part fits, every connection is made, nothing new to warn about, and "
+                "at most {percent}% more wiring work."
             ).format(percent=round((ROUTE_COST_TOLERANCE - 1) * 100))
         )
         theme.tone(blurb, "secondary")
@@ -2377,17 +2377,21 @@ class BoardSizeDialog(QDialog):
 def _verdict_note(verdict: BoardVerdict) -> str:
     """What a board's trial found, in words, for its row in the board question. Built at
     call time, so it comes out in the language the window was built in; the kinds are
-    ``boardfit.VerdictKind`` and every one of them has words here."""
+    ``boardfit.VerdictKind`` and every one of them has words here.
+
+    The cost is said as wiring work against the big board, never as a ratio of it: "wiring
+    at 108% of the roomy board's cost" asked a newcomer to know that a router prices its
+    wires, and what "roomy" was (the newcomer walk)."""
     trial = verdict.trial
-    percent = None if verdict.cost_ratio is None else round(verdict.cost_ratio * 100)
+    extra = None if verdict.cost_ratio is None else round(verdict.cost_ratio * 100) - 100
     if verdict.kind == "reference":
-        return t("the roomy board the smaller ones are measured against")
+        return t("the big board the smaller sizes are compared with")
+    if verdict.kind == "accepted" and (extra is None or extra <= 0):
+        return t("builds just as well, with no more wiring work")
     if verdict.kind == "accepted":
-        return t("builds as well, wiring at {percent}% of the roomy board's cost").format(
-            percent=percent
-        )
+        return t("builds just as well, with {percent}% more wiring work").format(percent=extra)
     if verdict.kind == "dearer":
-        return t("wires dearer: {percent}% of the roomy board's cost").format(percent=percent)
+        return t("harder to wire: {percent}% more wiring work").format(percent=extra)
     if verdict.kind == "new-warnings":
         return t("warns: {rules}").format(
             rules=", ".join(_rule_title(rule) for rule in verdict.new_warnings)

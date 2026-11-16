@@ -9638,6 +9638,17 @@ def test_every_verdict_has_words_in_the_board_question() -> None:
             _verdict(window.bus.document, "5 x 7 cm", "new-warnings", new_warnings=("heat-proximity",))
         )
         assert "heat-proximity" not in warned, "a rule is named in words, as the DRC panel does"
+        # The cost as wiring work, not a ratio of a "roomy board's cost" (the newcomer walk).
+        doc = window.bus.document
+        assert _verdict_note(_verdict(doc, "5 x 7 cm", "accepted", ratio=1.08)) == (
+            "builds just as well, with 8% more wiring work"
+        )
+        assert _verdict_note(_verdict(doc, "5 x 7 cm", "accepted", ratio=0.97)) == (
+            "builds just as well, with no more wiring work"
+        )
+        assert _verdict_note(_verdict(doc, "5 x 7 cm", "dearer", ratio=1.31)) == (
+            "harder to wire: 31% more wiring work"
+        )
     finally:
         _close(window)
 
