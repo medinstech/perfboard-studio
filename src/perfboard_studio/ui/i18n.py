@@ -2283,7 +2283,7 @@ TURKISH: Mapping[str, str] = {
     "{pin} is already on {net}.": "{pin} zaten {net} üzerinde.",
     "{pin} belongs to {net}. Disconnect it there first — a pin can only "
     "be on one net.": (
-        "{pin} {net} netine ait. Önce oradan ayır — bir pin yalnızca bir nette olabilir."
+        "{pin} {net} netine ait. Önce oradan ayırın — bir pin yalnızca bir nette olabilir."
     ),
     "{pin} is already the pin you started from.": "{pin} zaten başladığınız pin.",
     "{a} and {b} are both already on {net}.": "{a} ve {b} zaten {net} üzerinde.",
@@ -6494,7 +6494,7 @@ TURKISH: Mapping[str, str] = {
     'A component with ref "{ref}" already exists.': '"{ref}" referanslı bir parça zaten var.',
     'Pin 1 of {ref} at {hole} is outside the {cols}x{rows} board.': '{ref} parçasının 1. pini {hole} deliğine düşüyor; bu delik {cols}x{rows} kartın dışında.',
     'Renaming to "{ref}" would put {pins} on two nets at once, because something already wired those pins under that reference.': '"{ref}" olarak adlandırmak {pins} pinlerini aynı anda iki nete koyar; o referansla bu pinlere zaten bağlantı yapılmış.',
-    '{pin} already belongs to net "{net}". Disconnect it from there first -- a pin can only be on one net.': '{pin} zaten "{net}" netinde. Önce oradan ayır — bir pin yalnızca bir nette olabilir.',
+    '{pin} already belongs to net "{net}". Disconnect it from there first -- a pin can only be on one net.': '{pin} zaten "{net}" netinde. Önce oradan ayırın — bir pin yalnızca bir nette olabilir.',
     '{pin} is already on net "{net}".': '{pin} zaten "{net}" netinde.',
     'A net called "{name}" already exists.': '"{name}" adlı bir net zaten var.',
     'A net needs a name.': 'Bir netin adı olmalı.',
