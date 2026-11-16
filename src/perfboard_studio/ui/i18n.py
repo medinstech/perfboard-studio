@@ -1450,6 +1450,10 @@ TURKISH: Mapping[str, str] = {
     "{net} split in two: {pins} is now {new}": "{net} ikiye bölündü: {pins} artık {new}",
     "{net} split in two: {pins} are now {new}": "{net} ikiye bölündü: {pins} artık {new}",
     "{said}. Ctrl+Z brings the wire back.": "{said}. Ctrl+Z teli geri getirir.",
+    "The sheet is drawn by hand from now on.": "Şema bundan sonra elle çiziliyor.",
+    "The sheet is drawn by hand from now on; Ctrl+Z takes it back.": (
+        "Şema bundan sonra elle çiziliyor; Ctrl+Z bunu geri alır."
+    ),
     "Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back.": (
         "Tel silindi. Pinler adla bağlı kalır; Ctrl+Z teli geri getirir."
     ),

@@ -1643,6 +1643,21 @@ What joining two pins MEANS is `commands.plan_pin_join`, which `view2d.join_pins
 one fact, two consumers, the shape this codebase uses everywhere. Two nets are never merged:
 that is a change to the circuit rather than to a drawing.
 
+**The first edit of an arranged sheet carries its freeze, so it is one undo step.** Every
+change to a wire -- drawn, reshaped, an end moved, cut, rubbed out -- on a sheet the layout
+still arranges first stores every symbol where it is drawn and the drawn wires as stored
+ones: the freeze, a `symbol.move`. It used to be dispatched as its own command before the
+edit, on the argument that "the sheet is now yours" is worth undoing on its own. On an
+example sheet that made undo look broken: freezing visibly changes the drawing (a rail across
+the page becomes a stub at each pin, names sit where the hand-drawn sheet puts them), so one
+Ctrl+Z took back the reshape and left that changed drawing on the screen, and only a second
+put the sheet back. The edit's payload now carries the freeze (`freeze`, a
+`MoveSymbolsPayload`), applied first inside the same command (`commands._frozen`): one record
+in the journal, one entry on the stack. The status line says once, on the edit that froze it,
+that the sheet is drawn by hand from now on. A symbol dragged was already one command, the
+freeze in its own `wires`. `test_one_undo_takes_the_first_edit_of_an_example_sheet_back_whole`
+holds it on atmega328-relay and nano-relay.
+
 **A note is a person writing on the drawing** (`model.SheetNote`). Nothing derives anything
 from one: not DRC, not LVS, and no command refuses one for overlapping anything. A drawing
 tool that argued with what was written on it would be worse than one with no notes at all.

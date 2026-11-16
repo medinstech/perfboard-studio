@@ -1,8 +1,8 @@
 """The sheet's wire edits as the window carries them out: a wire reshaped, an end moved to
 another pin, a cut that splits a net, and a label on a pin that is already wired.
 
-What is pinned: a reshape on a sheet still being arranged freezes it first, as one undo step
-of its own; a moved end and a cut say in the status bar which pins left and which went to a
+What is pinned: a reshape on a sheet still being arranged freezes it in the same command, so
+one undo puts the arranged sheet back -- on an example sheet too; a moved end and a cut say in the status bar which pins left and which went to a
 net of their own; a new name on a wired pin names that pin's net, re-classed by the Nets
 panel's rule; and a name another net already has is still refused for a pin on a net.
 """
@@ -69,7 +69,7 @@ def _derived_bus():
     return bus
 
 
-def test_a_reshape_on_a_sheet_still_arranged_freezes_it_first(window_for) -> None:
+def test_a_reshape_on_a_sheet_still_arranged_freezes_it_in_the_same_undo_step(window_for) -> None:
     from perfboard_studio.commands import AddNetPayload
     from perfboard_studio.schematic import wires_as_drawn
 
@@ -92,14 +92,67 @@ def test_a_reshape_on_a_sheet_still_arranged_freezes_it_first(window_for) -> Non
         *_ends(wire.a), *_ends(wire.b), [(p.x, p.y) for p in new]
     )
     said = window.statusBar().currentMessage()
-    assert said.endswith("Reshape the wire from R2.1 to R1.2"), said
+    assert "Reshape the wire from R2.1 to R1.2. " in said, said
+    assert said.endswith("The sheet is drawn by hand from now on; Ctrl+Z takes it back."), said
     document = window.bus.system_document
     assert document.sheet, "the sheet was not frozen"
     (after,) = document.sheet_wires
     assert after.path == new
     labels = window.bus.history()
-    assert labels[-2] == "Keep the symbols where they are"
+    assert len(labels) == 1  # the window's bus starts with no history
     assert labels[-1].startswith("Reshape the wire")
+    window.on_undo()
+    assert not window.bus.system_document.sheet
+    assert not window.bus.system_document.sheet_wires
+
+
+@pytest.mark.parametrize("name", ["atmega328-relay", "nano-relay"])
+def test_one_undo_takes_the_first_edit_of_an_example_sheet_back_whole(window_for, name) -> None:
+    """The walk's case: on an example sheet nobody has touched, dragging the middle of a
+    wire freezes the sheet -- rails become stubs at their pins, names move -- and one Ctrl+Z
+    has to put the sheet back as it was, not leave the frozen drawing behind it. A later edit
+    is an ordinary step and says nothing about the sheet."""
+    import pathlib
+
+    from perfboard_studio import persist
+    from perfboard_studio.schematic import wires_as_drawn
+
+    golden = pathlib.Path(__file__).resolve().parent.parent / "examples" / f"{name}.perf"
+    document = persist.deserialize_document(golden.read_text(encoding="utf-8")).document
+    window = window_for(document)
+    document = window.bus.system_document
+    drawing = build_schematic(document, window.lookup)
+    window.schematic_view.set_unfrozen_wires(wires_as_drawn(drawing, document))
+    window.schematic_view.set_drawing(drawing)
+    before = window.bus.system_document
+    depth = len(window.bus.history())
+    wire = max(wires_as_drawn(drawing, document), key=lambda w: len(w.path))
+    index = len(wire.path) // 2 - 1
+    start = wire.path[index]
+    new = moved_run(wire.path, index, type(start)(x=start.x + 5.08, y=start.y + 5.08))
+
+    window._on_sheet_wire_reshaped(*_ends(wire.a), *_ends(wire.b), [(p.x, p.y) for p in new])
+    assert window.bus.system_document.sheet
+    assert len(window.bus.history()) == depth + 1
+    assert "drawn by hand from now on" in window.statusBar().currentMessage()
+
+    window.on_undo()
+    assert window.bus.system_document.sheet == before.sheet == ()
+    assert window.bus.system_document.sheet_wires == before.sheet_wires
+    assert window.bus.system_document.nets == before.nets
+    assert len(window.bus.history()) == depth
+
+    # Redone, it is the frozen, reshaped sheet again in one step; the next edit says nothing
+    # about the sheet, which is the user's already.
+    window.on_redo()
+    assert window.bus.system_document.sheet
+    stored = next(
+        w for w in window.bus.system_document.sheet_wires if {w.a, w.b} == {wire.a, wire.b}
+    )
+    window._on_sheet_wire_reshaped(
+        *_ends(stored.a), *_ends(stored.b), [(p.x, p.y) for p in stored.path]
+    )
+    assert "drawn by hand" not in window.statusBar().currentMessage()
 
 
 def test_moving_an_end_says_which_pins_went_to_a_net_of_their_own(window_for) -> None:

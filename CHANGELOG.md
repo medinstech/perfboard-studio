@@ -450,6 +450,13 @@ closed without a bump.
   the board named them as "the bodies of" the parts, from a field a face note shares, and
   now names the parts. A hole hint said the bare "tıkla" where every status line says
   "tıklayın", and the bar's short "tezgâhta 1" now says one of what.
+- **One Ctrl+Z takes back the first edit of an example sheet.** The first change to a wire
+  on a sheet drawn for you -- dragging the middle of a wire on atmega328-relay, say -- turns
+  it into a hand-drawn sheet: rails become short stubs at their pins and names move. That was
+  its own undo step, so one Ctrl+Z took back the edit and left the changed drawing on the
+  screen, and it took a second to get the sheet back. The edit and the change to a hand-drawn
+  sheet are now one step, and the status line says once that the sheet is drawn by hand from
+  now on.
 - **A label on the board is no longer edited by a drag of something else.** A label whose
   offset from its hole was off the quarter-millimetre step it snaps to -- both of the
   nano-relay example's -- counted as moved from the moment it was drawn, so every drag of a

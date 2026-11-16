@@ -1102,6 +1102,11 @@ class DrawSheetWirePayload:
 
     wire: SheetWire
 
+    #: The freeze this edit is the first change of, when the sheet is still drawn by the
+    #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
+    #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
+
 
 @dataclass(frozen=True, slots=True)
 class DeleteSheetWiresPayload:
@@ -1111,6 +1116,11 @@ class DeleteSheetWiresPayload:
 
     wires: tuple[SheetWire, ...]
 
+    #: The freeze this edit is the first change of, when the sheet is still drawn by the
+    #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
+    #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
+
 
 @dataclass(frozen=True, slots=True)
 class CutSheetWiresPayload:
@@ -1119,6 +1129,11 @@ class CutSheetWiresPayload:
     the picture alone, and stays for "Remove Line Only"."""
 
     wires: tuple[SheetWire, ...]
+
+    #: The freeze this edit is the first change of, when the sheet is still drawn by the
+    #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
+    #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1131,6 +1146,11 @@ class ReshapeSheetWirePayload:
     a: NetNode
     b: NetNode
     path: tuple[Point2, ...]
+
+    #: The freeze this edit is the first change of, when the sheet is still drawn by the
+    #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
+    #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1148,6 +1168,11 @@ class ReconnectSheetWirePayload:
     end: NetNode
     to: NetNode
     path: tuple[Point2, ...]
+
+    #: The freeze this edit is the first change of, when the sheet is still drawn by the
+    #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
+    #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -3082,6 +3107,25 @@ class _AutoSymbols:
         return f"Lay {count_noun(len(p.ids), 'symbol')} out automatically"
 
 
+def _frozen(
+    doc: PerfDocument, freeze: MoveSymbolsPayload | None, ctx: CommandContext
+) -> PerfDocument:
+    """The document with the sheet frozen first, when the edit carries the freeze.
+
+    THE FIRST EDIT OF A SHEET THE LAYOUT DREW IS ONE UNDO STEP WITH ITS FREEZE. Freezing
+    turns the derived drawing into stored positions and wires (``symbol.move``), and on an
+    example sheet it visibly changes things: a rail drawn across the page becomes a stub at
+    each pin, names sit where the hand-drawn sheet puts them. Dispatched as its own command,
+    one Ctrl+Z took back the edit and left that changed drawing behind, so undo looked
+    broken and a second one was needed. Carried in the edit's payload, it is applied here,
+    in the same command: one record in the journal, one entry on the stack, both back with
+    one undo. The window says once, on the status line, that the sheet is now drawn by hand.
+    """
+    if freeze is None:
+        return doc
+    return _MoveSymbols().apply(doc, freeze, ctx)
+
+
 class _DrawSheetWire:
     """Draw a wire between two pins, and join them.
 
@@ -3101,6 +3145,7 @@ class _DrawSheetWire:
     def apply(
         self, doc: PerfDocument, p: DrawSheetWirePayload, ctx: CommandContext
     ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
         wire = p.wire
         if wire.a == wire.b:
             raise CommandError("same-pin", "A wire has to go between two different pins.")
@@ -3167,6 +3212,7 @@ class _ReshapeSheetWire:
     def apply(
         self, doc: PerfDocument, p: ReshapeSheetWirePayload, ctx: CommandContext
     ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
         key = frozenset((p.a, p.b))
         wire = next((w for w in doc.sheet_wires if frozenset((w.a, w.b)) == key), None)
         if wire is None:
@@ -3263,6 +3309,7 @@ class _DeleteSheetWires:
     def apply(
         self, doc: PerfDocument, p: DeleteSheetWiresPayload, ctx: CommandContext
     ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
         if not p.wires:
             raise CommandError(
                 "empty-batch", "sheet.wire.delete needs at least one wire to rub out."
@@ -3319,6 +3366,7 @@ class _CutSheetWires:
     def apply(
         self, doc: PerfDocument, p: CutSheetWiresPayload, ctx: CommandContext
     ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
         if not p.wires:
             raise CommandError("empty-batch", "sheet.wire.cut needs at least one wire to cut.")
         wanted = _with_branches(doc, {frozenset((wire.a, wire.b)) for wire in p.wires})
@@ -3397,6 +3445,7 @@ class _ReconnectSheetWire:
     def apply(
         self, doc: PerfDocument, p: ReconnectSheetWirePayload, ctx: CommandContext
     ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
         key = frozenset((p.a, p.b))
         wire = next((w for w in doc.sheet_wires if frozenset((w.a, w.b)) == key), None)
         if wire is None:

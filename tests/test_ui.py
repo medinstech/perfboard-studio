@@ -10494,8 +10494,8 @@ def test_a_drawn_wire_is_selected_by_a_click_and_rubbed_out_by_delete() -> None:
 @pytest.mark.parametrize("name", ["atmega328-relay", "nano-relay", "ne555-astable"])
 def test_a_wire_on_an_example_sheet_nobody_has_frozen_can_be_selected_and_deleted(name) -> None:
     """The derived sheet draws wires that are not stored. Clicking one selects it all the
-    same, and Delete freezes the sheet (its own undo step, as drawing a wire does) and
-    then rubs the line out; the circuit is untouched."""
+    same, and Delete freezes the sheet (in the same undo step, as drawing a wire does) and
+    then cuts the line; one undo puts the arranged sheet back."""
     import pathlib
 
     from perfboard_studio import persist
@@ -10523,6 +10523,9 @@ def test_a_wire_on_an_example_sheet_nobody_has_frozen_can_be_selected_and_delete
     assert sum(len(n.nodes) for n in window.bus.document.nets) < sum(
         len(n.nodes) for n in nets_before
     )
+    window.on_undo()
+    assert window.bus.document.sheet == ()
+    assert window.bus.document.nets == nets_before
     _close(window)
 
 

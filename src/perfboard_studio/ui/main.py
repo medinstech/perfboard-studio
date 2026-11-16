@@ -7909,6 +7909,37 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
 
+    def _sheet_freeze(self) -> MoveSymbolsPayload | None:
+        """The freeze a change to a wire carries when the sheet is still the layout's:
+        every symbol where it is drawn and the drawn wires as stored ones, for the command's
+        own ``freeze`` (``commands._frozen``). One command, so one Ctrl+Z takes back the edit
+        AND the freeze -- dispatched apart, the first undo left the hand-drawn version of an
+        example sheet on the screen and looked like it had done nothing. None once the sheet
+        is the user's."""
+        if self.bus.system_document.sheet:
+            return None
+        placements = self._sheet_placements({})
+        if not placements:
+            return None
+        return MoveSymbolsPayload(
+            placements=placements,
+            label=t("Keep the symbols where they are"),
+            wires=self._sheet_wires_after(placements),
+        )
+
+    def _say_on_sheet(self, said: str, freeze: MoveSymbolsPayload | None, ms: int) -> None:
+        """The status line after a change to a wire, saying once -- on the change that
+        froze it -- that the sheet is drawn by hand from now on."""
+        if freeze is not None:
+            # Said once: a line that already says what Ctrl+Z brings back is not told again.
+            tail = (
+                t("The sheet is drawn by hand from now on.")
+                if "Ctrl+Z" in said
+                else t("The sheet is drawn by hand from now on; Ctrl+Z takes it back.")
+            )
+            said = f"{said.rstrip('.')}. {tail}"
+        self.statusBar().showMessage(said, ms)
+
     def on_schematic_rotate(self, quarter_turns: int = 1) -> None:
         """Turn the selected symbols a quarter at a time.
 
@@ -7997,26 +8028,28 @@ class MainWindow(QMainWindow):
     ) -> None:
         """A wire was dragged from one pin to another.
 
-        The sheet is FROZEN first when it has not been already, and that is two commands on
-        purpose. Storing a wire on a sheet the layout is still arranging would be storing a
-        line between two points that move the next time anything is added -- so "the sheet
-        is now yours" is a real thing that happened, and it is worth being able to undo on
-        its own.
+        The sheet is FROZEN in the same command when it has not been already. Storing a wire
+        on a sheet the layout is still arranging would be storing a line between two points
+        that move the next time anything is added -- so "the sheet is now yours" is a real
+        thing that happens, and the status line says so. It is not its own undo step: an
+        undo that took back the wire and left the frozen drawing looked like one that had
+        done nothing (``_sheet_freeze``).
         """
         if not isinstance(path, list) or len(path) < 2:
             return
-        if not self.bus.system_document.sheet:
-            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        freeze = self._sheet_freeze()
         wire = SheetWire(
             a=NetNode(component_ref=ref_a, pin=pin_a),
             b=NetNode(component_ref=ref_b, pin=pin_b),
             path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
         )
-        result = self.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=wire))
+        result = self.bus.dispatch(
+            "sheet.wire", DrawSheetWirePayload(wire=wire, freeze=freeze)
+        )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(did(result.description), 6000)
+        self._say_on_sheet(did(result.description), freeze, 6000)
 
     def _on_sheet_tee_started(self, wire: str) -> None:
         self.statusBar().showMessage(
@@ -10344,9 +10377,8 @@ class MainWindow(QMainWindow):
 
     def _on_sheet_wires_delete(self, ends: object) -> None:
         """Delete was pressed with a wire selected: ``viewsch.WIRE_DELETE`` says what that
-        means. Rubbing out is the one meaning built; a sheet still being arranged is frozen
-        first, as drawing a wire freezes it, and that is its own undo step for the same
-        reason (``_on_sheet_wire_drawn``)."""
+        means. A sheet still being arranged is frozen in the same command, as drawing a
+        wire freezes it (``_sheet_freeze``)."""
         if not isinstance(ends, list) or not ends:
             return
         wires = tuple(
@@ -10357,28 +10389,30 @@ class MainWindow(QMainWindow):
             )
             for ar, ap, br, bp in ends
         )
-        if not self.bus.system_document.sheet:
-            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        freeze = self._sheet_freeze()
         if WIRE_DELETE == "rub-out":
             result = self.bus.dispatch(
-                "sheet.wire.delete", DeleteSheetWiresPayload(wires=wires)
+                "sheet.wire.delete", DeleteSheetWiresPayload(wires=wires, freeze=freeze)
             )
             if not result.ok:
                 self.statusBar().showMessage(refused(result), 8000)
                 return
-            self.statusBar().showMessage(
+            self._say_on_sheet(
                 t("Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back."),
+                freeze,
                 8000,
             )
             return
         before = {net.id: net for net in self.bus.system_document.nets}
-        result = self.bus.dispatch("sheet.wire.cut", CutSheetWiresPayload(wires=wires))
+        result = self.bus.dispatch(
+            "sheet.wire.cut", CutSheetWiresPayload(wires=wires, freeze=freeze)
+        )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
         said = self._say_what_left(before) or t("The pins stay joined by other wires")
-        self.statusBar().showMessage(
-            t("{said}. Ctrl+Z brings the wire back.").format(said=said), 8000
+        self._say_on_sheet(
+            t("{said}. Ctrl+Z brings the wire back.").format(said=said), freeze, 8000
         )
 
     def _say_what_left(self, before: dict[str, Net]) -> str:
@@ -10412,22 +10446,25 @@ class MainWindow(QMainWindow):
         self, a_ref: str, a_pin: str, b_ref: str, b_pin: str, path: object
     ) -> None:
         """A drawn wire dragged into a new shape (``viewsch.wireReshaped``): the drawing
-        only. A sheet still being arranged is frozen first, as for drawing or deleting a
-        wire, and that is its own undo step for the same reason."""
+        only. A sheet still being arranged is frozen in the same command, as for drawing or
+        deleting a wire (``_sheet_freeze``), so one Ctrl+Z puts the example sheet back."""
         if not isinstance(path, list):
             return
-        if not self.bus.system_document.sheet:
-            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        freeze = self._sheet_freeze()
         result = self.bus.dispatch(
             "sheet.wire.reshape",
             ReshapeSheetWirePayload(
                 a=NetNode(component_ref=a_ref, pin=a_pin),
                 b=NetNode(component_ref=b_ref, pin=b_pin),
                 path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
+                freeze=freeze,
             ),
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
+            return
+        if freeze is not None:
+            self._say_on_sheet(did(result.description), freeze, 8000)
 
     def _on_sheet_wire_end_moved(
         self,
@@ -10443,11 +10480,10 @@ class MainWindow(QMainWindow):
     ) -> None:
         """An end of the selected wire dragged onto another pin (``viewsch.wireEndMoved``):
         ``sheet.wire.reconnect``, a change to the circuit, said as a cut says what it took
-        off. Frozen first, as for any other change to a wire."""
+        off. Frozen in the same command, as for any other change to a wire."""
         if not isinstance(path, list):
             return
-        if not self.bus.system_document.sheet:
-            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        freeze = self._sheet_freeze()
         before = {net.id: net for net in self.bus.system_document.nets}
         result = self.bus.dispatch(
             "sheet.wire.reconnect",
@@ -10457,16 +10493,18 @@ class MainWindow(QMainWindow):
                 end=NetNode(component_ref=end_ref, pin=end_pin),
                 to=NetNode(component_ref=to_ref, pin=to_pin),
                 path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
+                freeze=freeze,
             ),
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
         said = self._say_what_left(before)
-        self.statusBar().showMessage(
+        self._say_on_sheet(
             t("{said}. Ctrl+Z brings the wire back.").format(said=said)
             if said
             else did(result.description),
+            freeze,
             8000,
         )
 
