@@ -9355,6 +9355,69 @@ def test_next_asks_for_the_values_a_drawn_circuit_left_empty() -> None:
         _close(window)
 
 
+def test_parts_put_straight_on_the_board_are_a_circuit_still_being_drawn() -> None:
+    """The board-first walk: parts put on the holes from the Library, no sheet opened. A
+    part with no value turned the bar amber with a Problems count the moment it landed,
+    while the Circuit step called it work left and its hint sent them to the sheet. Until
+    copper goes down it is a circuit being drawn on the board: the value is still to do,
+    the hint and Next join pins with the board's Connect, and Set the Values stays on the
+    board. Copper on the board ends the drawing, and a missing value is a warning again."""
+    from perfboard_studio.commands import (
+        AddConductorPayload,
+        AddNetPayload,
+        NewWireConductor,
+        PlaceComponentPayload,
+    )
+    from perfboard_studio.model import HoleCoord, NetNode
+    from perfboard_studio.ui.i18n import t
+    from perfboard_studio.ui.workflow import step_hint
+
+    window = _blank_window()
+    try:
+        window.show_board()
+        for ref, value, anchor in (("R1", "", HoleCoord(2, 2)), ("R2", "10k", HoleCoord(2, 6))):
+            assert window.bus.dispatch(
+                "component.place",
+                PlaceComponentPayload(
+                    ref=ref, value=value, footprint_id="r-axial-4", anchor=anchor
+                ),
+            ).ok
+        bar = window.workflow_bar
+        assert [f.refs for f in window._last_erc if f.rule == "value-missing"] == [("R1",)]
+        assert window.problems_bar.warnings == 0 and window.problems_bar.errors == 0
+        assert bar.next_key == "circuit"
+        assert step_hint("circuit", window.workflow_facts()) == t(
+            "Join the parts on the board: press C, then click a pin and the pin it connects "
+            "to. Every pin that should be joined needs a connection."
+        )
+        assert bar.next_button.text() == t("Connect the Pins")
+        bar.next_button.click()
+        assert window.board_is_showing() and not window.schematic_is_showing()
+        assert window.scene.connect_armed
+        window.scene.arm_connect(False)
+
+        assert window.bus.dispatch(
+            "net.add",
+            AddNetPayload(name="A", nodes=(NetNode("R1", "2"), NetNode("R2", "1"))),
+        ).ok
+        assert window.problems_bar.warnings == 0
+        assert bar.next_button.text() == t("Set the Values")
+        bar.next_button.click()
+        assert window.board_is_showing() and not window.schematic_is_showing()
+        assert window.inspector.shown.ref.text() == "R1"
+
+        # Copper on the board: past drawing, and the value it never got is a warning.
+        assert window.bus.dispatch(
+            "conductor.add",
+            AddConductorPayload(
+                conductor=NewWireConductor(path=(HoleCoord(10, 1), HoleCoord(12, 1)))
+            ),
+        ).ok
+        assert window.problems_bar.warnings >= 1
+    finally:
+        _close(window)
+
+
 def _unpowered_555() -> PerfDocument:
     """A 555 from the catalog in the design, its output and ground wired and its VCC on
     nothing -- the circuit LVS would pass and the guide would build. A terminal on its
@@ -15069,7 +15132,9 @@ def test_the_status_bar_does_not_count_pins_waiting_for_their_wiring() -> None:
         unwired = window.workflow_facts().drc_unwired
         assert unwired > 0
         warnings = sum(1 for v in window._last_violations if v.severity == "warning")
-        erc_warnings = sum(1 for f in window._last_erc if f.severity == "warning")
+        # The circuit's findings as the bar counts them (``_erc_shown``): parts on no net,
+        # on a board with no copper yet, are the circuit still being drawn.
+        erc_warnings = sum(1 for f in window._erc_shown() if f.severity == "warning")
         assert window.problems_bar.warnings == warnings - unwired + erc_warnings
     finally:
         _close(window)
@@ -15213,8 +15278,9 @@ def test_the_findings_and_the_status_bar_colour_a_finding_by_one_rule() -> None:
                 group = drc.child(row)
                 counted[group.foreground(0).color().name()] += int(group.text(1))
             bar = window.problems_bar
-            erc_errors = sum(1 for f in window._last_erc if f.severity == "error")
-            erc_warnings = len(window._last_erc) - erc_errors
+            shown = window._erc_shown()
+            erc_errors = sum(1 for f in shown if f.severity == "error")
+            erc_warnings = len(shown) - erc_errors
             lvs = _findings_root(window, "LVS")
             # Copper joined to no pin: an amber row of its own under LVS, and a warning.
             stray = sum(

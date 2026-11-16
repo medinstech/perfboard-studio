@@ -266,12 +266,20 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     their next click is, so it names no check, no rule and no data-model word.
     """
     parts = facts.parts_off_board + facts.parts_on_board
+    # Every part on the board and none waiting in the design: somebody working board first,
+    # told to join pins there rather than on a sheet they never opened.
+    on_board = facts.parts_on_board > 0 and facts.parts_off_board == 0
     if key == "circuit" and parts and facts.erc_errors:
         return t("The circuit has a mistake to put right first. Show Problems says what and where.")
     if key == "circuit" and parts and facts.to_join and facts.circuit_left:
         return t(
             "Still connected to nothing: {parts}. Show Problems says which pins; join them "
             "on the sheet before the board."
+        ).format(parts=refs_said(facts.to_join))
+    if key == "circuit" and facts.to_join and on_board:
+        return t(
+            "Still to join: {parts}. Press C, then click a pin on the board and the pin it "
+            "connects to."
         ).format(parts=refs_said(facts.to_join))
     if key == "circuit" and parts and facts.to_join:
         return t(
@@ -282,6 +290,11 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
             "Still without a value: {parts}. Select each and type its value in Properties: "
             "470, 10k, 100nF."
         ).format(parts=refs_said(facts.valueless))
+    if key == "circuit" and on_board:
+        return t(
+            "Join the parts on the board: press C, then click a pin and the pin it connects "
+            "to. Every pin that should be joined needs a connection."
+        )
     if key == "circuit" and parts:
         return t(
             "Join the parts on the sheet: click a pin, then the pin it connects to. "

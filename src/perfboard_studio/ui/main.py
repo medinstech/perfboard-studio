@@ -3782,9 +3782,21 @@ class MainWindow(QMainWindow):
 
     def _circuit_being_drawn(self) -> bool:
         """Whether the circuit is still being drawn: nobody has gone on from its step, and
-        no part is on a board yet. A board with parts on it is past drawing by definition,
-        which is also how a file opened with an open pin says so at once."""
-        return not self._circuit_left and not every_component(self.bus.system_document)
+        either no part is on a board yet or no copper is on one. A board with copper on it
+        is past drawing, which is also how a wired file opened with an open pin says so at
+        once.
+
+        Parts on a board with no copper are a circuit being drawn THERE: put straight on the
+        holes from the Library, the board-first way in. "A board with parts on it" used to
+        end the drawing on its own, so the first part placed with no value turned the bar
+        amber with a Problems count, while the Circuit step still called it work left (the
+        board-first walk)."""
+        if self._circuit_left:
+            return False
+        document = self.bus.system_document
+        if not every_component(document):
+            return True
+        return not any(board_document(document, b).conductors for b in board_ids(document))
 
     def _erc_shown(self) -> tuple[ErcFinding, ...]:
         """The circuit's findings as problems: all of them, except while the circuit is
@@ -3933,8 +3945,12 @@ class MainWindow(QMainWindow):
             self.show_circuit_findings()
         elif step == "circuit" and facts.nets and facts.valueless and not facts.to_join:
             # Joined and not yet said what they are: the first in Properties, the keyboard
-            # in its Value, as a double-click on it does.
-            self.show_schematic()
+            # in its Value, as a double-click on it does -- on the board when every part is
+            # there, which is where somebody working board first is looking.
+            if facts.parts_on_board and not facts.parts_off_board:
+                self.show_board()
+            else:
+                self.show_schematic()
             ref = facts.valueless[0]
             self._schematic_ref = ref
             self._on_schematic_part_activated(ref)
@@ -3944,6 +3960,11 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 t("Type the value of {ref} and press Enter: 470, 10k, 100nF.").format(ref=ref)
             )
+        elif step == "circuit" and facts.parts_on_board and not facts.parts_off_board:
+            # Every part is on the board, put there from the Library: they are joined there,
+            # with Connect, as the step's hint says -- not on a sheet nobody has opened.
+            self.show_board()
+            self.scene.arm_connect(True)
         elif step == "circuit":
             self.show_schematic()
             document = self.bus.system_document

@@ -1098,6 +1098,11 @@ TURKISH: Mapping[str, str] = {
     "{refs} and {count} more": "{refs} ve {count} tane daha",
     "Still connected to nothing: {parts}. Show Problems says which pins; join them on the sheet before the board.": "Hâlâ hiçbir yere bağlı değil: {parts}. Hangi pinler olduğunu Sorunları Göster söyler; karta geçmeden önce onları şemada bağlayın.",
     "Still to join: {parts}. Click a pin, then the pin it connects to.": "Bağlanacaklar: {parts}. Bir pine, sonra bağlandığı pine tıklayın.",
+    "Still to join: {parts}. Press C, then click a pin on the board and the pin it "
+    "connects to.": (
+        "Bağlanacaklar: {parts}. C'ye basın, sonra karttaki bir pine ve bağlandığı pine "
+        "tıklayın."
+    ),
     "{count} still to join": "{count} bağlanacak",
     "Still connected to nothing: {parts}. Show Problems says which pins.": "Hâlâ hiçbir yere bağlı değil: {parts}. Hangi pinler olduğunu Sorunları Göster söyler.",
     "{count} still to do": "{count} yapılacak",
@@ -6112,6 +6117,11 @@ TURKISH: Mapping[str, str] = {
     "The circuit has a mistake to put right first. Show Problems says what and where.": (
         "Devrede önce düzeltilmesi gereken bir hata var. Sorunları Göster neyin nerede "
         "olduğunu söyler."
+    ),
+    "Join the parts on the board: press C, then click a pin and the pin it connects to. "
+    "Every pin that should be joined needs a connection.": (
+        "Karttaki parçaları birleştirin: C'ye basın, sonra bir pine ve bağlandığı pine "
+        "tıklayın. Birleşmesi gereken her pinin bir bağlantısı olmalı."
     ),
     "Join the parts on the sheet: click a pin, then the pin it connects to. Every pin that "
     "should be joined needs a line.": (
