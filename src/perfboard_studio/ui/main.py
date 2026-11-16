@@ -172,6 +172,7 @@ from perfboard_studio.catalog import (
     not_offered,
     package_search_rank,
     part_rank,
+    typed_value,
 )
 from perfboard_studio.command import CommandContext, CommandError, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
@@ -239,7 +240,7 @@ from perfboard_studio.drc import (
     run_drc,
 )
 from perfboard_studio.erc import SEVERITY as ERC_SEVERITY
-from perfboard_studio.erc import ErcFinding, run_erc
+from perfboard_studio.erc import VALUE_ARCHETYPES, ErcFinding, run_erc
 from perfboard_studio.footprints import (
     MODULE_SEAT_SOCKETED_MM,
     MODULE_SEAT_SOLDERED_MM,
@@ -2630,6 +2631,16 @@ def _lvs_title(kind: str) -> str:
 #: is drawn (``MainWindow._erc_shown``), and a problem once somebody goes on without it.
 JOIN_RULES = frozenset({"part-unconnected", "supply-unconnected", "supply-pin-open"})
 STILL_TO_DO_RULES = JOIN_RULES | {"value-missing"}
+
+
+#: The packages a value of each kind is fitted on, for a value typed in the Library's
+#: search to become the value of the part placed from it (``MainWindow._typed_value_for``).
+#: Within ``erc.VALUE_ARCHETYPES``: a part whose value is the part.
+TYPED_VALUE_PACKAGES: dict[str, frozenset[str]] = {
+    "capacitor": frozenset({"radial-electrolytic", "disc-ceramic", "box-film"}),
+    "resistor": frozenset({"axial-cylinder", "axial-upright", "potentiometer"}),
+    "inductor": frozenset({"axial-cylinder", "axial-upright"}),
+}
 
 
 def _severity_word(severity: str) -> str:
@@ -6788,12 +6799,16 @@ class MainWindow(QMainWindow):
         """Give the parts placed from here what the chosen catalog part says about itself,
         or take it all back for a bare package."""
         scene = self.scene
+        typed = self._typed_value_for(footprint_id)
         if part is not None:
             scene.placement_pin_names = part.pin_names
             scene.placement_symbol = part.symbol
             scene.placement_prefix = part.reference_prefix
-            self._catalog_value = part.placed_value
-            self.placing_value.setText(part.placed_value)
+            # A part with a value of its own (a 1N4007, a 3V3 zener) keeps it; one without
+            # takes the value typed to find it.
+            value = part.placed_value or typed
+            self._catalog_value = value
+            self.placing_value.setText(value)
             return
         scene.placement_pin_names = (
             self._described_names.get(footprint_id, ()) if isinstance(footprint_id, str) else ()
@@ -6805,6 +6820,24 @@ class MainWindow(QMainWindow):
         if self._catalog_value and self.placing_value.text().strip() == self._catalog_value:
             self.placing_value.clear()
         self._catalog_value = ""
+        if typed:
+            # "10uF" typed in the Library: the electrolytic it found is placed as a 10 uF,
+            # rather than as a capacitor of no value the Circuit step then asks about. Kept
+            # like a catalog value, so a package chosen after it does not inherit it.
+            self._catalog_value = typed
+            self.placing_value.setText(typed)
+
+    def _typed_value_for(self, footprint_id: object) -> str:
+        """The value typed in the Library's search ("10uF", "4k7"), as ``catalog.typed_value``
+        spells it, when this package is one that value is fitted on; "" otherwise."""
+        found = typed_value(self.library_filter.text()) if hasattr(self, "library_filter") else None
+        footprint = self.lookup(footprint_id) if isinstance(footprint_id, str) else None
+        if found is None or footprint is None:
+            return ""
+        archetype = footprint.body.archetype
+        if archetype not in VALUE_ARCHETYPES or archetype not in TYPED_VALUE_PACKAGES[found[0]]:
+            return ""
+        return found[1]
 
     def _on_placement_armed(self, footprint_id: str) -> None:
         self._armed_footprint_id: str | None = footprint_id or None
@@ -8258,6 +8291,10 @@ class MainWindow(QMainWindow):
         tree.setCurrentItem(item)
         item.setSelected(True)
         tree.scrollToItem(item)
+        if typed_value(self.library_filter.text()) is not None:
+            # The part may have been chosen already, so no selection changed: the value
+            # typed is given to it all the same.
+            self._on_library_selection_changed()
         self._on_library_item_activated(item)
 
     def _first_library_part(self) -> QTreeWidgetItem | None:

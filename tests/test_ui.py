@@ -13819,6 +13819,52 @@ def _catalog_leaf(window, catalog_id: str):
     return None
 
 
+def test_a_value_typed_in_the_library_is_the_value_of_the_part_it_places() -> None:
+    """"10uF" in the Library found the electrolytic and placed it with no value, which the
+    Circuit step then asked for. The value typed goes with it -- on the sheet and on the
+    board, in the one command that places it, so one undo takes the part away."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from perfboard_studio.footprints import get_footprint
+
+    # On the sheet of a new board.
+    window = _blank_window()
+    try:
+        window.show_schematic()
+        window.library_filter.setText("10uF")
+        QTest.keyClick(window.library_filter, Qt.Key.Key_Return)
+        (part,) = window.bus.document.parts
+        assert part.value == "10uF"
+        footprint = get_footprint(part.footprint_id)
+        assert footprint is not None and footprint.body.archetype == "radial-electrolytic"
+        window.bus.undo()
+        assert window.bus.document.parts == ()
+    finally:
+        _close(window)
+
+    # On the board of a shipped example.
+    window = _window_on(_example_document("nano-relay"))
+    try:
+        window.show_board()
+        before = {c.id for c in window.bus.document.components}
+        window.library_filter.setText("4k7")
+        QTest.keyClick(window.library_filter, Qt.Key.Key_Return)
+        assert window.placing_value.text() == "4k7"
+        result = window.scene.place_armed(HoleCoord(1, 1))
+        assert result is not None and result.ok, result
+        (placed,) = [c for c in window.bus.document.components if c.id not in before]
+        assert placed.value == "4k7" and placed.ref.startswith("R")
+        window.bus.undo()
+        assert {c.id for c in window.bus.document.components} == before
+        # A package of another kind does not take it: a value is a value of something.
+        window.library_filter.setText("NE555")
+        QTest.keyClick(window.library_filter, Qt.Key.Key_Return)
+        assert window.placing_value.text() != "4k7"
+    finally:
+        _close(window)
+
+
 def test_the_parts_panel_lists_real_parts_and_places_them_described() -> None:
     """Picking BC547 places a BC547: value, pin names, symbol, and a Q reference -- the
     whole of what the catalog says, through the same arming a package uses."""
