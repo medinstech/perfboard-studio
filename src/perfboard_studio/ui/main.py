@@ -3799,6 +3799,7 @@ class MainWindow(QMainWindow):
             self._board_chosen = True
             self.show_board()
             self.view.fit_board()
+            self._refresh_empty_hint()
         self._refresh_workflow()
 
     def _build_update_strip(self) -> None:
@@ -7069,13 +7070,17 @@ class MainWindow(QMainWindow):
                 t("{count} part is waiting for a board") if count == 1
                 else t("{count} parts are waiting for a board")
             ).format(count=count)
-            self.view.set_empty_hint(
-                f"<b>{waiting}</b><br><br>"
-                + t(
+            # Once the board is chosen, choosing it is not the way there any more: the hint
+            # said "Choose a Board, then Place" over the board just picked (the newcomer walk).
+            how = (
+                t("The blue button at the top right puts them on it: Place on the Board.")
+                if self._board_chosen
+                else t(
                     "The blue button at the top right takes them there: Choose a Board, then "
                     "Place on the Board."
                 )
             )
+            self.view.set_empty_hint(f"<b>{waiting}</b><br><br>" + how)
             return
         if self._has_placed_a_part:
             self.view.set_empty_hint("")

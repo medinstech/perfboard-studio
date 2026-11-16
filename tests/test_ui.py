@@ -5584,6 +5584,12 @@ def test_an_empty_board_under_a_drawn_circuit_says_how_the_parts_get_to_it() -> 
         assert not window.view.empty_hint.isHidden()
         assert "1" in window.view.empty_hint.text()
         assert "Place on the Board" in window.view.empty_hint.text()
+        assert "Choose a Board" in window.view.empty_hint.text()
+        # A board chosen: choosing one is no longer the way there (the newcomer walk).
+        window._board_chosen = True
+        window._refresh_empty_hint()
+        assert "Place on the Board" in window.view.empty_hint.text()
+        assert "Choose a Board" not in window.view.empty_hint.text()
     finally:
         _close(window)
 

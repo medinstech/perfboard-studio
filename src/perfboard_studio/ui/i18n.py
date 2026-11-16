@@ -5543,6 +5543,9 @@ TURKISH: Mapping[str, str] = {
     ),
     "{count} part is waiting for a board": "{count} parça bir kart bekliyor",
     "{count} parts are waiting for a board": "{count} parça bir kart bekliyor",
+    "The blue button at the top right puts them on it: Place on the Board.": (
+        "Sağ üstteki mavi düğme onları karta koyar: Karta Yerleştir."
+    ),
     "The blue button at the top right takes them there: Choose a Board, then Place on the "
     "Board.": (
         "Sağ üstteki mavi düğme onları oraya götürür: önce Kart Seç, sonra Karta Yerleştir."
