@@ -1045,7 +1045,7 @@ TURKISH: Mapping[str, str] = {
     "Part with no value": "Değeri olmayan parça",
     "Set the Values": "Değerleri Gir",
     "Still without a value: {parts}. Select each and type its value in Properties: 470, 10k, 100nF.": "Henüz değeri olmayanlar: {parts}. Her birini seçip değerini Özellikler'e yazın: 470, 10k, 100nF.",
-    "{count} without a value": "{count} değersiz",
+    "{count} without a value": "{count} değer eksik",
     "{refs} and {count} more": "{refs} ve {count} tane daha",
     "Still connected to nothing: {parts}. Show Problems says which pins; join them on the sheet before the board.": "Hâlâ hiçbir yere bağlı değil: {parts}. Hangi pinler olduğunu Sorunları Göster söyler; karta geçmeden önce onları şemada bağlayın.",
     "Still to join: {parts}. Click a pin, then the pin it connects to.": "Bağlanacaklar: {parts}. Bir pine, sonra bağlandığı pine tıklayın.",
@@ -1214,10 +1214,10 @@ TURKISH: Mapping[str, str] = {
     ),
     "Given to each part as it is placed. Leave it blank and the part is placed "
     "without one; F2 sets it afterwards either way.": (
-        "Yerleştirilen her parçaya verilir. Boş bırakılırsa parça değersiz yerleştirilir; "
+        "Yerleştirilen her parçaya verilir. Boş bırakılırsa parça değeri olmadan yerleştirilir; "
         "her hâlükârda F2 ile sonradan da girilebilir."
     ),
-    "Click a hole to place": "Yerleştirmek için bir deliğe tıkla:",
+    "Click a hole to place": "Yerleştirmek için bir deliğe tıklayın:",
     "Esc cancels.": "Esc iptal eder.",
     # -- panel headings --------------------------------------------------------
     "Part": "Parça",
@@ -5498,7 +5498,7 @@ TURKISH: Mapping[str, str] = {
     "Matches the circuit: {matched} of {total} nets": "Devreyle uyuşan net: {matched}/{total}",
     "{matched}/{total} nets match": "{matched}/{total} net uyuşuyor",
     "{count} to look at": "bakılacak {count}",
-    "{count} at the bench": "tezgâhta {count}",
+    "{count} at the bench": "tezgâhta {count} kontrol",
     "Select and move parts. Esc comes back to it from any tool.": (
         "Parçaları seçin ve taşıyın. Esc her araçtan buraya döner."
     ),
@@ -6034,13 +6034,13 @@ TURKISH: Mapping[str, str] = {
     ),
     "Ready to build. {count} wire is worth a look if you like: Worth a look, below, "
     "shows it.": (
-        "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki Bakmaya değer "
-        "onu gösterir."
+        "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki “Bakmaya değer” "
+        "bağlantısı onu gösterir."
     ),
     "Ready to build. {count} wires are worth a look if you like: Worth a look, below, "
     "lists them.": (
-        "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki Bakmaya değer "
-        "onları listeler."
+        "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki “Bakmaya değer” "
+        "bağlantısı onları listeler."
     ),
     "Worth a look, if you like": "Bakmaya değer, isterseniz",
     "Not needed to build the board; each count selects its wires.": "Kartı yapmak için gerekmez; her sayı kendi tellerini seçer.",
