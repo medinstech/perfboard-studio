@@ -703,6 +703,14 @@ QWidget[variant="card"] {{
     border: 1px solid {k.border};
     border-radius: {RADIUS_LG}px;
 }}
+/* Home's unbuilt example: the sheet's paper fills the picture as a board does, inside the
+   card's border and under its rounded top. */
+QLabel#sheetPicture {{
+    background: {k.sheet_paper};
+    margin: 1px 1px 0 1px;
+    border-top-left-radius: {RADIUS_LG - 1}px;
+    border-top-right-radius: {RADIUS_LG - 1}px;
+}}
 
 /* The update strip above the board: news, not a question. */
 QFrame#updateBar {{ background: {k.bg_subtle}; border-bottom: 1px solid {k.border}; }}

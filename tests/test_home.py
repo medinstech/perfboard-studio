@@ -112,6 +112,30 @@ def test_the_pictures_are_drawn_after_home_is_on_screen(app) -> None:
     assert all(not card.picture.pixmap().isNull() for card in home.cards)
 
 
+def test_a_circuit_not_yet_built_is_pictured_on_the_window_s_sheet_not_the_printer_s(app) -> None:
+    """The release-candidate sitting asked why one card was a white page on a dark Home,
+    and narrower than its neighbours: it was the SVG export, white because it goes to a
+    printer. It is the sheet view's own painting now, on the theme's paper, and the card
+    names its picture area so the stylesheet lays that paper across all of it."""
+    from PySide6.QtGui import QColor
+
+    from perfboard_studio.ui import theme
+
+    home = make(app)
+    home.show()
+    for _ in range(50):
+        app.processEvents()
+        if all(not card.picture.pixmap().isNull() for card in home.cards):
+            break
+    home.close()
+    sheets = [c for c in home.cards if c.picture.objectName() == "sheetPicture"]
+    assert [c.example.path.stem for c in sheets] == ["ne555-blinker"]
+    image = sheets[0].picture.pixmap().toImage()
+    paper = QColor(theme.ACTIVE.sheet_paper).rgb()
+    assert image.pixelColor(1, 1).rgb() == paper
+    assert image.pixelColor(image.width() - 2, image.height() - 2).rgb() == paper
+
+
 def test_the_start_up_box_says_what_it_does(app) -> None:
     home = make(app)
     said: list[bool] = []

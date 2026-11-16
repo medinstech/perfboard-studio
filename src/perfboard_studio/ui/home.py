@@ -30,7 +30,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStyleOptionGraphicsItem,
     QVBoxLayout,
     QWidget,
 )
@@ -51,14 +52,13 @@ from perfboard_studio import persist
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.model import PerfDocument
 from perfboard_studio.schematic import build_schematic
-from perfboard_studio.schematic_export import drawing_to_svg
 from perfboard_studio.system import board_document, board_ids
 from perfboard_studio.version import __version__
 
 from . import theme
 from .boardpreview import render_board
-from .export_schematic import svg_to_image
 from .i18n import t
+from .viewsch import SHEET, SheetItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +100,37 @@ def _boards_side_by_side(document: PerfDocument, lookup: FootprintLookup) -> QPi
         x += picture.width() + gap
     painter.end()
     return QPixmap.fromImage(image)
+
+
+def _sheet_picture(document: PerfDocument, lookup: FootprintLookup) -> QPixmap | None:
+    """The circuit's sheet as the window's sheet view paints it -- its own item, on its
+    paper, in the theme's ink -- for a circuit with nothing placed yet.
+
+    It was the SVG export, whose paper is white on purpose because it goes to a printer: a
+    white rectangle glaring out of the dark page, narrower than the boards beside it (the
+    release-candidate sitting asked why it was white). The export is unchanged; this is
+    the view's picture, as a dragged symbol's is (``SchematicView._symbol_pixmap``), and
+    the card's picture area is the same paper around it (``ExampleCard.set_picture``)."""
+    drawing = build_schematic(document, lookup)
+    sheet = QRectF(0.0, 0.0, drawing.width, drawing.height)
+    if sheet.isEmpty():
+        return None
+    margin = theme.SPACE["md"]
+    scale = min(
+        (PICTURE.width() - 2 * margin) / sheet.width(),
+        (PICTURE.height() - 2 * margin) / sheet.height(),
+    )
+    picture = QPixmap(
+        round(sheet.width() * scale) + 2 * margin, round(sheet.height() * scale) + 2 * margin
+    )
+    picture.fill(QColor(SHEET))
+    painter = QPainter(picture)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.translate(margin, margin)
+    painter.scale(scale, scale)
+    SheetItem(drawing).paint(painter, QStyleOptionGraphicsItem(), None)
+    painter.end()
+    return picture
 
 
 def example_title(stem: str) -> str:
@@ -154,7 +185,13 @@ class ExampleCard(QPushButton):
         for child in self.findChildren(QLabel):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
-    def set_picture(self, pixmap: QPixmap) -> None:
+    def set_picture(self, pixmap: QPixmap, *, on_paper: bool = False) -> None:
+        """``on_paper`` for a sheet: the picture area is the sheet's paper edge to edge, as
+        a board fills it, rather than a sheet-sized patch in the middle of the card."""
+        if on_paper:
+            self.picture.setObjectName("sheetPicture")
+            self.picture.style().unpolish(self.picture)
+            self.picture.style().polish(self.picture)
         self.picture.setPixmap(
             pixmap.scaled(
                 QSize(self.picture.width() or PICTURE.width(), self.picture.height()),
@@ -512,15 +549,21 @@ class Home(QWidget):
         if not self._to_draw:
             return
         card = self._to_draw.pop(0)
-        pixmap = self._picture(card.example.path)
-        if pixmap is not None:
-            card.set_picture(pixmap)
+        drawn = self._picture_of(card.example.path)
+        if drawn is not None:
+            pixmap, on_paper = drawn
+            card.set_picture(pixmap, on_paper=on_paper)
         if self._to_draw:
             QTimer.singleShot(0, self._draw_next)
 
     def _picture(self, path: Path) -> QPixmap | None:
         """The board as the window will draw it, or -- for a circuit with nothing placed --
         its sheet. None when the file cannot be read: the card keeps its words."""
+        drawn = self._picture_of(path)
+        return drawn[0] if drawn is not None else None
+
+    def _picture_of(self, path: Path) -> tuple[QPixmap, bool] | None:
+        """``_picture``, and whether it is a sheet rather than a board."""
         try:
             result = persist.deserialize_document(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError):
@@ -529,8 +572,8 @@ class Home(QWidget):
             return None
         document = result.document
         if len(board_ids(document)) > 1:
-            return _boards_side_by_side(document, self._lookup)
+            return _boards_side_by_side(document, self._lookup), False
         if document.components:
-            return render_board(document, self._lookup, PICTURE)
-        svg = drawing_to_svg(build_schematic(document, self._lookup), title=document.meta.name)
-        return QPixmap.fromImage(svg_to_image(svg, px_per_mm=2.0, background=theme.ACTIVE.sheet_paper))
+            return render_board(document, self._lookup, PICTURE), False
+        sheet = _sheet_picture(document, self._lookup)
+        return (sheet, True) if sheet is not None else None
