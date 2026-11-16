@@ -93,8 +93,16 @@ def window():
     # A test may have stubbed these on the window. The autouse fixtures that use
     # `monkeypatch` are set up before this one and so undone after it, which would leave a
     # stubbed `close` or `_offer_to_save` in place for the very close below.
+    #
+    # The stub is REPLACED by the real method rather than removed. pytest 9.2 records an
+    # instance attribute that was not in `__dict__` as absent and undoes it with `delattr`,
+    # so a removed stub made that `delattr` raise -- and a raise inside `undo` abandons
+    # every patch after it, which left `updater.start_install` stubbed into the next test
+    # (CI's "'NoneType' object has no attribute 'started'"). pytest 9.0 sets the bound
+    # method back instead; an entry is there for either to undo.
     for name in ("_offer_to_save", "close"):
-        made.__dict__.pop(name, None)
+        if name in made.__dict__:
+            made.__dict__[name] = getattr(MainWindow, name).__get__(made)
     made.close()
 
 
@@ -600,7 +608,12 @@ def test_a_refused_elevation_prompt_installs_nothing_and_keeps_the_file(
     path, digest = a_downloaded_installer(tmp_path)
 
     def refused(path: str, arguments: str) -> None:
-        raise OSError(0, "The operation was canceled by the user", None, updater.ELEVATION_REFUSED)
+        err = OSError(0, "The operation was canceled by the user", None, updater.ELEVATION_REFUSED)
+        # Only Windows reads the fourth argument into `winerror`; elsewhere it is dropped,
+        # and this test runs on every platform CI has.
+        if getattr(err, "winerror", None) != updater.ELEVATION_REFUSED:
+            err.winerror = updater.ELEVATION_REFUSED
+        raise err
 
     monkeypatch.setattr(updater, "_run_elevated", refused)
     attempt = updater.start_install(path, digest, pid=1)
