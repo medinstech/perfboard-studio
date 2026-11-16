@@ -15,8 +15,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from perfboard_studio import persist
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.ui.home import COLUMNS, WALKTHROUGH, Home, HomeExample, example_title
+from perfboard_studio.ui.home import (
+    COLUMNS,
+    WALKTHROUGH,
+    Home,
+    HomeExample,
+    LastBoard,
+    example_title,
+)
 from perfboard_studio.ui.i18n import language, set_language
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -134,6 +142,61 @@ def test_a_circuit_not_yet_built_is_pictured_on_the_window_s_sheet_not_the_print
     paper = QColor(theme.ACTIVE.sheet_paper).rgb()
     assert image.pixelColor(1, 1).rgb() == paper
     assert image.pixelColor(image.width() - 2, image.height() - 2).rgb() == paper
+
+
+def test_the_board_opened_last_comes_forward_with_where_it_stands(app, tmp_path) -> None:
+    """The window hands Home the last board with its steps and its next sentence; Home
+    shows it large, with the step bar's six dots, leaves it out of the list beside it, and
+    Continue opens it. The keyboard, which started on the list, moves to Continue."""
+    from PySide6.QtCore import Qt
+
+    from perfboard_studio.ui.workflow import STEP_ORDER, WorkflowFacts, workflow_steps
+
+    document = persist.deserialize_document(
+        (EXAMPLES / "nano-relay.perf").read_text(encoding="utf-8")
+    ).document
+    boards = [str(tmp_path / "relay.perf"), str(tmp_path / "supply.perf")]
+    home = make(app, boards)
+    home.show()
+    home.focus_first()
+    app.processEvents()
+    assert home.last_card.isHidden()
+    assert app.focusWidget() is home.recent_list
+    steps = workflow_steps(
+        WorkflowFacts(
+            parts_off_board=0, parts_on_board=5, nets=4, board_label="", board_chosen=True,
+            unrouted=3, drc_errors=0, drc_warnings=0, lvs_problems=0,
+        )
+    )
+    home.set_last(LastBoard(Path(boards[0]), document, steps, "Join the pins on the board."))
+    app.processEvents()
+    assert not home.last_card.isHidden()
+    assert home.last_hint.text() == "Join the pins on the board."
+    assert not home.last_picture.pixmap().isNull()
+    assert home.last_steps.layout().count() == 3 * len(STEP_ORDER) + 1
+    listed = [home.recent_list.item(i).data(Qt.ItemDataRole.UserRole)
+              for i in range(home.recent_list.count())]
+    assert listed == [boards[1]]
+    assert app.focusWidget() is home.continue_button
+    opened: list[str] = []
+    home.openRecent.connect(opened.append)
+    home.continue_button.click()
+    assert opened == [boards[0]]
+
+    home.set_last(None)
+    assert home.last_card.isHidden()
+    assert home.recent_list.count() == 2
+    home.close()
+
+
+def test_with_the_only_board_forward_there_is_no_empty_list_under_it(app, tmp_path) -> None:
+    board = str(tmp_path / "relay.perf")
+    document = persist.deserialize_document(
+        (EXAMPLES / "nano-relay.perf").read_text(encoding="utf-8")
+    ).document
+    home = make(app, [board])
+    home.set_last(LastBoard(Path(board), document, (), ""))
+    assert home.recent_list.isHidden() and home._recent_title.isHidden()
 
 
 def test_the_start_up_box_says_what_it_does(app) -> None:

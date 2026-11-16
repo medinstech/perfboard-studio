@@ -321,6 +321,19 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     return t("The board is ready to build. The build guide takes you through it one part at a time.")
 
 
+def resume_hint(key: StepKey, facts: WorkflowFacts) -> str:
+    """``step_hint`` for a board not open yet -- Home's, over the board opened last. The
+    one hint that points at the window ("Worth a look, below") says what is there once it
+    is open instead; every other already reads the same before as after."""
+    if key == "build" and facts.wiring_to_review:
+        return _counted(
+            facts.wiring_to_review,
+            t("Ready to build. {count} wire is worth a look if you like, once it is open."),
+            t("Ready to build. {count} wires are worth a look if you like, once it is open."),
+        )
+    return step_hint(key, facts)
+
+
 def _counted(count: int, one: str, many: str) -> str:
     """``one`` or ``many`` -- each already through ``t()`` -- with the count in it."""
     return (one if count == 1 else many).format(count=count)
@@ -460,7 +473,7 @@ type FitMode = Literal["full", "compact", "current", "tiny"]
 FIT_MODES: tuple[FitMode, ...] = ("full", "compact", "current", "tiny")
 
 
-def _step_dot(number: int, status: StepStatus) -> QIcon:
+def step_dot(number: int, status: StepStatus) -> QIcon:
     """The round mark in front of a step's name: a tick when it is done, its number --
     filled in the accent when it is the one to do, outlined when it comes later -- and an
     exclamation mark on a problem. Drawn, so it is the same in every font and stays crisp
@@ -631,7 +644,7 @@ class WorkflowBar(QWidget):
         self._next = next_step(steps)
         for number, step in enumerate(steps, start=1):
             button = self.buttons[step.key]
-            button.setIcon(_step_dot(number, step.status))
+            button.setIcon(step_dot(number, step.status))
             button.setText(self._label(step, self._mode))
             button.setToolTip(
                 f"<b>{number}. {step_title(step.key)}</b> — {step.summary}"

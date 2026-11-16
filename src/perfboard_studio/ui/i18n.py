@@ -6066,6 +6066,14 @@ TURKISH: Mapping[str, str] = {
         "Kart yapılmaya hazır. Montaj rehberi size her seferinde bir parça olmak üzere yol "
         "gösterir."
     ),
+    "Ready to build. {count} wire is worth a look if you like, once it is open.": (
+        "Montaja hazır. İsterseniz açtıktan sonra {count} tele bakabilirsiniz."
+    ),
+    "Ready to build. {count} wires are worth a look if you like, once it is open.": (
+        "Montaja hazır. İsterseniz açtıktan sonra {count} tele bakabilirsiniz."
+    ),
+    "Last opened": "Son açılan",
+    "Continue": "Devam Et",
     "Ready to build. {count} wire is worth a look if you like: Worth a look, below, "
     "shows it.": (
         "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki “Bakmaya değer” "

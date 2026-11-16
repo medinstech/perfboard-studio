@@ -18,6 +18,11 @@ a card cannot show a board the example does not open into. They are painted one 
 the event loop after Home is on screen: seven boards drawn before the first frame would be
 a second of nothing at every start.
 
+THE BOARD OPENED LAST COMES FORWARD, with where it stands -- the step bar's six dots, the
+next thing to do -- and one button to go on with it. Where it stands is its checks, run
+on its file by the window (``main.file_facts``) a turn after Home is on screen; until
+then, and for a file that no longer opens, Home is the plain list of boards.
+
 THE WINDOW OWNS EVERYTHING ELSE. Home imports nothing from ``main``: it says what was asked
 for through its signals, and the window opens the file, leaves Home and shows the editor.
 Esc is the window's too -- it means "a blank board", which is the window's to make.
@@ -59,6 +64,7 @@ from . import theme
 from .boardpreview import render_board
 from .i18n import t
 from .viewsch import SHEET, SheetItem
+from .workflow import DOT_SIZE, StepState, step_dot, step_title
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +77,19 @@ class HomeExample:
     line: str
 
 
+@dataclass(frozen=True, slots=True)
+class LastBoard:
+    """The board opened last, as Home offers to go on with it: its file, the document read
+    from it (for its picture), the step bar's steps for it, and the one sentence that says
+    what to do next. The window works it out -- the steps are its checks, on the file --
+    and Home only shows it."""
+
+    path: Path
+    document: PerfDocument
+    steps: tuple[StepState, ...]
+    hint: str
+
+
 #: The unbuilt example, which the "new here" card opens: drawn, not placed, so the step
 #: bar's next button has every step still to do.
 WALKTHROUGH = "ne555-blinker"
@@ -80,14 +99,18 @@ WALKTHROUGH = "ne555-blinker"
 COLUMNS = 4
 #: The size each picture is drawn at, before the card scales it.
 PICTURE = QSize(320, 180)
+#: The board opened last's picture: the same frame, larger.
+LAST_PICTURE = QSize(448, 252)
 
 
-def _boards_side_by_side(document: PerfDocument, lookup: FootprintLookup) -> QPixmap:
+def _boards_side_by_side(
+    document: PerfDocument, lookup: FootprintLookup, size: QSize = PICTURE
+) -> QPixmap:
     """Every board of a system in a row, each drawn as the window draws it -- the
     System view's row, without its bench -- fitted together into the card's picture."""
     gap = theme.SPACE["lg"]
     ids = board_ids(document)
-    each = QSize(max(1, (PICTURE.width() - gap * (len(ids) - 1)) // len(ids)), PICTURE.height())
+    each = QSize(max(1, (size.width() - gap * (len(ids) - 1)) // len(ids)), size.height())
     pictures = [render_board(board_document(document, board_id), lookup, each) for board_id in ids]
     width = sum(picture.width() for picture in pictures) + gap * (len(pictures) - 1)
     height = max(picture.height() for picture in pictures)
@@ -102,7 +125,9 @@ def _boards_side_by_side(document: PerfDocument, lookup: FootprintLookup) -> QPi
     return QPixmap.fromImage(image)
 
 
-def _sheet_picture(document: PerfDocument, lookup: FootprintLookup) -> QPixmap | None:
+def _sheet_picture(
+    document: PerfDocument, lookup: FootprintLookup, size: QSize = PICTURE
+) -> QPixmap | None:
     """The circuit's sheet as the window's sheet view paints it -- its own item, on its
     paper, in the theme's ink -- for a circuit with nothing placed yet.
 
@@ -117,8 +142,8 @@ def _sheet_picture(document: PerfDocument, lookup: FootprintLookup) -> QPixmap |
         return None
     margin = theme.SPACE["md"]
     scale = min(
-        (PICTURE.width() - 2 * margin) / sheet.width(),
-        (PICTURE.height() - 2 * margin) / sheet.height(),
+        (size.width() - 2 * margin) / sheet.width(),
+        (size.height() - 2 * margin) / sheet.height(),
     )
     picture = QPixmap(
         round(sheet.width() * scale) + 2 * margin, round(sheet.height() * scale) + 2 * margin
@@ -244,6 +269,7 @@ class Home(QWidget):
         )
         self._lookup = lookup
         self._recent: list[str] = []
+        self._last: LastBoard | None = None
         self._showing_all = False
         self._to_draw: list[ExampleCard] = []
 
@@ -305,11 +331,14 @@ class Home(QWidget):
         self.new_button = QPushButton(t("New Circuit"))
         top.addLayout(self._doors(self.new_button))
         back.addLayout(top)
+        self.last_card = self._last_card()
+        back.addWidget(self.last_card)
         heading = QHBoxLayout()
-        heading.addWidget(QLabel(theme.heading(t("Recent"))))
-        hint = QLabel(t("Enter opens the highlighted one."))
-        theme.tone(hint, "tertiary")
-        heading.addWidget(hint)
+        self._recent_title = QLabel(theme.heading(t("Recent")))
+        heading.addWidget(self._recent_title)
+        self._recent_hint = QLabel(t("Enter opens the highlighted one."))
+        theme.tone(self._recent_hint, "tertiary")
+        heading.addWidget(self._recent_hint)
         heading.addStretch(1)
         back.addLayout(heading)
         self.recent_list = QListWidget()
@@ -405,25 +434,66 @@ class Home(QWidget):
             self._draw_pictures()
     def set_recent(self, paths: Sequence[str]) -> None:
         """The boards opened last, newest first. With none, Home is the first-run page; with
-        any, it leads with them and the examples shrink to a row."""
+        any, it leads with them and the examples shrink to a row. The last board's card
+        goes until ``set_last`` says again which of them it is."""
         self._recent = [str(p) for p in paths]
-        self.recent_list.clear()
-        for entry in self._recent:
-            path = Path(entry)
-            item = QListWidgetItem(f"{path.stem}    {path.parent}")
-            item.setToolTip(entry)
-            item.setData(Qt.ItemDataRole.UserRole, entry)
-            self.recent_list.addItem(item)
-        if self._recent:
-            self.recent_list.setCurrentRow(0)
-            self.recent_list.setFixedHeight(
-                min(len(self._recent), 6) * (self.recent_list.sizeHintForRow(0) + 2) + 4
-            )
+        self._last = None
+        self.last_card.hide()
+        self._fill_recent()
         returning = bool(self._recent)
         self.first_run.setVisible(not returning)
         self.returning.setVisible(returning)
         self._showing_all = not returning
         self._lay_out_cards()
+
+    def set_last(self, last: LastBoard | None) -> None:
+        """The board opened last, large, with where it stands and Continue; or, with
+        ``None``, the plain list. The list leaves out the board the card is about, and the
+        keyboard moves from the list to Continue if it was on the list."""
+        self._last = last
+        listed = self.recent_list.hasFocus()
+        if last is None:
+            self.last_card.hide()
+            self._fill_recent()
+            return
+        self.last_name.setText(theme.heading(html.escape(last.path.stem)))
+        self.last_folder.setText(str(last.path.parent))
+        self.last_card.setToolTip(str(last.path))
+        drawn = self._picture_of_document(last.document, LAST_PICTURE)
+        self.last_picture.clear()
+        if drawn is not None:
+            self.last_picture.setPixmap(
+                drawn[0].scaled(
+                    LAST_PICTURE,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        row = self._last_steps_row
+        while row.count():
+            item = row.takeAt(0)
+            gone = item.widget() if item is not None else None
+            if gone is not None:
+                gone.deleteLater()
+        for number, step in enumerate(last.steps, start=1):
+            dot = QLabel()
+            dot.setPixmap(step_dot(number, step.status).pixmap(QSize(DOT_SIZE, DOT_SIZE)))
+            name = QLabel(step_title(step.key))
+            if step.status == "current":
+                name.setText(f"<b>{html.escape(step_title(step.key))}</b>")
+            elif step.status == "problem":
+                theme.tone(name, "danger")
+            else:
+                theme.tone(name, "secondary" if step.status == "done" else "tertiary")
+            row.addWidget(dot)
+            row.addWidget(name)
+            row.addSpacing(theme.SPACE["sm"])
+        row.addStretch(1)
+        self.last_hint.setText(last.hint)
+        self.last_card.show()
+        self._fill_recent()
+        if listed:
+            self.continue_button.setFocus()
 
     def set_show_at_start(self, on: bool) -> None:
         self.show_at_start.blockSignals(True)
@@ -431,8 +501,10 @@ class Home(QWidget):
         self.show_at_start.blockSignals(False)
 
     def focus_first(self) -> None:
-        """Where the keyboard starts: the last board, or the primary door."""
-        if self._recent:
+        """Where the keyboard starts: Continue, the list of boards, or the primary door."""
+        if self._last is not None:
+            self.continue_button.setFocus()
+        elif self._recent:
             self.recent_list.setFocus()
         else:
             self.first_button.setFocus()
@@ -503,6 +575,73 @@ class Home(QWidget):
         card.hide()
         return card
 
+    def _last_card(self) -> QFrame:
+        """The board opened last: its picture, its name and folder, the six steps as the
+        step bar draws them, the next thing to do, and Continue. Empty until ``set_last``."""
+        card = QFrame()
+        card.setObjectName("homeLast")
+        theme.variant(card, "card")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(0, 0, theme.SPACE["xl"], 0)
+        row.setSpacing(theme.SPACE["xl"])
+        self.last_picture = QLabel()
+        self.last_picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.last_picture.setFixedSize(LAST_PICTURE)
+        row.addWidget(self.last_picture)
+        words = QVBoxLayout()
+        words.setSpacing(theme.SPACE["sm"])
+        caption = QLabel(t("Last opened"))
+        theme.size(caption, theme.CAPTION_PX)
+        theme.tone(caption, "tertiary")
+        self.last_name = QLabel()
+        self.last_folder = QLabel()
+        self.last_folder.setTextFormat(Qt.TextFormat.PlainText)
+        theme.tone(self.last_folder, "secondary")
+        self.last_steps = QWidget()
+        self.last_steps.setObjectName("homeLastSteps")
+        self._last_steps_row = QHBoxLayout(self.last_steps)
+        self._last_steps_row.setContentsMargins(0, theme.SPACE["xs"], 0, theme.SPACE["xs"])
+        self._last_steps_row.setSpacing(theme.SPACE["xs"])
+        self.last_hint = QLabel()
+        self.last_hint.setWordWrap(True)
+        self.continue_button = QPushButton(t("Continue"))
+        theme.variant(self.continue_button, "primary")
+        self.continue_button.clicked.connect(self._continue)
+        words.addStretch(1)
+        for widget in (caption, self.last_name, self.last_folder, self.last_steps, self.last_hint):
+            words.addWidget(widget)
+        words.addWidget(self.continue_button, 0, Qt.AlignmentFlag.AlignLeft)
+        words.addStretch(1)
+        row.addLayout(words, 1)
+        card.hide()
+        return card
+
+    def _continue(self) -> None:
+        if self._last is not None:
+            self.openRecent.emit(str(self._last.path))
+
+    def _fill_recent(self) -> None:
+        """The list of boards, less the one the last board's card is about. With nothing
+        left in it, it goes, and its heading with it."""
+        shown = [
+            entry for entry in self._recent
+            if self._last is None or Path(entry) != self._last.path
+        ]
+        self.recent_list.clear()
+        for entry in shown:
+            path = Path(entry)
+            item = QListWidgetItem(f"{path.stem}    {path.parent}")
+            item.setToolTip(entry)
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            self.recent_list.addItem(item)
+        if shown:
+            self.recent_list.setCurrentRow(0)
+            self.recent_list.setFixedHeight(
+                min(len(shown), 6) * (self.recent_list.sizeHintForRow(0) + 2) + 4
+            )
+        for widget in (self.recent_list, self._recent_title, self._recent_hint):
+            widget.setVisible(bool(shown))
+
     def _walkthrough_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("homeWalkthrough")
@@ -570,10 +709,16 @@ class Home(QWidget):
             return None
         if not result.ok:
             return None
-        document = result.document
+        return self._picture_of_document(result.document)
+
+    def _picture_of_document(
+        self, document: PerfDocument, size: QSize = PICTURE
+    ) -> tuple[QPixmap, bool] | None:
+        """A document's picture at ``size``: every board in a row, the board, or -- with
+        nothing placed -- the sheet (the bool)."""
         if len(board_ids(document)) > 1:
-            return _boards_side_by_side(document, self._lookup), False
+            return _boards_side_by_side(document, self._lookup, size), False
         if document.components:
-            return render_board(document, self._lookup, PICTURE), False
-        sheet = _sheet_picture(document, self._lookup)
+            return render_board(document, self._lookup, size), False
+        sheet = _sheet_picture(document, self._lookup, size)
         return (sheet, True) if sheet is not None else None

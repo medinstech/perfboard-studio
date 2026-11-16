@@ -21691,3 +21691,119 @@ def test_make_this_strip_a_rail_from_the_strips_own_menu() -> None:
         assert len(bus.document.conductors) == before
     finally:
         _close(window)
+
+
+def _home_cases(tmp_path):  # type: ignore[no-untyped-def]
+    """A board of each kind Home may have to say the steps of, written to files."""
+    from perfboard_studio.breadboard import breadboard
+
+    astable = _example_document("ne555-astable")
+    kinds = {
+        "nano-relay": _example_document("nano-relay"),
+        "relay-and-supply": _example_document("relay-and-supply"),
+        "atmega328-relay": _example_document("atmega328-relay"),
+        "stripboard": dataclasses.replace(
+            astable,
+            board=dataclasses.replace(astable.board, type="stripboard", strip_axis="horizontal"),
+            conductors=(),
+        ),
+        "breadboard": dataclasses.replace(
+            astable, board=breadboard("830"), conductors=(), mounting_holes=(), edge_connectors=()
+        ),
+    }
+    root = pathlib.Path(__file__).resolve().parents[1]
+    blinker = tmp_path / "ne555-blinker.perf"
+    blinker.write_bytes((root / "examples" / "ne555-blinker" / "ne555-blinker.perf").read_bytes())
+    drawn = persist.deserialize_document(blinker.read_text(encoding="utf-8"))
+    assert drawn.ok
+    # Half drawn: a net not joined yet, which is work left while the circuit is being
+    # drawn and a problem once it is not (``_erc_shown``).
+    kinds["half-drawn"] = dataclasses.replace(drawn.document, nets=drawn.document.nets[1:])
+    paths = {"ne555-blinker": blinker}
+    for name, document in kinds.items():
+        path = tmp_path / f"{name}.perf"
+        path.write_text(persist.serialize_document(document), encoding="utf-8")
+        paths[name] = path
+    return paths
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "nano-relay", "relay-and-supply", "atmega328-relay", "stripboard", "breadboard",
+        "ne555-blinker", "half-drawn",
+    ],
+)
+def test_home_says_the_steps_the_window_says_once_it_is_open(
+    kind, tmp_path, _settings_in_a_temp_file
+) -> None:
+    """Home says where the board opened last stands before it is opened, from its file
+    (``file_facts``); the window says it from its own refresh once it is. Two routes to
+    one answer -- a system of two boards, a stripboard and a breadboard included -- so the
+    dots on Home are the dots Continue opens onto."""
+    from perfboard_studio.ui.main import file_facts
+    from perfboard_studio.ui.workflow import workflow_steps
+
+    path = _home_cases(tmp_path)[kind]
+    window = _blank_window()
+    try:
+        last = window._last_board(path)
+        assert last is not None, f"{kind} gets the card"
+        window.on_open_recent(path)
+        assert window.current_path == path
+        assert file_facts(last.document, window.lookup) == window.workflow_facts()
+        assert last.steps == workflow_steps(window.workflow_facts())
+    finally:
+        _close(window)
+
+
+def test_home_passes_over_a_last_board_that_no_longer_opens(
+    tmp_path, _settings_in_a_temp_file
+) -> None:
+    """A board moved, unreadable, not UTF-8 or not a board since it was opened is passed
+    over for the next one that opens; with none, Home is the plain list. Never an error
+    on Home, and nothing read before its first frame."""
+    import shutil
+
+    from PySide6.QtTest import QTest
+
+    from perfboard_studio.ui import main as main_module
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    moved = tmp_path / "moved.perf"
+    garbage = tmp_path / "garbage.perf"
+    garbage.write_text("not a board", encoding="utf-8")
+    binary = tmp_path / "binary.perf"
+    binary.write_bytes(b"\xff\xfe\x00 not text")
+    stranger = tmp_path / "stranger.perf"
+    stranger.write_text('{"format": "something else"}', encoding="utf-8")
+    good = tmp_path / "relay.perf"
+    shutil.copy(root / "examples" / "nano-relay.perf", good)
+    _settings_in_a_temp_file.setValue(
+        main_module.RECENT_FILES_KEY, [str(p) for p in (moved, garbage, binary, stranger, good)]
+    )
+    window = _blank_window()
+    try:
+        window.offer_home()
+        home = window._home_page
+        assert home is not None
+        assert home._last is None, "nothing is read before the first frame"
+        for _ in range(20):
+            QTest.qWait(5)
+            if home._last is not None:
+                break
+        assert home._last is not None and home._last.path == good
+        assert not home.last_card.isHidden()
+        assert home.recent_list.count() == 3, "the others are listed as they are"
+
+        _settings_in_a_temp_file.setValue(
+            main_module.RECENT_FILES_KEY, [str(p) for p in (moved, garbage, binary)]
+        )
+        window.leave_home()
+        window.offer_home()
+        QTest.qWait(50)
+        assert window.home_is_showing()
+        assert home._last is None and home.last_card.isHidden()
+        assert home.recent_list.count() == 2
+    finally:
+        _close(window)

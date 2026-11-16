@@ -595,6 +595,7 @@ QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
 QWidget#header {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
 /* Over Home it stands where the steps were, and must not paint over the line under them. */
 QWidget#headerGap {{ background: transparent; }}
+QWidget#homeLastSteps {{ background: transparent; }}
 QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
 QLabel#headerPlace {{ color: {k.text_secondary}; }}
 /* A newer release exists: a pill in the header and a card on Home, both in the accent. */

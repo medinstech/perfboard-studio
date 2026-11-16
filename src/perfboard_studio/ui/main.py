@@ -408,7 +408,7 @@ from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .header import HeaderBar
-from .home import WALKTHROUGH, Home, HomeExample
+from .home import WALKTHROUGH, Home, HomeExample, LastBoard
 from .i18n import counted, hole_grid, set_language, t
 from .i18n import language as current_language
 from .inspector import (
@@ -454,6 +454,7 @@ from .workflow import (
     build_action,
     next_step,
     refs_said,
+    resume_hint,
     step_hint,
     step_title,
     workflow_steps,
@@ -2641,6 +2642,136 @@ JOIN_RULES = frozenset({"part-unconnected", "supply-unconnected", "supply-pin-op
 STILL_TO_DO_RULES = JOIN_RULES | {"value-missing"}
 
 
+def refs_to_join(erc: Sequence[ErcFinding]) -> tuple[str, ...]:
+    """The parts with a pin connected to nothing, each once, in the check's order."""
+    return tuple(dict.fromkeys(ref for f in erc if f.rule in JOIN_RULES for ref in f.refs))
+
+
+def first_empty_board(document: PerfDocument) -> BoardId | None:
+    """The first board of a system with no part on it, or None: a single board with
+    nothing on it is the Place step's own news, and is not this."""
+    ids = board_ids(document)
+    if len(ids) < 2:
+        return None
+    return next((b for b in ids if not board_document(document, b).components), None)
+
+
+def facts_from(
+    document: PerfDocument,
+    *,
+    erc: tuple[ErcFinding, ...],
+    erc_shown: tuple[ErcFinding, ...],
+    violations: tuple[DrcViolation, ...],
+    unrouted: int,
+    lvs: LvsResult | None,
+    wiring: Sequence[WiringNote],
+    board_chosen: bool,
+    circuit_left: bool,
+    untitled: bool,
+    guide_showing: bool = False,
+    guide_opened: bool = False,
+    save_declined: bool = False,
+    problems_showing: bool = False,
+) -> WorkflowFacts:
+    """What the step bar is measured against, from the checks' answers and what the
+    window knows that no check does. One function for the window (``workflow_facts``) and
+    for the board Home offers to continue (``file_facts``), so the two cannot say
+    different steps about one board.
+
+    On a system it is EVERY board's: the bar said the first board's size and the board in
+    front's connections and findings, so a system whose second board had nothing wired
+    read "all wired" from the first.
+    """
+    board = document.board
+    preset = _matching_preset(board)
+    grid = hole_grid(board.cols, board.rows)
+    label = f"{preset.name} · {grid}" if preset is not None else grid
+    ids = board_ids(document)
+    if len(ids) > 1:
+        sizes: set[str] = set()
+        for board_id in ids:
+            sizes.add(_board_size_name(board_document(document, board_id).board))
+        label = counted(len(ids), t("{count} board"), t("{count} boards"))
+        if len(sizes) == 1:
+            label = f"{label} · {next(iter(sizes))}"
+    problems = lvs.summary.opens + lvs.summary.shorts if lvs is not None else 0
+    empty = first_empty_board(document)
+    return WorkflowFacts(
+        parts_off_board=len(document.parts),
+        # On ANY board: a part on the second board is placed, and "7 not on the board
+        # yet" must not count it.
+        parts_on_board=len(every_component(document)),
+        nets=sum(1 for net in document.nets if len(net.nodes) >= 2),
+        board_label=label,
+        board_chosen=board_chosen,
+        unrouted=unrouted,
+        drc_errors=sum(1 for v in violations if v.severity == "error"),
+        # Not a check the guide makes at the bench: the Check step says what is wrong.
+        drc_warnings=sum(
+            1 for v in violations
+            if v.severity == "warning" and not is_bench_check(v)
+        ),
+        drc_unwired=sum(1 for v in violations if v.rule in UNWIRED_RULES),
+        lvs_problems=problems,
+        erc_errors=sum(1 for f in erc_shown if f.severity == "error"),
+        erc_warnings=sum(1 for f in erc_shown if f.severity == "warning"),
+        lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
+        shorts_wait_for_wiring=is_stripboard(board),
+        guide_showing=guide_showing,
+        guide_opened=guide_opened,
+        save_declined=save_declined,
+        untitled=untitled,
+        solderless_breadboard=is_breadboard(board),
+        problems_showing=problems_showing,
+        empty_board=(
+            board_title(document, empty, current_language()) if empty is not None else ""
+        ),
+        wiring_to_review=len({cid for note in wiring for cid in note.conductor_ids}),
+        valueless=tuple(ref for f in erc if f.rule == "value-missing" for ref in f.refs),
+        to_join=refs_to_join(erc),
+        circuit_left=circuit_left,
+    )
+
+
+def file_facts(document: PerfDocument, lookup: FootprintLookup) -> WorkflowFacts:
+    """The step bar's facts for a document as the window has them the moment it opens it
+    from its file -- no board chosen, no guide opened, nothing declined yet -- worked out
+    without opening it: where the board Home offers to continue stands
+    (``MainWindow._last_board``).
+
+    The checks ``_redraw_for`` runs, on the same documents: ERC and LVS on the whole
+    system, DRC and the ratsnest on every board (``_every_boards_checks``), and the wiring
+    notes on the board a file opens on, its first.
+    ``test_home_says_the_steps_the_window_says_once_it_is_open`` holds the two to one
+    answer, on a single board, a system, a stripboard and a breadboard.
+    """
+    erc = run_erc(document, lookup)
+    ids = board_ids(document)
+    violations: list[DrcViolation] = []
+    unrouted = 0
+    for board_id in ids:
+        seen = board_document(document, board_id)
+        violations.extend(run_drc(seen, lookup))
+        unrouted += summarize(ratsnest(seen, lookup)).links
+    # Just opened, nobody has gone on from the circuit: while no part is on a board it is
+    # still being drawn, and what is left to join is work, not a fault (``_erc_shown``).
+    being_drawn = not every_component(document)
+    return facts_from(
+        document,
+        erc=erc,
+        erc_shown=(
+            tuple(f for f in erc if f.rule not in STILL_TO_DO_RULES) if being_drawn else erc
+        ),
+        violations=tuple(violations),
+        unrouted=unrouted,
+        lvs=run_lvs(document, lookup),
+        wiring=wiring_notes(wiring_stats(board_document(document, ids[0]), lookup)),
+        board_chosen=False,
+        circuit_left=False,
+        untitled=False,
+    )
+
+
 #: The packages a value of each kind is fitted on, for a value typed in the Library's
 #: search to become the value of the part placed from it (``MainWindow._typed_value_for``).
 #: Within ``erc.VALUE_ARCHETYPES``: a part whose value is the part.
@@ -3601,68 +3732,25 @@ class MainWindow(QMainWindow):
         self.header.open_menu()
 
     def workflow_facts(self) -> WorkflowFacts:
-        """What the step bar is measured against, from what the last refresh computed.
-
-        On a system it is EVERY board's: the bar said the first board's size and the
-        board in front's connections and findings, so a system whose second board had
-        nothing wired read "all wired" from the first.
-        """
+        """What the step bar is measured against, from what the last refresh computed
+        (``facts_from``)."""
         document = self.bus.system_document
-        board = document.board
-        preset = _matching_preset(board)
-        grid = hole_grid(board.cols, board.rows)
-        label = f"{preset.name} · {grid}" if preset is not None else grid
-        ids = board_ids(document)
-        violations, unrouted = self._every_boards_checks(document, ids)
-        if len(ids) > 1:
-            sizes: set[str] = set()
-            for board_id in ids:
-                sizes.add(_board_size_name(board_document(document, board_id).board))
-            label = counted(len(ids), t("{count} board"), t("{count} boards"))
-            if len(sizes) == 1:
-                label = f"{label} · {next(iter(sizes))}"
-        lvs = self._last_lvs
-        problems = lvs.summary.opens + lvs.summary.shorts if lvs is not None else 0
-        return WorkflowFacts(
-            parts_off_board=len(document.parts),
-            # On ANY board: a part on the second board is placed, and "7 not on the board
-            # yet" must not count it.
-            parts_on_board=len(every_component(document)),
-            nets=sum(1 for net in document.nets if len(net.nodes) >= 2),
-            board_label=label,
-            board_chosen=self._board_chosen,
+        violations, unrouted = self._every_boards_checks(document, board_ids(document))
+        return facts_from(
+            document,
+            erc=self._last_erc,
+            erc_shown=self._erc_shown(),
+            violations=violations,
             unrouted=unrouted,
-            drc_errors=sum(1 for v in violations if v.severity == "error"),
-            # Not a check the guide makes at the bench: the Check step says what is wrong.
-            drc_warnings=sum(
-                1 for v in violations
-                if v.severity == "warning" and not is_bench_check(v)
-            ),
-            drc_unwired=sum(1 for v in violations if v.rule in UNWIRED_RULES),
-            lvs_problems=problems,
-            erc_errors=sum(1 for f in self._erc_shown() if f.severity == "error"),
-            erc_warnings=sum(1 for f in self._erc_shown() if f.severity == "warning"),
-            lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
-            shorts_wait_for_wiring=is_stripboard(board),
+            lvs=self._last_lvs,
+            wiring=self._last_wiring,
+            board_chosen=self._board_chosen,
+            circuit_left=self._circuit_left,
+            untitled=self.current_path is None,
             guide_showing=self._is_in_front(getattr(self, "dock_guide", None)),
             guide_opened=self._guide_opened,
             save_declined=self._save_declined,
-            untitled=self.current_path is None,
-            solderless_breadboard=is_breadboard(board),
             problems_showing=self.problems_bar.expanded if hasattr(self, "problems_bar") else False,
-            empty_board=(
-                board_title(document, empty, current_language())
-                if (empty := self._empty_board()) is not None
-                else ""
-            ),
-            wiring_to_review=len(
-                {cid for note in self._last_wiring for cid in note.conductor_ids}
-            ),
-            valueless=tuple(
-                ref for f in self._last_erc if f.rule == "value-missing" for ref in f.refs
-            ),
-            to_join=self._refs_to_join(),
-            circuit_left=self._circuit_left,
         )
 
     def _circuit_being_drawn(self) -> bool:
@@ -3684,10 +3772,7 @@ class MainWindow(QMainWindow):
 
     def _refs_to_join(self) -> tuple[str, ...]:
         """The parts with a pin connected to nothing, each once, in the check's order."""
-        refs = (
-            ref for f in self._last_erc if f.rule in JOIN_RULES for ref in f.refs
-        )
-        return tuple(dict.fromkeys(refs))
+        return refs_to_join(self._last_erc)
 
     def _leave_the_circuit(self) -> None:
         """Somebody is going on from the Circuit step: what was still to do there becomes a
@@ -3712,13 +3797,8 @@ class MainWindow(QMainWindow):
         self._refresh_schematic_panel()
 
     def _empty_board(self) -> BoardId | None:
-        """The first board of a system with no part on it, or None: a single board with
-        nothing on it is the Place step's own news, and is not this."""
-        document = self.bus.system_document
-        ids = board_ids(document)
-        if len(ids) < 2:
-            return None
-        return next((b for b in ids if not board_document(document, b).components), None)
+        """The first board of a system with no part on it, or None (``first_empty_board``)."""
+        return first_empty_board(self.bus.system_document)
 
     def _every_boards_checks(
         self, document: PerfDocument, ids: tuple[BoardId, ...]
@@ -16194,11 +16274,46 @@ class MainWindow(QMainWindow):
         ):
             return
         home = self._make_home(examples_later=True)
-        recent = [entry for entry in self._recent_paths() if Path(entry).is_file()]
-        home.set_recent([str(entry) for entry in recent[:8]])
+        recent = [entry for entry in self._recent_paths() if Path(entry).is_file()][:8]
+        home.set_recent([str(entry) for entry in recent])
         home.set_show_at_start(True)
         self.show_home(home)
         home.focus_first()
+        # Where the last board stands is its checks, run on its file: tens of milliseconds
+        # on a small board, more on a system, and none of it before the first frame. Home
+        # is up with the plain list of boards, and the last one comes forward a turn later.
+        QTimer.singleShot(0, home, partial(self._offer_last_board, home, recent))
+
+    def _offer_last_board(self, home: Home, recent: Sequence[str]) -> None:
+        """Hand Home the first of ``recent`` that opens, with where it stands, or nothing:
+        a file moved, unreadable or not a board since it was opened is passed over for the
+        next one, and with none that opens Home keeps its plain list. Never a message --
+        nobody asked to open anything yet."""
+        if self._home_page is not home or not self.home_is_showing():
+            return
+        for entry in recent:
+            last = self._last_board(Path(entry))
+            if last is not None:
+                home.set_last(last)
+                return
+
+    def _last_board(self, path: Path) -> LastBoard | None:
+        """``path`` as Home offers to continue it, or None if it does not open."""
+        try:
+            text, _problem = read_document_text(path)
+            if text is None:
+                return None
+            result = persist.deserialize_document(text)
+            if not result.ok:
+                return None
+            facts = file_facts(result.document, self.lookup)
+        except Exception:  # a file Home only looked at is never an error on Home
+            return None
+        steps = workflow_steps(facts)
+        key = next_step(steps)
+        return LastBoard(
+            path=path, document=result.document, steps=steps, hint=resume_hint(key, facts)
+        )
 
     def _autosave_to_the_file(self, text: str) -> bool:
         """Put the board back in its own file, if that is what the user asked for.
