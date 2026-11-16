@@ -34,6 +34,16 @@ closed without a bump.
   two supplies on one net is red at once, as before. From the first wire of a half-drawn
   blinker the step used to be red with a ring on every part, and once the chip had ground
   Next went on to "Choose a Board" with three parts on no net.
+- **The Library finds what a beginner types.** A value with its unit -- `10uF`, `100n`,
+  `4k7`, `330 ohm`, `470Ω`, `100µH` -- finds the parts that take it, the one made for the value
+  first: an electrolytic for 10 µF, a ceramic or film capacitor for 100 nF, the resistors and
+  pots for 10k. A part number or a bare number is not read as a value, so `LM350` and `555`
+  still find the parts they name. "Capacitor" shows each family, ceramic, film and
+  electrolytic, where it listed one ceramic disc after another. The words a Turkish beginner
+  types find parts and packages, with or without their marks: kapasitör, kondansatör,
+  direnç, potansiyometre, buton, röle, sensör, transistör, diyot, kristal, ekran, entegre.
+  And a part whose own name holds what was typed comes first: "soil moisture" gives
+  SparkFun's sensor before the generic board that lists it among its aliases.
 - **Copper moves under the hand, like a part.** In the Select tool a press on copper picks
   it up at once, with no click to select it first: on an end -- anywhere on its pad, a part's
   pin included -- it moves that end; on a wire's or a jumper's corner, the corner; on a
