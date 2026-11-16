@@ -9689,10 +9689,10 @@ def test_the_board_question_says_what_each_trial_found() -> None:
         suggested = next(name for name in text if "5 x 7 cm" in name)
         assert "★" in dialog.choices.item(dialog.choices.currentRow()).text()
         assert "5 x 7 cm" in dialog.choices.item(dialog.choices.currentRow()).text()
-        assert "104" in text[suggested]
+        assert "4% more wiring work" in text[suggested]
         dearer = next(item for name, item in rows.items() if name == "4 x 6 cm")
         small = next(item for name, item in rows.items() if name == "3 x 7 cm")
-        assert "131" in dearer.text() and dearer.flags() & Qt.ItemFlag.ItemIsEnabled
+        assert "31% more wiring work" in dearer.text() and dearer.flags() & Qt.ItemFlag.ItemIsEnabled
         assert not small.flags() & Qt.ItemFlag.ItemIsEnabled
         for row in range(dialog.choices.count()):
             item = dialog.choices.item(row)
@@ -17680,7 +17680,7 @@ def test_a_shipped_example_opens_with_no_problem_and_its_bench_check_listed() ->
     try:
         bar = window.problems_bar
         assert bar.badge.isHidden() and bar.errors == 0 and bar.warnings == 0
-        assert "1 to check at the bench" in bar.facts.text()
+        assert "1 to check at the bench" in bar.facts_said()
         groups = [
             window.drc_tree.topLevelItem(i).child(j)
             for i in range(window.drc_tree.topLevelItemCount())
@@ -20052,8 +20052,9 @@ def test_wiring_worth_a_look_is_a_group_that_selects_its_wires_and_is_not_no_pro
         # in the plain colour rather than orange (the newcomer walk).
         assert "Ready to build" in window.problems_bar.title.text()
         assert window.problems_bar.badge.isHidden()
-        facts = window.problems_bar.facts.text()
-        assert "optional: 2 wires to look at" in facts
+        facts = window.problems_bar.facts_said()
+        tip = window.problems_bar.facts.toolTip()
+        assert "optional: 2 wires to look at" in (tip or facts), (facts, tip)
         from perfboard_studio.ui import theme as ui_theme
 
         assert ui_theme.colour("warning") not in facts
@@ -20310,6 +20311,35 @@ def test_the_step_card_keeps_the_wiring_and_a_count_selects_its_wires() -> None:
         assert card.wiring.isHidden() and card.wiring_links.isHidden()
     finally:
         _close(window)
+
+
+def test_the_problems_bar_says_what_fits_and_the_rest_in_its_tooltip() -> None:
+    """At 1366 px the bar's facts ran under the board's edge and stopped at "Matches the
+    circuit: 7 o" (the newcomer walk). Short of room they are said short, then the last
+    dropped, and the tooltip has every one in full."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui.problems import ProblemsBar, _plain
+
+    bar = ProblemsBar()
+    # Measured by characters: the offscreen platform has no fonts on Windows.
+    bar._text_width = lambda rich: len(_plain(rich)) * 7  # type: ignore[method-assign]
+    bar.resize(2400, 30)
+    bar.show()
+    bar.set_where("component side · 5 x 7 cm")
+    bar.set_counts(errors=0, warnings=0, to_wire=3, matched=7, nets=8, to_check=1, to_review=4)
+    QApplication.processEvents()
+    assert "Matches the circuit: 7 of 8 nets" in _plain(bar.facts.text())
+    assert bar.facts.toolTip() == ""
+
+    bar.resize(bar.width() - bar.facts.width() + 300, 30)
+    QApplication.processEvents()
+    said = _plain(bar.facts.text())
+    assert "Matches the circuit" not in said and "3 to wire" in said
+    assert len(said) * 7 <= bar.facts.width()
+    assert "Matches the circuit: 7 of 8 nets" in bar.facts.toolTip()
+    assert "1 to check at the bench" in bar.facts.toolTip()
+    bar.close()
 
 
 def test_a_board_ready_to_build_folds_what_is_worth_a_look_under_it() -> None:
@@ -20874,8 +20904,8 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         # On the bar, in the neutral colour beside the facts, and counted as nothing: the
         # badge reads the same with the note and without it.
         off = counted(1, t("{count} net off its face"), t("{count} nets off their face"))
-        assert off in window.problems_bar.facts.text()
-        assert theme.ink("●", "secondary") + " " + off in window.problems_bar.facts.text()
+        assert off in window.problems_bar.facts_said()
+        assert theme.ink("●", "secondary") + " " + off in window.problems_bar.facts_said()
         counts: list[dict] = []
         real_set_counts = window.problems_bar.set_counts
         window.problems_bar.set_counts = lambda **kw: counts.append(kw)  # type: ignore[method-assign]
@@ -20886,7 +20916,7 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         assert counts[0] == counts[1]
         window.problems_bar.set_counts = real_set_counts  # type: ignore[method-assign]
         window._refresh_problems_bar()
-        assert off not in window.problems_bar.facts.text()
+        assert off not in window.problems_bar.facts_said()
         # ...and the group goes with the note.
         window._refresh_drc_panel(window._last_violations, window._last_lvs)
         assert all(
@@ -21035,7 +21065,7 @@ def test_a_net_that_kept_its_face_is_told_so_under_its_face_row() -> None:
             count=1
         ) not in status
         off = counted(1, t("{count} net off its face"), t("{count} nets off their face"))
-        assert off not in window.problems_bar.facts.text()
+        assert off not in window.problems_bar.facts_said()
     finally:
         _close(window)
 

@@ -17,15 +17,26 @@ whole, so this widget decides nothing (``MainWindow._refresh_problems_bar``).
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+import html
+import re
+
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QWidget
 
 from . import theme
 from .i18n import counted, t
 
 #: The bar's height, in logical pixels.
 BAR_HEIGHT = 30
+
+#: Between two facts on the bar.
+FACT_GAP = "&nbsp;&nbsp;·&nbsp;&nbsp;"
+
+
+def _plain(rich: str) -> str:
+    """What a fact reads as, tags and entities gone: for measuring it, and for the tooltip."""
+    return html.unescape(re.sub(r"<[^>]+>", "", rich))
 
 
 class ProblemsBar(QWidget):
@@ -63,7 +74,16 @@ class ProblemsBar(QWidget):
         layout.addSpacing(12)
         self.facts = QLabel()
         self.facts.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(self.facts)
+        # Given what is left of the bar rather than asking for its whole line: at 1366 px the
+        # label ran under the board's edge and cut "Matches the circuit: 7 o" mid-word
+        # (the newcomer walk). ``_fit_facts`` says what fits; the tooltip says the rest.
+        self.facts.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        #: Each fact as (full, short), in the order they are dropped last to first.
+        self._facts: list[tuple[str, str]] = []
+        # Fitted whenever the label is given a new width: the bar's own resize comes
+        # before the layout has passed the width on.
+        self.facts.installEventFilter(self)
+        layout.addWidget(self.facts, 1)
         # What to do about the count beside it: "3 to wire" was a fact with no way to act
         # on it, in a drawer Next kept opening (reach's walkthrough).
         self.wire = QToolButton()
@@ -73,8 +93,9 @@ class ProblemsBar(QWidget):
         self.wire.clicked.connect(self.wire_requested.emit)
         self.wire.hide()
         layout.addWidget(self.wire)
-        layout.addStretch(1)
         self.where = QLabel()
+        # As wide as it says, so the room left goes to the facts.
+        self.where.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         layout.addWidget(self.where)
         self.set_expanded(False)
         self.set_counts(errors=0, warnings=0, to_wire=0, matched=None, nets=0)
@@ -142,37 +163,74 @@ class ProblemsBar(QWidget):
         else:
             self.title.setText(theme.ink("✓", "success") + f" <b>{t('No problems')}</b>")
             self.badge.hide()
-        facts = []
+        facts: list[tuple[str, str]] = []
         if to_wire:
-            facts.append(
-                theme.ink("●", "warning") + " " + t("{count} to wire").format(count=to_wire)
-            )
+            said = theme.ink("●", "warning") + " " + t("{count} to wire").format(count=to_wire)
+            facts.append((said, said))
         if to_review:
-            facts.append(
-                theme.ink("●", "secondary") + " "
-                + counted(
+            dot = theme.ink("●", "secondary") + " "
+            facts.append((
+                dot + counted(
                     to_review,
                     t("optional: {count} wire to look at"),
                     t("optional: {count} wires to look at"),
-                )
-            )
-        if to_check:
-            facts.append(
-                theme.ink("●", "secondary") + " "
-                + t("{count} to check at the bench").format(count=to_check)
-            )
-        if off_face:
-            facts.append(
-                theme.ink("●", "secondary") + " "
-                + counted(off_face, t("{count} net off its face"), t("{count} nets off their face"))
-            )
-        if matched is not None and nets:
-            facts.append(t("Matches the circuit: {matched} of {total} nets").format(
-                matched=matched, total=nets
+                ),
+                dot + t("{count} to look at").format(count=to_review),
             ))
-        self.facts.setText("&nbsp;&nbsp;·&nbsp;&nbsp;".join(facts))
+        if to_check:
+            dot = theme.ink("●", "secondary") + " "
+            facts.append((
+                dot + t("{count} to check at the bench").format(count=to_check),
+                dot + t("{count} at the bench").format(count=to_check),
+            ))
+        if off_face:
+            said = theme.ink("●", "secondary") + " " + counted(
+                off_face, t("{count} net off its face"), t("{count} nets off their face")
+            )
+            facts.append((said, said))
+        if matched is not None and nets:
+            facts.append((
+                t("Matches the circuit: {matched} of {total} nets").format(
+                    matched=matched, total=nets
+                ),
+                t("{matched}/{total} nets match").format(matched=matched, total=nets),
+            ))
+        self._facts = facts
         self.wire.setVisible(to_wire > 0)
+        self._fit_facts()
+
+    def facts_said(self) -> str:
+        """Every fact in full, as the bar says them with room for all: what the label
+        shows when it fits, whatever it was cut to."""
+        return FACT_GAP.join(said for said, _ in self._facts)
+
+    def _text_width(self, rich: str) -> int:
+        return self.facts.fontMetrics().horizontalAdvance(_plain(rich))
+
+    def _fit_facts(self) -> None:
+        """The facts, as many as the label's width holds: each in full, then each short,
+        then the last ones dropped. Whatever is shortened or dropped is in the tooltip."""
+        room = self.facts.width()
+        full = [said for said, _ in self._facts]
+        short = [brief for _, brief in self._facts]
+        chosen = short
+        for candidate in (full, short):
+            if self._text_width(FACT_GAP.join(candidate)) <= room:
+                chosen = candidate
+                break
+        else:
+            while len(chosen) > 1 and self._text_width(FACT_GAP.join(chosen)) > room:
+                chosen = chosen[:-1]
+        self.facts.setText(FACT_GAP.join(chosen))
+        cut = chosen != full
+        self.facts.setToolTip("\n".join(_plain(said) for said in full) if cut else "")
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.facts and event.type() == QEvent.Type.Resize:
+            self._fit_facts()
+        return super().eventFilter(watched, event)
 
     def set_where(self, text: str) -> None:
         """The side being looked at and the board, at the bar's right end."""
         self.where.setText(text)
+        self._fit_facts()

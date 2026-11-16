@@ -5500,6 +5500,9 @@ TURKISH: Mapping[str, str] = {
     ),
     "{count} to wire": "{count} kablolanacak",
     "Matches the circuit: {matched} of {total} nets": "Devreyle uyuşan net: {matched}/{total}",
+    "{matched}/{total} nets match": "{matched}/{total} net uyuşuyor",
+    "{count} to look at": "bakılacak {count}",
+    "{count} at the bench": "tezgâhta {count}",
     "Select and move parts. Esc comes back to it from any tool.": (
         "Parçaları seçin ve taşıyın. Esc her araçtan buraya döner."
     ),
