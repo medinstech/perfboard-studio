@@ -2233,12 +2233,19 @@ over "0.64 mm", in either language. The engine's text cannot change, so the boxe
   A count is said with `i18n.counted`, which picks one of two catalogued forms: "3 part(s)"
   read like a machine, and Turkish's two entries are one wording, since it takes the
   singular after a number.
-- **Home replaces the dialog, and imports nothing from the window** (`ui/home.py`). One
-  primary door ("Draw Your First Circuit"), Open… second, KiCad as a link; recents first
-  for somebody who has boards. The examples are cards with plain titles
+- **Home replaces the dialog, and imports nothing from the window** (`ui/home.py`). A
+  sidebar holds the doors and the places beside a page that scrolls. One primary door --
+  "Draw Your First Circuit" on a first start, "New Circuit" after -- with Open… under it and
+  KiCad as a link. The places, Home, Recent and Examples, scroll to their sections and Tour
+  starts the tour; the one lit is the last section whose top has reached the page's, with
+  Home lit at the very top and the last section at the very bottom, where no top can reach.
+  A place is there only when its section is: Recent with no boards, Examples with none and
+  Tour without the walkthrough example are hidden. The board opened last stands in a banner
+  with its picture, its six steps and what comes next, and Continue opens it -- so does
+  Enter on no button, since a push button outside a dialog lets Enter go by; the others are
+  one row of cards, Show All for the rest. The examples are cards with plain titles
   (`home.example_title`) and pictures drawn by `boardpreview.render_board` -- or the sheet,
-  for the example with nothing placed -- one per turn of the event loop after Home is on
-  screen, so seven boards never hold back the first frame. Home says what was asked through
+  for the example with nothing placed. Home says what was asked through
   signals; the window opens the file and leaves Home. It is a PAGE of the window, not a window of its own: the
   central widget is a stack (the every-view-closed hint, and Home), and `show_home` hides
   every dock, the header and the status bar after photographing the layout with
@@ -2247,6 +2254,29 @@ over "0.64 mm", in either language. The engine's text cannot change, so the boxe
   opening proportions wait for `leave_home` (`_sizes_after_home`); and `leave_home` keeps
   whichever view was in front, where the start's `_keep_3d_behind` would have raised the
   board over it.
+- **One frame for a first start and a return.** Where a returning user's banner stands, a
+  first start has a banner with what the app does and the tour, so Home does not change
+  shape the day somebody saves a board. Every picture -- an example's card, a recent
+  board's, the banner's -- is one 16:10 `FramedPicture` on a backdrop washed `TINT` (16%)
+  toward the picture's own mean colour, the sheet's paper for a sheet. The sidebar is
+  248 px, and 200 below a 1500 px window, so four cards stay abreast at 1366; the column
+  stops at 1360 px and centres on a wider screen. Tab goes sidebar, update card, Continue,
+  boards, examples -- set with `setTabOrder`, not left to the order the widgets were made
+  in.
+- **Nothing on Home is worked out before its first frame** (`Home.after_first_frame`). A
+  zero timer set before the window is shown runs BEFORE the first frame, not after it --
+  measured, not assumed: the last board's checks (`main.file_facts`) held 52-72 ms of the
+  first paint on the relay examples that way. So the callbacks wait for the page's first
+  Paint event and are queued only then; the window's last-board work and Home's chain of
+  pictures, one per turn of the event loop, both go through it, and seven boards never hold
+  back the first frame. The examples' own read is still a zero timer, a known follow-up.
+  `test_a_callback_after_the_first_frame_waits_for_it` pins the order.
+- **The page is a blueprint, and no image file.** A tile made in code -- a minor line every
+  8 px, a major one every 40, washed `GRID_WASH` (5%) from the app's background toward the
+  accent and the minor lines about half that -- once per theme and pixel ratio, drawn in
+  device pixels so a line is a whole number of them at every scale and never a blur. It is
+  the page widget's brush, so it scrolls with what is on it and the scroll can still blit.
+  `test_the_page_is_a_blueprint_in_the_accent_made_once`.
 - **An empty panel says what will be there and how it gets there** (`ui/emptystate.py`):
   a title, at most two lines, at most one button, dim links for the other doors. The button
   is the step that fills the panel under the next button's own name. `EmptyOverlay.over_view`

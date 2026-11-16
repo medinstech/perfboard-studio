@@ -360,6 +360,14 @@ closed without a bump.
 
 ### Changed
 
+- **Home is laid out anew.** A sidebar holds New Circuit and Open… and lists the page's
+  places -- Home, Recent, Examples, Tour -- lighting the one you have scrolled to. The board
+  you opened last stands in a banner with its picture, its six steps and what to do next,
+  and Continue (or Enter) opens it. Your other boards are a row of picture cards that say
+  when each was saved, with Show All for the rest. A first start has the same banner,
+  saying what the app does and offering the tour. The page is ruled as a faint blueprint
+  grid. None of it holds back the first frame: the last board's checks and every picture
+  are worked out once Home is on screen.
 - **The circuit check speaks the window's language.** In a Turkish window its findings --
   a value missing, a pin connected to nothing, a chip with no supply or ground, a net with
   one pin, a part drawn the wrong way round -- are said in Turkish in the Problems panel and
