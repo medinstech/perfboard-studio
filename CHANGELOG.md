@@ -348,6 +348,11 @@ closed without a bump.
 
 ### Changed
 
+- **The circuit check speaks the window's language.** In a Turkish window its findings --
+  a value missing, a pin connected to nothing, a chip with no supply or ground, a net with
+  one pin, a part drawn the wrong way round -- are said in Turkish in the Problems panel and
+  in the tooltip of a ringed pin on the sheet, as the board's checks already were. The check
+  itself, Copy All, the MCP server and `--headless` keep the engine's English.
 - **A finished board leads with "Ready to build".** With nothing wrong and nothing left to
   wire, the bar under the board says so with a green tick, and the wires worth a look are
   "optional: 4 wires to look at" in the plain colour rather than an orange "Wiring to
