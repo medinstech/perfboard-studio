@@ -476,6 +476,9 @@ closed without a bump.
   "its 1 connection" and "3 pins", for conductors, notes, labels, jumpers, tracks and links
   too, and Auto-wire's own say "Re-route 3 nets", "Autoroute stripboard: 1 cut, 4 links" and
   "Autoroute breadboard: 1 jumper", in both languages.
+- **Opening a board no longer gives the parts library half the window.** A window closed
+  on Home at its first start saved panels that had never been sized, and every start after
+  replayed them. Such a layout is now put back to the opening widths.
 - **The Problems bar's count badge shows its number.** It was a coloured sliver as wide as
   its digits, with the count cut off at its rounded ends, at every window size and in both
   languages; it now has room either side of the number.
