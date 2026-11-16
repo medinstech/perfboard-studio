@@ -461,6 +461,11 @@ closed without a bump.
   now names the parts. A hole hint said the bare "tıkla" where every status line says
   "tıklayın", the refusal for a pin already on another net said the bare "ayır" where it
   now says "ayırın", and the bar's short "tezgâhta 1" now says one of what.
+- **Undo labels count in words.** Where a count could be one, the Undo and Redo labels said
+  "(s)": "Delete R1 and its 1 connection(s)", "Add net VCC with 1 pin(s)". Now they say
+  "its 1 connection" and "3 pins", for conductors, notes, labels, jumpers, tracks and links
+  too, and Auto-wire's own say "Re-route 3 nets", "Autoroute stripboard: 1 cut, 4 links" and
+  "Autoroute breadboard: 1 jumper", in both languages.
 - **The Problems bar's count badge shows its number.** It was a coloured sliver as wide as
   its digits, with the count cut off at its rounded ends, at every window size and in both
   languages; it now has room either side of the number.
