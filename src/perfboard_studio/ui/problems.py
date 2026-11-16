@@ -117,6 +117,9 @@ class ProblemsBar(QWidget):
         never in the badge, which is what is wrong. ``to_review`` is the wires worth a look
         (``wiringreview``): not wrong either, so not in the badge -- but not "No problems"
         over them, which is what Auto-wire finished on over wires lying across pins 44 times.
+        With nothing wrong and nothing left to wire, wires worth a look are said under
+        "Ready to build", in the plain colour and marked optional: an orange "Wiring to
+        review" over six green ticks left a newcomer unsure whether the board was fine.
         ``off_face`` is the nets wired off the face they prefer (the drawer's Faces group):
         information, in the neutral colour, counted as nothing. Said only in the drawer, it
         was the fifth clause of a long status line and a group in a closed drawer, and a
@@ -133,8 +136,8 @@ class ProblemsBar(QWidget):
                 + counted(warnings, t("{count} warning"), t("{count} warnings"))
             )
             self.badge.show()
-        elif to_review:
-            self.title.setText(theme.ink("●", "warning") + f" <b>{t('Wiring to review')}</b>")
+        elif to_review and not to_wire:
+            self.title.setText(theme.ink("✓", "success") + f" <b>{t('Ready to build')}</b>")
             self.badge.hide()
         else:
             self.title.setText(theme.ink("✓", "success") + f" <b>{t('No problems')}</b>")
@@ -146,8 +149,12 @@ class ProblemsBar(QWidget):
             )
         if to_review:
             facts.append(
-                theme.ink("●", "warning") + " "
-                + counted(to_review, t("{count} wire to look at"), t("{count} wires to look at"))
+                theme.ink("●", "secondary") + " "
+                + counted(
+                    to_review,
+                    t("optional: {count} wire to look at"),
+                    t("optional: {count} wires to look at"),
+                )
             )
         if to_check:
             facts.append(

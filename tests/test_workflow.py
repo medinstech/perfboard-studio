@@ -320,7 +320,9 @@ def test_wiring_worth_a_look_is_said_on_the_last_step_and_holds_nothing_back() -
     assert steps["check"] == "done"
     assert next_step(workflow_steps(facts)) == "build"
     hint = step_hint("build", facts)
-    assert "3 wires are worth a look" in hint and "count below" in hint
+    # Ready first, the look offered after it (the newcomer walk).
+    assert hint.startswith("Ready to build.")
+    assert "3 wires are worth a look if you like" in hint and "Worth a look, below" in hint
     one = step_hint("build", dataclasses.replace(facts, wiring_to_review=1))
     assert "1 wire is worth a look" in one
     assert "ready to build" in step_hint("build", dataclasses.replace(facts, wiring_to_review=0))

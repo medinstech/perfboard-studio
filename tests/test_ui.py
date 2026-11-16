@@ -20037,9 +20037,15 @@ def test_wiring_worth_a_look_is_a_group_that_selects_its_wires_and_is_not_no_pro
         window._refresh_drc_panel(window._last_violations, window._last_lvs)
         window._refresh_problems_bar()
 
-        assert "Wiring to review" in window.problems_bar.title.text()
+        # Nothing wrong and nothing to wire: ready first, the look offered as optional and
+        # in the plain colour rather than orange (the newcomer walk).
+        assert "Ready to build" in window.problems_bar.title.text()
         assert window.problems_bar.badge.isHidden()
-        assert "2 wires to look at" in window.problems_bar.facts.text()
+        facts = window.problems_bar.facts.text()
+        assert "optional: 2 wires to look at" in facts
+        from perfboard_studio.ui import theme as ui_theme
+
+        assert ui_theme.colour("warning") not in facts
         tree = window.drc_tree
         group = next(
             tree.topLevelItem(i) for i in range(tree.topLevelItemCount())
@@ -20291,6 +20297,36 @@ def test_the_step_card_keeps_the_wiring_and_a_count_selects_its_wires() -> None:
         window._refresh_properties()
         card = window.inspector.step_card
         assert card.wiring.isHidden() and card.wiring_links.isHidden()
+    finally:
+        _close(window)
+
+
+def test_a_board_ready_to_build_folds_what_is_worth_a_look_under_it() -> None:
+    """Six green ticks over an orange "Wiring to review" and a list of counts left a
+    newcomer unsure the board was fine. Once it is ready the card leads with that, and the
+    counts fold under one link, opened by a click and kept open across refreshes."""
+    from perfboard_studio.ui.inspector import StepNote
+
+    window = _blank_window()
+    try:
+        window._refresh_properties()
+        card = window.inspector.step_card
+        note = StepNote(
+            number=6, title="Build", summary="guide ready", hint="Ready to build.",
+            action="Open the Build Guide", wiring="53 wires",
+            wiring_notes=(("over-pins", "2 places a wire lies over a pin"),),
+            notes_optional=True,
+        )
+        card.load(note)
+        assert not card.notes_toggle.isHidden() and card.wiring_links.isHidden()
+        assert "Worth a look" in card.notes_toggle.text()
+        card.notes_toggle.linkActivated.emit("toggle")
+        assert not card.wiring_links.isHidden()
+        card.load(note)
+        assert not card.wiring_links.isHidden(), "a refresh keeps it open"
+        # Before the board is ready the counts are listed, as they were.
+        card.load(dataclasses.replace(note, notes_optional=False))
+        assert card.notes_toggle.isHidden() and not card.wiring_links.isHidden()
     finally:
         _close(window)
 

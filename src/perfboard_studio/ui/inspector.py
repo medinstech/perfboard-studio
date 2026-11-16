@@ -199,6 +199,9 @@ class StepNote:
     wiring_notes: tuple[tuple[str, str], ...] = ()
     #: Offer to wire the board in every style and keep the best, under the counts.
     try_styles: bool = False
+    #: The board is ready to build: the counts and the offer are folded under a "Worth a
+    #: look" link rather than listed, so the card leads with ready and the rest is optional.
+    notes_optional: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -417,6 +420,15 @@ class _StepCard(QWidget):
         # link to the wires it counts: said where it stays, not in one status line.
         self._inspector = inspector
         self.wiring = _fact()
+        # On a board ready to build the counts fold under this, opened by a click and
+        # kept open across refreshes until it is clicked again.
+        self.notes_toggle = QLabel()
+        self.notes_toggle.setTextFormat(Qt.TextFormat.RichText)
+        self.notes_toggle.setTextInteractionFlags(Qt.TextInteractionFlag.LinksAccessibleByMouse)
+        self.notes_toggle.setToolTip(t("Not needed to build the board; each count selects its wires."))
+        self.notes_toggle.linkActivated.connect(self._toggle_notes)
+        self._notes_open = False
+        self._has_links = False
         self.wiring_links = QWidget()
         self._links = QVBoxLayout(self.wiring_links)
         self._links.setContentsMargins(0, 0, 0, 0)
@@ -431,7 +443,13 @@ class _StepCard(QWidget):
         )
         self.board_settings.clicked.connect(inspector.open_board_settings)
         for widget in (
-            self.step, self.title, self.summary, self.hint, self.wiring, self.wiring_links
+            self.step,
+            self.title,
+            self.summary,
+            self.hint,
+            self.wiring,
+            self.notes_toggle,
+            self.wiring_links,
         ):
             layout.addWidget(widget)
         layout.addWidget(self.next, 0, Qt.AlignmentFlag.AlignLeft)
@@ -484,7 +502,26 @@ class _StepCard(QWidget):
             )
             offer.linkActivated.connect(lambda _href: self._inspector.hooks.try_every_style())
             self._links.addWidget(offer)
-        self.wiring_links.setVisible(bool(note.wiring_notes) or note.try_styles)
+        self._has_links = bool(note.wiring_notes) or note.try_styles
+        optional = note.notes_optional and self._has_links
+        self.notes_toggle.setVisible(optional)
+        if not optional:
+            self.wiring_links.setVisible(self._has_links)
+        else:
+            self._show_notes()
+
+    def _toggle_notes(self, _href: str = "") -> None:
+        self._notes_open = not self._notes_open
+        self._show_notes()
+
+    def _show_notes(self) -> None:
+        """The folded counts, open or shut, and the link saying which."""
+        arrow = "▾" if self._notes_open else "▸"
+        # No count here: the hint counts wires and this would count kinds of note, and
+        # "16 wires" over "(3)" read as two answers to one question.
+        said = t("Worth a look, if you like")
+        self.notes_toggle.setText(f'<a href="toggle">{escape(said)} {arrow}</a>')
+        self.wiring_links.setVisible(self._has_links and self._notes_open)
 
 
 # -- nothing selected: the board ----------------------------------------------------------

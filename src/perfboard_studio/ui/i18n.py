@@ -5369,7 +5369,7 @@ TURKISH: Mapping[str, str] = {
         "Üç denetimin bulduğu her şey, en ciddisi önce (Ctrl+7)."
     ),
     "No problems": "Sorun yok",
-    "Wiring to review": "Gözden geçirilecek kablolama",
+    "Ready to build": "Montaja hazır",
     "{count} ring of wires, each over another's end: none can go in first": (
         "her biri bir başkasının ucunun üzerinden geçen {count} tel halkası: hiçbiri önce "
         "döşenemez"
@@ -6027,16 +6027,20 @@ TURKISH: Mapping[str, str] = {
         "Kart yapılmaya hazır. Montaj rehberi size her seferinde bir parça olmak üzere yol "
         "gösterir."
     ),
-    "The board can be built. {count} wire is worth a look first: a count below selects "
-    "it.": (
-        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: aşağıdaki sayıya tıklamak "
-        "onu seçer."
+    "Ready to build. {count} wire is worth a look if you like: Worth a look, below, "
+    "shows it.": (
+        "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki Bakmaya değer "
+        "onu gösterir."
     ),
-    "The board can be built. {count} wires are worth a look first: each count below selects "
-    "its wires.": (
-        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: aşağıdaki her sayı kendi "
-        "tellerini seçer."
+    "Ready to build. {count} wires are worth a look if you like: Worth a look, below, "
+    "lists them.": (
+        "Montaja hazır. İsterseniz {count} tele bakabilirsiniz: aşağıdaki Bakmaya değer "
+        "onları listeler."
     ),
+    "Worth a look, if you like": "Bakmaya değer, isterseniz",
+    "Not needed to build the board; each count selects its wires.": "Kartı yapmak için gerekmez; her sayı kendi tellerini seçer.",
+    "optional: {count} wire to look at": "isteğe bağlı: bakılacak {count} tel",
+    "optional: {count} wires to look at": "isteğe bağlı: bakılacak {count} tel",
     # -- what the engine says it did (ui/engine_text.py) ---------------------------
     "Place {parts} part and {links} connection": "{parts} parça ve {links} bağlantı yerleştir",
     "Place {parts} part and {links} connections": "{parts} parça ve {links} bağlantı yerleştir",

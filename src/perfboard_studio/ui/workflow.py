@@ -309,12 +309,14 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     if key == "check":
         return t("Something on the board needs a look. Show Problems lists each one and where it is.")
     if facts.wiring_to_review:
+        # Ready first, and the look offered after: "can be built ... worth a look first"
+        # over an orange bar read as a board that was not fine (the newcomer walk).
         return _counted(
             facts.wiring_to_review,
-            t("The board can be built. {count} wire is worth a look first: a count below "
-              "selects it."),
-            t("The board can be built. {count} wires are worth a look first: each count below "
-              "selects its wires."),
+            t("Ready to build. {count} wire is worth a look if you like: Worth a look, "
+              "below, shows it."),
+            t("Ready to build. {count} wires are worth a look if you like: Worth a look, "
+              "below, lists them."),
         )
     return t("The board is ready to build. The build guide takes you through it one part at a time.")
 

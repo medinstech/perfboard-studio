@@ -3684,6 +3684,8 @@ class MainWindow(QMainWindow):
                         and self._routing_style != "best"
                         and not board_joins_holes(self.bus.document.board)
                     ),
+                    # Ready: what is worth a look is offered, folded, not listed first.
+                    notes_optional=key == "build",
                 )
             )
 
