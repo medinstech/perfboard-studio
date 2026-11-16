@@ -16280,9 +16280,10 @@ class MainWindow(QMainWindow):
         self.show_home(home)
         home.focus_first()
         # Where the last board stands is its checks, run on its file: tens of milliseconds
-        # on a small board, more on a system, and none of it before the first frame. Home
-        # is up with the plain list of boards, and the last one comes forward a turn later.
-        QTimer.singleShot(0, home, partial(self._offer_last_board, home, recent))
+        # on a small board, more on a system, and none of it before the first frame -- a
+        # zero timer set here would run before it. Home is up with the row of boards, and
+        # the last one comes forward once Home has been painted.
+        home.after_first_frame(partial(self._offer_last_board, home, recent))
 
     def _offer_last_board(self, home: Home, recent: Sequence[str]) -> None:
         """Hand Home the first of ``recent`` that opens, with where it stands, or nothing:
@@ -16296,6 +16297,7 @@ class MainWindow(QMainWindow):
             if last is not None:
                 home.set_last(last)
                 return
+        home.set_last(None)
 
     def _last_board(self, path: Path) -> LastBoard | None:
         """``path`` as Home offers to continue it, or None if it does not open."""

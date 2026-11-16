@@ -5910,7 +5910,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "Welcome back": "Tekrar hoş geldiniz",
     "Recent": "Son açılanlar",
-    "Enter opens the highlighted one.": "Enter seçili olanı açar.",
     "Each opens as an untitled copy. Nothing you change touches the original.": (
         "Her biri adsız bir kopya olarak açılır. Yaptığınız değişiklik aslına dokunmaz."
     ),
@@ -6073,6 +6072,14 @@ TURKISH: Mapping[str, str] = {
         "Montaja hazır. İsterseniz açtıktan sonra {count} tele bakabilirsiniz."
     ),
     "Last opened": "Son açılan",
+    "Welcome to Perfboard Studio": "Perfboard Studio'ya hoş geldiniz",
+    "Home": "Ana Sayfa",
+    "Tour": "Tur",
+    "Show All": "Tümünü Göster",
+    "Saved today": "Bugün kaydedildi",
+    "Saved yesterday": "Dün kaydedildi",
+    "Saved {count} days ago": "{count} gün önce kaydedildi",
+    "Saved {date}": "{date} tarihinde kaydedildi",
     "Continue": "Devam Et",
     "Ready to build. {count} wire is worth a look if you like: Worth a look, below, "
     "shows it.": (

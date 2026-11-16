@@ -595,7 +595,24 @@ QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
 QWidget#header {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
 /* Over Home it stands where the steps were, and must not paint over the line under them. */
 QWidget#headerGap {{ background: transparent; }}
-QWidget#homeLastSteps {{ background: transparent; }}
+/* Home (ui/home.py): a sidebar of doors and places beside a page ruled as a blueprint,
+   which the page's containers let show through. */
+QWidget[clear="true"] {{ background: transparent; }}
+QFrame#homeSide {{ background: {k.bg_surface}; border: none; border-right: 1px solid {k.border}; }}
+QPushButton#homeDoor {{ text-align: left; padding: {s["sm"]}px {s["lg"]}px; }}
+QPushButton#homeNav {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {RADIUS_MD}px;
+    color: {k.text_secondary};
+    text-align: left;
+    padding: {s["sm"]}px {s["md"]}px;
+}}
+QPushButton#homeNav:hover {{ background: {k.bg_hover}; color: {k.text}; }}
+QPushButton#homeNav:checked {{ background: {k.bg_hover}; color: {k.text}; font-weight: {SEMIBOLD}; }}
+QPushButton#homeNav:focus {{ border-color: {k.accent}; }}
+QLabel#homeCaption {{ color: {k.accent_text}; font-size: {CAPTION_PX}px; font-weight: {SEMIBOLD}; }}
+QFrame#homeStepRule {{ background: {k.border_strong}; border: none; }}
 QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
 QLabel#headerPlace {{ color: {k.text_secondary}; }}
 /* A newer release exists: a pill in the header and a card on Home, both in the accent. */
@@ -705,14 +722,6 @@ QWidget[variant="card"] {{
     background: {k.bg_raised};
     border: 1px solid {k.border};
     border-radius: {RADIUS_LG}px;
-}}
-/* Home's unbuilt example: the sheet's paper fills the picture as a board does, inside the
-   card's border and under its rounded top. */
-QLabel#sheetPicture {{
-    background: {k.sheet_paper};
-    margin: 1px 1px 0 1px;
-    border-top-left-radius: {RADIUS_LG - 1}px;
-    border-top-right-radius: {RADIUS_LG - 1}px;
 }}
 
 /* The update strip above the board: news, not a question. */

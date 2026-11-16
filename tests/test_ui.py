@@ -21761,8 +21761,8 @@ def test_home_passes_over_a_last_board_that_no_longer_opens(
     tmp_path, _settings_in_a_temp_file
 ) -> None:
     """A board moved, unreadable, not UTF-8 or not a board since it was opened is passed
-    over for the next one that opens; with none, Home is the plain list. Never an error
-    on Home, and nothing read before its first frame."""
+    over for the next one that opens; with none, Home is the row of boards. Never an
+    error on Home, and nothing read before its first frame."""
     import shutil
 
     from PySide6.QtTest import QTest
@@ -21787,14 +21787,16 @@ def test_home_passes_over_a_last_board_that_no_longer_opens(
         window.offer_home()
         home = window._home_page
         assert home is not None
+        QTest.qWait(20)
         assert home._last is None, "nothing is read before the first frame"
-        for _ in range(20):
+        window.show()
+        for _ in range(40):
             QTest.qWait(5)
             if home._last is not None:
                 break
         assert home._last is not None and home._last.path == good
         assert not home.last_card.isHidden()
-        assert home.recent_list.count() == 3, "the others are listed as they are"
+        assert len(home.recent_cards) == 3, "the others are listed as they are"
 
         _settings_in_a_temp_file.setValue(
             main_module.RECENT_FILES_KEY, [str(p) for p in (moved, garbage, binary)]
@@ -21804,6 +21806,6 @@ def test_home_passes_over_a_last_board_that_no_longer_opens(
         QTest.qWait(50)
         assert window.home_is_showing()
         assert home._last is None and home.last_card.isHidden()
-        assert home.recent_list.count() == 2
+        assert len(home.recent_cards) == 2
     finally:
         _close(window)

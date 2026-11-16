@@ -7,21 +7,30 @@ same ("Draw a New Circuit", "New Project…", "Open a Board…", "Open Project�
 of file names. The first question it put was "project or board?", which means nothing in
 the first minute. Home is the whole window instead, and offers one thing to do first.
 
-ONE DOOR, THEN THE OTHERS, SMALLER. Drawing a circuit is the primary button; opening a file
-is the secondary one; importing from KiCad is a link, because the application draws its
-own circuits and KiCad is a side entrance. Projects are a choice for the second board and
-live in the File menu.
+A SIDEBAR FOR THE DOORS AND THE PLACES, A PAGE FOR THE BOARDS. Drawing a circuit is the
+primary door; opening a file is the second, aligned with it; importing from KiCad is a
+link, because the application draws its own circuits and KiCad is a side entrance. Under
+them, the page's sections by name -- Home, Recent, Examples -- with the one the page is
+scrolled to lit, and the tour. The sidebar narrows on a small screen rather than going.
 
-THE EXAMPLES ARE PICTURES, drawn by the same code that draws them in the window
-(``boardpreview.render_board``, and the sheet for the one that is drawn and not built), so
-a card cannot show a board the example does not open into. They are painted one per turn of
-the event loop after Home is on screen: seven boards drawn before the first frame would be
-a second of nothing at every start.
+ONE FRAME FOR A FIRST START AND EVERY START AFTER IT. Where the board opened last stands
+as a banner, a first start has the same banner saying what the application does and
+offering the tour, so Home does not change shape the day somebody saves their first board.
 
 THE BOARD OPENED LAST COMES FORWARD, with where it stands -- the step bar's six dots, the
 next thing to do -- and one button to go on with it. Where it stands is its checks, run
-on its file by the window (``main.file_facts``) a turn after Home is on screen; until
-then, and for a file that no longer opens, Home is the plain list of boards.
+on its file by the window (``main.file_facts``) once Home is on screen
+(``after_first_frame``); until then, and for a file that no longer opens, the boards are
+the row of cards under it.
+
+THE PICTURES ARE DRAWN, by the same code that draws them in the window
+(``boardpreview.render_board``, and the sheet for a circuit drawn and not built), so a card
+cannot show a board the file does not open into. Every one sits in one frame, 16:10, on a
+backdrop washed with its own colour. They are painted one per turn of the event loop after
+Home's first frame: a dozen boards drawn before it would be a second of nothing.
+
+THE PAGE IS A BLUEPRINT: a faint grid in the accent, made once per theme and pixel ratio
+as a tile and painted as a brush, on the page so it scrolls with the boards.
 
 THE WINDOW OWNS EVERYTHING ELSE. Home imports nothing from ``main``: it says what was asked
 for through its signals, and the window opens the file, leaves Home and shows the editor.
@@ -30,21 +39,35 @@ Esc is the window's too -- it means "a blank board", which is the window's to ma
 
 from __future__ import annotations
 
+import datetime
 import html
-from collections.abc import Sequence
+import itertools
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
-from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QShowEvent
+from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QImage,
+    QKeyEvent,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+    QPen,
+    QPixmap,
+    QResizeEvent,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -90,17 +113,94 @@ class LastBoard:
     hint: str
 
 
-#: The unbuilt example, which the "new here" card opens: drawn, not placed, so the step
-#: bar's next button has every step still to do.
+#: The unbuilt example, which the tour opens: drawn, not placed, so the step bar's next
+#: button has every step still to do.
 WALKTHROUGH = "ne555-blinker"
 
-#: How many example cards fit a row, and how many show to somebody who has boards of
-#: their own (the rest are one click away).
+#: How many cards make a row; a returning user sees one row of each, the rest on request.
 COLUMNS = 4
-#: The size each picture is drawn at, before the card scales it.
-PICTURE = QSize(320, 180)
-#: The board opened last's picture: the same frame, larger.
-LAST_PICTURE = QSize(448, 252)
+#: Every picture's frame, height to width: a board's card, a sheet's, the banner's.
+RATIO = 10 / 16
+#: The size each card's picture is drawn at, before the frame fits it.
+PICTURE = QSize(400, 250)
+#: The banner's picture: the same frame, larger.
+LAST_PICTURE = QSize(640, 400)
+#: How far a picture's backdrop is washed toward the picture's own colour.
+TINT = 0.16
+#: The sidebar, and the narrower one below ``NARROW_BELOW`` px of window: at 1366 the
+#: page keeps four cards abreast.
+SIDE_WIDE = 248
+SIDE_NARROW = 200
+NARROW_BELOW = 1500
+#: The page's column stops growing here, and centres, on a wide screen.
+CONTENT_MAX = 1360
+#: The blueprint: a minor line every 8 px and a major one every 40, washed from the page's
+#: background toward the accent by this much (the minor lines by about half of it).
+GRID_MINOR = 8
+GRID_MAJOR = 40
+GRID_WASH = 0.05
+
+
+def _wash(base: QColor, toward: QColor, amount: float) -> QColor:
+    return QColor(
+        round(base.red() + (toward.red() - base.red()) * amount),
+        round(base.green() + (toward.green() - base.green()) * amount),
+        round(base.blue() + (toward.blue() - base.blue()) * amount),
+    )
+
+
+def _average(pixmap: QPixmap) -> QColor | None:
+    """The picture's own colour: the mean of its opaque pixels, read off a 16 × 10 copy."""
+    small = pixmap.toImage().scaled(
+        16, 10, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation
+    ).convertToFormat(QImage.Format.Format_ARGB32)
+    red = green = blue = count = 0
+    for y in range(small.height()):
+        for x in range(small.width()):
+            colour = small.pixelColor(x, y)
+            if colour.alpha() > 200:
+                red += colour.red()
+                green += colour.green()
+                blue += colour.blue()
+                count += 1
+    if not count:
+        return None
+    return QColor(round(red / count), round(green / count), round(blue / count))
+
+
+_TILES: dict[tuple[str, float], QPixmap] = {}
+
+
+def blueprint_tile(tokens: theme.Tokens, ratio: float) -> QPixmap:
+    """One tile of the page's grid, made once per theme and pixel ratio. Drawn in device
+    pixels, so a line is a whole number of them at every scale and never a blur."""
+    key = (tokens.name, ratio)
+    tile = _TILES.get(key)
+    if tile is not None:
+        return tile
+    scale = max(1, round(ratio))
+    size = round(GRID_MAJOR * ratio)
+    background, accent = QColor(tokens.bg_app), QColor(tokens.accent)
+    image = QImage(size, size, QImage.Format.Format_RGB32)
+    image.fill(background)
+    painter = QPainter(image)
+    minor = QPen(_wash(background, accent, GRID_WASH * 0.55))
+    minor.setWidth(scale)
+    painter.setPen(minor)
+    for step in range(GRID_MINOR, GRID_MAJOR, GRID_MINOR):
+        at = round(step * ratio)
+        painter.drawLine(at, 0, at, size)
+        painter.drawLine(0, at, size, at)
+    major = QPen(_wash(background, accent, GRID_WASH))
+    major.setWidth(scale)
+    painter.setPen(major)
+    painter.drawLine(0, 0, size, 0)
+    painter.drawLine(0, 0, 0, size)
+    painter.end()
+    tile = QPixmap.fromImage(image)
+    tile.setDevicePixelRatio(ratio)
+    _TILES[key] = tile
+    return tile
 
 
 def _boards_side_by_side(
@@ -135,7 +235,7 @@ def _sheet_picture(
     white rectangle glaring out of the dark page, narrower than the boards beside it (the
     release-candidate sitting asked why it was white). The export is unchanged; this is
     the view's picture, as a dragged symbol's is (``SchematicView._symbol_pixmap``), and
-    the card's picture area is the same paper around it (``ExampleCard.set_picture``)."""
+    the frame around it is the same paper (``FramedPicture``)."""
     drawing = build_schematic(document, lookup)
     sheet = QRectF(0.0, 0.0, drawing.width, drawing.height)
     if sheet.isEmpty():
@@ -174,61 +274,214 @@ def example_title(stem: str) -> str:
     return titles.get(stem, stem)
 
 
-class ExampleCard(QPushButton):
-    """One example: a button, so Tab reaches it and Enter opens it, laid out as a card."""
+def saved_when(path: Path, today: datetime.date | None = None) -> str:
+    """When ``path`` was last written, as a person says it: today, yesterday, so many days
+    ago, or the date. Nothing for a file that cannot be asked."""
+    try:
+        day = datetime.date.fromtimestamp(path.stat().st_mtime)
+    except (OSError, OverflowError, ValueError):
+        return ""
+    days = ((today or datetime.date.today()) - day).days
+    if days <= 0:
+        return t("Saved today")
+    if days == 1:
+        return t("Saved yesterday")
+    if days < 30:
+        return t("Saved {count} days ago").format(count=days)
+    return t("Saved {date}").format(date=day.isoformat())
 
-    def __init__(self, example: HomeExample, parent: QWidget | None = None) -> None:
+
+def _clear(widget: QWidget) -> QWidget:
+    """A container that lets the page's grid show through it."""
+    widget.setProperty("clear", True)
+    return widget
+
+
+def _caption(text: str) -> QLabel:
+    """A banner's small line above its title, in the accent."""
+    label = QLabel(text)
+    label.setObjectName("homeCaption")
+    return label
+
+
+def _title(text: str, px: int) -> QLabel:
+    label = QLabel(f'<span style="font-size:{px}px; font-weight:{theme.SEMIBOLD}">{text}</span>')
+    label.setWordWrap(True)
+    return label
+
+
+class FramedPicture(QWidget):
+    """A picture in Home's one frame: 16:10 at whatever width it is given, the board centred
+    on a backdrop washed with the board's own colour -- the sheet's paper for a sheet -- and
+    rounded where it meets its card's corners (the top of a card, the left of a banner)."""
+
+    def __init__(self, rounded: Literal["top", "left"] = "top", parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.example = example
-        self.setObjectName("exampleCard")
+        self._rounded = rounded
+        self._source = QPixmap()
+        self._on_paper = False
+        self._backdrop = QColor(theme.ACTIVE.bg_subtle)
+        self._scaled = QPixmap()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(round(PICTURE.width() * RATIO))
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def sizeHint(self) -> QSize:
+        return QSize(PICTURE.width(), self.height())
+
+    def pixmap(self) -> QPixmap:
+        """The picture as it was drawn, or a null pixmap before it is."""
+        return self._source
+
+    @property
+    def on_paper(self) -> bool:
+        return self._on_paper
+
+    @property
+    def backdrop(self) -> QColor:
+        return QColor(self._backdrop)
+
+    def set_picture(self, pixmap: QPixmap, *, on_paper: bool = False) -> None:
+        self._source = pixmap
+        self._on_paper = on_paper
+        if on_paper:
+            self._backdrop = QColor(theme.ACTIVE.sheet_paper)
+        else:
+            own = _average(pixmap)
+            base = QColor(theme.ACTIVE.bg_subtle)
+            self._backdrop = base if own is None else _wash(base, own, TINT)
+        self._scaled = QPixmap()
+        self.update()
+
+    def clear(self) -> None:
+        self._source = QPixmap()
+        self._on_paper = False
+        self._backdrop = QColor(theme.ACTIVE.bg_subtle)
+        self._scaled = QPixmap()
+        self.update()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        height = round(self.width() * RATIO)
+        if height != self.height():
+            self.setFixedHeight(height)
+        self._scaled = QPixmap()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        frame = QRectF(self.rect())
+        radius = theme.RADIUS_LG - 1
+        outline = QPainterPath()
+        outline.addRoundedRect(frame, radius, radius)
+        outline.setFillRule(Qt.FillRule.WindingFill)
+        if self._rounded == "top":
+            outline.addRect(QRectF(0, frame.height() / 2, frame.width(), frame.height() / 2))
+        else:
+            outline.addRect(QRectF(frame.width() / 2, 0, frame.width() / 2, frame.height()))
+        painter.setClipPath(outline.simplified())
+        painter.fillRect(frame, self._backdrop)
+        if not self._source.isNull():
+            ratio = self.devicePixelRatioF()
+            pad = max(theme.SPACE["md"], round(self.width() * 0.045))
+            room = QSize(max(1, self.width() - 2 * pad), max(1, self.height() - 2 * pad))
+            if self._scaled.isNull() or self._scaled.devicePixelRatio() != ratio:
+                self._scaled = self._source.scaled(
+                    room * ratio,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                self._scaled.setDevicePixelRatio(ratio)
+            shown = self._scaled.deviceIndependentSize()
+            painter.drawPixmap(
+                QPoint(
+                    round((self.width() - shown.width()) / 2),
+                    round((self.height() - shown.height()) / 2),
+                ),
+                self._scaled,
+            )
+        painter.end()
+
+
+class _Card(QPushButton):
+    """A board as a card: its picture in the frame, a title, and a line under it. A button,
+    so Tab reaches it and Enter opens it."""
+
+    path: Path
+
+    def __init__(self, title: str, line: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("homeCard")
         theme.variant(self, "card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setAccessibleName(example_title(example.path.stem))
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setAccessibleName(title)
         layout = QVBoxLayout(self)
         self.content = layout
-        layout.setContentsMargins(0, 0, 0, theme.SPACE["md"])
+        layout.setContentsMargins(1, 1, 1, theme.SPACE["lg"])
         layout.setSpacing(theme.SPACE["2xs"])
-        self.picture = QLabel()
-        self.picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.picture.setFixedHeight(128)
+        self.picture = FramedPicture("top")
         layout.addWidget(self.picture)
-        title = QLabel(example_title(example.path.stem))
-        title.setWordWrap(True)
-        line = QLabel(example.line)
-        line.setWordWrap(True)
-        theme.tone(line, "secondary")
-        for label in (title, line):
+        layout.addSpacing(theme.SPACE["sm"])
+        self.title = QLabel(f"<b>{html.escape(title)}</b>")
+        self.title.setWordWrap(True)
+        self.line = QLabel(line)
+        self.line.setWordWrap(True)
+        theme.tone(self.line, "secondary")
+        for label in (self.title, self.line):
             label.setContentsMargins(theme.SPACE["lg"], 0, theme.SPACE["lg"], 0)
             layout.addWidget(label)
-        if example.path.stem == WALKTHROUGH:
-            chip = QLabel(t("Start here"))
-            chip.setContentsMargins(theme.SPACE["lg"], 0, theme.SPACE["lg"], 0)
-            theme.tone(chip, "accent")
-            layout.addWidget(chip)
-        layout.addStretch(1)
+
+    def finish(self) -> None:
+        self.content.addStretch(1)
         for child in self.findChildren(QLabel):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
     def set_picture(self, pixmap: QPixmap, *, on_paper: bool = False) -> None:
-        """``on_paper`` for a sheet: the picture area is the sheet's paper edge to edge, as
-        a board fills it, rather than a sheet-sized patch in the middle of the card."""
-        if on_paper:
-            self.picture.setObjectName("sheetPicture")
-            self.picture.style().unpolish(self.picture)
-            self.picture.style().polish(self.picture)
-        self.picture.setPixmap(
-            pixmap.scaled(
-                QSize(self.picture.width() or PICTURE.width(), self.picture.height()),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
+        self.picture.set_picture(pixmap, on_paper=on_paper)
+
+
+class ExampleCard(_Card):
+    """One example."""
+
+    def __init__(self, example: HomeExample, parent: QWidget | None = None) -> None:
+        super().__init__(example_title(example.path.stem), example.line, parent)
+        self.example = example
+        self.path = example.path
+        if example.path.stem == WALKTHROUGH:
+            chip = QLabel(t("Start here"))
+            chip.setContentsMargins(theme.SPACE["lg"], 0, theme.SPACE["lg"], 0)
+            theme.tone(chip, "accent")
+            self.content.addWidget(chip)
+        self.finish()
+
+
+class RecentCard(_Card):
+    """One of the boards opened last: its name, and when it was saved and where."""
+
+    def __init__(self, path: Path, parent: QWidget | None = None) -> None:
+        when = saved_when(path)
+        where = path.parent.name
+        super().__init__(path.stem, "  ·  ".join(part for part in (when, where) if part), parent)
+        self.path = path
+        self.setToolTip(str(path))
+        self.finish()
+
+
+class _Blueprint(QWidget):
+    """The page: the theme's background ruled as a blueprint, scrolling with what is on it."""
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.fillRect(
+            event.rect(), QBrush(blueprint_tile(theme.ACTIVE, self.devicePixelRatioF()))
         )
+        painter.end()
 
 
 class Home(QWidget):
-    """What the window shows when there is no board yet: one door to start, the others,
-    the examples, and -- for somebody who has boards already -- the last ones opened."""
+    """What the window shows when there is no board yet: the doors, the board opened last
+    and the others, and the examples."""
 
     newCircuit = Signal()
     openFile = Signal()
@@ -257,7 +510,7 @@ class Home(QWidget):
         its line is most of what Home costs a blank start, so the window puts Home up with
         none and hands them over on the first turn of the event loop. ``has_walkthrough``
         says whether the tour's example is there before then (a file name, not a read), so
-        the "new here" card is in place on the first frame rather than arriving after it.
+        the tour is offered on the first frame rather than arriving after it.
         """
         super().__init__(parent)
         self.setObjectName("home")
@@ -271,109 +524,96 @@ class Home(QWidget):
         self._recent: list[str] = []
         self._last: LastBoard | None = None
         self._showing_all = False
-        self._to_draw: list[ExampleCard] = []
+        self._showing_all_recent = False
+        self._to_draw: list[tuple[FramedPicture, Path, QSize]] = []
+        self._painted = False
+        self._after_paint: list[Callable[[], None]] = []
+        self._scrolling_to = False
+        self._placeholders: dict[int, list[QWidget]] = {}
 
-        outer = QVBoxLayout(self)
+        outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        outer.addWidget(scroll)
-        page = QWidget()
-        scroll.setWidget(page)
-        column = QVBoxLayout(page)
-        column.setContentsMargins(
-            theme.SPACE["2xl"] * 2, theme.SPACE["2xl"], theme.SPACE["2xl"] * 2, theme.SPACE["xl"]
-        )
-        column.setSpacing(theme.SPACE["xl"])
+        outer.setSpacing(0)
+        # Built first, so Tab goes through the sidebar before the page.
+        self.side = self._sidebar()
+        outer.addWidget(self.side)
+        self.scroller = QScrollArea()
+        self.scroller.setWidgetResizable(True)
+        self.scroller.setFrameShape(QFrame.Shape.NoFrame)
+        outer.addWidget(self.scroller, 1)
+        self.page = _Blueprint()
+        self.page.setObjectName("homePage")
+        self.page.installEventFilter(self)
+        self.scroller.setWidget(self.page)
+        centre = QHBoxLayout(self.page)
+        centre.setContentsMargins(0, 0, 0, 0)
+        centre.addStretch(1)
+        self.column = _clear(QWidget())
+        centre.addWidget(self.column, 100)
+        centre.addStretch(1)
+        column = QVBoxLayout(self.column)
+        self._column_layout = column
+        column.setSpacing(theme.SPACE["2xl"])
 
-        name = QLabel(f"{theme.heading('Perfboard Studio')}  {theme.ink(__version__, 'tertiary')}")
-        column.addWidget(name)
+        self.welcome = QLabel()
+        column.addWidget(self.welcome)
         self.update_card = self._update_card()
         column.addWidget(self.update_card)
-
-        # -- the first door, for somebody with nothing yet ------------------------------
-        self.first_run = QWidget()
-        hero = QHBoxLayout(self.first_run)
-        hero.setContentsMargins(0, 0, 0, 0)
-        hero.setSpacing(theme.SPACE["2xl"])
-        pitch = QVBoxLayout()
-        pitch.setSpacing(theme.SPACE["md"])
-        title = QLabel(theme.heading(t("Design it on screen. Solder it from the guide.")))
-        title.setWordWrap(True)
-        lead = QLabel(
-            t(
-                "Draw the circuit. The app picks a board you can buy, lays the parts out "
-                "and wires them, then writes the soldering steps for you."
-            )
-        )
-        lead.setWordWrap(True)
-        theme.size(lead, theme.LEAD_PX)
-        theme.tone(lead, "secondary")
-        pitch.addWidget(title)
-        pitch.addWidget(lead)
-        self.first_button = QPushButton(t("Draw Your First Circuit"))
-        pitch.addLayout(self._doors(self.first_button))
-        pitch.addStretch(1)
-        hero.addLayout(pitch, 3)
-        self.walkthrough_card = self._walkthrough_card()
-        hero.addWidget(self.walkthrough_card, 2)
+        self.first_run = self._first_run_banner()
         column.addWidget(self.first_run)
+        self.last_card = self._last_card()
+        column.addWidget(self.last_card)
 
-        # -- the same doors, smaller, above the boards somebody already has ------------
-        self.returning = QWidget()
+        # -- the boards opened last ----------------------------------------------------
+        self.returning = _clear(QWidget())
         back = QVBoxLayout(self.returning)
         back.setContentsMargins(0, 0, 0, 0)
-        back.setSpacing(theme.SPACE["md"])
-        top = QHBoxLayout()
-        welcome = QLabel(theme.heading(t("Welcome back")))
-        top.addWidget(welcome, 1)
-        self.new_button = QPushButton(t("New Circuit"))
-        top.addLayout(self._doors(self.new_button))
-        back.addLayout(top)
-        self.last_card = self._last_card()
-        back.addWidget(self.last_card)
+        back.setSpacing(theme.SPACE["lg"])
         heading = QHBoxLayout()
-        self._recent_title = QLabel(theme.heading(t("Recent")))
+        self._recent_title = _title(t("Recent"), theme.LEAD_PX + 3)
         heading.addWidget(self._recent_title)
-        self._recent_hint = QLabel(t("Enter opens the highlighted one."))
-        theme.tone(self._recent_hint, "tertiary")
-        heading.addWidget(self._recent_hint)
         heading.addStretch(1)
+        self.show_all_recent = QPushButton(t("Show All"))
+        theme.variant(self.show_all_recent, "link")
+        self.show_all_recent.clicked.connect(self._reveal_all_recent)
+        heading.addWidget(self.show_all_recent)
         back.addLayout(heading)
-        self.recent_list = QListWidget()
-        self.recent_list.setObjectName("homeRecent")
-        self.recent_list.itemActivated.connect(self._open_recent)
-        self.recent_list.itemDoubleClicked.connect(self._open_recent)
-        back.addWidget(self.recent_list)
+        self.recent_grid = QGridLayout()
+        self.recent_grid.setSpacing(theme.SPACE["xl"])
+        back.addLayout(self.recent_grid)
+        self.recent_cards: list[RecentCard] = []
         column.addWidget(self.returning)
 
         # -- the examples ---------------------------------------------------------------
+        self.examples_section = _clear(QWidget())
+        section = QVBoxLayout(self.examples_section)
+        section.setContentsMargins(0, 0, 0, 0)
+        section.setSpacing(theme.SPACE["lg"])
         heading = QHBoxLayout()
-        self._examples_title = QLabel(theme.heading(t("Examples")))
+        heading.setSpacing(theme.SPACE["lg"])
+        self._examples_title = _title(t("Examples"), theme.LEAD_PX + 3)
         heading.addWidget(self._examples_title)
         self._examples_note = QLabel(
             t("Each opens as an untitled copy. Nothing you change touches the original.")
         )
-        theme.tone(self._examples_note, "secondary")
-        heading.addWidget(self._examples_note)
-        heading.addStretch(1)
+        theme.tone(self._examples_note, "tertiary")
+        # Wrapped, so a wider face (or a longer language) folds it rather than widen the page.
+        self._examples_note.setWordWrap(True)
+        heading.addWidget(self._examples_note, 1)
         self.show_all = QPushButton(t("Show All Examples"))
         theme.variant(self.show_all, "link")
         self.show_all.clicked.connect(self._reveal_all)
         heading.addWidget(self.show_all)
-        column.addLayout(heading)
+        section.addLayout(heading)
         self.grid = QGridLayout()
-        self.grid.setSpacing(theme.SPACE["lg"])
+        self.grid.setSpacing(theme.SPACE["xl"])
+        section.addLayout(self.grid)
         self.cards: list[ExampleCard] = []
-        column.addLayout(self.grid)
+        column.addWidget(self.examples_section)
         column.addStretch(1)
 
-        self.show_at_start = QCheckBox(t("Start on the home page"))
-        self.show_at_start.setChecked(True)
-        self.show_at_start.toggled.connect(self.showAtStartChanged)
-        column.addWidget(self.show_at_start)
-
+        self.scroller.verticalScrollBar().valueChanged.connect(self._follow_scroll)
+        self._fit_to_width(1366)
         self.set_examples(self._examples)
         self.set_recent([])
 
@@ -408,7 +648,7 @@ class Home(QWidget):
     def set_examples(self, examples: Sequence[HomeExample]) -> None:
         """The example cards, made anew: one per example, in the order given. With none --
         an install from a wheel ships none, and the window hands them over a turn after
-        Home first shows -- the heading says nothing rather than head an empty row."""
+        Home first shows -- the section says nothing rather than head an empty row."""
         # Nothing still queued to be drawn may be a card about to go.
         self._to_draw = []
         for card in self.cards:
@@ -419,56 +659,59 @@ class Home(QWidget):
         for index, example in enumerate(self._examples):
             card = ExampleCard(example)
             card.clicked.connect(lambda _checked=False, p=example.path: self.openExample.emit(str(p)))
-            self.grid.addWidget(card, index // COLUMNS, index % COLUMNS, Qt.AlignmentFlag.AlignTop)
+            self.grid.addWidget(card, index // COLUMNS, index % COLUMNS)
             self.cards.append(card)
-        # One height for every card, so a title that wraps does not stagger the row.
-        tallest = max((card.content.sizeHint().height() for card in self.cards), default=0)
-        for card in self.cards:
-            card.setFixedHeight(tallest)
-        for widget in (self._examples_title, self._examples_note):
-            widget.setVisible(bool(self._examples))
+        self.examples_section.setVisible(bool(self._examples))
+        self.nav_examples.setVisible(bool(self._examples))
         self._lay_out_cards()
+        self._chain_focus()
         # Cards that arrive while Home is on screen are drawn as they would have been had
         # they been there when it was shown.
         if self.isVisible():
             self._draw_pictures()
+
     def set_recent(self, paths: Sequence[str]) -> None:
-        """The boards opened last, newest first. With none, Home is the first-run page; with
-        any, it leads with them and the examples shrink to a row. The last board's card
-        goes until ``set_last`` says again which of them it is."""
+        """The boards opened last, newest first. With none, Home is the first-start page;
+        with any, it leads with them and the examples shrink to a row. The last board's
+        banner goes until ``set_last`` says again which of them it is."""
         self._recent = [str(p) for p in paths]
         self._last = None
         self.last_card.hide()
-        self._fill_recent()
         returning = bool(self._recent)
         self.first_run.setVisible(not returning)
-        self.returning.setVisible(returning)
+        self.welcome.setText(
+            theme.heading(t("Welcome back") if returning else t("Welcome to Perfboard Studio"))
+        )
+        theme.size(self.welcome, theme.TITLE_PX)
+        self.new_button.setText(t("New Circuit") if returning else t("Draw Your First Circuit"))
         self._showing_all = not returning
+        self._showing_all_recent = False
+        self._fill_recent()
         self._lay_out_cards()
+        if self.isVisible():
+            self._draw_pictures()
 
     def set_last(self, last: LastBoard | None) -> None:
         """The board opened last, large, with where it stands and Continue; or, with
-        ``None``, the plain list. The list leaves out the board the card is about, and the
-        keyboard moves from the list to Continue if it was on the list."""
+        ``None``, the row of boards alone. The row leaves out the board the banner is
+        about, and the keyboard moves to Continue if it was on one of the boards."""
         self._last = last
-        listed = self.recent_list.hasFocus()
+        on_a_board = any(card.hasFocus() for card in self.recent_cards)
         if last is None:
             self.last_card.hide()
             self._fill_recent()
             return
         self.last_name.setText(theme.heading(html.escape(last.path.stem)))
-        self.last_folder.setText(str(last.path.parent))
+        self.last_name.setToolTip(str(last.path))
+        self.last_folder.setText(
+            "  ·  ".join(part for part in (saved_when(last.path), last.path.parent.name) if part)
+        )
         self.last_card.setToolTip(str(last.path))
         drawn = self._picture_of_document(last.document, LAST_PICTURE)
-        self.last_picture.clear()
         if drawn is not None:
-            self.last_picture.setPixmap(
-                drawn[0].scaled(
-                    LAST_PICTURE,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
+            self.last_picture.set_picture(drawn[0], on_paper=drawn[1])
+        else:
+            self.last_picture.clear()
         row = self._last_steps_row
         while row.count():
             item = row.takeAt(0)
@@ -487,12 +730,17 @@ class Home(QWidget):
                 theme.tone(name, "secondary" if step.status == "done" else "tertiary")
             row.addWidget(dot)
             row.addWidget(name)
-            row.addSpacing(theme.SPACE["sm"])
-        row.addStretch(1)
+            # The steps are one line from the first to the last: a rule between each two.
+            if number < len(last.steps):
+                rule = QFrame()
+                rule.setObjectName("homeStepRule")
+                rule.setFixedHeight(1)
+                rule.setMinimumWidth(theme.SPACE["sm"])
+                row.addWidget(rule, 1)
         self.last_hint.setText(last.hint)
         self.last_card.show()
         self._fill_recent()
-        if listed:
+        if on_a_board or self.focusWidget() is None:
             self.continue_button.setFocus()
 
     def set_show_at_start(self, on: bool) -> None:
@@ -501,48 +749,179 @@ class Home(QWidget):
         self.show_at_start.blockSignals(False)
 
     def focus_first(self) -> None:
-        """Where the keyboard starts: Continue, the list of boards, or the primary door."""
+        """Where the keyboard starts: Continue, the first of the boards, or the first door."""
         if self._last is not None:
             self.continue_button.setFocus()
-        elif self._recent:
-            self.recent_list.setFocus()
+        elif self._shown_recent():
+            self.recent_cards[0].setFocus()
         else:
-            self.first_button.setFocus()
+            self.new_button.setFocus()
+
+    def after_first_frame(self, callback: Callable[[], None]) -> None:
+        """Run ``callback`` a turn after Home's page is first painted -- or on the next
+        turn, if it has been. A zero timer set before the window is shown runs BEFORE its
+        first frame, which is how the last board's checks once held that frame back."""
+        if self._painted:
+            QTimer.singleShot(0, self, callback)
+        else:
+            self._after_paint.append(callback)
 
     # -- Qt --------------------------------------------------------------------------
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.page and event.type() == QEvent.Type.Paint and not self._painted:
+            self._painted = True
+            self.page.removeEventFilter(self)
+            waiting, self._after_paint = self._after_paint, []
+            for callback in waiting:
+                QTimer.singleShot(0, self, callback)
+        return False
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         self._draw_pictures()
 
-    def _draw_pictures(self) -> None:
-        """Paint the cards still without a picture, one per turn of the event loop."""
-        pending = bool(self._to_draw)
-        self._to_draw = [card for card in self.cards if card.picture.pixmap().isNull()]
-        # One chain of turns at a time: a second would draw the same card twice.
-        if self._to_draw and not pending:
-            QTimer.singleShot(0, self._draw_next)
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_to_width(self.width())
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Enter presses the button the keyboard is on -- a push button outside a dialog
+        lets Enter go by -- and, on nothing in particular, opens the board opened last."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            focused = self.focusWidget()
+            if isinstance(focused, QPushButton) and self.isAncestorOf(focused):
+                focused.click()
+                return
+            if self._last is not None:
+                self._continue()
+                return
+        super().keyPressEvent(event)
 
     # -- inside ------------------------------------------------------------------------
 
-    def _doors(self, primary: QPushButton) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(theme.SPACE["md"])
-        theme.variant(primary, "primary")
-        primary.setToolTip(t("Start on the sheet: add parts and join their pins. The board comes after."))
-        primary.clicked.connect(self.newCircuit)
-        opener = QPushButton(t("Open…"))
-        opener.setToolTip(t("A board you saved (.perf)."))
-        opener.clicked.connect(self.openFile)
+    def _sidebar(self) -> QFrame:
+        side = QFrame()
+        side.setObjectName("homeSide")
+        column = QVBoxLayout(side)
+        column.setContentsMargins(
+            theme.SPACE["xl"], theme.SPACE["2xl"], theme.SPACE["xl"], theme.SPACE["xl"]
+        )
+        column.setSpacing(theme.SPACE["sm"])
+        self.new_button = QPushButton(t("New Circuit"))
+        self.new_button.setObjectName("homeDoor")
+        theme.variant(self.new_button, "primary")
+        self.new_button.setToolTip(
+            t("Start on the sheet: add parts and join their pins. The board comes after.")
+        )
+        self.new_button.clicked.connect(self.newCircuit)
+        self.open_button = QPushButton(t("Open…"))
+        self.open_button.setObjectName("homeDoor")
+        self.open_button.setToolTip(t("A board you saved (.perf)."))
+        self.open_button.clicked.connect(self.openFile)
         importer = QPushButton(t("Import from KiCad…"))
         importer.setToolTip(t("A circuit drawn in KiCad: its parts and connections come in as the design."))
         theme.variant(importer, "link")
         importer.clicked.connect(self.importNetlist)
-        row.addWidget(primary)
-        row.addWidget(opener)
-        row.addWidget(importer)
-        row.addStretch(1)
-        return row
+        column.addWidget(self.new_button)
+        column.addWidget(self.open_button)
+        column.addWidget(importer, 0, Qt.AlignmentFlag.AlignLeft)
+        column.addSpacing(theme.SPACE["xl"])
+
+        self.nav = QButtonGroup(self)
+        self.nav.setExclusive(True)
+
+        def place(text: str, checkable: bool = True) -> QPushButton:
+            button = QPushButton(text)
+            button.setObjectName("homeNav")
+            button.setCheckable(checkable)
+            if checkable:
+                self.nav.addButton(button)
+            column.addWidget(button)
+            return button
+
+        self.nav_home = place(t("Home"))
+        self.nav_recent = place(t("Recent"))
+        self.nav_examples = place(t("Examples"))
+        self.nav_tour = place(t("Tour"), checkable=False)
+        self.nav_home.setChecked(True)
+        self.nav_home.clicked.connect(lambda _checked=False: self._go_to(self.nav_home))
+        self.nav_recent.clicked.connect(lambda _checked=False: self._go_to(self.nav_recent))
+        self.nav_examples.clicked.connect(lambda _checked=False: self._go_to(self.nav_examples))
+        self.nav_tour.clicked.connect(lambda _checked=False: self.startTour.emit())
+        self.nav_tour.setVisible(self._has_walkthrough)
+        column.addStretch(1)
+
+        self.show_at_start = QCheckBox(t("Start on the home page"))
+        self.show_at_start.setChecked(True)
+        self.show_at_start.toggled.connect(self.showAtStartChanged)
+        column.addWidget(self.show_at_start)
+        version = QLabel(f"Perfboard Studio {__version__}")
+        theme.size(version, theme.CAPTION_PX)
+        theme.tone(version, "tertiary")
+        column.addWidget(version)
+        return side
+
+    def _banner(self, name: str) -> tuple[QFrame, FramedPicture, QVBoxLayout]:
+        """A wide card: a picture on the left, words on the right."""
+        card = QFrame()
+        card.setObjectName(name)
+        theme.variant(card, "card")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(1, 1, theme.SPACE["2xl"], 1)
+        row.setSpacing(theme.SPACE["2xl"])
+        picture = FramedPicture("left")
+        row.addWidget(picture, 2)
+        holder = _clear(QWidget())
+        words = QVBoxLayout(holder)
+        words.setContentsMargins(0, theme.SPACE["xl"], 0, theme.SPACE["xl"])
+        words.setSpacing(theme.SPACE["sm"])
+        words.addStretch(1)
+        row.addWidget(holder, 3)
+        return card, picture, words
+
+    def _first_run_banner(self) -> QFrame:
+        """Where the board opened last will stand: what the application does, and the tour
+        on the circuit it opens, pictured."""
+        card, self.walkthrough_picture, words = self._banner("homeFirstRun")
+        words.addWidget(_caption(t("New here?")))
+        words.addWidget(_title(t("Design it on screen. Solder it from the guide."), theme.TITLE_PX + 4))
+        lead = QLabel(
+            t(
+                "Draw the circuit. The app picks a board you can buy, lays the parts out "
+                "and wires them, then writes the soldering steps for you."
+            )
+        )
+        lead.setWordWrap(True)
+        theme.size(lead, theme.LEAD_PX)
+        theme.tone(lead, "secondary")
+        words.addWidget(lead)
+        self.walkthrough_card = _clear(QWidget())
+        tour = QVBoxLayout(self.walkthrough_card)
+        tour.setContentsMargins(0, theme.SPACE["md"], 0, 0)
+        tour.setSpacing(theme.SPACE["xs"])
+        tour.addWidget(QLabel(f"<b>{html.escape(t('Take the 1-minute tour'))}</b>"))
+        body = QLabel(
+            t(
+                "Opens a circuit that is already drawn and walks through it: board, "
+                "placement, wiring, checks, guide."
+            )
+        )
+        body.setWordWrap(True)
+        theme.tone(body, "secondary")
+        tour.addWidget(body)
+        tour.addSpacing(theme.SPACE["sm"])
+        self.walkthrough_button = QPushButton(t("Start the Tour"))
+        theme.variant(self.walkthrough_button, "primary")
+        self.walkthrough_button.clicked.connect(lambda _checked=False: self.startTour.emit())
+        tour.addWidget(self.walkthrough_button, 0, Qt.AlignmentFlag.AlignLeft)
+        words.addWidget(self.walkthrough_card)
+        words.addStretch(1)
+        if not self._has_walkthrough:
+            # The tour runs on that example, and this copy has none.
+            self.walkthrough_card.hide()
+            self.walkthrough_picture.hide()
+        return card
 
     def _update_card(self) -> QFrame:
         """A newer release exists: what it is, what changed, and the one button that acts."""
@@ -576,43 +955,31 @@ class Home(QWidget):
         return card
 
     def _last_card(self) -> QFrame:
-        """The board opened last: its picture, its name and folder, the six steps as the
-        step bar draws them, the next thing to do, and Continue. Empty until ``set_last``."""
-        card = QFrame()
-        card.setObjectName("homeLast")
-        theme.variant(card, "card")
-        row = QHBoxLayout(card)
-        row.setContentsMargins(0, 0, theme.SPACE["xl"], 0)
-        row.setSpacing(theme.SPACE["xl"])
-        self.last_picture = QLabel()
-        self.last_picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.last_picture.setFixedSize(LAST_PICTURE)
-        row.addWidget(self.last_picture)
-        words = QVBoxLayout()
-        words.setSpacing(theme.SPACE["sm"])
-        caption = QLabel(t("Last opened"))
-        theme.size(caption, theme.CAPTION_PX)
-        theme.tone(caption, "tertiary")
+        """The board opened last: its picture, its name, when it was saved and where, the
+        six steps as one line, the next thing to do, and Continue. Empty until
+        ``set_last``."""
+        card, self.last_picture, words = self._banner("homeLast")
+        words.addWidget(_caption(t("Last opened")))
         self.last_name = QLabel()
         self.last_folder = QLabel()
         self.last_folder.setTextFormat(Qt.TextFormat.PlainText)
         theme.tone(self.last_folder, "secondary")
-        self.last_steps = QWidget()
+        self.last_steps = _clear(QWidget())
         self.last_steps.setObjectName("homeLastSteps")
         self._last_steps_row = QHBoxLayout(self.last_steps)
-        self._last_steps_row.setContentsMargins(0, theme.SPACE["xs"], 0, theme.SPACE["xs"])
+        self._last_steps_row.setContentsMargins(0, theme.SPACE["sm"], 0, theme.SPACE["xs"])
         self._last_steps_row.setSpacing(theme.SPACE["xs"])
         self.last_hint = QLabel()
         self.last_hint.setWordWrap(True)
+        theme.tone(self.last_hint, "secondary")
         self.continue_button = QPushButton(t("Continue"))
         theme.variant(self.continue_button, "primary")
         self.continue_button.clicked.connect(self._continue)
-        words.addStretch(1)
-        for widget in (caption, self.last_name, self.last_folder, self.last_steps, self.last_hint):
+        for widget in (self.last_name, self.last_folder, self.last_steps, self.last_hint):
             words.addWidget(widget)
+        words.addSpacing(theme.SPACE["sm"])
         words.addWidget(self.continue_button, 0, Qt.AlignmentFlag.AlignLeft)
         words.addStretch(1)
-        row.addLayout(words, 1)
         card.hide()
         return card
 
@@ -620,80 +987,160 @@ class Home(QWidget):
         if self._last is not None:
             self.openRecent.emit(str(self._last.path))
 
-    def _fill_recent(self) -> None:
-        """The list of boards, less the one the last board's card is about. With nothing
-        left in it, it goes, and its heading with it."""
-        shown = [
+    def _shown_recent(self) -> list[str]:
+        return [
             entry for entry in self._recent
             if self._last is None or Path(entry) != self._last.path
         ]
-        self.recent_list.clear()
-        for entry in shown:
-            path = Path(entry)
-            item = QListWidgetItem(f"{path.stem}    {path.parent}")
-            item.setToolTip(entry)
-            item.setData(Qt.ItemDataRole.UserRole, entry)
-            self.recent_list.addItem(item)
-        if shown:
-            self.recent_list.setCurrentRow(0)
-            self.recent_list.setFixedHeight(
-                min(len(shown), 6) * (self.recent_list.sizeHintForRow(0) + 2) + 4
-            )
-        for widget in (self.recent_list, self._recent_title, self._recent_hint):
-            widget.setVisible(bool(shown))
 
-    def _walkthrough_card(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("homeWalkthrough")
-        theme.variant(card, "card")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(*([theme.SPACE["xl"]] * 4))
-        layout.setSpacing(theme.SPACE["sm"])
-        caption = QLabel(t("New here?"))
-        theme.size(caption, theme.CAPTION_PX)
-        theme.tone(caption, "secondary")
-        heading = QLabel(theme.heading(t("Take the 1-minute tour")))
-        body = QLabel(
-            t(
-                "Opens a circuit that is already drawn and walks through it: board, "
-                "placement, wiring, checks, guide."
-            )
+    def _fill_recent(self) -> None:
+        """The row of boards, less the one the banner is about: up to a row of them, and
+        Show All for the rest. With nothing left in it, it goes, and its place in the
+        sidebar with it."""
+        shown = self._shown_recent()
+        kept = {card.path: card for card in self.recent_cards}
+        self.recent_cards = []
+        for card in kept.values():
+            self.recent_grid.removeWidget(card)
+        for entry in shown:
+            if Path(entry) in kept:
+                card = kept.pop(Path(entry))
+            else:
+                card = RecentCard(Path(entry))
+                card.clicked.connect(lambda _checked=False, p=entry: self.openRecent.emit(p))
+            self.recent_cards.append(card)
+        for gone in kept.values():
+            self._to_draw = [entry for entry in self._to_draw if entry[0] is not gone.picture]
+            gone.deleteLater()
+        for index, card in enumerate(self.recent_cards):
+            self.recent_grid.addWidget(card, index // COLUMNS, index % COLUMNS)
+            card.setVisible(self._showing_all_recent or index < COLUMNS)
+        self._pad_row(self.recent_grid, len(self.recent_cards))
+        self.show_all_recent.setVisible(
+            not self._showing_all_recent and len(self.recent_cards) > COLUMNS
         )
-        body.setWordWrap(True)
-        theme.tone(body, "secondary")
-        self.walkthrough_button = QPushButton(t("Start the Tour"))
-        if not self._has_walkthrough:
-            card.hide()  # the tour runs on that example, and this copy has none
-        self.walkthrough_button.clicked.connect(lambda _checked=False: self.startTour.emit())
-        for widget in (caption, heading, body):
-            layout.addWidget(widget)
-        layout.addWidget(self.walkthrough_button, 0, Qt.AlignmentFlag.AlignLeft)
-        layout.addStretch(1)
-        return card
+        self.returning.setVisible(bool(self.recent_cards))
+        self.nav_recent.setVisible(bool(self.recent_cards))
+        self._chain_focus()
+
+    def _pad_row(self, grid: QGridLayout, count: int) -> None:
+        """Every column of a grid as wide as the others, however few cards are in it: an
+        empty column has no gap beside it, so a row of one card would be a quarter of the
+        page and not a quarter less the gaps. The empty places hold nothing visible."""
+        for gone in self._placeholders.pop(id(grid), []):
+            grid.removeWidget(gone)
+            gone.deleteLater()
+        kept = []
+        for column in range(count, COLUMNS):
+            place = _clear(QWidget())
+            grid.addWidget(place, 0, column)
+            kept.append(place)
+        self._placeholders[id(grid)] = kept
+        for column in range(COLUMNS):
+            grid.setColumnStretch(column, 1)
 
     def _lay_out_cards(self) -> None:
         shown = len(self.cards) if self._showing_all else COLUMNS
         for index, card in enumerate(self.cards):
             card.setVisible(index < shown)
+        self._pad_row(self.grid, len(self.cards))
         self.show_all.setVisible(len(self.cards) > shown)
 
     def _reveal_all(self) -> None:
         self._showing_all = True
         self._lay_out_cards()
 
-    def _open_recent(self, item: QListWidgetItem) -> None:
-        self.openRecent.emit(str(item.data(Qt.ItemDataRole.UserRole)))
+    def _reveal_all_recent(self) -> None:
+        self._showing_all_recent = True
+        self._fill_recent()
+
+    def _chain_focus(self) -> None:
+        """Tab goes down the sidebar, then the page from the top: Continue, the boards, the
+        examples -- not in the order the cards happened to be made."""
+        chain: list[QWidget] = [
+            self.new_button, self.open_button, self.nav_home, self.nav_recent,
+            self.nav_examples, self.nav_tour, self.show_at_start, self.update_action,
+            self.walkthrough_button, self.continue_button, *self.recent_cards,
+            self.show_all_recent, *self.cards, self.show_all,
+        ]
+        for before, after in itertools.pairwise(chain):
+            QWidget.setTabOrder(before, after)
+
+    def _fit_to_width(self, width: int) -> None:
+        """A narrower sidebar and margins below ``NARROW_BELOW``; a column that stops at
+        ``CONTENT_MAX`` and centres above it."""
+        narrow = width < NARROW_BELOW
+        self.side.setFixedWidth(SIDE_NARROW if narrow else SIDE_WIDE)
+        margin = theme.SPACE["2xl"] * (1 if narrow else 2) + (theme.SPACE["sm"] if narrow else 0)
+        self._column_layout.setContentsMargins(margin, theme.SPACE["2xl"] + theme.SPACE["sm"], margin, theme.SPACE["2xl"])
+        self.column.setMaximumWidth(CONTENT_MAX + 2 * margin)
+
+    def _sections(self) -> list[tuple[QPushButton, int]]:
+        """The sidebar's places and where each starts on the page, top first."""
+        found = [(self.nav_home, 0)]
+        for button, widget in (
+            (self.nav_recent, self.returning),
+            (self.nav_examples, self.examples_section),
+        ):
+            if not widget.isHidden():
+                found.append((button, widget.mapTo(self.page, QPoint(0, 0)).y()))
+        return found
+
+    def _go_to(self, button: QPushButton) -> None:
+        """Scroll to a place; it stays lit even where the page is too short to bring it to
+        the top, until the page is scrolled by hand."""
+        button.setChecked(True)
+        target = next((top for place, top in self._sections() if place is button), 0)
+        margin = theme.SPACE["2xl"]
+        self._scrolling_to = True
+        try:
+            self.scroller.verticalScrollBar().setValue(max(0, target - margin))
+        finally:
+            self._scrolling_to = False
+
+    def _follow_scroll(self, value: int) -> None:
+        """The place the page is scrolled to is the one lit: the last whose start has
+        reached the top of the page (give or take its margin), Home at the very top, and the
+        last place of all at the very bottom, where a short one never reaches the top."""
+        if self._scrolling_to:
+            return
+        sections = self._sections()
+        bar = self.scroller.verticalScrollBar()
+        if bar.maximum() > 0 and value >= bar.maximum():
+            lit = sections[-1][0]
+        else:
+            line = value + 2 * theme.SPACE["2xl"]
+            lit = [button for button, top in sections if top <= line][-1]
+        lit.setChecked(True)
+
+    def _draw_pictures(self) -> None:
+        """Queue the pictures still not drawn -- the tour's circuit, the boards, the
+        examples, top first -- and paint them one per turn once Home's first frame is up."""
+        pending = bool(self._to_draw)
+        queue: list[tuple[FramedPicture, Path, QSize]] = []
+        if self._has_walkthrough and not self.first_run.isHidden():
+            tour = next((e.path for e in self._examples if e.path.stem == WALKTHROUGH), None)
+            if tour is not None and self.walkthrough_picture.pixmap().isNull():
+                queue.append((self.walkthrough_picture, tour, LAST_PICTURE))
+        cards: list[_Card] = [*self.recent_cards, *self.cards]
+        queue += [
+            (card.picture, card.path, PICTURE) for card in cards if card.picture.pixmap().isNull()
+        ]
+        self._to_draw = queue
+        # One chain of turns at a time: a second would draw the same picture twice.
+        if self._to_draw and not pending:
+            self.after_first_frame(self._draw_next)
 
     def _draw_next(self) -> None:
         if not self._to_draw:
             return
-        card = self._to_draw.pop(0)
-        drawn = self._picture_of(card.example.path)
+        picture, path, size = self._to_draw.pop(0)
+        drawn = self._picture_of(path, size)
         if drawn is not None:
             pixmap, on_paper = drawn
-            card.set_picture(pixmap, on_paper=on_paper)
+            picture.set_picture(pixmap, on_paper=on_paper)
         if self._to_draw:
-            QTimer.singleShot(0, self._draw_next)
+            QTimer.singleShot(0, self, self._draw_next)
 
     def _picture(self, path: Path) -> QPixmap | None:
         """The board as the window will draw it, or -- for a circuit with nothing placed --
@@ -701,15 +1148,18 @@ class Home(QWidget):
         drawn = self._picture_of(path)
         return drawn[0] if drawn is not None else None
 
-    def _picture_of(self, path: Path) -> tuple[QPixmap, bool] | None:
+    def _picture_of(self, path: Path, size: QSize = PICTURE) -> tuple[QPixmap, bool] | None:
         """``_picture``, and whether it is a sheet rather than a board."""
         try:
             result = persist.deserialize_document(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError, ValueError):
             return None
         if not result.ok:
             return None
-        return self._picture_of_document(result.document)
+        try:
+            return self._picture_of_document(result.document, size)
+        except Exception:  # a board Home only pictures is never an error on Home
+            return None
 
     def _picture_of_document(
         self, document: PerfDocument, size: QSize = PICTURE
@@ -722,3 +1172,4 @@ class Home(QWidget):
             return render_board(document, self._lookup, size), False
         sheet = _sheet_picture(document, self._lookup, size)
         return (sheet, True) if sheet is not None else None
+
