@@ -3856,9 +3856,26 @@ class MainWindow(QMainWindow):
         self.update_strip = strip
         # Followed rather than told: the bar puts ITSELF up and down as the check moves
         # through its states, and a second place deciding when it is up would be a second
-        # place to forget one of them.
-        self.update_bar.visibilityChanged.connect(strip.setVisible)
+        # place to forget one of them. ``_sync_update_strip`` adds only Home's card.
+        self.update_bar.visibilityChanged.connect(lambda _up: self._sync_update_strip())
         self.update_bar.setVisible(announcing)
+
+    def _sync_update_strip(self) -> None:
+        """The strip up exactly when the bar inside it is -- except over Home while it only
+        announces the release, which Home's update card says already.
+
+        Over Home the two said "0.25.0 is available" one above the other, with Download and
+        What Changed twice, and the first thing asked at the release-candidate sitting was
+        why there were two. Only the announcement is said twice: a download's progress, a
+        file landed and a failure are the strip's alone, so those stay up over Home too.
+        Hide on either is one decision about the version (``_on_update_dismissed``)."""
+        strip = getattr(self, "update_strip", None)
+        if strip is None:
+            return
+        up = not self.update_bar.isHidden()
+        announcing = not self.update_bar.act_hide.isHidden()
+        home = getattr(self, "_home", None) is not None and self.home_is_showing()
+        strip.setVisible(up and not (home and announcing))
 
     def _build_central_hint(self) -> QWidget:
         """The one screen for a window with every view closed.
@@ -3927,6 +3944,7 @@ class MainWindow(QMainWindow):
         self._home = home
         stack.setCurrentWidget(home)
         stack.setMaximumSize(self.UNCAPPED, self.UNCAPPED)
+        self._sync_update_strip()
 
     def leave_home(self) -> None:
         """Back to the window as it was before Home (``show_home``). Nothing if Home is not
@@ -3941,6 +3959,9 @@ class MainWindow(QMainWindow):
             self._layout_before_home = None
         # Not ``_keep_3d_behind``: that is for a start, where a 3D view left in front would
         # build VTK for nobody. Here the view in front is the one somebody left there.
+        # The strip as the bar is now, not as the photograph had it: a release announced
+        # while Home was in front was said by the card alone, and comes back here.
+        self._sync_update_strip()
         self._sync_dock_titlebars()
         self._sync_central_hint()
         if self._sizes_after_home:
@@ -16341,9 +16362,7 @@ class MainWindow(QMainWindow):
         the window last closed comes back up -- wrapping a hidden bar, as a few pixels of
         ruled line across the top of a window with no news in it.
         """
-        strip = getattr(self, "update_strip", None)
-        if strip is not None:
-            strip.setVisible(not self.update_bar.isHidden())
+        self._sync_update_strip()
 
     def on_reset_layout(self) -> None:
         """Put every panel back where a new installation opens it.
@@ -17090,6 +17109,9 @@ class MainWindow(QMainWindow):
         Install happen."""
         release = self._update_release if self._update_noticed else None
         action = self._update_action()
+        # A download started from Home's card turns the strip from announcing to progress
+        # without putting it up or down, and over Home that is when it has to appear.
+        self._sync_update_strip()
         self.header.set_update(release.version if release is not None else None)
         if self._notes_dialog is not None and shiboken6.isValid(self._notes_dialog):
             self._notes_dialog.set_action(action)

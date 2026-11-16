@@ -778,6 +778,43 @@ def test_hiding_the_release_takes_the_pill_and_the_card_with_it(window) -> None:
     assert window.header.update_pill.isHidden() and home.update_card.isHidden()
 
 
+def test_over_home_the_card_says_the_release_and_the_strip_does_not_say_it_again(
+    window, an_installer_exists
+) -> None:
+    """The release-candidate sitting: over Home the strip and Home's card said "0.8.0 is
+    available" one above the other, and the first question was why there were two. With
+    Home in front the card says it alone; with the board in front the strip says it -- an
+    announcement made while Home was showing comes back on leaving it -- and a download's
+    progress, which the card cannot show, is the strip's even over Home. Hide on either
+    hides both."""
+    home = window._make_home()
+    window.show_home(home)
+    window._on_update_checked(NEXT_RELEASE)
+    assert not home.update_card.isHidden()
+    assert window.update_strip.isHidden() and not window.update_bar.isHidden()
+
+    window.leave_home()
+    assert not window.update_strip.isHidden()
+    window.show_home(home)
+    assert window.update_strip.isHidden()
+
+    # Download from the card: the progress has nowhere else to be. No transfer starts.
+    window._checker().download = lambda release, asset: None
+    window._on_update_surface_action()
+    assert window._update_busy
+    assert not window.update_strip.isHidden()
+    window._on_update_download_failed("the connection was reset")
+    assert not window.update_strip.isHidden(), "a failure is the strip's to say"
+    window.update_bar.announce(NEXT_RELEASE, "0.7.0", downloadable=True)
+    assert window.update_strip.isHidden()
+
+    window.leave_home()
+    window._on_update_dismissed()
+    assert window.update_strip.isHidden() and home.update_card.isHidden()
+    window.show_home(home)
+    assert window.update_strip.isHidden() and home.update_card.isHidden()
+
+
 def test_closing_the_strip_after_a_download_keeps_the_way_to_install(
     window, tmp_path, monkeypatch
 ) -> None:
