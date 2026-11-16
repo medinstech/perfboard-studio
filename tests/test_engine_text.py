@@ -593,3 +593,121 @@ def test_an_open_and_a_short_are_said_without_their_english_joins() -> None:
     assert "'OUT' ve 'THRESH'" in short, short
     for said in (open_net, short):
         assert " near " not in said and "' and '" not in said, said
+
+
+#: English that a finding said in Turkish must not still have: the words its sentences are
+#: made of. A part's reference, a net's name and a footprint id are names and stay, and
+#: "pin" and "net" are Turkish words too.
+_ENGLISH_WORDS = re.compile(
+    r"\b(?:the|is|are|and|of|on|pins|which|nothing|connected|supply|ground|names|"
+    r"reaches|lead|anode|so|has|no|value|board|wire|while|module|chip|regulator)\b"
+)
+
+
+def _circuits() -> list[object]:
+    """One circuit for every way the circuit check speaks, from ``test_erc``'s own: each
+    rule, and each sentence a rule has more than one of."""
+    import dataclasses as dc
+
+    from tests.test_erc import _blinker, cat, circuit, plain
+
+    return [
+        # value-missing, and part-unconnected
+        circuit(
+            [dc.replace(plain("R1", "r-axial-4"), value=""), cat("U1", "ne555"),
+             plain("R2", "r-axial-4")],
+            {"A": ("R1.2", "R2.1")},
+        ),
+        # no-power-entry, a list cut short
+        circuit(
+            [cat("U1", "ne555"), plain("R1", "r-axial-4"), plain("R2", "r-axial-4"),
+             plain("R3", "r-axial-4"), plain("R4", "r-axial-4")],
+            {"VCC": ("U1.8", "R1.1"), "GND": ("U1.1", "R1.2"), "+5V": ("R2.1", "R3.1"),
+             "+12V": ("R3.2", "R4.1"), "GNDA": ("R4.2", "R2.2")},
+        ),
+        _blinker(),
+        # pin-not-on-part and part-not-defined
+        circuit(
+            [cat("U1", "ne555"), plain("R1", "r-axial-4"), plain("R2", "r-axial-4")],
+            {"X": ("U1.9", "R1.1"), "Y": ("R2.1", "Q7.1"), "Z": ("R1.2", "R2.2")},
+        ),
+        # single-pin-net, both ways, and supply-unconnected on a chip
+        circuit(
+            [cat("U1", "ne555"), plain("R1", "r-axial-4"), plain("C1", "c-disc-p2")],
+            {"OUT": ("U1.3", "R1.1"), "GND": ("U1.1", "C1.2"), "VCC": ("U1.8",),
+             "Vcc": ("C1.1",), "EMPTY": ()},
+        ),
+        # supply-unconnected on a module, two pins
+        circuit(
+            [cat("A1", "arduino-nano"), plain("R1", "r-axial-4"), plain("LED1", "led-5mm")],
+            {"D2": ("A1.9", "R1.1"), "K": ("R1.2", "LED1.2")},
+        ),
+        # a regulator's input, and an LM317's ADJ
+        circuit(
+            [cat("U1", "7805"), plain("C1", "c-disc-p2"), plain("C2", "c-disc-p2")],
+            {"GND": ("U1.2", "C1.2", "C2.2"), "+5V": ("U1.3", "C2.1")},
+        ),
+        circuit(
+            [cat("U2", "lm317t"), plain("C1", "c-disc-p2"), plain("C2", "c-disc-p2")],
+            {"VIN": ("U2.3", "C1.1"), "VOUT": ("U2.2", "C2.1")},
+        ),
+        # supply-pin-open
+        circuit(
+            [cat("U1", "atmega328p"), plain("C1", "c-disc-p2"), plain("C2", "c-disc-p2")],
+            {"+5V": ("U1.7", "U1.20", "C1.1"), "GND": ("U1.8", "C1.2"), "RST": ("U1.1", "C2.1")},
+        ),
+        # supply-on-wrong-net, both ways
+        circuit(
+            [cat("U1", "ne555"), plain("C1", "c-disc-p2")],
+            {"+5V": ("U1.1", "C1.1"), "GND": ("U1.8", "C1.2")},
+        ),
+        # polarity-reversed: an electrolytic, and an LED
+        circuit(
+            [plain("C1", "c-elec-d5-p2"), plain("R1", "r-axial-4")],
+            {"+5V": ("C1.2", "R1.1"), "GND": ("C1.1", "R1.2")},
+        ),
+        circuit(
+            [plain("LED1", "led-5mm"), plain("R1", "r-axial-4")],
+            {"+5V": ("LED1.2", "R1.1"), "GND": ("LED1.1", "R1.2")},
+        ),
+        # nc-pin-connected
+        circuit(
+            [cat("U1", "dht11"), plain("R1", "r-axial-4")],
+            {"+5V": ("U1.1", "R1.1"), "DATA": ("U1.3", "R1.2"), "GND": ("U1.4", "R1.2")},
+        ),
+    ]
+
+
+#: The sentences no circuit above produces: a cable's (a system's), a negative supply, and
+#: the plural of a chip's open supplies and of the pins left wired beside one.
+_SENTENCES = (
+    "W1 lands on J2 pin 5, which hdr-1x4 does not have.",
+    "U3 pin 4 (VEE) is connected to nothing, so the chip has no supply.",
+    "U1 pins 7 and 20 (VCC) are connected to nothing, so the chip is not powered.",
+    "U1 pin 22 (GND) is connected to nothing, while pins 8, 30 and 31 (GND) are. Every "
+    "supply pin of a chip is meant to be connected.",
+)
+
+
+def test_every_finding_of_the_circuit_is_said_in_turkish(turkish: None) -> None:
+    """The circuit's findings went into the Problems panel and onto the sheet's pin rings as
+    the check wrote them, every row English in a Turkish window, while the board's beside
+    them were Turkish. One circuit for every rule, and every sentence it says comes out with
+    none of its English words left."""
+    from perfboard_studio.erc import RULES, run_erc
+    from perfboard_studio.ui.engine_text import say_finding
+
+    seen: set[str] = set()
+    english: list[str] = []
+    messages = [
+        (finding.rule, finding.message) for doc in _circuits()
+        for finding in run_erc(doc, LOOKUP)  # type: ignore[arg-type]
+    ]
+    messages += [("", sentence) for sentence in _SENTENCES]
+    for rule, message in messages:
+        seen.add(rule)
+        said = say_finding(message)
+        if said == message or _ENGLISH_WORDS.search(said):
+            english.append(f"{message!r} -> {said!r}")
+    assert english == []
+    assert set(RULES) <= seen, set(RULES) - seen

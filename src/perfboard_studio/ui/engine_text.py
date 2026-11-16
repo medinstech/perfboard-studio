@@ -411,6 +411,28 @@ FINDING_TEMPLATES: tuple[str, ...] = (
     'No hookup wire up to AWG {awg} carries that: split it across parallel runs, or bring this current onto the board on a terminal rated for it.',
     'Use AWG {awg} or heavier.',
     "Use AWG {awg} or heavier. AWG {awg_b} is {dia} mm of copper and will not go through this board's {drill} mm holes, so it has to be lap-soldered onto the pads or the current brought in on a terminal.",
+    # -- the circuit (erc.py) -------------------------------------------------------------
+    # A chip's supply left open, the module's ground first: its ending is its own sentence,
+    # and ``consequence`` is only ever one of the chip's.
+    "{ref} has no value, so nothing says which one to fit.",
+    "{ref} is connected to nothing: no pin of it is on a net with another pin.",
+    "Nothing brings power onto the board: no connector, terminal, battery clip or module is wired to {netlist}. Wire one to the supply and to ground.",
+    "{cable} lands on {ref} pin {pin_no}, which {footprint_id} does not have.",
+    "{net} names {ref}, which is neither on the board nor in the design.",
+    "{net} names {ref} pin {pin_no}, which {footprint_id} does not have.",
+    "{net} reaches no pin at all.",
+    "{net} reaches only {ref} pin {pin_no}, so it connects nothing. A label spelled differently on the pin it was meant for is the usual cause.",
+    "{ref} pin {pin_no} ({pinname}) is connected to nothing, so the module shares no ground with the rest of the circuit.",
+    "{ref} pins {pinlist} ({pinname}) are connected to nothing, so the module shares no ground with the rest of the circuit.",
+    "{ref} pin {pin_no} ({pinname}) is connected to nothing, {consequence}.",
+    "{ref} pins {pinlist} ({pinname}) are connected to nothing, {consequence}.",
+    "{ref} pin {pin_no} ({pinname}) is connected to nothing, while pin {pin_b} ({pinname_b}) is. Every supply pin of a chip is meant to be connected.",
+    "{ref} pin {pin_no} ({pinname}) is connected to nothing, while pins {pinlist} ({pinname_b}) are. Every supply pin of a chip is meant to be connected.",
+    "{ref} pin {pin_no} ({pinname}) is on {net}, a ground net: its supply is connected to ground.",
+    "{ref} pin {pin_no} ({pinname}) is on {net}, a power net: its ground is connected to a supply.",
+    "{ref}'s + lead (pin {pin_no}) is on {net}, a ground net, and its - lead (pin {pin_b}) on {net_b}, a supply: it is drawn the wrong way round.",
+    "{ref}'s anode (pin {pin_no}) is on {net}, a ground net, and its cathode (pin {pin_b}) on {net_b}, a supply: it is drawn the wrong way round and will never light.",
+    "{ref} pin {pin_no} ({pinname}) is on {net}, but the part has nothing inside on that pin. Check whether the wire was meant for a pin beside it.",
 )
 
 _CONDUCTOR_KINDS = (
@@ -500,6 +522,19 @@ _FIELDS: dict[str, str] = {
     "pins": r"\S+\.\S+(?:, \S+\.\S+)*(?: and \S+\.\S+)?",
     "covered": r"\d+",
     "open": r"\d+",
+    # -- the circuit (erc.py) ---------------------------------------------------------------
+    # "VCC", "VCC and GND", "VCC, GND, +5V and 2 more" (``erc._check_power_entry``).
+    "netlist": r"\S+(?:, \S+)*(?: and \d+ more| and \S+)?",
+    # "4 and 7", "4, 5, 12 and 13" (``erc._pins_phrase`` after its "pins").
+    "pinlist": r"\S+(?:, \S+)* and \S+",
+    "pin_b": r"[^\s]+",
+    "consequence": "|".join(re.escape(said) for said in (
+        "so the chip is not powered",
+        "so the chip has no ground",
+        "so the chip has no supply",
+        "so its output is not regulated",
+        "so the regulator has no input",
+    )),
 }
 
 
@@ -702,6 +737,21 @@ def _finding_word(field: str, value: str) -> str:
         return " " + said if said is not None else value
     if field == "advice":
         return _match(value, _compiled_findings()) or value
+    if field == "netlist":
+        more = re.fullmatch(r"(.+) and (\d+) more", value)
+        if more is not None:
+            return t("{names} and {count} more").format(names=more.group(1), count=more.group(2))
+        return value.replace(" and ", f" {t('and')} ")
+    if field == "pinlist":
+        return value.replace(" and ", f" {t('and')} ")
+    if field == "consequence":
+        return {
+            "so the chip is not powered": t("so the chip is not powered"),
+            "so the chip has no ground": t("so the chip has no ground"),
+            "so the chip has no supply": t("so the chip has no supply"),
+            "so its output is not regulated": t("so its output is not regulated"),
+            "so the regulator has no input": t("so the regulator has no input"),
+        }[value]
     return value
 
 

@@ -9151,6 +9151,42 @@ def test_the_sheet_rings_the_pin_erc_is_about_and_its_tooltip_says_why() -> None
         _close(window)
 
 
+def test_in_turkish_the_circuit_s_findings_are_said_in_turkish_in_the_panel_and_on_the_sheet() -> None:
+    """Every row of the circuit's group, and the ring on the sheet's pin, said the check's
+    English in a Turkish window while the board's findings beside them were Turkish. Both
+    are said where they are shown (ui/engine_text.py); the finding itself stays English."""
+    from perfboard_studio.ui.i18n import language, set_language
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+
+    english = "U1 pin 8 (VCC) is connected to nothing, so the chip is not powered."
+    said = "U1 parçasının 8. pini (VCC) hiçbir yere bağlı değil; bu yüzden entegre beslenmiyor."
+    before = language()
+    set_language("tr")
+    try:
+        window = _open_schematic(_unpowered_555())
+        try:
+            window._leave_the_circuit()
+            assert [f.message for f in window._last_erc] == [english]
+            item = window.schematic_view.item
+            assert item is not None
+            assert item.pin_marks == {("U1", "8"): ("error", (said,))}
+
+            window.show_circuit_findings()
+            tree = window.drc_tree
+            root = tree.topLevelItem(0)
+            assert root.data(0, ROLE_FINDING_KEY) == "ERC"
+            rows = [
+                root.child(i).child(j).text(1)
+                for i in range(root.childCount())
+                for j in range(root.child(i).childCount())
+            ]
+            assert rows == [said]
+        finally:
+            _close(window)
+    finally:
+        set_language(before)
+
+
 def test_placing_after_choosing_a_board_does_not_ask_again(monkeypatch) -> None:
     """The Board step and the placement both ask which board; asked once at the step, the
     placement uses the answer rather than putting the same question up a second time."""

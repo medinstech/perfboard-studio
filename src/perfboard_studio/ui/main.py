@@ -402,7 +402,7 @@ from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
 from .drawcheck import DrawCheck, DrawProblem
 from .emptystate import EmptyOverlay, EmptyState
-from .engine_text import finding_text, names_in, net_class_word, say
+from .engine_text import finding_text, names_in, net_class_word, say, say_finding
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
@@ -7623,7 +7623,12 @@ class MainWindow(QMainWindow):
         drawing = build_schematic(self.bus.system_document, self.lookup)
         # The circuit's findings ringed on the pins they are about: the sheet is where the
         # circuit is drawn, so it is where an unpowered VCC is looked for.
-        self.schematic_view.set_findings(self._erc_shown())
+        # Said in the window's language: the ring's tooltip is the finding (engine_text).
+        self.schematic_view.set_findings(
+            tuple(
+                dataclasses.replace(f, message=say_finding(f.message)) for f in self._erc_shown()
+            )
+        )
         # On a sheet still being arranged, the wires it would keep if it were frozen now,
         # so a wire there is selected like any other (see ``SchematicView.unfrozen_wires``).
         self.schematic_view.set_unfrozen_wires(
@@ -11463,7 +11468,7 @@ class MainWindow(QMainWindow):
         for finding in findings:
             haystack = _folded(
                 f"{finding.rule} {_erc_title(finding.rule)} {finding.severity} "
-                f"{_severity_word(finding.severity)} {finding.message}"
+                f"{_severity_word(finding.severity)} {say_finding(finding.message)}"
             )
             if needle and needle not in haystack:
                 continue
@@ -11487,7 +11492,7 @@ class MainWindow(QMainWindow):
             rule_item.setData(0, ROLE_FINDING_KEY, f"erc:{rule}")
             root.addChild(rule_item)
             for finding in items:
-                leaf = QTreeWidgetItem(["", finding.message])
+                leaf = QTreeWidgetItem(["", say_finding(finding.message)])
                 leaf.setData(0, ROLE_REFS, finding.refs)
                 leaf.setData(
                     0, ROLE_COMPONENT_IDS, tuple(components[r] for r in finding.refs if r in components)
