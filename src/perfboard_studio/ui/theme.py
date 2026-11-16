@@ -687,7 +687,6 @@ QLabel#toolKey {{
 QWidget#problemsBar {{ background: {k.bg_surface}; border-top: 1px solid {k.border}; }}
 QLabel#problemsBadge[tone="danger"], QLabel#problemsBadge[tone="warning"] {{
     border-radius: 8px;
-    padding: 0 {s["sm"]}px;
     font-weight: {SEMIBOLD};
 }}
 QLabel#problemsBadge[tone="danger"] {{ background: {k.danger}; color: {k.text_on_status}; }}

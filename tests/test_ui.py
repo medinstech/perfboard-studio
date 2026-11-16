@@ -20432,6 +20432,26 @@ def test_the_step_card_keeps_the_wiring_and_a_count_selects_its_wires() -> None:
         _close(window)
 
 
+def test_the_problems_badge_has_room_round_its_count() -> None:
+    """The count badge was exactly as wide as its digits -- the stylesheet's padding is not
+    in a QLabel's size hint -- so under its radius it was a coloured sliver with the count
+    cut off. Its room is the widget's own margins now, which the layout does count."""
+    from perfboard_studio.ui import theme
+    from perfboard_studio.ui.problems import ProblemsBar
+
+    bar = ProblemsBar()
+    bar.resize(900, 30)
+    bar.show()
+    try:
+        for errors, warnings in ((1, 0), (0, 12)):
+            bar.set_counts(errors=errors, warnings=warnings, to_wire=0, matched=None, nets=0)
+            badge = bar.badge
+            digits = badge.fontMetrics().horizontalAdvance(badge.text())
+            assert badge.sizeHint().width() >= digits + 2 * theme.SPACE["sm"]
+    finally:
+        bar.close()
+
+
 def test_the_problems_bar_says_what_fits_and_the_rest_in_its_tooltip() -> None:
     """At 1366 px the bar's facts ran under the board's edge and stopped at "Matches the
     circuit: 7 o" (the newcomer walk). Short of room they are said short, then the last

@@ -70,6 +70,12 @@ class ProblemsBar(QWidget):
         self.badge = QLabel()
         self.badge.setObjectName("problemsBadge")
         self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Its room either side of the count, in the widget rather than the stylesheet: a
+        # QLabel's size hint leaves the stylesheet's padding out, so the badge was as wide
+        # as its digits under an 8 px radius -- a coloured sliver the count was cut off in
+        # (the pre-RC walk, at every window size and in both languages).
+        side = theme.SPACE["sm"]
+        self.badge.setContentsMargins(side, 0, side, 0)
         layout.addWidget(self.badge)
         layout.addSpacing(12)
         self.facts = QLabel()
