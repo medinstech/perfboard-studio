@@ -153,6 +153,15 @@ GROUND = theme.NET_COLOURS["ground"]
 HIGHLIGHT = theme.ACTIVE.accent
 UNDEFINED = theme.ACTIVE.warning
 
+#: A NET THAT IS LIT KEEPS ITS OWN COLOUR, heavier, on a glow of the accent. It used to be
+#: redrawn IN the accent, a blue a shade off the signal colour: selecting the regulator lit
+#: +5V and GND, so the supply turned blue and the ground with it, and the sheet read as
+#: wired in two blues for no reason anybody could see (Sinan's dev3 try, "the colours got
+#: strange"). Under the line, not instead of it, a lit rail is still a rail and a lit
+#: signal still a signal. ``test_a_lit_net_keeps_its_class_colour``.
+HALO_MM = 2.2
+HALO_ALPHA = 90
+
 #: Line weights in millimetres of sheet. A schematic has one weight for wires and a
 #: slightly heavier one for symbol bodies, which is what makes a body read as a thing and a
 #: wire as a connection between things.
@@ -263,6 +272,19 @@ DRAG_WIRE_PX = 6
 
 def _point(point: Point2) -> QPointF:
     return QPointF(point.x, point.y)
+
+
+def _halo(painter: QPainter, path: Sequence[Point2]) -> None:
+    """The accent's glow under a lit run (``HALO_MM``)."""
+    glow = QColor(HIGHLIGHT)
+    glow.setAlpha(HALO_ALPHA)
+    pen = QPen(glow)
+    pen.setWidthF(HALO_MM)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawPolyline(QPolygonF([_point(point) for point in path]))
 
 
 def _class_colour(net_class: str) -> str:
@@ -438,7 +460,12 @@ class SheetItem(QGraphicsItem):
         for junction in drawing.junctions:
             lit = junction.net_id in self.highlight_nets
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(QColor(HIGHLIGHT if lit else SIGNAL)))
+            if lit:
+                glow = QColor(HIGHLIGHT)
+                glow.setAlpha(HALO_ALPHA)
+                painter.setBrush(QBrush(glow))
+                painter.drawEllipse(_point(junction.at), HALO_MM / 2, HALO_MM / 2)
+            painter.setBrush(QBrush(QColor(SIGNAL)))
             painter.drawEllipse(_point(junction.at), DOT_MM, DOT_MM)
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
@@ -484,7 +511,9 @@ class SheetItem(QGraphicsItem):
     def _stroke(
         self, painter: QPainter, path: Sequence[Point2], net_class: str, lit: bool
     ) -> None:
-        pen = QPen(QColor(HIGHLIGHT if lit else _class_colour(net_class)))
+        if lit:
+            _halo(painter, path)
+        pen = QPen(QColor(_class_colour(net_class)))
         pen.setWidthF(HIGHLIGHT_MM if lit else WIRE_MM)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -503,11 +532,15 @@ class SheetItem(QGraphicsItem):
         another on paper would be two answers to the question the glyph exists to answer.
         """
         lit = rail.net_id in self.highlight_nets
-        pen = QPen(QColor(HIGHLIGHT if lit else _class_colour(rail.net_class)))
+        bars = rail_glyph_bars(rail)
+        if lit:
+            for start, end in bars:
+                _halo(painter, (start, end))
+        pen = QPen(QColor(_class_colour(rail.net_class)))
         pen.setWidthF(HIGHLIGHT_MM if lit else BODY_MM)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
-        for start, end in rail_glyph_bars(rail):
+        for start, end in bars:
             painter.drawLine(_point(start), _point(end))
 
     def _no_connect(self, painter: QPainter, mark: NoConnect) -> None:
