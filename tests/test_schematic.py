@@ -73,6 +73,8 @@ from perfboard_studio.schematic import (
     RAIL_BAR_REACH,
     RAIL_GLYPH_DEPTH_MM,
     RAIL_GLYPH_MM,
+    RAIL_STUB_MM,
+    RAIL_TURN_MM,
     REF_LABEL_MM,
     TRACK_PITCH_MM,
     VALUE_LABEL_MM,
@@ -84,6 +86,7 @@ from perfboard_studio.schematic import (
     _net_name_box,
     _part_label_box,
     _PinSpec,
+    _rail_at_pin,
     _relay_sides,
     _split_tall_layers,
     _switch_poles,
@@ -389,26 +392,23 @@ def test_a_net_name_below_its_wire_has_room_under_it(path: Path) -> None:
 
 
 def test_a_name_with_no_room_above_its_wire_goes_under_it() -> None:
-    """The two names on the repository's boards the rule moves, named, so that a change
-    which quietly stops taking the band below fails here rather than nowhere.
+    """The name on the repository's boards the rule moves, named, so that a change which
+    quietly stops taking the band below fails here rather than nowhere.
 
-    Drawn with every net wired (``name_nets_at=0``): LED_ON reaches the Nano's 30 pins,
-    so by default it is said at its pins and never looks for room over a run -- and the
-    rule this holds is about a name that does."""
-    drawing = build_schematic(
-        load(EXAMPLES_DIR / "nano-relay.perf"),
-        REGISTRY,
-        dataclasses.replace(DEFAULT_SCHEMATIC_OPTIONS, name_nets_at=0),
-    )
+    It was BASE and LED_ON on nano-relay drawn with every net wired, each over a trunk with
+    a busy band above. Named over their longest run since (``_name_nets``), both found room
+    above a longer lead, and the one name left under its wire is relay-and-supply's
+    PWR_LED."""
+    drawing = build_schematic(load(EXAMPLES_DIR / "relay-and-supply.perf"), REGISTRY)
     moved = {
         label.text
         for label in drawing.labels
         if label.kind == "net"
         and _own_run_beside(label, drawing, -(NET_LABEL_CLEARANCE_MM + NET_LABEL_MM))
     }
-    assert {"BASE", "LED_ON"} <= moved
+    assert "PWR_LED" in moved
     for label in drawing.labels:
-        if label.text in {"BASE", "LED_ON"}:
+        if label.kind == "net" and label.text == "PWR_LED":
             box = net_label_box(label)
             assert not any(
                 box_meets_segment(box, start, end) for start, end, _what in segments(drawing)
@@ -562,22 +562,16 @@ def test_nothing_is_drawn_through_a_rail_glyph(path: Path) -> None:
 
     Unlike an ordinary crossing -- which every schematic has, and which the absence of a
     junction dot already settles -- there is no convention that rescues a line drawn
-    THROUGH the glyph. So rail anchors are allocated out of the same track pool the trunks
-    come from, and the vertical stub is padded past its anchor by the glyph's own depth.
-    This measures the box that leaves clear; the renderer draws inside it.
+    THROUGH the glyph. A rail is drawn at its pin, out into the room its channel keeps for
+    it (``_rail_reach``), so nothing else is laid there. This measures the box that leaves
+    clear; the renderer draws inside it.
     """
     drawing = drawing_for(path)
     anchors = {(round(rail.at.x, 6), round(rail.at.y, 6)) for rail in drawing.rails}
     assert len(anchors) == len(drawing.rails), "two rail glyphs are drawn on top of each other"
 
     for rail in drawing.rails:
-        deep = RAIL_GLYPH_DEPTH_MM if rail.direction == "down" else -RAIL_GLYPH_DEPTH_MM
-        box = (
-            rail.at.x - RAIL_GLYPH_MM,
-            min(rail.at.y, rail.at.y + deep),
-            rail.at.x + RAIL_GLYPH_MM,
-            max(rail.at.y, rail.at.y + deep),
-        )
+        box = rail_glyph_box(rail)
         for other in [*drawing.wires, *drawing.rails]:
             if other is rail:
                 continue  # its own stem runs into the glyph, which is the stem
@@ -617,37 +611,50 @@ def _box_gap(a: tuple[float, float, float, float], b: tuple[float, float, float,
 
 @pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
 def test_no_rail_glyph_meets_another_or_a_name(path: Path) -> None:
-    """Every sheet, as the document has it and as Arrange draws it: no two glyphs within
-    half a track of each other, and no text on a glyph but a supply's own name over its
-    bar. A glyph is most of a track deep, and the densest packing hung one a quarter of a
-    millimetre under another's box -- C2's and LED1's grounds on the NE555 read as one
-    smudge of six bars -- while a name kept off the BARS could still sit in the box: "OUT"
-    on U1's ground."""
+    """Every sheet, as the document has it and as Arrange draws it: no two glyphs' bars
+    within half a track of each other, and no text on a glyph but a supply's own name past
+    its bar. The densest packing of the old lanes hung one glyph a quarter of a millimetre
+    under another -- C2's and LED1's grounds on the NE555 read as one smudge of six bars --
+    while a name kept off the BARS could still sit in the box: "OUT" on U1's ground.
+
+    BARS, not boxes, between two glyphs. A rail stands at its pin now, so two supplies on
+    neighbouring pins of a connector start one pin apart, as they do on every schematic --
+    J1's VCC over its GND on the NE555 -- and a ground under a pin whose own rail turns
+    down beside it runs out a pin further first (``_rail_outs``). A box is what a WIRE is
+    kept out of and spans the whole of its row; the bars use ``RAIL_BAR_REACH`` of it, and
+    that is what two glyphs are held apart by."""
     for drawing in (drawing_for(path), _arranged(path)):
         glyphs = [(rail, rail_glyph_box(rail)) for rail in drawing.rails]
-        for (a, box_a), (b, box_b) in itertools.combinations(glyphs, 2):
-            assert _box_gap(box_a, box_b) >= TRACK_PITCH_MM / 2, (
+        for (a, _box_a), (b, _box_b) in itertools.combinations(glyphs, 2):
+            gap = min(
+                _gap(bar_a, bar_b)
+                for bar_a in rail_glyph_bars(a)
+                for bar_b in rail_glyph_bars(b)
+            )
+            assert gap >= TRACK_PITCH_MM / 2, (
                 f"{a.net_name} at {a.at.x:.2f},{a.at.y:.2f} and {b.net_name} at "
                 f"{b.at.x:.2f},{b.at.y:.2f} read as one glyph"
             )
         for rail, box in glyphs:
             for label in drawing.labels:
-                if label.kind == "rail" and abs(label.at.x - rail.at.x) < 1e-6:
-                    continue  # a supply's own name, printed over its bar
+                if label.kind == "rail" and _own_name(label, rail):
+                    continue  # a supply's own name, printed past its bar
                 assert _box_gap(box, _text_box(label)) > 0, (
                     f"{label.kind} {label.text!r} prints on the {rail.net_name} glyph at "
                     f"{rail.at.x:.2f},{rail.at.y:.2f}"
                 )
 
 
-def _glyph_box(rail) -> tuple[float, float, float, float]:
-    deep = RAIL_GLYPH_DEPTH_MM if rail.direction == "down" else -RAIL_GLYPH_DEPTH_MM
-    return (
-        rail.at.x - RAIL_GLYPH_MM,
-        min(rail.at.y, rail.at.y + deep),
-        rail.at.x + RAIL_GLYPH_MM,
-        max(rail.at.y, rail.at.y + deep),
+def _own_name(label: Label, rail) -> bool:  # type: ignore[no-untyped-def]
+    """Whether ``label`` is the name ``_rail_names`` prints past this rail's bar, or beside it
+    where the rail turned off a pin at a symbol's side."""
+    return label.text == rail.net_name and (
+        abs(label.at.x - rail.at.x) + abs(label.at.y - rail.at.y) < 1.5 * GRID_MM
     )
+
+
+def _glyph_box(rail) -> tuple[float, float, float, float]:  # type: ignore[no-untyped-def]
+    return rail_glyph_box(rail)
 
 
 @pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
@@ -762,17 +769,13 @@ def test_turning_rails_off_puts_the_ground_net_back_on_the_sheet_as_wire() -> No
 def test_every_power_glyph_says_which_supply_it_is() -> None:
     """A power glyph is a bar on a stem, so two supplies drew two identical bars and which pin
     was on which could only be found by tracing wires back to the connector. Every power
-    glyph now carries its net's name, centred over the bar; a ground glyph says GND on its
-    own and is left alone."""
+    glyph now carries its net's name, just past the bar; a ground glyph says GND on its own
+    and is left alone."""
     drawing = drawing_for(EXAMPLES_DIR / "ne555-astable.perf")
     names = [label for label in drawing.labels if label.kind == "rail"]
     assert any(rail.net_class == "power" for rail in drawing.rails)
     for rail in drawing.rails:
-        over = [
-            label
-            for label in names
-            if abs(label.at.x - rail.at.x) < 1e-9 and rail.at.y - GRID_MM < label.at.y < rail.at.y
-        ]
+        over = [label for label in names if _own_name(label, rail)]
         if rail.net_class == "power":
             assert [label.text for label in over] == [rail.net_name], (
                 f"the {rail.net_name} glyph at {rail.at} does not say which supply it is"
@@ -781,15 +784,64 @@ def test_every_power_glyph_says_which_supply_it_is() -> None:
             assert not over, "a ground glyph says GND already"
 
 
-def test_a_ground_rail_points_down_and_a_power_rail_points_up() -> None:
-    drawing = drawing_for(EXAMPLES_DIR / "ne555-astable.perf")
-    for rail in drawing.rails:
-        expected = "up" if rail.net_class == "power" else "down"
-        assert rail.direction == expected
-        if expected == "down":
-            assert rail.at.y > rail.path[0].y
-        else:
-            assert rail.at.y < rail.path[0].y
+REAL_BOARDS_FOR_RAILS = sorted(EXAMPLES_DIR.glob("*.perf"))
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS_FOR_RAILS, ids=lambda path: path.stem)
+def test_a_rail_stands_at_its_pin_upright(path: Path) -> None:
+    """At the pin, on both kinds of sheet, and upright: out of a pin on a symbol's side at
+    least a stub's length along its row, then half a pin pitch down for a ground and up for
+    a supply, the glyph on the end pointing on. Turned on its side, as it first was, a
+    ground did not read as one; turned up or down right at the pin, it stood on the next
+    pin's lead."""
+    doc = load(path)
+    for drawing in (build_schematic(doc, REGISTRY), _arranged(path)):
+        ends = {
+            (round(symbol.at.x + pin.at.x, 6), round(symbol.at.y + pin.at.y, 6)): pin.side
+            for symbol in drawing.symbols
+            for pin in symbol.pins
+        }
+        assert drawing.rails
+        for rail in drawing.rails:
+            start = rail.path[0]
+            side = ends[(round(start.x, 6), round(start.y, 6))]
+            down = rail.net_class != "power"
+            assert rail.direction == ("down" if down else "up")
+            assert rail.at == rail.path[-1]
+            assert side in ("left", "right")
+            anchor, bend, end = rail.path
+            out = bend.x - anchor.x if side == "right" else anchor.x - bend.x
+            assert bend.y == anchor.y and out >= RAIL_STUB_MM - 1e-9
+            assert out / GRID_MM == pytest.approx(round(out / GRID_MM))
+            assert end.x == bend.x
+            assert end.y - anchor.y == pytest.approx(RAIL_TURN_MM if down else -RAIL_TURN_MM)
+
+
+@pytest.mark.parametrize("side", ["left", "right", "top", "bottom"])
+@pytest.mark.parametrize("net_class", ["ground", "power"])
+def test_a_rail_on_any_pin_points_the_conventional_way(side: str, net_class: str) -> None:
+    """A turned symbol puts a pin on its top or bottom, and a ground on a top pin still
+    points down: past the stub, a step across and back, so the glyph hangs beside its own
+    stub, never over it, and stays on the pin's own side of the symbol."""
+    net = Net(id="n", name="GND" if net_class == "ground" else "+5V", net_class=net_class, nodes=())
+    anchor = Point2(x=50.8, y=50.8)
+    rail = _rail_at_pin(net, anchor, side)
+    down = net_class == "ground"
+    assert rail.direction == ("down" if down else "up")
+    for p, q in itertools.pairwise(rail.path):
+        assert p.x == q.x or p.y == q.y
+    outward = {"left": (-1, 0), "right": (1, 0), "top": (0, -1), "bottom": (0, 1)}[side]
+    # never back into the symbol: every point is on the pin's side of it
+    for point in rail.path[1:]:
+        assert (point.x - anchor.x) * outward[0] + (point.y - anchor.y) * outward[1] > 0
+    x0, y0, x1, y1 = rail_glyph_box(rail)
+    for p, q in itertools.pairwise(rail.path):
+        if q == rail.at:
+            continue
+        assert not (
+            min(p.x, q.x) < x1 - 1e-9 and max(p.x, q.x) > x0 + 1e-9
+            and min(p.y, q.y) < y1 - 1e-9 and max(p.y, q.y) > y0 + 1e-9
+        ), "the stub runs through its own glyph"
 
 
 def test_a_rail_never_makes_two_parts_neighbours() -> None:
@@ -1711,6 +1763,42 @@ def test_freezing_a_sheet_keeps_every_wire_and_every_name(path: Path) -> None:
         )
         if not options.name_nets_at:
             assert all(wire.ends is not None for wire in drawn.wires), "nothing turned into a label"
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+def test_a_freeze_moves_no_rail(path: Path) -> None:
+    """The sheet drawn for you ran every rail to a lane of its own between two rows, and
+    the first edit froze it into the hand-drawn kind, which draws a rail at its pin: every
+    +5V and GND on the page changed shape under the user's first click. Both kinds draw it
+    at the pin now (``_rail_at_pin``), and the freeze keeps every rail, its name and every
+    wire -- the test above -- exactly where they were."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    derived = build_schematic(doc, REGISTRY)
+    drawn = build_schematic(_frozen(doc, derived), REGISTRY)
+    assert derived.rails
+    assert sorted(drawn.rails, key=repr) == sorted(derived.rails, key=repr)
+    assert sorted(
+        (label for label in drawn.labels if label.kind == "rail"), key=repr
+    ) == sorted((label for label in derived.labels if label.kind == "rail"), key=repr)
+    assert {s.ref: s.at for s in drawn.symbols} == {s.ref: s.at for s in derived.symbols}
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+def test_a_freeze_moves_no_name(path: Path) -> None:
+    """The sheet drawn for you named a net over its trunk and the hand-drawn kind over the
+    longest wire somebody drew, each with different things kept out of its way, so the
+    first click on a sheet moved 13 names on four of the examples that nobody had touched.
+    Both name every net by one rule now (``_name_nets``): every net's name, and every name
+    said at a pin, is where it was."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    derived = build_schematic(doc, REGISTRY)
+    drawn = build_schematic(_frozen(doc, derived), REGISTRY)
+
+    def names(drawing: SchematicDrawing) -> list[Label]:
+        return sorted((label for label in drawing.labels if label.kind == "net"), key=repr)
+
+    assert names(derived)
+    assert names(drawn) == names(derived)
 
 
 @pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)

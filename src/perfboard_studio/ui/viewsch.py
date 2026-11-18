@@ -80,6 +80,8 @@ from perfboard_studio.erc import ErcFinding, ErcSeverity
 from perfboard_studio.model import NetNode, Point2, SheetWire
 from perfboard_studio.schematic import (
     GRID_MM,
+    LEAD_MM,
+    NET_LABEL_CLEARANCE_MM,
     NET_LABEL_MM,
     PIN_LABEL_MM,
     PIN_PITCH_MM,
@@ -744,7 +746,8 @@ class SheetItem(QGraphicsItem):
         pins_fit = pin_text_fits(scale, sizes["pin"])
         places = label_places(
             self.drawing.labels, painter.transform(), sizes,
-            wires=[wire.path for wire in self.drawing.wires], rails=self.drawing.rails,
+            wires=label_lines(self.drawing), rails=self.drawing.rails,
+            bounds=QRectF(0.0, 0.0, self.drawing.width, self.drawing.height),
         )
         back = painter.transform().inverted()[0]
         for index, label in enumerate(self.drawing.labels):
@@ -768,8 +771,9 @@ class SheetItem(QGraphicsItem):
                     continue
                 colour, size, bold = INK_DIM, sizes["pin"], False
             if label.kind == "net":
+                device, alignment = places[index]
                 draw_flag_label(
-                    painter, _point(label.at), label.text, size, label_alignment(label),
+                    painter, back.map(device), label.text, size, alignment,
                     colour=QColor(colour), fill=QColor(BODY_FILL),
                 )
                 continue
@@ -802,6 +806,23 @@ def visible_labels(
     return sorted(label_places(labels, transform, sizes, wires, rails))
 
 
+def label_lines(drawing: SchematicDrawing) -> list[tuple[Point2, ...]]:
+    """What a supply's name is kept off on screen: every wire, and every pin's lead.
+
+    The leads because a supply on a chip's side is named on its pin's row, and moved over
+    or under its bar when that is taken -- which on a chip is the next pin's row, where the
+    name says that pin is on the supply. A lead there, wired or not, keeps it off.
+    """
+    lines: list[tuple[Point2, ...]] = [wire.path for wire in drawing.wires]
+    inward = {"left": (1.0, 0.0), "right": (-1.0, 0.0), "top": (0.0, 1.0), "bottom": (0.0, -1.0)}
+    for symbol in drawing.symbols:
+        for pin in symbol.pins:
+            end = Point2(x=symbol.at.x + pin.at.x, y=symbol.at.y + pin.at.y)
+            dx, dy = inward[pin.side]
+            lines.append((end, Point2(x=end.x + dx * LEAD_MM, y=end.y + dy * LEAD_MM)))
+    return lines
+
+
 #: How far a supply's name stands off its own glyph when it is moved beside it, in device
 #: pixels: past the plate's own padding (``scenetext._plate``), so the plate clears the bar.
 RAIL_NAME_GAP_PX = 6.0
@@ -813,6 +834,7 @@ def label_places(
     sizes: dict[str, int],
     wires: Sequence[Sequence[Point2]] = (),
     rails: Sequence[Rail] = (),
+    bounds: QRectF | None = None,
 ) -> dict[int, tuple[QPointF, Qt.AlignmentFlag]]:
     """Where each label that can be drawn at this zoom goes: its anchor in DEVICE pixels
     and ``draw_label``'s alignment, by index into ``labels``.
@@ -833,7 +855,20 @@ def label_places(
     over its bar would meet one, it tries its other places in ``_rail_name_places`` order
     and takes the first that is clear, and only where none is does it wait for a closer
     zoom. Two rails on one board are told apart by nothing else -- orange says power, not
-    which one. A net's own name sits on its own wire, on a flag, so it is not asked.
+    which one.
+
+    A net's own name sits on its own wire, on a flag, and is not kept off wires -- but it is
+    kept off a RAIL. A supply drawn at its pin stands on the chip's side one pin from the
+    next pin's name, and that name, held at a readable size, grew up over the glyph: U1's
+    GND under XTAL1's flag on the ATmega board at the window's fitted zoom. Such a name
+    tries ON its run, then under it (``_off_its_run``), where nothing but its own wire may
+    touch it, and where those are taken too it waits for a closer zoom like any other.
+
+    And nothing past the sheet's edge (``bounds``, the sheet in millimetres): a fitted
+    sheet fills the panel edge to edge, and a name held at a readable size by a pin at the
+    sheet's edge printed as "ELAY_DRIVE". The layout keeps every label inside the sheet at
+    its own size, so this only ever asks of the panel's. A label that does not fit whole in
+    any of its places waits for a closer zoom too.
     """
     order = sorted(
         (index for index, label in enumerate(labels) if label.kind in LABEL_PRIORITY),
@@ -850,6 +885,7 @@ def label_places(
         for owner, path in lines
         for p, q in itertools.pairwise(path)
     ]
+    edge = transform.mapRect(bounds) if bounds is not None else None
     kept: dict[int, tuple[QPointF, Qt.AlignmentFlag]] = {}
     taken: list[QRectF] = []
     for index in order:
@@ -860,11 +896,21 @@ def label_places(
         own: Rail | None = None
         if label.kind == "rail":
             own, places = _rail_name_places(label, places[0], transform, rails)
+        elif label.kind == "net" and _over_a_run(label, wires):
+            places.extend(_off_its_run(label, transform))
         for place, (device, alignment) in enumerate(places):
             rect = label_plate_rect(device, label.text, size, alignment, bold=bold)
+            if edge is not None and not edge.contains(rect):
+                continue
             if label.kind == "rail" and any(
                 rect.intersects(run) for owner, run in runs
                 if place or owner is None or owner is not own
+            ):
+                continue
+            if label.kind == "net" and any(
+                rect.intersects(run) for owner, run in runs
+                if owner is not None
+                or (place and not run.contains(transform.map(_point(_on_its_run(label)))))
             ):
                 continue
             if any(rect.intersects(other) for other in taken):
@@ -875,6 +921,38 @@ def label_places(
     return kept
 
 
+def _on_its_run(label: Label) -> Point2:
+    """The point on the wire a net's name sits over: ``NET_LABEL_CLEARANCE_MM`` under its
+    baseline (``schematic._said_at_pin`` and the run namer both put it there)."""
+    return Point2(x=label.at.x, y=label.at.y + NET_LABEL_CLEARANCE_MM)
+
+
+def _over_a_run(label: Label, wires: Sequence[Sequence[Point2]]) -> bool:
+    """Whether a net's name stands over a level stretch of wire (``_on_its_run``), as a
+    name said at a side pin and most run names do -- not under one or past a stub's end."""
+    on = _on_its_run(label)
+    return any(
+        abs(p.y - on.y) < 1e-6 and abs(q.y - on.y) < 1e-6
+        and min(p.x, q.x) - 1e-6 <= on.x <= max(p.x, q.x) + 1e-6
+        for path in wires
+        for p, q in itertools.pairwise(path)
+    )
+
+
+def _off_its_run(label: Label, transform: QTransform) -> list[tuple[QPointF, Qt.AlignmentFlag]]:
+    """A net's other places, from the same end of the text: ON its wire, the flag centred on
+    the run as a label at a wire's end is on most schematics -- held at a readable size it
+    then fills its own pin's row and no other -- and then hanging under the wire by the
+    clearance it stood over it with."""
+    on = transform.map(_point(_on_its_run(label)))
+    under = Point2(x=label.at.x, y=label.at.y + 2 * NET_LABEL_CLEARANCE_MM)
+    horizontal = label_alignment(label) & ~Qt.AlignmentFlag.AlignTop
+    return [
+        (on, horizontal | Qt.AlignmentFlag.AlignVCenter),
+        (transform.map(_point(under)), horizontal | Qt.AlignmentFlag.AlignBottom),
+    ]
+
+
 def _rail_name_places(
     label: Label,
     over: tuple[QPointF, Qt.AlignmentFlag],
@@ -882,20 +960,27 @@ def _rail_name_places(
     rails: Sequence[Rail],
 ) -> tuple[Rail | None, list[tuple[QPointF, Qt.AlignmentFlag]]]:
     """A supply's name's glyph and places, the one the layout gave it first: past the end of the bar
-    (where the layout put it), then beside the bar to the right and to the left, then on
-    the stub's side of the bar, right of the stub and left of it.
+    (where the layout put it, over it or beside it), then beside the bar to the right and to
+    the left, then on
+    the stub's side of the bar, right of the stub and left of it. A bar off a chip's side
+    stands between two of its rows, and a name moved off it lands on a row; ``label_lines``
+    gives the caller every pin's lead to keep the name off, so a name that would say a pin
+    is on the supply when it is not waits for a closer zoom instead.
 
-    The glyph is the rail whose name this is, at the label's x -- ``_rail_names`` puts the
-    name on the bar's centre line -- and nearest in y. A label no rail owns keeps its one
-    place.
+    The glyph is the rail whose name this is nearest the label, within a grid step and a
+    half -- ``_rail_names`` puts the name just past the bar, or beside it where the rail
+    turned off a pin at a symbol's side. A label no rail owns keeps its one place.
     """
     own = [
         rail for rail in rails
-        if rail.net_name == label.text and abs(rail.at.x - label.at.x) < 1e-6
+        if rail.net_name == label.text
+        and math.dist((rail.at.x, rail.at.y), (label.at.x, label.at.y)) < 1.5 * GRID_MM
     ]
     if not own:
         return None, [over]
-    rail = min(own, key=lambda rail: abs(rail.at.y - label.at.y))
+    rail = min(
+        own, key=lambda rail: math.dist((rail.at.x, rail.at.y), (label.at.x, label.at.y))
+    )
     bar = transform.map(_point(rail.at))
     half = transform.map(QPointF(rail.at.x + RAIL_GLYPH_MM * RAIL_BAR_REACH, rail.at.y)).x() - bar.x()
     gap = RAIL_NAME_GAP_PX
@@ -903,10 +988,13 @@ def _rail_name_places(
     stub_side = Qt.AlignmentFlag.AlignBottom if rail.direction == "up" else Qt.AlignmentFlag.AlignTop
     step = gap if rail.direction == "up" else -gap
     middle = Qt.AlignmentFlag.AlignVCenter
+    right = (QPointF(bar.x() + half + gap, bar.y()), Qt.AlignmentFlag.AlignRight | middle)
+    left = (QPointF(bar.x() - half - gap, bar.y()), Qt.AlignmentFlag.AlignLeft | middle)
+    # A name the layout put beside the bar is centred on it here: on the layout's baseline,
+    # held at a readable size, it grew up into the row above.
+    first = {"left": [right, left], "right": [left, right]}.get(label.anchor, [over, right, left])
     return rail, [
-        over,
-        (QPointF(bar.x() + half + gap, bar.y()), Qt.AlignmentFlag.AlignRight | middle),
-        (QPointF(bar.x() - half - gap, bar.y()), Qt.AlignmentFlag.AlignLeft | middle),
+        *first,
         (QPointF(bar.x() + gap, bar.y() + step), Qt.AlignmentFlag.AlignRight | stub_side),
         (QPointF(bar.x() - gap, bar.y() + step), Qt.AlignmentFlag.AlignLeft | stub_side),
     ]

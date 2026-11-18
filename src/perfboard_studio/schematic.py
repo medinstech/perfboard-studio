@@ -66,7 +66,7 @@ import heapq
 import itertools
 import math
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
@@ -348,10 +348,15 @@ class Rail:
     ``direction``. ``net_class`` picks the glyph: three shrinking bars for ground, a bar on
     a stem for power.
 
-    ``at`` sits on a reserved track of a horizontal channel -- the same allocation the
-    trunks come out of -- so no trunk can ever run along the line the bars are drawn on. A
-    wire may still CROSS the stub, which is an ordinary schematic crossing and carries no
-    dot; a wire lying along the glyph reads as part of it, which is not.
+    AT THE PIN, ON BOTH KINDS OF SHEET (``_rail_at_pin``), AND UPRIGHT: a ground always
+    points down and a supply always up, which is the convention a beginner reads a ground
+    by -- three bars turned on their side did not read as one. Out of a pin on a symbol's
+    side the stub runs out and then turns half a pin pitch, so the glyph stands in the gap
+    between this row and the next and not on the next pin's lead (``_rail_outs``). The sheet
+    drawn for you used to run every rail to a lane of its own between two rows, and the
+    first edit, which freezes the sheet, drew them at the pin instead: every rail on the
+    sheet changed shape under the user's first click. Now there is one shape, and freezing
+    keeps it (``test_a_freeze_moves_no_rail``).
     """
 
     net_id: NetId
@@ -960,13 +965,26 @@ def rail_glyph_box(rail: Rail) -> tuple[Mm, Mm, Mm, Mm]:
     drawn inside it (``rail_glyph_bars``); a name placed on the sheet keeps out of all of it,
     not just off the bars -- clear of the bars by a fraction of a millimetre, "OUT" on the
     NE555 read as written on U1's ground."""
-    deep = RAIL_GLYPH_DEPTH_MM if rail.direction == "down" else -RAIL_GLYPH_DEPTH_MM
+    (along_x, along_y), (across_x, across_y) = _rail_axes(rail)
+    corners = [
+        (
+            rail.at.x + along_x * RAIL_GLYPH_DEPTH_MM * deep + across_x * RAIL_GLYPH_MM * side,
+            rail.at.y + along_y * RAIL_GLYPH_DEPTH_MM * deep + across_y * RAIL_GLYPH_MM * side,
+        )
+        for deep in (0.0, 1.0)
+        for side in (-1.0, 1.0)
+    ]
     return (
-        rail.at.x - RAIL_GLYPH_MM,
-        min(rail.at.y, rail.at.y + deep),
-        rail.at.x + RAIL_GLYPH_MM,
-        max(rail.at.y, rail.at.y + deep),
+        min(x for x, _ in corners),
+        min(y for _, y in corners),
+        max(x for x, _ in corners),
+        max(y for _, y in corners),
     )
+
+
+def _rail_axes(rail: Rail) -> tuple[tuple[float, float], tuple[float, float]]:
+    """The unit step the glyph points along, and the one across it."""
+    return {"down": (0.0, 1.0), "up": (0.0, -1.0)}[rail.direction], (1.0, 0.0)
 
 
 def rail_glyph_bars(rail: Rail) -> tuple[tuple[Point2, Point2], ...]:
@@ -986,23 +1004,23 @@ def rail_glyph_bars(rail: Rail) -> tuple[tuple[Point2, Point2], ...]:
     tenth of a grid from the wire in the next vertical track, on every sheet with a rail, and
     J1's +V on the NE555 read as joined to the net beside it.
 
-    ``direction`` is honoured rather than assumed. Every ground rail this module emits points
-    down and every power rail up, because ``rail_channel`` picks the channel from the net
-    class -- so this is the reading that stays correct if that ever stops being true, not a
-    case anybody has seen.
+    A ground points down and a supply up, whichever way its pin does (``Rail``).
     """
-    x, y = rail.at.x, rail.at.y
-    across = RAIL_GLYPH_MM * RAIL_BAR_REACH
-    if rail.net_class == "power":
-        return ((Point2(x=x - across, y=y), Point2(x=x + across, y=y)),)
-    sign = 1.0 if rail.direction == "down" else -1.0
-    return tuple(
-        (
-            Point2(x=x - across * shrink, y=y + sign * RAIL_GLYPH_DEPTH_MM * step),
-            Point2(x=x + across * shrink, y=y + sign * RAIL_GLYPH_DEPTH_MM * step),
+    (along_x, along_y), (across_x, across_y) = _rail_axes(rail)
+    reach = RAIL_GLYPH_MM * RAIL_BAR_REACH
+    bars = ((1.0, 0.0),) if rail.net_class == "power" else _GROUND_BARS
+    out = []
+    for shrink, step in bars:
+        centre_x = rail.at.x + along_x * RAIL_GLYPH_DEPTH_MM * step
+        centre_y = rail.at.y + along_y * RAIL_GLYPH_DEPTH_MM * step
+        half_x, half_y = across_x * reach * shrink, across_y * reach * shrink
+        out.append(
+            (
+                Point2(x=centre_x - half_x, y=centre_y - half_y),
+                Point2(x=centre_x + half_x, y=centre_y + half_y),
+            )
         )
-        for shrink, step in _GROUND_BARS
-    )
+    return tuple(out)
 
 
 # ---------------------------------------------------------------------------
@@ -2379,46 +2397,6 @@ def _assign_tracks(intervals: Sequence[tuple[str, float, float]]) -> tuple[dict[
     return tracks, len(last_end)
 
 
-def _space_rails(
-    runs: Sequence[tuple[str, float, float]], tracks: dict[str, int], count: int
-) -> tuple[dict[str, int], int]:
-    """The tracks ``_assign_tracks`` gave a channel's runs, with an empty track put between
-    two rails of one lane -- one vertical channel, so their stubs are a track or two apart
-    -- where the glyph of either reaches towards the other's track.
-
-    A glyph is most of a track deep, so the sweep's densest packing hung one glyph a track
-    below and a track beside another, a quarter of a millimetre under its box: on the NE555
-    C2's and LED1's grounds read as one smudge of six bars, and on nano-relay "+5V" printed
-    under the +12V bar. A ground points down, so the track below it is the one kept free of
-    another glyph; a power symbol points up, its name over its bar, and keeps the one above.
-    Everything from the lower of the two down moves one track, which keeps every run's order
-    and every gap the sweep made, and costs the channel one track for each such pair.
-    """
-    tracks = dict(tracks)
-    lanes = {key: low for key, low, _high in runs if key.startswith("rail")}
-
-    def points_down(key: str) -> bool:
-        return key.split("")[1] == "1"  # ``_rail_key`` orders power "0", ground "1"
-
-    while True:
-        clash = next(
-            (
-                below
-                for upper in lanes
-                for below in lanes
-                if lanes[upper] == lanes[below]
-                and tracks[below] == tracks[upper] + 1
-                and (points_down(upper) or not points_down(below))
-            ),
-            None,
-        )
-        if clash is None:
-            return tracks, count
-        cut = tracks[clash]
-        tracks = {key: track + (track >= cut) for key, track in tracks.items()}
-        count += 1
-
-
 def _named_stub(name: str, side: PinSide) -> Mm:
     """How far a pin's stub runs when its net is said by name: under the whole name, when
     the name runs along the stub; a plain stub when the pin points up or down."""
@@ -2856,6 +2834,81 @@ def _net_label_at(
     return Point2(x=best, y=above)
 
 
+def _name_nets(
+    nets: Sequence[Net],
+    runs_of: Sequence[Wire],
+    obstacles: list[tuple[Point2, Point2]],
+) -> list[Label]:
+    """Each net's name, once, over its longest level run -- ONE RULE FOR BOTH KINDS OF SHEET.
+
+    The derived sheet used to name a net over its trunk and the hand-drawn one over the
+    longest wire somebody drew, with different things in the way of each, so the first click
+    on a sheet froze it and moved names the user had not touched: 13 on four of the examples.
+    Now both read the same thing off the drawing. A run is every level segment of the net's
+    wires at one height that touch or overlap, merged -- the hand-drawn sheet holds a trunk
+    as the pieces of the pin-to-pin wires laid along it, the derived one as one segment --
+    and the longest wins, the highest and then the left-most among equals. The name goes on
+    it by ``_net_label_at``, in the order ``nets`` gives (the netlist's), and each name placed
+    is in the way of the next.
+
+    ``runs_of`` is the wires a net may be named over: not a stub a name is said at, which
+    is named already. ``obstacles`` is everything else in the way and grows by each name.
+    """
+    levels: dict[NetId, list[tuple[Mm, Mm, Mm]]] = {}
+    for wire in runs_of:
+        for start, end in _segments_of(wire.path):
+            if abs(end.y - start.y) < 1e-9 and abs(end.x - start.x) > 1e-9:
+                levels.setdefault(wire.net_id, []).append(
+                    (round(start.y, 6), min(start.x, end.x), max(start.x, end.x))
+                )
+    labels: list[Label] = []
+    for net in nets:
+        merged: list[tuple[Mm, Mm, Mm]] = []
+        for y, x0, x1 in sorted(levels.get(net.id, ())):
+            if merged and merged[-1][0] == y and x0 <= merged[-1][2] + 1e-9:
+                merged[-1] = (y, merged[-1][1], max(merged[-1][2], x1))
+            else:
+                merged.append((y, x0, x1))
+        if not merged:
+            continue
+        y, x0, x1 = min(merged, key=lambda run: (-(run[2] - run[1]), run[0], run[1]))
+        at = _net_label_at(net.name, (x0, x1), y, obstacles)
+        labels.append(Label(text=net.name, at=at, kind="net", anchor="left"))
+        obstacles.extend(_box_obstacle(_label_box(net.name, at.x, at.y)))
+    return labels
+
+
+def _names_in_the_way(
+    wires: Sequence[Wire],
+    rails: Sequence[Rail],
+    part_labels: Sequence[Label],
+    rail_names: Sequence[Label],
+    pin_names: Sequence[Label],
+) -> list[tuple[Point2, Point2]]:
+    """What a net's name is kept off, on both kinds of sheet: every wire, every rail's stub
+    and glyph, and every label already placed -- the parts', the supplies' and the names said
+    at a pin.
+
+    Text is in the way too. A net name used to be kept off the WIRES and nothing else, so
+    three names looking for room near the same corner of an IC all found the same room and
+    were printed on top of one another ("VCC", "THRESH" and "OUT" in one smudge), and a name
+    could land on a part's value.
+    """
+    obstacles: list[tuple[Point2, Point2]] = []
+    for wire in wires:
+        obstacles.extend(_segments_of(wire.path))
+    for rail in rails:
+        obstacles.extend(_segments_of(rail.path))
+        obstacles.extend(_box_obstacle(rail_glyph_box(rail)))
+    for label in part_labels:
+        box = _part_label_box(label)
+        if box is not None:
+            obstacles.extend(_box_obstacle(box))
+    for label in (*rail_names, *pin_names):
+        obstacles.extend(_box_obstacle(_net_name_box(label)))
+    return obstacles
+
+
 def _rail_names(rails: Sequence[Rail]) -> list[Label]:
     """The net's name over every power glyph.
 
@@ -2864,23 +2917,31 @@ def _rail_names(rails: Sequence[Rail]) -> list[Label]:
     tracing the wires back to the connector -- the one question the glyph exists to answer
     (``rail_glyph_bars``). Every schematic prints the supply's name on its symbol.
 
-    Over the bar, clear of it by ``NET_LABEL_CLEARANCE_MM``: the band a net name gets over
-    its own run, and for the same reason it cannot reach the next lane -- the two together
-    stay under ``TRACK_PITCH_MM``. A ground glyph is left as it is. It already says GND,
-    and there is no room to say anything else: under its bars is the next lane and beside
-    them the next vertical track, one pitch away, where a name was first tried and landed
-    on the neighbouring glyph.
+    Clear of the bar by ``NET_LABEL_CLEARANCE_MM``. A stub that turned on its way out of
+    the pin puts the name past the end of the bar, the way the stub went, centred on the bar:
+    the glyph stands in the gap between two of a chip's rows, and a name over it would reach
+    the row above (``_rail_reach`` makes the room beside it). A straight one puts it over a
+    bar pointing up and under one pointing down. A ground glyph is left as it is: it already
+    says GND.
     """
     labels: list[Label] = []
     for rail in rails:
         if rail.net_class != "power":
             continue
         x, y = rail.at.x, rail.at.y
-        if rail.direction == "up":
+        anchor: Literal["left", "centre", "right"] = "centre"
+        turned = [q.x - p.x for p, q in itertools.pairwise(rail.path) if abs(q.x - p.x) > 1e-9]
+        if turned:
+            reach = RAIL_GLYPH_MM * RAIL_BAR_REACH + NET_LABEL_CLEARANCE_MM
+            if turned[-1] < 0:
+                at, anchor = Point2(x=x - reach, y=y + NET_LABEL_MM / 2), "right"
+            else:
+                at, anchor = Point2(x=x + reach, y=y + NET_LABEL_MM / 2), "left"
+        elif rail.direction == "up":
             at = Point2(x=x, y=y - NET_LABEL_CLEARANCE_MM)
         else:
             at = Point2(x=x, y=y + NET_LABEL_CLEARANCE_MM + NET_LABEL_MM)
-        labels.append(Label(text=rail.net_name, at=at, kind="rail", anchor="centre"))
+        labels.append(Label(text=rail.net_name, at=at, kind="rail", anchor=anchor))
     return labels
 
 
@@ -3095,7 +3156,35 @@ def _resolve_nets(
             _ResolvedNet(net=net, rail=_is_rail(net, options), pins=tuple(picked))
         )
 
-    return resolved
+    # A PIN ON TWO NETS GETS ONE RAIL AT MOST. No command makes one ("duplicate-pin"); a
+    # hand-edited file or an old one can, and every random fixture does. A rail is drawn at
+    # its pin, out the way the pin points before it turns, and so is whatever else the pin
+    # is on -- a second rail on top of the first, or a wire through its bars. So at such a
+    # pin a wire or a name wins, and otherwise the first rail does; both kinds of sheet
+    # decide it here, so a freeze still changes nothing, and the note says what was left out.
+    wired = {
+        (ref, pin.number) for item in resolved if not item.rail for ref, pin in item.pins
+    }
+    railed: set[tuple[str, str]] = set()
+    kept: list[_ResolvedNet] = []
+    for item in resolved:
+        if not item.rail:
+            kept.append(item)
+            continue
+        alone: list[tuple[str, SymbolPin]] = []
+        for ref, pin in item.pins:
+            key = (ref, pin.number)
+            if key in wired or key in railed:
+                notes.append(
+                    f"{item.net.name}: {ref} pin {pin.number} is on another net too, "
+                    f"so no rail is drawn there"
+                )
+                continue
+            railed.add(key)
+            alone.append((ref, pin))
+        if alone:
+            kept.append(dataclasses.replace(item, pins=tuple(alone)))
+    return kept
 
 
 # ---------------------------------------------------------------------------
@@ -3117,8 +3206,117 @@ def _resolve_nets(
 #: How far a net label's stub runs out of the pin before the name is written.
 LABEL_STUB_MM: Mm = 2 * GRID_MM
 
-#: How far a rail glyph hangs off a pin nobody drew a wire to.
-RAIL_STUB_MM: Mm = 3 * GRID_MM
+#: How far a rail runs out of its pin, at the least: a net name's stub, so a chip's side
+#: reads as one column of names and glyphs.
+RAIL_STUB_MM: Mm = LABEL_STUB_MM
+
+#: How far a rail out of a pin on a symbol's side turns, up for a supply and down for a
+#: ground: half a pin pitch, so the glyph stands in the gap between its row and the next.
+#: A ground's last bar then ends ``TRACK_PITCH_MM - RAIL_BAR_REACH * RAIL_GLYPH_DEPTH_MM``
+#: from the next row's lead -- exactly the least gap any glyph keeps from another net's
+#: line (``test_a_rail_glyph_keeps_clear_of_every_other_nets_line``).
+RAIL_TURN_MM: Mm = PIN_PITCH_MM / 2
+
+
+def _rail_at_pin(net: Net, anchor: Point2, side: PinSide, out: Mm = RAIL_STUB_MM) -> Rail:
+    """A rail glyph on ``net`` at a pin, upright: a ground points down and a supply up.
+
+    Out of a pin on a symbol's side, ``out`` along the pin's row and then ``RAIL_TURN_MM``
+    up or down, the glyph on the end. Out of a pin pointing the glyph's own way,
+    ``RAIL_STUB_MM`` straight on. Out of one pointing against it -- a ground on a top pin,
+    only ever on a turned symbol -- one grid step past the stub, a grid step across, and
+    back by one, so the glyph hangs beside the stub and not on it. ONE rule for both kinds
+    of sheet, which is what lets the first edit freeze the sheet drawn for you without a
+    rail changing shape (``Rail``); ``out`` comes from ``_rail_outs`` on both.
+    """
+    down = net.net_class != "power"
+    turn = RAIL_TURN_MM if down else -RAIL_TURN_MM
+    if side in ("left", "right"):
+        step = -out if side == "left" else out
+        bend = _p(anchor.x + step, anchor.y)
+        path: tuple[Point2, ...] = (anchor, bend, _p(bend.x, anchor.y + turn))
+    elif (side == "bottom") == down:
+        path = (anchor, _p(anchor.x, anchor.y + (RAIL_STUB_MM if down else -RAIL_STUB_MM)))
+    else:
+        away = -1.0 if side == "top" else 1.0
+        far = anchor.y + away * (RAIL_STUB_MM + GRID_MM)
+        path = (
+            anchor,
+            _p(anchor.x, far),
+            _p(anchor.x + GRID_MM, far),
+            _p(anchor.x + GRID_MM, anchor.y + away * RAIL_STUB_MM),
+        )
+    return Rail(
+        net_id=net.id,
+        net_name=net.name,
+        net_class=net.net_class,
+        path=path,
+        at=path[-1],
+        direction="down" if down else "up",
+    )
+
+
+def _rail_outs(
+    symbols: Mapping[str, _Placed],
+    rails: Sequence[tuple[str, SymbolPin, NetClass]],
+    said: Mapping[tuple[str, str], str],
+) -> dict[tuple[str, str], Mm]:
+    """How far each rail on a symbol's side runs out of its pin before it turns.
+
+    ``RAIL_STUB_MM``, unless something else is in the gap the glyph turns into. A ground
+    turns down into the gap over the next row, where that row's name is written when one
+    is said at its pin (``said``, the name by pin): the ground runs out past the name. A
+    supply turns up into the gap under the row above, where a ground from that row may
+    already stand: the supply runs out a pin pitch past it. Both kinds of sheet ask this
+    with the same pins, rails and names, so a freeze keeps every rail where it was.
+    """
+    def _neighbour(ref: str, pin: SymbolPin, rows: int) -> SymbolPin | None:
+        for other in symbols[ref].body.pins:
+            if (
+                other.side == pin.side
+                and abs(other.at.x - pin.at.x) < 1e-6
+                and abs(other.at.y - (pin.at.y + rows * PIN_PITCH_MM)) < 1e-6
+            ):
+                return other
+        return None
+
+    half = RAIL_GLYPH_MM
+    outs: dict[tuple[str, str], Mm] = {}
+    kinds = {(ref, pin.number): net_class for ref, pin, net_class in rails}
+    for ref, pin, net_class in rails:
+        if pin.side not in ("left", "right") or net_class == "power":
+            continue
+        out = RAIL_STUB_MM
+        below = _neighbour(ref, pin, 1)
+        if below is not None and (ref, below.number) in said:
+            name = said[(ref, below.number)]
+            need = NET_LABEL_INSET_MM + _text_width(name, NET_LABEL_MM) + NET_LABEL_CLEARANCE_MM
+            out = max(out, _up_to_grid(need + half))
+        outs[(ref, pin.number)] = out
+    for ref, pin, net_class in rails:
+        if pin.side not in ("left", "right") or net_class != "power":
+            continue
+        out = RAIL_STUB_MM
+        above = _neighbour(ref, pin, -1)
+        if above is not None and kinds.get((ref, above.number), "power") != "power":
+            out = outs[(ref, above.number)] + PIN_PITCH_MM
+        outs[(ref, pin.number)] = out
+    return outs
+
+
+def _rail_reach(net: Net, out: Mm) -> Mm:
+    """How far past its pin a rail on a symbol's side reaches along the pin's row: to the
+    edge of the box kept for its glyph, or for a supply to the end of its name beside it."""
+    reach = out + RAIL_GLYPH_MM
+    if net.net_class == "power":
+        reach = max(
+            reach,
+            out
+            + RAIL_GLYPH_MM * RAIL_BAR_REACH
+            + NET_LABEL_CLEARANCE_MM
+            + _text_width(net.name, NET_LABEL_MM),
+        )
+    return reach
 
 #: The gap between symbols parked at the edge of a hand-drawn sheet, and between that
 #: column and the drawing.
@@ -3450,8 +3648,6 @@ def _hand_drawn_sheet(
     # drawn (its net no longer holds both its ends); it goes to its pin instead, which is
     # still true: it joins that pin's net.
     drawn_paths: dict[frozenset[NetNode], tuple[Point2, ...]] = {}
-    #: Per net: its longest horizontal run, which is where its name goes -- see below.
-    longest_run: dict[NetId, tuple[Mm, str, Point2, Point2]] = {}
     waiting = list(doc.sheet_wires)
     stalled = False
     provisional: SchematicDrawing | None = None
@@ -3532,12 +3728,6 @@ def _hand_drawn_sheet(
                     ends=(wire.a, wire.b),
                 )
             )
-            for run_start, run_end in _segments_of(path):
-                length = abs(run_end.x - run_start.x)
-                if abs(run_end.y - run_start.y) < 1e-9 and length > 0:
-                    held = longest_run.get(net.id)
-                    if held is None or length > held[0]:
-                        longest_run[net.id] = (length, net.name, run_start, run_end)
             drawn_paths[frozenset((wire.a, wire.b))] = path
             drawn_pins.add((wire.a.component_ref, wire.a.pin))
         if len(still) == len(waiting):
@@ -3545,26 +3735,34 @@ def _hand_drawn_sheet(
         waiting = still
 
     # -- and a name, or a rail glyph, on everything else ---------------------
+    drawn_wires = list(wires)
     rails: list[Rail] = []
     net_labels: list[Label] = []
+    outs = _rail_outs(
+        symbols,
+        [
+            (ref, pin, item.net.net_class)
+            for item in resolved
+            if item.rail
+            for ref, pin in item.pins
+            if (ref, pin.number) not in drawn_pins
+        ],
+        {
+            (ref, pin.number): item.net.name
+            for item in resolved
+            if not item.rail and len(item.pins) > 1
+            for ref, pin in item.pins
+            if (ref, pin.number) not in drawn_pins
+        },
+    )
     for item in resolved:
         for ref, pin in item.pins:
             if (ref, pin.number) in drawn_pins:
                 continue
             anchor = symbols[ref].anchor_of(pin)
             if item.rail:
-                upward = item.net.net_class == "power"
-                end = _p(anchor.x, anchor.y + (-RAIL_STUB_MM if upward else RAIL_STUB_MM))
-                rails.append(
-                    Rail(
-                        net_id=item.net.id,
-                        net_name=item.net.name,
-                        net_class=item.net.net_class,
-                        path=(anchor, end),
-                        at=end,
-                        direction="up" if upward else "down",
-                    )
-                )
+                out = outs.get((ref, pin.number), RAIL_STUB_MM)
+                rails.append(_rail_at_pin(item.net, anchor, pin.side, out))
                 continue
             if len(item.pins) < 2:
                 # One pin and nothing to join it to. Saying the name would claim a
@@ -3579,22 +3777,17 @@ def _hand_drawn_sheet(
     #
     # A wire says two pins are joined and not what the join is called, and the derived
     # sheet always said both: freezing it used to keep the lines and lose every name. The
-    # name goes where the derived sheet puts one -- above a horizontal run, slid along it
-    # clear of the other wires by the same ``_net_label_at`` -- on the longest run the net
-    # has, which is the one a reader's eye follows.
-    obstacles: list[tuple[Point2, Point2]] = []
-    for drawn_wire in wires:
-        obstacles.extend(_segments_of(drawn_wire.path))
-    for rail in rails:
-        obstacles.extend(_segments_of(rail.path))
-        obstacles.extend(_box_obstacle(rail_glyph_box(rail)))
+    # name goes by the derived sheet's own rule, ``_name_nets``, so a freeze moves none.
+    ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
+    part_labels = _part_labels(ordered, options)
     rail_names = _rail_names(rails)
-    for label in rail_names:
-        obstacles.extend(_box_obstacle(_net_name_box(label)))
-    for _length, name, run_start, run_end in longest_run.values():
-        span = (min(run_start.x, run_end.x), max(run_start.x, run_end.x))
-        at = _net_label_at(name, span, run_start.y, obstacles)
-        net_labels.append(Label(text=name, at=at, kind="net", anchor="left"))
+    net_labels.extend(
+        _name_nets(
+            [item.net for item in resolved if not item.rail],
+            drawn_wires,
+            _names_in_the_way(wires, rails, part_labels, rail_names, net_labels),
+        )
+    )
 
     # -- dots where three or more ends of one net meet, and at every T ------
     junctions = tuple(sorted(
@@ -3608,9 +3801,6 @@ def _hand_drawn_sheet(
         for pin in symbols[ref].body.pins
         if (ref, pin.number) not in wired_pins
     ]
-
-    ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
-    part_labels = _part_labels(ordered, options)
 
     width, height = _sheet_extent(ordered, wires, rails, no_connects, annotations)
 
@@ -3990,28 +4180,11 @@ def _derived_sheet(
 
     # -- which channel each run belongs in ----------------------------------
     #
-    # Rails take a lane out of the same pool the trunks do. A ground glyph is three
-    # horizontal bars, so a trunk running along the line it is drawn on reads as part of
-    # it -- and unlike a crossing, there is no convention that says otherwise. Reserving
-    # the lane costs at most one extra track in a channel, and rails pack into it densely
-    # because each claims a single column rather than a span.
-    #
-    # POWER SORTS BEFORE GROUND, and that is what keeps two glyphs apart. Ground rails in
-    # a channel belong to the row above it and point down; power rails belong to the row
-    # below and point up. Two of them at the same point of a channel need two lanes, and
-    # the sweep hands the first one it meets the upper lane. When that was ground -- by
-    # nothing more than its net id sorting first -- the two glyphs pointed at each other a
-    # lane apart, and a glyph is most of a lane deep and most of a lane wide: on five
-    # sheets in this repository, `nano-relay` among them, a ground's bars sat inside a
-    # power symbol one column across. With power in the upper lane both point away, and
-    # the two boxes cannot meet at all.
-    def _rail_key(net: Net, ref: str, number: str) -> str:
-        order = "0" if net.net_class == "power" else "1"
-        return f"rail\x1f{order}\x1f{net.id}\x1f{ref}\x1f{number}"
-
+    # A rail takes no lane. It is drawn at its pin, out into the vertical channel beside
+    # it the way the pin points and then turned upright (``_rail_at_pin``), in room the
+    # channel keeps for it as it keeps room for a name said at a pin -- below.
     pin_channel: dict[tuple[NetId, str, str], int] = {}
     trunk_channel: dict[NetId, int] = {}
-    rail_channel: dict[str, int] = {}
     horizontal_runs: dict[int, list[tuple[str, float, float]]] = defaultdict(list)
     for item in resolved:
         spanned: list[int] = []
@@ -4020,13 +4193,6 @@ def _derived_sheet(
             pin_channel[(item.net.id, ref, pin.number)] = channel
             spanned.append(channel)
         if item.rail:
-            upward = item.net.net_class == "power"
-            for ref, pin in item.pins:
-                channel = symbols[ref].row if upward else symbols[ref].row + 1
-                key = _rail_key(item.net, ref, pin.number)
-                rail_channel[key] = channel
-                lane = float(pin_channel[(item.net.id, ref, pin.number)])
-                horizontal_runs[channel].append((key, lane, lane))
             continue
         if len(item.pins) < 2 or item.net.id in named:
             continue
@@ -4040,7 +4206,7 @@ def _derived_sheet(
     horizontal_track: dict[str, int] = {}
     horizontal_tracks = [0] * (nrows + 1)
     for channel, runs in horizontal_runs.items():
-        assigned, count = _space_rails(runs, *_assign_tracks(runs))
+        assigned, count = _assign_tracks(runs)
         horizontal_track.update(assigned)
         horizontal_tracks[channel] = count
 
@@ -4071,9 +4237,6 @@ def _derived_sheet(
     trunk_y: dict[NetId, float] = {
         net_id: _lane_y(channel, net_id) for net_id, channel in trunk_channel.items()
     }
-    rail_y: dict[str, float] = {
-        key: _lane_y(channel, key) for key, channel in rail_channel.items()
-    }
 
     # -- x, which needs the y above to know which verticals overlap ---------
     def _segment_key(net_id: NetId, ref: str, number: str) -> str:
@@ -4084,15 +4247,7 @@ def _derived_sheet(
         for ref, pin in item.pins:
             anchor_y = symbols[ref].anchor_of(pin).y
             run_key = _segment_key(item.net.id, ref, pin.number)
-            if item.rail:
-                # Padded PAST the anchor by the glyph's depth, so nothing else is given the
-                # same track through the space the bars are drawn in.
-                glyph = rail_y[_rail_key(item.net, ref, pin.number)]
-                beyond = glyph + (
-                    -RAIL_GLYPH_DEPTH_MM if glyph < anchor_y else RAIL_GLYPH_DEPTH_MM
-                )
-                low, high = min(anchor_y, beyond), max(anchor_y, beyond)
-            elif item.net.id in named:
+            if item.rail or item.net.id in named:
                 continue
             elif len(item.pins) < 2:
                 low = high = anchor_y
@@ -4110,17 +4265,32 @@ def _derived_sheet(
         vertical_track.update(assigned)
         vertical_tracks[channel] = count
 
-    # A named pin's label runs out from its pin into the channel beside it. The channel
-    # takes the widest label from each side, and its tracks run between the two.
+    # A named pin's label runs out from its pin into the channel beside it, and so does a
+    # rail's stub and glyph. The channel takes the widest from each side, and its tracks
+    # run between the two.
+    outs = _rail_outs(
+        symbols,
+        [(ref, pin, item.net.net_class) for item in resolved if item.rail for ref, pin in item.pins],
+        {
+            (ref, pin.number): item.net.name
+            for item in resolved
+            if item.net.id in named
+            for ref, pin in item.pins
+        },
+    )
     name_room_left = [0.0] * (ncols + 1)
     name_room_right = [0.0] * (ncols + 1)
     for item in resolved:
-        if item.net.id not in named:
+        if item.net.id not in named and not item.rail:
             continue
         reach = 0.0
         for ref, pin in item.pins:
             channel = pin_channel[(item.net.id, ref, pin.number)]
-            reach = _named_stub(item.net.name, pin.side) + NET_LABEL_INSET_MM
+            if item.rail:
+                out = outs.get((ref, pin.number), RAIL_STUB_MM)
+                reach = _rail_reach(item.net, out) + NET_LABEL_INSET_MM
+            else:
+                reach = _named_stub(item.net.name, pin.side) + NET_LABEL_INSET_MM
             if pin.side == "left":
                 name_room_right[channel] = max(name_room_right[channel], reach)
             elif pin.side == "right":
@@ -4172,35 +4342,24 @@ def _derived_sheet(
     rails: list[Rail] = []
     junctions: list[Junction] = []
     net_labels: list[Label] = []
-    # (name, the run's x span, the run's y). Placing a net name needs every OTHER run on
-    # the sheet to already exist, and half of them are emitted after this one.
-    pending_labels: list[tuple[str, tuple[Mm, Mm], Mm]] = []
     #: Names said at a pin, placed already: the stub and the channel make their room.
     pin_names: list[Label] = []
+    #: The stubs those names are said at, which no second name goes over.
+    said_stubs: list[Wire] = []
 
     for item in resolved:
         net = item.net
         if item.rail:
             for ref, pin in item.pins:
-                anchor = symbols[ref].anchor_of(pin)
-                x = _track_x(net.id, ref, pin.number)
-                end_y = rail_y[_rail_key(net, ref, pin.number)]
-                rails.append(
-                    Rail(
-                        net_id=net.id,
-                        net_name=net.name,
-                        net_class=net.net_class,
-                        path=_tidy((anchor, Point2(x=x, y=anchor.y), Point2(x=x, y=end_y))),
-                        at=Point2(x=x, y=end_y),
-                        direction="up" if end_y < anchor.y else "down",
-                    )
-                )
+                out = outs.get((ref, pin.number), RAIL_STUB_MM)
+                rails.append(_rail_at_pin(net, symbols[ref].anchor_of(pin), pin.side, out))
             continue
 
         if net.id in named:
             for ref, pin in item.pins:
                 stub, said = _said_at_pin(net, symbols[ref].anchor_of(pin), pin.side)
                 wires.append(stub)
+                said_stubs.append(stub)
                 pin_names.append(said)
             continue
 
@@ -4215,9 +4374,6 @@ def _derived_sheet(
                         net_id=net.id, net_name=net.name, net_class=net.net_class, path=path
                     )
                 )
-            pending_labels.append(
-                (net.name, (min(anchor.x, x), max(anchor.x, x)), anchor.y)
-            )
             continue
 
         y = trunk_y[net.id]
@@ -4245,7 +4401,6 @@ def _derived_sheet(
         for x in branch_x:
             if left < x < right:
                 junctions.append(Junction(net_id=net.id, at=Point2(x=x, y=y)))
-        pending_labels.append((net.name, (left, right), y))
 
     # Every pin the netlist reaches, so the rest can be marked. Read off `resolved` rather
     # than off `doc.nets`, because a node naming a pin the footprint does not have was
@@ -4266,31 +4421,15 @@ def _derived_sheet(
     # fact with two answers, and the exporters read whichever they were given.
     part_labels = _part_labels(ordered, options)
 
-    obstacles: list[tuple[Point2, Point2]] = []
-    for wire in wires:
-        obstacles.extend(_segments_of(wire.path))
-    for rail in rails:
-        obstacles.extend(_segments_of(rail.path))
-        obstacles.extend(_box_obstacle(rail_glyph_box(rail)))
-    # Text is in the way too. A net name used to be kept off the WIRES and nothing else, so
-    # three names looking for room near the same corner of an IC all found the same room
-    # and were printed on top of one another ("VCC", "THRESH" and "OUT" in one smudge), and
-    # a name could land on a part's value. Each name placed becomes an obstacle for the
-    # next, in the fixed order the names are taken in, so the sheet is still deterministic.
-    for label in part_labels:
-        box = _part_label_box(label)
-        if box is not None:
-            obstacles.extend(_box_obstacle(box))
     rail_names = _rail_names(rails)
-    for label in rail_names:
-        obstacles.extend(_box_obstacle(_net_name_box(label)))
-    for label in pin_names:
-        obstacles.extend(_box_obstacle(_net_name_box(label)))
     net_labels.extend(pin_names)
-    for name, span, y in pending_labels:
-        at = _net_label_at(name, span, y, obstacles)
-        net_labels.append(Label(text=name, at=at, kind="net", anchor="left"))
-        obstacles.extend(_box_obstacle(_label_box(name, at.x, at.y)))
+    net_labels.extend(
+        _name_nets(
+            [item.net for item in resolved if not item.rail],
+            [wire for wire in wires if not any(wire is stub for stub in said_stubs)],
+            _names_in_the_way(wires, rails, part_labels, rail_names, pin_names),
+        )
+    )
 
     drawn = tuple(
         Symbol(

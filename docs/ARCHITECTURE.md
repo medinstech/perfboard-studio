@@ -1493,6 +1493,46 @@ Here it is not even a convention — the net IS `doc.nets` and the label is prin
 so two pins carrying one name are the same net because they are. Ground and power keep their
 rail glyphs either way, for the reason they always had them.
 
+**A rail is drawn at its pin, on both kinds of sheet, and stands upright**
+(`schematic._rail_at_pin`): out of a pin at a symbol's side along the pin's row,
+`RAIL_STUB_MM` and then a turn of `RAIL_TURN_MM`, down for a ground and up for a supply, with
+the glyph on the end -- a ground always points down and a supply always up, which is the
+schematic convention and what a beginner reads as ground. A pin on a symbol's top or
+bottom pointing the glyph's way gets a straight stub; one pointing against it (a turned
+symbol) goes out, a step across and back, so the glyph hangs beside its own stub. The
+derived sheet used to run each rail to a lane of its own in the channel between two rows,
+while the hand-drawn sheet drew a short vertical stub at the pin; the first edit froze one
+into the other, and every +5V and GND on the page changed shape under the user's first
+click. A vertical stub on a pin at a chip's side also stood on the next pin's lead. A
+straight stub with the glyph turned the pin's way, as KiCad draws a turned ground, was
+built first and rejected on the rendered sheet: a ground bar pointing left at a chip's
+side does not read as ground. Where the pin below has a name said at it, a ground runs out
+past that name before it turns, and a supply over a ground runs out a pin further than the
+ground (`_rail_outs`), so a glyph lands on neither; both kinds of sheet work it out from
+the same pins, so a freeze moves no rail. The price is room: a rail takes no track, but
+the channel beside its pin keeps space for the stub, the glyph and a supply's name
+(`_rail_reach`), as it does for a name said at a pin, so the examples' derived sheets came
+out a fifth to a third wider and 5 mm shorter. A pin on two nets
+(only the old fixtures have one; the commands refuse it, `duplicate-pin`) gets one rail at most --
+a wire or a name wins, else the first rail -- and a note says what was left out, because
+two glyphs on one point read as one. `test_a_rail_stands_at_its_pin_upright` holds the
+shape on both sheets of every example, `test_a_rail_on_any_pin_points_the_conventional_way`
+on every side of a symbol, and `test_a_freeze_moves_no_rail` holds every rail, its name
+and every symbol through a freeze.
+
+**A net is named by one rule on both kinds of sheet** (`schematic._name_nets`): over its
+longest level run, every level piece of its wires at one height that touch merged into one
+run, the highest and then the left-most among equals, slid along it by `_net_label_at`,
+clear of every wire, rail, glyph and label already placed (`_names_in_the_way`), in the
+netlist's order. The derived sheet used to name a net over its trunk with part labels in
+the way, and the hand-drawn one over the longest single wire somebody drew with neither
+part labels nor the other names in the way, so the first click on a sheet moved 13 names
+nobody had touched on four of the examples. The merge is what makes it one answer: the
+hand-drawn sheet holds a trunk as the pieces of the pin-to-pin wires laid along it, the
+derived one as one segment. On the NE555 two names moved for it, CTRL and LED_A, each from
+a trunk one pin wide to the longer lead of the part it comes from.
+`test_a_freeze_moves_no_name` holds every name through a freeze.
+
 **The panel draws the sheet for a screen; the export draws it for paper.** `viewsch`
 puts a net's name on a flag, outlines text in the paper's colour, fills a symbol's body
 with a tint (`BODY_FILL`) and leaves out a pin's name and number while the pins are
@@ -1513,12 +1553,31 @@ out wherever it met a wire, the NE555 showed none of its supply names at the zoo
 at, and on a board with two rails the name is the only thing that tells them apart --
 orange says power, not which one. So where over its bar would meet a wire, a rail's stub
 or another label, it tries beside the bar to the right and the left, then the stub's side
-of the bar, and takes the first that is clear; only where none is does it wait. Measured
-on every example's arranged sheet at the zoom it opens at in a 1280 x 720 window, it shows
+of the bar, and takes the first that is clear; only where none is does it wait. A bar at a
+pin's side is tried beside it on the pin's row, then over and under it, centred and then
+reaching outward away from the pin; with rails upright that is the name beside the bar
+on the side the rail turned, and the pin's row is no longer tried. Every pin's lead counts
+as a wire there
+(`label_lines`), so a name moved off its row does not land on the next pin's and say that
+pin is on the supply. Measured, while rails still stood in lanes, on every example's
+arranged sheet at the zoom it opens at in a 1280 x 720 window, it shows
 as many names as before or more, none of them on a wire, and every supply is named:
 atmega328-relay 12 of 13 (8 before, some of them on wires), nano-relay 7 of 9 with both
 +12V and +5V, the walkthrough NE555 4 of 4 (2). Drawing the name on a plate over the wire
 instead was rejected: a wire that vanishes under "VCC" reads as ending on it.
+
+A net's own name is never moved off a wire for a wire's sake -- it sits on its own -- but
+it is kept off a RAIL's stub and bars, and off the sheet's edge. With rails at the pin, a
+supply stands one pin from the next pin's name, and that name held at a readable size grew
+up over the glyph: U1's GND under XTAL1's flag on the ATmega board at the zoom an 820 x 710
+panel opens it at. And a name by a pin at the left edge ran off the sheet and printed as
+"ELAY_DRIVE". So such a name tries ON its run, the flag centred on the wire as a label at a
+wire's end is on most schematics, then under it, and otherwise waits for a closer zoom like
+any label that would land on another. Every label is held inside the sheet the same way
+(`label_places`' `bounds`). The cost is names: on the ATmega board at that zoom 17 of 39 net
+names wait for a closer look, where 11 did with rails in lanes, because the sheet is wider
+and so fitted smaller; nano-relay 1 of 12 (1), relay-and-supply 6 of 15 (1).
+`test_zoomed_out_no_name_covers_a_rail_or_leaves_the_sheet` holds both on both kinds of sheet.
 
 **Past a fan-out, a net is said by name at its pins on the derived sheet too.** A net
 touching a symbol with `SchematicOptions.name_nets_at` pins or more (12: a
@@ -1648,8 +1707,9 @@ change to a wire -- drawn, reshaped, an end moved, cut, rubbed out -- on a sheet
 still arranges first stores every symbol where it is drawn and the drawn wires as stored
 ones: the freeze, a `symbol.move`. It used to be dispatched as its own command before the
 edit, on the argument that "the sheet is now yours" is worth undoing on its own. On an
-example sheet that made undo look broken: freezing visibly changes the drawing (a rail across
-the page becomes a stub at each pin, names sit where the hand-drawn sheet puts them), so one
+example sheet that made undo look broken: freezing visibly changed the drawing (a rail across
+the page became a stub at each pin, until both kinds drew rails at the pin; names still sit
+where the hand-drawn sheet puts them), so one
 Ctrl+Z took back the reshape and left that changed drawing on the screen, and only a second
 put the sheet back. The edit's payload now carries the freeze (`freeze`, a
 `MoveSymbolsPayload`), applied first inside the same command (`commands._frozen`): one record
@@ -1717,12 +1777,14 @@ Four decisions carry it, and each has a test that would notice it going:
   disagreeing would split a column and immediately merge it back. It divides by
   `CELL_ASPECT`, which is not taste: a symbol is wide and short and the horizontal channels
   sit between the ROWS, so a row costs far more height than a column costs width, and a
-  square grid of cells draws a sheet taller than it is wide. Rail
-  anchors come out of the **same** track pool as the trunks, because a crossing carries no
+  square grid of cells draws a sheet taller than it is wide. A rail takes no track at
+  all: it stands at its pin, and the channel beside the pin keeps the room its stub, glyph
+  and name reach into (`_rail_reach`) clear of every track, because a crossing carries no
   dot and reads correctly while a line lying along a ground symbol's bars does not.
   `RAIL_GLYPH_MM`/`RAIL_GLYPH_DEPTH_MM` are the layout's contract with the renderer — one
-  fact, two consumers, and both must stay under `TRACK_PITCH_MM` or the guarantee needs
-  another allocation pass. The bars reach `RAIL_BAR_REACH` of that box, across the stub as
+  fact, two consumers, and both must stay under `TRACK_PITCH_MM`, so that two supplies on
+  neighbouring pins, a pin pitch apart, still read as two glyphs
+  (`test_no_rail_glyph_meets_another_or_a_name` measures their bars). The bars reach `RAIL_BAR_REACH` of that box, across the stub as
   well as along it. Along was always so; across, a bar the box's whole width ended a tenth
   of a grid from the wire in the next lane on every sheet with a rail, and read as joined
   to it. `test_a_rail_glyph_keeps_clear_of_every_other_nets_line` holds the gap that leaves.
