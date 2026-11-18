@@ -797,28 +797,18 @@ def test_over_home_the_card_says_the_release_and_the_strip_does_not_say_it_again
     """The release-candidate sitting: over Home the strip and Home's card said "0.8.0 is
     available" one above the other, and the first question was why there were two. With
     Home in front the card says it alone; with the board in front the strip says it -- an
-    announcement made while Home was showing comes back on leaving it -- and a download's
-    progress, which the card cannot show, is the strip's even over Home. Hide on either
+    announcement made while Home was showing comes back on leaving it. Hide on either
     hides both."""
     home = window._make_home()
     window.show_home(home)
     window._on_update_checked(NEXT_RELEASE)
     assert not home.update_card.isHidden()
     assert window.update_strip.isHidden() and not window.update_bar.isHidden()
+    assert home.update_status.isHidden() and "Automatic updates" in home.update_detail.text()
 
     window.leave_home()
     assert not window.update_strip.isHidden()
     window.show_home(home)
-    assert window.update_strip.isHidden()
-
-    # Download from the card: the progress has nowhere else to be. No transfer starts.
-    window._checker().download = lambda release, asset: None
-    window._on_update_surface_action()
-    assert window._update_busy
-    assert not window.update_strip.isHidden()
-    window._on_update_download_failed("the connection was reset")
-    assert not window.update_strip.isHidden(), "a failure is the strip's to say"
-    window.update_bar.announce(NEXT_RELEASE, "0.7.0", downloadable=True)
     assert window.update_strip.isHidden()
 
     window.leave_home()
@@ -826,6 +816,83 @@ def test_over_home_the_card_says_the_release_and_the_strip_does_not_say_it_again
     assert window.update_strip.isHidden() and home.update_card.isHidden()
     window.show_home(home)
     assert window.update_strip.isHidden() and home.update_card.isHidden()
+
+
+def _install_buttons_on_screen(window) -> list[object]:
+    from PySide6.QtWidgets import QPushButton
+
+    return [
+        button
+        for button in window.findChildren(QPushButton)
+        if button.text() == "Install and Restart" and button.isVisibleTo(window)
+    ]
+
+
+def test_over_home_the_card_is_the_one_notice_from_download_to_a_refused_install(
+    window, tmp_path, monkeypatch, an_installer_exists, _nothing_reaches_the_desktop
+) -> None:
+    """The release-candidate sitting, again: a refused Install and Restart put the strip
+    up over Home -- "The update was not installed." with Install and Restart -- above the
+    card's "0.8.0 is available" with Install and Restart: two notices, two buttons. Over
+    Home the card says every state now, the download's progress with Cancel, the file
+    landed with Show the File, a failure and a refusal with the button that tries again,
+    and the strip waits for Home to go."""
+    home = window._make_home()
+    window.show_home(home)
+    window._on_update_checked(NEXT_RELEASE)
+
+    # A download started from the card: its progress is on the card. No transfer starts.
+    window._checker().download = lambda release, asset: None
+    window._on_update_surface_action()
+    assert window._update_busy and window.update_strip.isHidden()
+    assert not home.update_progress.isHidden() and not home.update_cancel.isHidden()
+    assert home.update_action.isHidden()
+    window._checker().downloadProgress.emit(3 * 1024 * 1024, 8 * 1024 * 1024)
+    assert home.update_progress.value() == 3 * 1024 * 1024
+    assert home.update_progress.maximum() == 8 * 1024 * 1024
+    assert home.update_detail.text() == window.update_bar.detail.text()
+    assert "3 of 8 MB" in home.update_detail.text()
+    home.update_cancel.click()
+    assert not window._update_busy and home.update_progress.isHidden()
+    assert home.update_action.text() == "Download" and not home.update_action.isHidden()
+
+    window._on_update_download_failed("the connection was reset")
+    assert window.update_strip.isHidden()
+    assert home.update_status.text() == "The update could not be downloaded."
+    assert home.update_status.property("tone") == "danger"
+    assert home.update_detail.text() == "the connection was reset"
+    assert home.update_action.text() == "Download", "the card's button tries again"
+
+    # Downloaded and verified: Install and Restart and Show the File, on the card.
+    path, _ = a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    assert window.update_strip.isHidden()
+    assert home.update_status.text() == "The update is downloaded and its checksum matched."
+    assert home.update_status.property("tone") == "text"
+    assert not home.update_reveal.isHidden() and home.update_cancel.isHidden()
+    home.update_reveal.click()
+    assert _nothing_reaches_the_desktop[-1] == path
+    assert _install_buttons_on_screen(window) == [home.update_action]
+
+    # Windows' prompt refused: said on the card, with the one button to try again.
+    monkeypatch.setattr(window, "_offer_to_save", lambda: True)
+    monkeypatch.setattr(window, "close", lambda: pytest.fail("closed on a refusal"))
+    refusal = "Windows did not give permission, so nothing was installed."
+    monkeypatch.setattr(updater, "start_install", lambda p, d: updater.InstallAttempt(False, refusal))
+    window._on_update_install()
+    assert window.update_strip.isHidden(), "no second notice over Home"
+    assert home.update_status.text() == "The update was not installed."
+    assert home.update_status.property("tone") == "danger"
+    assert home.update_detail.text() == refusal
+    assert not home.update_reveal.isHidden()
+    assert _install_buttons_on_screen(window) == [home.update_action]
+
+    # Leaving Home brings the strip back as it stands.
+    window.leave_home()
+    assert not window.update_strip.isHidden()
+    assert window.update_bar.headline.text() == "The update was not installed."
+    assert _install_buttons_on_screen(window) == [window.update_bar.act_install]
+    window.show_home(home)
+    assert window.update_strip.isHidden()
 
 
 def test_closing_the_strip_after_a_download_keeps_the_way_to_install(

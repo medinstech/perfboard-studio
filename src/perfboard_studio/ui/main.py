@@ -408,7 +408,7 @@ from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .header import HeaderBar
-from .home import WALKTHROUGH, Home, HomeExample, LastBoard
+from .home import WALKTHROUGH, Home, HomeExample, LastBoard, UpdateStatus
 from .i18n import counted, hole_grid, set_language, t
 from .i18n import language as current_language
 from .inspector import (
@@ -4024,21 +4024,23 @@ class MainWindow(QMainWindow):
         self.update_bar.setVisible(announcing)
 
     def _sync_update_strip(self) -> None:
-        """The strip up exactly when the bar inside it is -- except over Home while it only
-        announces the release, which Home's update card says already.
+        """The strip up exactly when the bar inside it is -- and never over Home, where
+        Home's update card is the one notice.
 
         Over Home the two said "0.25.0 is available" one above the other, with Download and
-        What Changed twice, and the first thing asked at the release-candidate sitting was
-        why there were two. Only the announcement is said twice: a download's progress, a
-        file landed and a failure are the strip's alone, so those stay up over Home too.
-        Hide on either is one decision about the version (``_on_update_dismissed``)."""
+        What Changed twice, and the first question asked at the release-candidate sitting was
+        why there were two. The strip then stood down only while it announced, and a refused
+        Install and Restart put it back up over the card: two Install and Restart buttons on
+        one screen, one under "the update was not installed" and one under "is available".
+        Now the card says every state the strip can (``_update_status``) and the strip waits
+        for Home to go, coming back as the bar stands then. Hide on either is one decision
+        about the version (``_on_update_dismissed``)."""
         strip = getattr(self, "update_strip", None)
         if strip is None:
             return
         up = not self.update_bar.isHidden()
-        announcing = not self.update_bar.act_hide.isHidden()
         home = getattr(self, "_home", None) is not None and self.home_is_showing()
-        strip.setVisible(up and not (home and announcing))
+        strip.setVisible(up and not home)
 
     def _build_central_hint(self) -> QWidget:
         """The one screen for a window with every view closed.
@@ -4280,6 +4282,8 @@ class MainWindow(QMainWindow):
         )
         home.updateNotesRequested.connect(self._on_update_notes)
         home.updateActionRequested.connect(self._on_update_surface_action)
+        home.updateRevealRequested.connect(self._on_update_reveal)
+        home.updateCancelRequested.connect(self._on_update_cancel)
         self._home_page = home
         self._refresh_update_surfaces()
         return home
@@ -17306,6 +17310,8 @@ class MainWindow(QMainWindow):
             checker.checked.connect(self._on_update_checked)
             checker.checkFailed.connect(self._on_update_check_failed)
             checker.downloadProgress.connect(self.update_bar.show_progress)
+            # After the strip, which the card reads it from.
+            checker.downloadProgress.connect(lambda *_: self._refresh_home_update())
             checker.downloaded.connect(self._on_update_downloaded)
             checker.downloadFailed.connect(self._on_update_download_failed)
             self._update_checker = checker
@@ -17388,14 +17394,47 @@ class MainWindow(QMainWindow):
         self.header.set_update(release.version if release is not None else None)
         if self._notes_dialog is not None and shiboken6.isValid(self._notes_dialog):
             self._notes_dialog.set_action(action)
+        self._refresh_home_update()
+
+    def _refresh_home_update(self) -> None:
+        """Home's update card as the release and the strip stand now."""
         home = self._home_page
-        if home is not None:
-            summary = highlights(release.notes) if release is not None else []
-            home.set_update(
-                release.version if release is not None else None,
-                summary=" · ".join(summary),
-                action=action,
+        if home is None:
+            return
+        release = self._update_release if self._update_noticed else None
+        summary = highlights(release.notes) if release is not None else []
+        home.set_update(
+            release.version if release is not None else None,
+            summary=" · ".join(summary),
+            action=self._update_action(),
+            status=self._update_status(),
+        )
+
+    def _update_status(self) -> UpdateStatus:
+        """Where the download or the install stands, READ OFF THE STRIP for Home's card.
+
+        Read rather than kept a second time: the strip already goes through every state
+        (``updater.UpdateBar``), and a card told separately is a card that can say "is
+        available" under a strip saying "was not installed" -- which is the screen this
+        replaced. A strip that is down, or only announcing, leaves the card its summary.
+        """
+        bar = self.update_bar
+        if bar.isHidden() or not bar.act_hide.isHidden():
+            return UpdateStatus()
+        if not bar.progress.isHidden():
+            return UpdateStatus(
+                detail=bar.detail.text(),
+                progress=(bar.progress.value(), bar.progress.maximum()),
+                cancel=True,
             )
+        headline = bar.headline.text()
+        return UpdateStatus(
+            headline=headline,
+            detail=bar.detail.text() if not bar.detail.isHidden() else "",
+            trouble=headline
+            in (t("The update was not installed."), t("The update could not be downloaded.")),
+            reveal=not bar.act_reveal.isHidden(),
+        )
 
     def _on_update_surface_action(self) -> None:
         """The pill, the card and the notes dialog all press the same button."""

@@ -68,6 +68,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -111,6 +112,25 @@ class LastBoard:
     document: PerfDocument
     steps: tuple[StepState, ...]
     hint: str
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateStatus:
+    """Where fetching and installing a release stands, as Home's update card says it.
+
+    The default is "nothing done yet", where the card quotes the release's own summary.
+    Otherwise ``headline`` is the state in a sentence ("The update was not installed."),
+    ``detail`` the line under it, ``progress`` the bytes received and expected while a
+    download runs, ``trouble`` that it went wrong, and ``reveal`` and ``cancel`` whether
+    Show the File and Cancel can be pressed now. The window reads it off the strip
+    (``MainWindow._update_status``), so the card and the strip cannot disagree."""
+
+    headline: str = ""
+    detail: str = ""
+    progress: tuple[int, int] | None = None
+    trouble: bool = False
+    reveal: bool = False
+    cancel: bool = False
 
 
 #: The unbuilt example, which the tour opens: drawn, not placed, so the step bar's next
@@ -493,10 +513,12 @@ class Home(QWidget):
     #: A recent board's path, as a string.
     openRecent = Signal(str)
     showAtStartChanged = Signal(bool)
-    #: The update card's two buttons. The window decides what the primary one does
+    #: The update card's buttons. The window decides what the primary one does
     #: (download, or install and restart); Home only says it was pressed.
     updateNotesRequested = Signal()
     updateActionRequested = Signal()
+    updateRevealRequested = Signal()
+    updateCancelRequested = Signal()
 
     def __init__(
         self,
@@ -620,17 +642,27 @@ class Home(QWidget):
     # -- what the window tells Home ----------------------------------------------------
 
     def set_update(
-        self, version: str | None, *, summary: str = "", action: str = ""
+        self,
+        version: str | None,
+        *,
+        summary: str = "",
+        action: str = "",
+        status: UpdateStatus | None = None,
     ) -> None:
         """The card that says a newer release exists, or none (``version`` ``None``).
 
         ``action`` is what the primary button does now: ``"download"``, ``"install"`` or
         ``""`` (nothing to press: a download is under way, or this build cannot install
         itself). What Changed is always there, because reading is always possible.
+
+        ``status`` is where fetching and installing it stands, said under the headline in
+        place of the release's summary: the card is the only notice over Home, so the
+        progress, the file landed and a refusal are said here or nowhere.
         """
         if version is None:
             self.update_card.hide()
             return
+        status = status or UpdateStatus()
         self.update_headline.setText(
             "<b>"
             + t("Perfboard Studio {new} is available — you have {old}.").format(
@@ -638,8 +670,19 @@ class Home(QWidget):
             )
             + "</b>"
         )
-        self.update_detail.setText(summary)
-        self.update_detail.setVisible(bool(summary))
+        self.update_status.setText(status.headline)
+        self.update_status.setVisible(bool(status.headline))
+        theme.tone(self.update_status, "danger" if status.trouble else "text")
+        detail = status.detail if status.headline or status.progress else summary
+        self.update_detail.setText(detail)
+        self.update_detail.setVisible(bool(detail))
+        if status.progress is not None:
+            received, total = status.progress
+            self.update_progress.setRange(0, max(total, 0))
+            self.update_progress.setValue(max(received, 0))
+        self.update_progress.setVisible(status.progress is not None)
+        self.update_reveal.setVisible(status.reveal)
+        self.update_cancel.setVisible(status.cancel)
         labels = {"download": t("Download"), "install": t("Install and Restart")}
         self.update_action.setVisible(action in labels)
         self.update_action.setText(labels.get(action, ""))
@@ -940,13 +983,37 @@ class Home(QWidget):
         self.update_detail.setTextFormat(Qt.TextFormat.PlainText)
         self.update_detail.setWordWrap(True)
         theme.tone(self.update_detail, "secondary")
+        # Where the download or the install stands, between the headline and the detail.
+        # Words the strip says, so plain text like the summary.
+        self.update_status = QLabel()
+        self.update_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.update_status.setWordWrap(True)
+        self.update_status.hide()
+        self.update_progress = QProgressBar()
+        self.update_progress.setTextVisible(False)
+        self.update_progress.setFixedWidth(320)
+        self.update_progress.hide()
         words.addWidget(self.update_headline)
+        words.addWidget(self.update_status)
         words.addWidget(self.update_detail)
+        # ALIGNED, and that is what keeps the column wide: a widget with a maximum width
+        # caps the whole column of a vertical layout at it, and the buttons beside it took
+        # the rest of a 1920 px card -- What Changed and Cancel each 490 px wide.
+        words.addWidget(self.update_progress, 0, Qt.AlignmentFlag.AlignLeft)
         row.addLayout(words, 1)
         notes = QPushButton(t("What Changed"))
         notes.setToolTip(t("Read what this release changes."))
         notes.clicked.connect(self.updateNotesRequested)
         row.addWidget(notes)
+        self.update_reveal = QPushButton(t("Show the File"))
+        self.update_reveal.setToolTip(t("Open the folder the installer was saved in."))
+        self.update_reveal.clicked.connect(self.updateRevealRequested)
+        self.update_reveal.hide()
+        row.addWidget(self.update_reveal)
+        self.update_cancel = QPushButton(t("Cancel"))
+        self.update_cancel.clicked.connect(self.updateCancelRequested)
+        self.update_cancel.hide()
+        row.addWidget(self.update_cancel)
         self.update_action = QPushButton()
         theme.variant(self.update_action, "primary")
         self.update_action.clicked.connect(self.updateActionRequested)
