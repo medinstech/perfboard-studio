@@ -67,6 +67,12 @@ closed without a bump.
   drawn red, shows its findings and what to do. A click on a ring opens the drawer to its
   row and selects what the row selects, so Properties shows the copper the finding is about.
 
+### Fixed
+
+- **A part's value is no longer printed over its own lead.** A symbol turned on the sheet,
+  like a resistor stood upright, has a lead leaving the bottom of its body, and its value
+  was printed across it. Now the value moves to the right of the lead.
+
 ## [0.25.0] - 2026-11-18
 
 ### Added

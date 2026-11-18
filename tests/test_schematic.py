@@ -2057,3 +2057,28 @@ def test_a_supplys_name_prints_on_no_line(path: Path) -> None:
                     and min(p.y, q.y) <= y1 and max(p.y, q.y) >= y0
                 )
                 assert not meets, f"{label.text} at {label.at} prints on a line"
+
+
+def test_a_value_moves_off_a_lead_that_leaves_the_bottom_of_its_body() -> None:
+    """A turned resistor's second end leaves the bottom of its body, straight through the
+    line its value is printed on. The value moves right, clear of the lead, and an upright
+    one stays centred under its body."""
+    from perfboard_studio.schematic import VALUE_LABEL_MM, VALUE_LEAD_GAP_MM, _text_width
+
+    document = load(GOLDEN_DIR / "ne555.perf")
+    for rotation in (0, 90):
+        drawing = build_schematic(_at(document, "R1", 25.4, 25.4, rotation=rotation), REGISTRY)
+        symbol = next(s for s in drawing.symbols if s.ref == "R1")
+        value = next(
+            label for label in drawing.labels
+            if label.kind == "value" and label.text == symbol.value
+            and abs(label.at.y - (symbol.at.y + symbol.height + 0.4 * GRID_MM)) < 1e-6
+        )
+        half = _text_width(value.text, VALUE_LABEL_MM) / 2
+        bottom = [symbol.at.x + p.at.x for p in symbol.pins if p.side == "bottom"]
+        if rotation == 0:
+            assert bottom == []
+            assert value.at.x == pytest.approx(symbol.at.x + symbol.width / 2)
+        else:
+            assert len(bottom) == 1
+            assert value.at.x - half == pytest.approx(bottom[0] + VALUE_LEAD_GAP_MM)

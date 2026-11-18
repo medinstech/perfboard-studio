@@ -2998,7 +2998,10 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
             labels.append(
                 Label(
                     text=placed.value,
-                    at=_p(centre, placed.y + placed.body.height + 0.4 * GRID_MM),
+                    at=_p(
+                        placed.x + _value_centre_x(placed),
+                        placed.y + placed.body.height + 0.4 * GRID_MM,
+                    ),
                     kind="value",
                     anchor="centre",
                 )
@@ -3067,6 +3070,30 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
 
 
 _TRANSISTOR_KINDS: frozenset[SymbolKind] = frozenset({"npn", "pnp", "nmos", "pmos"})
+
+#: How far a value moved aside keeps from the lead it was moved off, beyond its own half.
+VALUE_LEAD_GAP_MM: Mm = 0.5 * GRID_MM
+
+
+def _value_centre_x(placed: _Placed) -> Mm:
+    """Where a symbol's value is centred, across from the body's left edge.
+
+    Under the middle of the body, unless a lead leaves the bottom there: a regulator's
+    ground, a turned resistor's second end. The lead runs straight down through the value's
+    line, so the value moves right, clear of the rightmost such lead. The rail symbol at
+    the lead's end is a lead's length down, below the value's line, so only the lead
+    itself is in the way.
+    """
+    centre = placed.body.width / 2
+    half = _text_width(placed.value, VALUE_LABEL_MM) / 2 + VALUE_LEAD_GAP_MM
+    under = [
+        pin.at.x
+        for pin in placed.body.pins
+        if pin.side == "bottom" and centre - half < pin.at.x < centre + half
+    ]
+    if not under:
+        return centre
+    return max(under) + half
 
 
 def _inside_text(pin: SymbolPin, options: SchematicOptions) -> str | None:
