@@ -2454,6 +2454,16 @@ def _said_at_pin(net: Net, anchor: Point2, side: PinSide) -> tuple[Wire, Label]:
     return wire, Label(text=net.name, at=at, kind="net", anchor=anchor_side)
 
 
+def _on_grid(at: Mm) -> Mm:
+    """The nearest grid line, as exactly the float ``snap_to_grid`` makes of it."""
+    return round(at / GRID_MM) * GRID_MM
+
+
+def _up_to_grid(length: Mm) -> Mm:
+    """``length`` made a whole number of grid steps, never shorter."""
+    return math.ceil(length / GRID_MM - 1e-9) * GRID_MM
+
+
 def _channel_size(track_count: int) -> Mm:
     return max(MIN_CHANNEL_MM, 2 * GRID_MM + max(0, track_count - 1) * TRACK_PITCH_MM)
 
@@ -4035,6 +4045,9 @@ def _derived_sheet(
         horizontal_tracks[channel] = count
 
     # -- y, which depends only on the horizontal channels -------------------
+    # In whole grid steps for the reason x is (below): a switch two and a half steps
+    # shorter than its row sat half a step off the grid and jumped on the first edit.
+    row_height = [_up_to_grid(room) for room in row_height]
     horizontal_gap = [_channel_size(count) for count in horizontal_tracks]
     cursor = MARGIN_MM
     horizontal_channel_y = [0.0] * (nrows + 1)
@@ -4049,7 +4062,8 @@ def _derived_sheet(
     height = cursor + MARGIN_MM
 
     for placed in symbols.values():
-        placed.y = row_y[placed.row] + (row_height[placed.row] - placed.body.height) / 2
+        slack = (row_height[placed.row] - placed.body.height) / 2
+        placed.y = _on_grid(row_y[placed.row] + slack)
 
     def _lane_y(channel: int, key: str) -> Mm:
         return horizontal_channel_y[channel] + GRID_MM + horizontal_track[key] * TRACK_PITCH_MM
@@ -4111,6 +4125,15 @@ def _derived_sheet(
                 name_room_right[channel] = max(name_room_right[channel], reach)
             elif pin.side == "right":
                 name_room_left[channel] = max(name_room_left[channel], reach)
+    # EVERY SYMBOL ON THE GRID, as the first edit puts it. The first edit freezes the sheet
+    # and snaps each symbol to the grid (``snap_to_grid``); a column as wide as its text, a
+    # name's reach and a narrow body centred in a wide column each left x a fraction of a
+    # step off, so on atmega328-relay all 24 symbols moved by up to a millimetre on the
+    # first click and 51 of its 79 runs were laid again. In whole steps, a freeze moves
+    # nothing: ``test_a_freeze_moves_no_symbol``.
+    name_room_left = [_up_to_grid(room) for room in name_room_left]
+    name_room_right = [_up_to_grid(room) for room in name_room_right]
+    column_width = [_up_to_grid(room) for room in column_width]
     vertical_gap = [
         name_room_left[index] + _channel_size(count) + name_room_right[index]
         for index, count in enumerate(vertical_tracks)
@@ -4128,7 +4151,11 @@ def _derived_sheet(
     width = cursor + MARGIN_MM
 
     for placed in symbols.values():
-        placed.x = column_x[placed.col] + (column_width[placed.col] - placed.body.width) / 2
+        slack = (column_width[placed.col] - placed.body.width) / 2
+        # Rounded as ``snap_to_grid`` rounds, to the same float: a sum of steps can come
+        # out at 142.23999999999998, and snapped to 142.24 the pins no longer met their
+        # wires' ends exactly and the freeze laid those wires again.
+        placed.x = _on_grid(column_x[placed.col] + slack)
 
     def _track_x(net_id: NetId, ref: str, number: str) -> Mm:
         key = _segment_key(net_id, ref, number)

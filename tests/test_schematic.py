@@ -1663,12 +1663,15 @@ REAL_BOARDS = [*sorted(EXAMPLES_DIR.glob("*.perf")), GOLDEN_DIR / "ne555.perf"]
 
 def _frozen(doc: PerfDocument, drawing: SchematicDrawing) -> PerfDocument:
     """``doc`` as the window freezes it on the first edit: every symbol where the drawing
-    has it, and the drawing's wires as drawn wires."""
+    has it, snapped to the grid as ``MainWindow._sheet_placements`` snaps it, and the
+    drawing's wires as drawn wires."""
     ids = {part.ref: part.id for part in circuit_parts(doc)}  # every board's, as the window freezes
     return dataclasses.replace(
         doc,
         sheet=tuple(
-            SymbolPlacement(id=ids[s.ref], at=s.at, rotation=s.rotation, mirrored=s.mirrored)
+            SymbolPlacement(
+                id=ids[s.ref], at=snap_to_grid(s.at), rotation=s.rotation, mirrored=s.mirrored
+            )
             for s in drawing.symbols
             if s.ref in ids
         ),
@@ -1708,6 +1711,18 @@ def test_freezing_a_sheet_keeps_every_wire_and_every_name(path: Path) -> None:
         )
         if not options.name_nets_at:
             assert all(wire.ends is not None for wire in drawn.wires), "nothing turned into a label"
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+def test_a_freeze_moves_no_symbol(path: Path) -> None:
+    """The first edit snaps every symbol to the grid, and the sheet drawn for you put them
+    a fraction of a step off it -- a column as wide as its text, a narrow body centred in
+    a wide one, a switch half a step shorter than its row -- so on atmega328-relay all 24
+    symbols moved by up to a millimetre on the first click and 51 of its 79 runs were laid
+    again. The layout now keeps to whole steps, to the very float the snap makes."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    for symbol in build_schematic(doc, REGISTRY).symbols:
+        assert snap_to_grid(symbol.at) == symbol.at, symbol.ref
 
 
 def test_a_frozen_symbol_that_moves_takes_its_wires_with_it() -> None:
