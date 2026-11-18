@@ -998,6 +998,8 @@ TURKISH: dict[str, str] = {
     "{count} wires to cut": "kesilecek {count} tel",
     "{count} warning": "{count} uyarı",
     "{count} warnings": "{count} uyarı",
+    "{count} note": "{count} not",
+    "{count} notes": "{count} not",
     # -- the exported guide ---------------------------------------------------------------
     "{name} — build guide": "{name} — montaj rehberi",
     "Soldering guide · {cols} × {rows} {material} perfboard at {pitch:g} mm pitch · "

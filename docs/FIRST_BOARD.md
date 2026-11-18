@@ -162,8 +162,8 @@ next one.
 
 **Overview** is the same guide as a list. On this board it is 32 steps across 8 phases,
 with 45 checks and 20 wires to cut. The numbers change with the board you chose. The one
-warning is a note, not a fault: the stock board's edge fingers are part of the board, and
-the guide says so rather than giving them a step.
+note is not a fault: the stock board's edge fingers are part of the board, and the guide
+says so rather than giving them a step.
 
 The order is the order you solder in, which is not the order of the schematic:
 

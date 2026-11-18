@@ -3359,11 +3359,21 @@ def describe(guide: Guide) -> str:
             say("{count} wire to a part off the board", count=leads) if leads == 1
             else say("{count} wires to parts off the board", count=leads)
         )
-    warnings = len(guide.warnings)
-    if warnings:
+    # A gap and a note are counted apart, by the predicate the window's export reads
+    # (``is_guide_gap``): a stock board's edge fingers made the first board's overview end
+    # "1 warning", on a guide with nothing left out, for a note the export already listed
+    # as information and not as a gap.
+    gaps = sum(1 for warning in guide.warnings if is_guide_gap(warning))
+    notes = len(guide.warnings) - gaps
+    if gaps:
         parts.append(
-            say("{count} warning", count=warnings) if warnings == 1
-            else say("{count} warnings", count=warnings)
+            say("{count} warning", count=gaps) if gaps == 1
+            else say("{count} warnings", count=gaps)
+        )
+    if notes:
+        parts.append(
+            say("{count} note", count=notes) if notes == 1
+            else say("{count} notes", count=notes)
         )
     return ", ".join(parts)
 

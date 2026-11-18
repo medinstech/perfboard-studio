@@ -51,7 +51,7 @@ from perfboard_studio.geometry import (
     pad_extent_mm,
     printed_row_label,
 )
-from perfboard_studio.guide import GuideWarning, build_guide
+from perfboard_studio.guide import GuideWarning, build_guide, describe
 from perfboard_studio.guide_export import guide_to_html
 from perfboard_studio.model import (
     Board,
@@ -505,6 +505,25 @@ def test_the_exported_guide_says_the_fingers_in_a_note_and_a_gap_in_a_warning() 
     page = guide_to_html(dataclasses.replace(guide, warnings=(*guide.warnings, gap)))
     assert any("U9 has no footprint" in box for box in boxes(page, "warnbox"))
     assert len(boxes(page, "notebox")) == 1
+
+
+def test_the_guides_summary_counts_the_fingers_as_a_note_and_a_gap_as_a_warning() -> None:
+    """The overview's one line counts what the export does, by the same predicate: the
+    first board's guide, on a stock board with fingers and nothing left out, ended
+    "1 warning"."""
+    doc = _doc(edge_connectors=(EdgeConnector(id="ec-1", edge="bottom", start=2, count=4),))
+    guide = build_guide(doc, LOOKUP)
+    fingers = dataclasses.replace(
+        guide, warnings=tuple(w for w in guide.warnings if w.code == "edge-connector")
+    )
+    assert describe(fingers).endswith(", 1 note")
+    assert "warning" not in describe(fingers)
+
+    gap = GuideWarning(code="unknown-footprint", message="U9 has no footprint")
+    both = dataclasses.replace(fingers, warnings=(*fingers.warnings, gap, gap))
+    assert describe(both).endswith(", 2 warnings, 1 note")
+    turkish = dataclasses.replace(both, language="tr")
+    assert describe(turkish).endswith(", 2 uyarı, 1 not")
 
 
 # ---------------------------------------------------------------------------

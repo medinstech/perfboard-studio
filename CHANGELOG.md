@@ -72,6 +72,10 @@ closed without a bump.
 - **A part's value is no longer printed over its own lead.** A symbol turned on the sheet,
   like a resistor stood upright, has a lead leaving the bottom of its body, and its value
   was printed across it. Now the value moves to the right of the lead.
+- **The guide's summary no longer calls a note a warning.** The first board's overview
+  ended "1 warning" on a guide with nothing left out: the stock board's edge fingers, which
+  the exported guide already listed as information. The summary now counts what the guide
+  left out as warnings and everything else as notes, by the rule the export uses.
 
 ## [0.25.0] - 2026-11-18
 
