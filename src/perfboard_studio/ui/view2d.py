@@ -23,6 +23,7 @@ consistently everywhere, not a family of ad hoc sign flips that can drift apart.
 from __future__ import annotations
 
 import contextlib
+import html
 import math
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
@@ -73,6 +74,7 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QLabel,
+    QToolTip,
     QWidget,
 )
 
@@ -5195,6 +5197,9 @@ class BoardScene(QGraphicsScene):
     #: The measurement as a sentence, live while the pointer moves, or "" when there is
     #: nothing to say. Text rather than numbers because every consumer of it is prose.
     measured = Signal(str)
+    #: A plain click on what a finding marks on the board: a ringed hole (a ``HoleCoord``)
+    #: or a part drawn in error (its id). The window picks the finding's row for it.
+    findingPicked = Signal(object)
 
     def __init__(
         self,
@@ -5225,6 +5230,10 @@ class BoardScene(QGraphicsScene):
         self.show_far_side = show_far_side
         self.document = document
         self.violations: tuple[DrcViolation, ...] = ()
+        #: What the findings marked on the board say, as tooltips (``set_finding_notes``):
+        #: by ringed hole, and by the id of a part drawn in error.
+        self._finding_holes: dict[tuple[int, int], str] = {}
+        self._finding_parts: dict[str, str] = {}
         self.component_items: dict[str, ComponentItem] = {}
         self.mount_items: dict[str, MountingHoleItem] = {}
         self.connector_items: dict[str, EdgeConnectorItem] = {}
@@ -5956,6 +5965,57 @@ class BoardScene(QGraphicsScene):
         }
         for mount_item in self.mount_items.values():
             mount_item.set_flagged((mount_item.mount.at.col, mount_item.mount.at.row) in crowded)
+
+    def set_finding_notes(self, holes: Mapping[HoleCoord, str], parts: Mapping[str, str]) -> None:
+        """What a ring and a part drawn in error say when the pointer rests on them, made
+        by the window (``MainWindow._finding_notes``) in its words. The rings and the red
+        tint said only that something was wrong; what, and what to do, was a row in a
+        drawer that might be closed, found by reading the list (Sinan's dev4 walk)."""
+        self._finding_holes = {(hole.col, hole.row): note for hole, note in holes.items()}
+        self._finding_parts = dict(parts)
+
+    def _finding_part_at(self, pos: QPointF) -> ComponentItem | None:
+        """The part under ``pos`` that a finding draws in error -- the topmost part only,
+        so a finding about the part underneath is not said over another one."""
+        for item in self.items(pos):
+            if isinstance(item, ComponentItem):
+                return item if item.comp.id in self._finding_parts else None
+        return None
+
+    def finding_tip_at(self, pos: QPointF) -> str:
+        """The tooltip a finding gives at ``pos``, or ``""`` where none is marked."""
+        at = screen_to_hole(pos, self.document.board, self.side)
+        note = self._finding_holes.get((at.col, at.row))
+        if note:
+            return note
+        part = self._finding_part_at(pos)
+        if part is None:
+            return ""
+        own = html.escape(part.toolTip()).replace("\n", "<br>")
+        return f"{self._finding_parts[part.comp.id]}<hr>{own}"
+
+    def helpEvent(self, event: Any) -> None:
+        tip = self.finding_tip_at(event.scenePos())
+        if not tip:
+            super().helpEvent(event)
+            return
+        QToolTip.showText(event.screenPos(), tip, event.widget())
+        event.accept()
+
+    def pick_finding_at(self, pos: QPointF) -> str:
+        """Say which finding a plain click at ``pos`` landed on (``findingPicked``):
+        ``"ring"`` for a ringed hole, whose click is the finding's -- the window selects
+        what its row selects, and the press goes no further -- ``"part"`` for a part drawn
+        in error, whose click goes on to select or drag the part, or ``""``."""
+        at = screen_to_hole(pos, self.document.board, self.side)
+        if (at.col, at.row) in self._finding_holes:
+            self.findingPicked.emit(at)
+            return "ring"
+        part = self._finding_part_at(pos)
+        if part is not None:
+            self.findingPicked.emit(part.comp.id)
+            return "part"
+        return ""
 
     # -- selection helpers, used by the DRC/LVS dock -------------------------
 
@@ -7448,6 +7508,11 @@ class BoardScene(QGraphicsScene):
             if index is not None and self.begin_reshape(index):
                 event.accept()
                 return
+            # A ring's click is its finding's, as a click on its row; a handle of the copper
+            # that click selected, on the same hole, still takes the next press.
+            if self.pick_finding_at(event.scenePos()) == "ring":
+                event.accept()
+                return
             if self.grab_copper(event.scenePos()):
                 event.accept()
                 return
@@ -7843,6 +7908,14 @@ class BoardScene(QGraphicsScene):
 #: viewport. Both ends are reachable by accident on a trackpad, so they are clamped.
 MIN_SCALE = 1.5
 MAX_SCALE = 90.0
+
+#: Going to a finding (``BoardView.center_on_holes``) frames at least this many holes each
+#: way round it, and never closer than ``FINDING_MAX_SCALE`` pixels per millimetre. Two
+#: pads named by a finding were framed alone, at the zoom's limit: a click on a row put
+#: two pads across the whole view, with nothing round them to say where on the board they
+#: were (Sinan's dev4 walk).
+FINDING_FRAME_PITCHES = 8
+FINDING_MAX_SCALE = 24.0
 
 
 class FlipCurtain(QWidget):
@@ -8611,12 +8684,22 @@ class BoardView(QGraphicsView):
         )
 
     def center_on_holes(self, holes: Sequence[HoleCoord], board: Board, side: BoardSide) -> None:
-        """Zoom to frame the given holes. For the DRC/LVS dock, where the point of clicking
-        a violation is to get a close look at the two pads it names."""
+        """Zoom to frame the given holes, for the Problems drawer: close enough to see the
+        pads a finding names, with the board round them in view (``FINDING_FRAME_PITCHES``,
+        ``FINDING_MAX_SCALE``)."""
         if not holes:
             return
         self._navigated()
-        self.fitInView(self._holes_rect(holes, board, side, 6.0), Qt.AspectRatioMode.KeepAspectRatio)
+        rect = self._holes_rect(holes, board, side, 6.0)
+        least = FINDING_FRAME_PITCHES * board.pitch
+        grow_x = max(0.0, least - rect.width()) / 2
+        grow_y = max(0.0, least - rect.height()) / 2
+        rect = rect.adjusted(-grow_x, -grow_y, grow_x, grow_y)
+        self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+        if self.current_scale() > FINDING_MAX_SCALE:
+            factor = FINDING_MAX_SCALE / self.current_scale()
+            self.scale(factor, factor)
+            self.centerOn(rect.center())
         self._clamp_scale()
 
     def reveal_holes(self, holes: Sequence[HoleCoord], board: Board, side: BoardSide) -> None:

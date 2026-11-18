@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Sequence
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QMouseEvent
@@ -32,6 +33,172 @@ BAR_HEIGHT = 30
 
 #: Between two facts on the bar.
 FACT_GAP = "&nbsp;&nbsp;·&nbsp;&nbsp;"
+
+
+def advice(group: str, rule: str) -> str:
+    """What to do about a finding, by the check it came from (``"drc"``, ``"lvs"`` or
+    ``"erc"``) and its rule id, LVS kind or ERC code -- or ``""`` for one with no line.
+
+    The finding's own sentence says what is wrong, in the engine's words, and stays as it
+    is: it is what the MCP server and ``--headless`` print, and goldens compare it byte for
+    byte. This is the window's second line under it, written for the person at the board:
+    one step that makes the finding go away. Built at call time, like the rule titles, so
+    it is said in the language the window was built in; ``tests/test_ui.py`` reads every
+    rule, kind and code out of the engine and fails on one this table is silent about.
+    """
+    lines: dict[str, dict[str, str]] = {
+        "drc": {
+            "component-body-overlap": t(
+                "Move one of the parts until their bodies no longer meet."),
+            "component-off-board": t(
+                "Move the part back onto the board, or make the board bigger under Properties."),
+            "component-overhangs-edge": t(
+                "Move or turn the part so its body stays over the board, or make sure the "
+                "case has room for it."),
+            "component-too-tall": t(
+                "Lay the part down, choose a lower package, or use a taller case."),
+            "conductor-crossing": t(
+                "Redraw one of them, or make it an insulated wire so it can pass over the "
+                "other."),
+            "conductor-off-board": t(
+                "Delete the copper past the edge and draw it again on the board."),
+            "copper-at-covered-pin": t(
+                "Lay the copper on the other face, where the pin's pad can be soldered."),
+            "copper-under-body": t(
+                "Lay the copper before fitting the part, or move it out from under the part."),
+            "creepage-clearance": t(
+                "Move the high-voltage copper at least one hole further from the other net."),
+            "crossing-conductors": t(
+                "Redraw one of them to go round the hole, or join the two nets if they are "
+                "meant to be one."),
+            "current-capacity": t(
+                "Use a thicker wire, or put a wire under the solder; if the net's current was "
+                "set too high, lower it."),
+            "cut-track-conflict": t(
+                "Move the part, or the cut, so that no pin lands where the strip is cut."),
+            "duplicate-pin-hole": t(
+                "Move one of the parts: a hole takes one pin."),
+            "edge-connector-conflict": t(
+                "Move the part off the edge finger, onto holes with pads."),
+            "heat-proximity": t(
+                "Move the part further from the hot one, or move the hot one to the edge."),
+            "joint-under-body": t(
+                "Move the part back to the component side, where its joints can be reached."),
+            "jumper-under-body": t(
+                "Fit the jumper before the part, or take it round the part."),
+            "lead-bend-too-long": t(
+                "Bend the leg across fewer holes, and use a wire for the rest of the way."),
+            "mounting-hole-clearance": t(
+                "Move the part out from under the screw head."),
+            "mounting-hole-conflict": t(
+                "Move the part so that no pin lands on the mounting hole."),
+            "no-copper-on-face": t(
+                "Lay it on the solder side, where the pads are."),
+            "no-hole": t(
+                "Move the part onto the breadboard's holes."),
+            "not-on-breadboard": t(
+                "Use a jumper wire on top instead: nothing is soldered on a breadboard."),
+            "pad-lifting-risk": t(
+                "Put a wire under the solder, or use a wire for the long stretch."),
+            "pin-not-connected": t(
+                "Wire the pin to its net, by hand or with Auto-wire."),
+            "rail-without-bridge": t(
+                "Bridge a finger to a hole of the board, or delete the solder on the fingers."),
+            "solder-gap-needs-spine": t(
+                "Put a wire under the solder across the gap, or use a wire."),
+            "solder-trace-invalid-path": t(
+                "Redraw the trace one hole at a time, with no diagonal step."),
+            "solder-trace-proximity": t(
+                "Leave an empty hole between the solder and the other net, or solder it with "
+                "care and look for a bridge afterwards."),
+            "solder-trace-too-long": t(
+                "Use a wire for part of the run, or put a wire under the solder."),
+            "superseded-footprint": t(
+                "Choose the part again under Properties ▸ Change…; its pins stay where they are."),
+            "terminal-entry-blocked": t(
+                "Turn the terminal, or move what stands in front of its wire entries."),
+            "terminal-entry-faces-in": t(
+                "Turn the terminal so that its wire entries face the edge of the board."),
+            "under-module": t(
+                "Fit this part before the module, or move it out from under it."),
+            "unknown-footprint": t(
+                "Choose a package for the part under Properties ▸ Change…."),
+            "wire-over-joint": t(
+                "Use an insulated wire there, or take the bare wire round the joint."),
+            "wire-too-thick-for-hole": t(
+                "Use a thinner wire, or share the current between two wires."),
+            "wrong-rail": t(
+                "Move the pin to the rail its net belongs on."),
+        },
+        "lvs": {
+            "open": t(
+                "Join the pieces: draw the copper that is missing, or Redo Wiring on the net."),
+            "short": t(
+                "Find the copper that joins the two nets, and delete or move it."),
+            "floating-conductor": t(
+                "Delete the copper, or carry it on to the pin it was meant for."),
+            "unplaced-component": t(
+                "Place the part on the board from the Parts list."),
+            "unknown-footprint": t(
+                "Choose a package for the part under Properties ▸ Change…."),
+            "unrouted-net": t(
+                "Wire it, by hand or with Auto-wire."),
+        },
+        "erc": {
+            "supply-unconnected": t(
+                "Connect the power pin to its supply net on the sheet."),
+            "supply-on-wrong-net": t(
+                "Move the power pin to the right supply net."),
+            "polarity-reversed": t(
+                "Turn the part round on the sheet, or swap its two nets."),
+            "pin-not-on-part": t(
+                "Take the pin off the net, or choose the package that has it."),
+            "no-power-entry": t(
+                "Add the connector, battery or supply that brings power in."),
+            "supply-pin-open": t(
+                "Connect the other power pin as well."),
+            "nc-pin-connected": t(
+                "Take the “no connect” pin off its net."),
+            "single-pin-net": t(
+                "Connect the net to a second pin, or delete it."),
+            "part-unconnected": t(
+                "Wire the part into the circuit, or delete it."),
+            "part-not-defined": t(
+                "Add the part, or take its pins off the net."),
+            "value-missing": t(
+                "Give the part a value under Properties."),
+        },
+    }
+    return lines.get(group, {}).get(rule, "")
+
+
+#: Findings said in one tooltip on the board before the rest are counted: a hole in a
+#: long run next to another net can be named by a finding of each trace, per pad.
+TIP_FINDINGS = 3
+
+
+def findings_tip(findings: Sequence[tuple[str, str]]) -> str:
+    """Findings as a tooltip says them: each whole sentence -- the drawer's row cuts it off
+    at the column's edge -- and then what to do about them, each step once. ``findings``
+    is (sentence, what to do) pairs; either may be empty. Rich text, so Qt wraps it rather
+    than drawing one line as wide as the screen."""
+    sentences = list(dict.fromkeys(sentence for sentence, _ in findings if sentence))
+    steps = list(dict.fromkeys(step for _, step in findings if step))
+    said = "".join(f"<p>{html.escape(sentence)}</p>" for sentence in sentences[:TIP_FINDINGS])
+    if len(sentences) > TIP_FINDINGS:
+        more = len(sentences) - TIP_FINDINGS
+        said += f"<p>{html.escape(t('…and {count} more').format(count=more))}</p>"
+    if steps:
+        said += (
+            f"<p><b>{html.escape(t('What to do:'))}</b> "
+            f"{html.escape(' '.join(steps))}</p>"
+        )
+    return said
+
+
+def finding_tip(sentence: str, what_to_do: str = "") -> str:
+    """One finding as a tooltip says it (``findings_tip``)."""
+    return findings_tip([(sentence, what_to_do)])
 
 
 def _plain(rich: str) -> str:

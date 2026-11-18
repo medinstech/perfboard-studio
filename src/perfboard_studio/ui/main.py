@@ -92,6 +92,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -105,6 +106,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -426,7 +428,7 @@ from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
-from .problems import ProblemsBar
+from .problems import ProblemsBar, advice, finding_tip, findings_tip
 from .project import write_project
 from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
@@ -939,6 +941,8 @@ ROLE_REFS = int(Qt.ItemDataRole.UserRole) + 10
 #: The copper a finding is about, selected on the board when it is clicked: the way from
 #: "something is wrong with the wiring" to the wire.
 ROLE_CONDUCTOR_IDS = int(Qt.ItemDataRole.UserRole) + 11
+#: What to do about a finding (``problems.advice``), on its row and on its rule's.
+ROLE_ADVICE = int(Qt.ItemDataRole.UserRole) + 12
 
 
 def _now_iso() -> str:
@@ -2623,6 +2627,13 @@ def _erc_title(rule: str) -> str:
     return titles.get(rule, rule)
 
 
+def shown_finding(text: str) -> str:
+    """A finding as the window shows it: the engine's " -- " set as the dash it stands
+    for. Only here, where it is read -- the engine's text, which goldens compare and MCP
+    prints, and ``engine_text``'s keys stay as they are."""
+    return text.replace(" -- ", " — ")
+
+
 def stray_copper(lvs: LvsResult) -> int:
     """Islands of copper joined to no pin (LVS ``floating-conductor``): a run or a wire left
     on empty holes. Counted as a warning on the drawer's bar and the Checks step -- listed
@@ -3255,6 +3266,7 @@ class MainWindow(QMainWindow):
         self.view.footprintDropped.connect(self._on_footprint_dropped)
         self.scene.measureArmed.connect(self._on_measure_armed)
         self.scene.measured.connect(self._on_measured)
+        self.scene.findingPicked.connect(self._on_finding_picked)
         self.scene.cutArmed.connect(self._on_cut_armed)
         self.scene.cutMade.connect(self._on_cut_made)
 
@@ -6310,6 +6322,10 @@ class MainWindow(QMainWindow):
         self.act_drc_panel = QAction(self)
         self.act_drc_panel.setCheckable(True)
         self.act_drc_panel.toggled.connect(self.set_problems_open)
+        # Ctrl+7 and the menu, as a click on the bar: opened by hand, to the first problem.
+        self.act_drc_panel.triggered.connect(
+            lambda checked: self._go_to_first_problem() if checked else None
+        )
         self.act_drc_panel.setText(t("Show &Problems"))
         self.act_drc_panel.setShortcut(QKeySequence("Ctrl+7"))
         view_menu.addAction(self.act_drc_panel)
@@ -10082,7 +10098,28 @@ class MainWindow(QMainWindow):
         )
         self.drc_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.drc_tree.customContextMenuRequested.connect(self._on_drc_context_menu)
-        layout.addWidget(self.drc_tree)
+        # The row picked or pointed at, all of it, and what to do: a finding is a sentence
+        # the column cut off with "--" halfway, and nothing said what to do about it.
+        # Beside the list rather than under it: the drawer is wide and short, and under it
+        # the list was one row tall in a 768 px window.
+        self.drc_detail = QLabel()
+        self.drc_detail.setObjectName("problemDetail")
+        self.drc_detail.setWordWrap(True)
+        self.drc_detail.setTextFormat(Qt.TextFormat.RichText)
+        self.drc_detail.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.drc_detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.drc_detail.setContentsMargins(theme.SPACE["sm"], 0, 0, 0)
+        detail = QScrollArea()
+        detail.setWidgetResizable(True)
+        detail.setFrameShape(QFrame.Shape.NoFrame)
+        detail.setWidget(self.drc_detail)
+        detail.setMinimumWidth(220)
+        row = QHBoxLayout()
+        row.setSpacing(theme.SPACE["sm"])
+        row.addWidget(self.drc_tree, 3)
+        row.addWidget(detail, 2)
+        layout.addLayout(row)
+        self._say_finding(None)
 
         dock = QDockWidget(t("Problems"), self)
         dock.setObjectName("dockDrc")
@@ -10094,7 +10131,7 @@ class MainWindow(QMainWindow):
         # title bar, so it is the dock's one handle; and it is neither closed nor floated
         # nor moved -- a drawer that can be put away is a count nobody sees.
         self.problems_bar = ProblemsBar(dock)
-        self.problems_bar.toggled.connect(self.set_problems_open)
+        self.problems_bar.toggled.connect(self._open_problems_by_hand)
         self.problems_bar.wire_requested.connect(self._wire_from_the_drawer)
         dock.setTitleBarWidget(self.problems_bar)
         dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
@@ -10119,12 +10156,7 @@ class MainWindow(QMainWindow):
         dock = self.dock_drc
         if on:
             dock.setMaximumHeight(self.UNCAPPED)
-            QTimer.singleShot(
-                0,
-                lambda: self.resizeDocks(
-                    [dock], [self.LAYOUT_DRC_HEIGHT], Qt.Orientation.Vertical
-                ),
-            )
+            QTimer.singleShot(0, self._give_the_drawer_its_height)
         else:
             dock.setMaximumHeight(PROBLEMS_BAR_HEIGHT)
         if hasattr(self, "act_drc_panel") and self.act_drc_panel.isChecked() != on:
@@ -11366,6 +11398,117 @@ class MainWindow(QMainWindow):
         self._wire_offer = menu
         menu.popup(where)
 
+    def _give_the_drawer_its_height(self) -> None:
+        self.resizeDocks([self.dock_drc], [self.LAYOUT_DRC_HEIGHT], Qt.Orientation.Vertical)
+        # Laid out now rather than on the next layout pass, so what runs after it in this
+        # turn of the loop -- going to the first problem -- scrolls the list at the height
+        # it is shown at. Scrolled while still squeezed to nothing, the row gone to stood
+        # at the top with the rule it is under out of sight above it.
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+
+    def _open_problems_by_hand(self, on: bool) -> None:
+        """The bar clicked: the drawer opens, and goes to the first problem it counts."""
+        self.set_problems_open(on)
+        if on:
+            self._go_to_first_problem()
+
+    def _go_to_first_problem(self) -> None:
+        """Opened on a count, the drawer goes to what it counts, as Next does on Check: the
+        badge said "Problems 3" and opened a list of folded groups, the three somewhere in
+        it (Sinan's dev4 walk). A row already picked is kept: that is the reader's place.
+
+        After the drawer has taken its height (``set_problems_open`` gives it on the next
+        turn of the loop), so the finding is framed in the view that is left, not in the
+        taller one it had, where the drawer would come up over it."""
+        if not (self.problems_bar.errors or self.problems_bar.warnings):
+            return
+        current = self.drc_tree.currentItem()
+        if current is not None and current.childCount() == 0:
+            return
+        QTimer.singleShot(0, self._go_to_next_problem)
+
+    def _on_finding_picked(self, what: object) -> None:
+        """A click on a ringed hole or a part drawn in error picks its finding's row: the
+        first that names the hole, or the part. A ring is nothing but the finding, so it
+        opens the drawer to it and selects what the row's click selects; a part is clicked
+        for its own sake as often -- to select it, to drag it -- so its row is picked only
+        where the drawer is already open, and the click goes on to the part."""
+        leaves: list[QTreeWidgetItem] = []
+
+        def walk(item: QTreeWidgetItem) -> None:
+            for index in range(item.childCount()):
+                child = item.child(index)
+                if child is None:
+                    continue
+                if child.childCount():
+                    walk(child)
+                elif (
+                    what in (child.data(0, ROLE_HOLES) or ())
+                    if isinstance(what, HoleCoord)
+                    else what in (child.data(0, ROLE_COMPONENT_IDS) or ())
+                ):
+                    leaves.append(child)
+
+        tree = self.drc_tree
+        for index in range(tree.topLevelItemCount()):
+            top = tree.topLevelItem(index)
+            if top is not None:
+                walk(top)
+        if not leaves:
+            return
+
+        def under_the_board_check(leaf: QTreeWidgetItem) -> bool:
+            top: QTreeWidgetItem = leaf
+            while (parent := top.parent()) is not None:
+                top = parent
+            return bool(top.data(0, ROLE_FINDING_KEY) == "DRC")
+
+        # What the board marked is DRC's -- the rings and the red tint are drawn from it --
+        # though an LVS row may name the same pin and the circuit's row the same part.
+        leaves.sort(key=lambda leaf: not under_the_board_check(leaf))
+        if isinstance(what, HoleCoord):
+            if not self.problems_bar.expanded:
+                self.set_problems_open(True)
+        elif not self.problems_bar.expanded:
+            return
+        leaf = leaves[0]
+        parent = leaf.parent()
+        while parent is not None:
+            parent.setExpanded(True)
+            parent = parent.parent()
+        tree.setCurrentItem(leaf)
+        self._reveal_finding_row(leaf)
+        if isinstance(what, HoleCoord):
+            # As the row's click: the copper or the parts it is about, selected, and in
+            # Properties. The ring took the click, so nothing else under it did.
+            self._select_what_a_finding_names(leaf)
+
+    def _finding_notes(
+        self, violations: Sequence[DrcViolation]
+    ) -> tuple[dict[HoleCoord, str], dict[str, str]]:
+        """What the board says on hover about the findings it marks: the rings
+        (``solder-trace-proximity``, the only rule drawn as rings) by hole, and the parts
+        an error draws in red by id -- each finding's sentence and what to do."""
+        by_hole: dict[HoleCoord, list[tuple[str, str]]] = {}
+        by_part: dict[str, list[tuple[str, str]]] = {}
+        for violation in violations:
+            said = (
+                self._finding_text(violation.message, violation.conductor_ids),
+                advice("drc", violation.rule),
+            )
+            if violation.rule == "solder-trace-proximity":
+                for hole in violation.holes:
+                    by_hole.setdefault(hole, []).append(said)
+            if violation.severity == "error":
+                for component_id in violation.component_ids:
+                    by_part.setdefault(component_id, []).append(said)
+        return (
+            {hole: findings_tip(said) for hole, said in by_hole.items()},
+            {part: findings_tip(said) for part, said in by_part.items()},
+        )
+
     def _go_to_next_problem(self) -> bool:
         """The next finding in the drawer after the one chosen -- what is wrong, never the
         work left -- shown as a click on it shows it. False when there is none."""
@@ -11414,7 +11557,7 @@ class MainWindow(QMainWindow):
             parent.setExpanded(True)
             parent = parent.parent()
         tree.setCurrentItem(leaf)
-        tree.scrollToItem(leaf)
+        self._reveal_finding_row(leaf)
         self._on_drc_item_clicked(leaf, 0)
         return True
 
@@ -11499,6 +11642,7 @@ class MainWindow(QMainWindow):
         self._last_drc_ms = (time.perf_counter() - t0) * 1000
         self._last_violations = tuple(violations)
         self.scene.set_violations(violations)
+        self.scene.set_finding_notes(*self._finding_notes(self._last_violations))
 
         self._last_lvs = run_lvs(document, self.lookup)
         self._last_ratsnest = ratsnest(shown, self.lookup)
@@ -11822,6 +11966,7 @@ class MainWindow(QMainWindow):
         tree.clear()
 
         self._add_erc_findings(needle, expanded)
+        self._add_lvs_findings(lvs, needle, expanded)
         self._add_not_wired(needle)
         self._add_face_notes(needle)
         self._add_wiring_notes(needle, expanded)
@@ -11874,6 +12019,7 @@ class MainWindow(QMainWindow):
             # The id stays one hover away: it is what the documentation and the MCP
             # server call the rule, and what somebody searching for it will type.
             rule_item.setToolTip(0, rule)
+            self._explain_group(rule_item, advice("drc", rule))
             if rule in at_the_bench:
                 # A check the guide makes at the bench, in its own group with the same go-to
                 # and menu -- listed, never hidden, just not among what is wrong.
@@ -11892,6 +12038,12 @@ class MainWindow(QMainWindow):
             rule_item.setExpanded(f"drc:{rule}" in expanded)
         drc_root.setExpanded("DRC" in expanded or not expanded)
 
+    def _add_lvs_findings(self, lvs: LvsResult, needle: str, expanded: set[str]) -> None:
+        """Whether the board is the circuit, as the tree's second group, under the circuit's
+        own: a board in pieces or shorted will not work whatever else is right, and this
+        group sat last, under every proximity warning DRC had (Sinan's dev4 walk)."""
+        tree = self.drc_tree
+        left = self._work_left()
         s = lvs.summary
         lvs_root = QTreeWidgetItem(
             [
@@ -11914,16 +12066,24 @@ class MainWindow(QMainWindow):
             ):
                 continue
             by_kind.setdefault(iss.kind, []).append(iss)
-        for kind in sorted(by_kind):
+        # What is wrong first -- broken, shorted, a package nobody knows, stray copper --
+        # then what is only left to do.
+        for kind in sorted(
+            by_kind,
+            key=lambda kind: (kind in left, kind not in self._LVS_WRONG, kind),
+        ):
             kind_issues = by_kind[kind]
             kind_item = QTreeWidgetItem([_lvs_title(kind), f"{len(kind_issues)}"])
             kind_item.setToolTip(0, kind)
+            self._explain_group(kind_item, advice("lvs", kind))
             colour = theme.colour("danger" if kind in self._LVS_WRONG else "warning")
             kind_item.setForeground(0, QColor(theme.colour("secondary") if kind in left else colour))
             kind_item.setData(0, ROLE_FINDING_KEY, f"lvs:{kind}")
             lvs_root.addChild(kind_item)
             for iss in kind_issues:
-                leaf = QTreeWidgetItem(["", self._finding_text(iss.message, iss.conductor_ids)])
+                said = self._finding_text(iss.message, iss.conductor_ids)
+                leaf = QTreeWidgetItem(["", said])
+                self._explain(leaf, said, advice("lvs", iss.kind))
                 issue_refs = {p.component_ref for p in iss.pins}
                 issue_component_ids = tuple(c.id for c in self.bus.document.components if c.ref in issue_refs)
                 leaf.setData(0, ROLE_COMPONENT_IDS, issue_component_ids)
@@ -11934,7 +12094,10 @@ class MainWindow(QMainWindow):
                 leaf.setData(0, ROLE_CONDUCTOR_IDS, iss.conductor_ids)
                 kind_item.addChild(leaf)
             kind_item.setExpanded(f"lvs:{kind}" in expanded)
-        lvs_root.setExpanded("LVS" in expanded or not expanded)
+        # Open on its own whenever the board is not the circuit, as the circuit's group is
+        # with an error in it: this is the group that says the board will not work.
+        wrong = any(kind in self._LVS_WRONG and kind not in left for kind in by_kind)
+        lvs_root.setExpanded("LVS" in expanded or not expanded or wrong)
 
     def _lvs_holes(self, issue: LvsIssue) -> tuple[HoleCoord, ...]:
         """The holes an LVS finding is about, on the board in front: its copper's and its
@@ -12009,9 +12172,12 @@ class MainWindow(QMainWindow):
                 ),
             )
             rule_item.setData(0, ROLE_FINDING_KEY, f"erc:{rule}")
+            self._explain_group(rule_item, advice("erc", rule))
             root.addChild(rule_item)
             for finding in items:
-                leaf = QTreeWidgetItem(["", say_finding(finding.message)])
+                said = shown_finding(say_finding(finding.message))
+                leaf = QTreeWidgetItem(["", said])
+                self._explain(leaf, said, advice("erc", rule))
                 leaf.setData(0, ROLE_REFS, finding.refs)
                 leaf.setData(
                     0, ROLE_COMPONENT_IDS, tuple(components[r] for r in finding.refs if r in components)
@@ -12049,7 +12215,18 @@ class MainWindow(QMainWindow):
         conductor named in it by its two ends and every part by its reference, rather than
         by an id -- the ones the finding carries and the ones only its words name (the end
         of another wire, the part a lead bend belongs to) -- in the window's language."""
-        return finding_text(message, names_in(self.bus.document, message, conductor_ids))
+        return shown_finding(
+            finding_text(message, names_in(self.bus.document, message, conductor_ids))
+        )
+
+    def _reveal_finding_row(self, leaf: QTreeWidgetItem) -> None:
+        """Scroll the drawer to a finding gone to, with the rule it is under in view: the
+        row alone was an empty Problem cell beside a cut-off sentence, the rule that says
+        what it is scrolled out above it in a drawer four rows tall."""
+        parent = leaf.parent()
+        if parent is not None:
+            self.drc_tree.scrollToItem(parent, QAbstractItemView.ScrollHint.PositionAtTop)
+        self.drc_tree.scrollToItem(leaf)
 
     def _add_drc_findings(
         self,
@@ -12093,6 +12270,11 @@ class MainWindow(QMainWindow):
             holes = tuple(hole for violation in group for hole in violation.holes)
             span = f"{format_hole(group[0].holes[0], self.bus.document.board)}–{format_hole(group[-1].holes[0], self.bus.document.board)}"
             node = QTreeWidgetItem([span, f"{len(group)} {t('pads')}"])
+            self._explain(
+                node,
+                self._finding_text(group[0].message, group[0].conductor_ids),
+                advice("drc", rule),
+            )
             node.setData(0, ROLE_HOLES, holes)
             node.setData(0, ROLE_CONDUCTOR_IDS, (key,))
             node.setData(0, ROLE_FINDING_KEY, f"drc:{rule}:{key}")
@@ -12101,8 +12283,26 @@ class MainWindow(QMainWindow):
             node.setExpanded(f"drc:{rule}:{key}" in expanded)
             rule_item.addChild(node)
 
+    def _explain(self, item: QTreeWidgetItem, sentence: str, what_to_do: str) -> None:
+        """A finding's row says all of itself on hover and in the line under the list: the
+        sentence the column cuts off, and what to do (``problems.advice``)."""
+        item.setData(0, ROLE_ADVICE, what_to_do)
+        tip = finding_tip(sentence, what_to_do)
+        item.setToolTip(0, tip)
+        item.setToolTip(1, tip)
+
+    @staticmethod
+    def _explain_group(item: QTreeWidgetItem, what_to_do: str) -> None:
+        """A rule's row: what to do about every finding under it, beside the count. Its
+        name's tooltip stays the rule's id, which is what the docs and the MCP server say."""
+        item.setData(0, ROLE_ADVICE, what_to_do)
+        if what_to_do:
+            item.setToolTip(1, finding_tip("", what_to_do))
+
     def _drc_leaf(self, violation: DrcViolation) -> QTreeWidgetItem:
-        leaf = QTreeWidgetItem(["", self._finding_text(violation.message, violation.conductor_ids)])
+        said = self._finding_text(violation.message, violation.conductor_ids)
+        leaf = QTreeWidgetItem(["", said])
+        self._explain(leaf, said, advice("drc", violation.rule))
         leaf.setData(0, ROLE_HOLES, violation.holes)
         leaf.setData(0, ROLE_COMPONENT_IDS, violation.component_ids)
         leaf.setData(0, ROLE_CONDUCTOR_IDS, violation.conductor_ids)
@@ -12345,15 +12545,45 @@ class MainWindow(QMainWindow):
         return found
 
     def _focus_drc_item(self, item: QTreeWidgetItem | None) -> None:
-        """The board shows the holes of the finding picked or hovered in the drawer."""
+        """The board shows the holes of the finding picked or hovered in the drawer, and
+        the line under the list says it."""
         holes = item.data(0, ROLE_HOLES) if item is not None else None
         self.scene.set_focused_holes(list(holes) if holes else [])
+        self._say_finding(item)
+
+    def _say_finding(self, item: QTreeWidgetItem | None) -> None:
+        """The pane beside the findings: what to do about the row picked or pointed at, and
+        the row whole -- or, with none, how to get it said. What to do comes first here,
+        unlike the tooltip: the drawer is 200 px tall, the row already shows how its
+        sentence starts, and the step is the one thing said nowhere else."""
+        if not hasattr(self, "drc_detail"):
+            return
+        what_to_do = str(item.data(0, ROLE_ADVICE) or "") if item is not None else ""
+        if item is None or (not what_to_do and item.childCount()):
+            self.drc_detail.setText(
+                theme.ink(
+                    escape(t("Point at a problem, or pick one: it is said here in full, "
+                             "with what to do about it.")),
+                    "secondary",
+                )
+            )
+            return
+        sentence = item.text(1) if not item.text(0) else item.text(0)
+        said = f"<p>{escape(sentence)}</p>"
+        if what_to_do:
+            said = f"<p><b>{escape(t('What to do:'))}</b> {escape(what_to_do)}</p>{said}"
+        self.drc_detail.setText(said)
 
     def _on_drc_item_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
         holes = item.data(0, ROLE_HOLES)
-        component_ids = item.data(0, ROLE_COMPONENT_IDS)
         if holes:
             self.view.center_on_holes(holes, self.bus.document.board, self.side)
+        self._select_what_a_finding_names(item)
+
+    def _select_what_a_finding_names(self, item: QTreeWidgetItem) -> None:
+        """What a click on a finding's row selects, framing apart: a ring clicked on the
+        board selects the same, where the view already is (``_on_finding_picked``)."""
+        component_ids = item.data(0, ROLE_COMPONENT_IDS)
         conductor_ids = item.data(0, ROLE_CONDUCTOR_IDS)
         if component_ids:
             self.scene.select_components(component_ids)

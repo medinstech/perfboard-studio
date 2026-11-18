@@ -20,6 +20,7 @@ catch the two failure modes this rewiring exists to prevent:
 from __future__ import annotations
 
 import dataclasses
+import html
 import itertools
 import os
 import pathlib
@@ -6189,6 +6190,254 @@ def test_a_run_past_a_row_of_pins_is_one_row_with_every_pad_underneath() -> None
     assert findings == 7, "and every pad still reachable underneath"
     assert "–" in proximity.child(0).text(0), "named by where it runs"
     _close(window)
+
+
+def test_every_rule_kind_and_code_says_what_to_do() -> None:
+    """A finding said what was wrong and nothing about what to do. Read off the engine, as
+    the titles are, so a new rule cannot arrive mute."""
+    import re
+    from typing import get_args
+
+    from perfboard_studio import drc, erc, lvs
+    from perfboard_studio.ui.problems import advice
+
+    source = pathlib.Path(drc.__file__).read_text(encoding="utf-8")
+    rules = set(re.findall(r'rule="([a-z0-9-]+)"', source))
+    assert len(rules) > 20
+    assert [rule for rule in sorted(rules) if not advice("drc", rule)] == []
+    kinds = get_args(lvs.LvsIssueKind.__value__)
+    assert kinds
+    assert [kind for kind in kinds if not advice("lvs", kind)] == []
+    assert [rule for rule in erc.RULES if not advice("erc", rule)] == []
+    assert advice("drc", "no-such-rule") == ""
+
+
+def _first_leaf(group):
+    item = group
+    while item.childCount():
+        item = item.child(0)
+    return item
+
+
+def test_a_finding_says_all_of_itself_and_what_to_do() -> None:
+    """The row cut its sentence off at the column's edge, with no tooltip, and nothing
+    anywhere said what to do about it."""
+    from perfboard_studio.ui.main import ROLE_ADVICE
+    from perfboard_studio.ui.problems import advice
+
+    window = _window_on(_trace_along_a_dip())
+    try:
+        group = _drc_group(window, "drc:solder-trace-proximity")
+        steps = advice("drc", "solder-trace-proximity")
+        assert group.data(0, ROLE_ADVICE) == steps
+        assert group.toolTip(0) == "solder-trace-proximity", "the id, as before"
+
+        leaf = _first_leaf(group)
+        sentence = leaf.text(1)
+        assert sentence and steps
+        tip = leaf.toolTip(1)
+        assert html.escape(sentence) in tip and html.escape(steps) in tip
+        assert "What to do:" in tip
+
+        window._focus_drc_item(leaf)
+        said = window.drc_detail.text()
+        assert html.escape(sentence) in said and html.escape(steps) in said
+        window._focus_drc_item(None)
+        assert "Point at a problem" in window.drc_detail.text()
+    finally:
+        _close(window)
+
+
+def test_the_board_against_the_circuit_comes_right_after_the_circuit() -> None:
+    """Broken nets, shorts and stray copper -- a board that will not work -- were the
+    tree's last group, under every warning DRC had."""
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        _stray_trace(window)
+        keys = [
+            window.drc_tree.topLevelItem(i).data(0, ROLE_FINDING_KEY)
+            for i in range(window.drc_tree.topLevelItemCount())
+        ]
+        assert keys[:2] == ["ERC", "LVS"]
+        assert keys.index("LVS") < keys.index("DRC")
+        lvs_root = window.drc_tree.topLevelItem(1)
+        assert lvs_root.isExpanded()
+        assert lvs_root.child(0).data(0, ROLE_FINDING_KEY) == "lvs:floating-conductor"
+        # The engine's " -- " is shown as the dash it stands for; the engine keeps its own.
+        said = lvs_root.child(0).child(0).text(1)
+        assert " — " in said and " -- " not in said
+        assert " -- " in next(
+            i.message for i in window._last_lvs.issues if i.kind == "floating-conductor"
+        )
+    finally:
+        _close(window)
+
+
+def test_going_to_a_finding_shows_the_board_round_it() -> None:
+    """Two pads were framed alone, at the zoom's limit: the whole view was two pads and
+    nothing said where on the board they were."""
+    from perfboard_studio.ui.view2d import (
+        FINDING_FRAME_PITCHES,
+        FINDING_MAX_SCALE,
+        BoardView,
+    )
+
+    document = _load_dense()
+    scene = BoardScene(document, footprint_lookup(), side="top")
+    view = BoardView(scene)
+    view.resize(1600, 1200)
+    view.show()
+    try:
+        pair = [HoleCoord(10, 8), HoleCoord(11, 8)]
+        view.center_on_holes(pair, document.board, "top")
+        assert view.current_scale() <= FINDING_MAX_SCALE + 1e-6
+        seen = view.mapToScene(view.viewport().rect()).boundingRect()
+        assert seen.width() >= FINDING_FRAME_PITCHES * document.board.pitch
+        assert seen.height() >= FINDING_FRAME_PITCHES * document.board.pitch
+        for hole in pair:
+            assert seen.contains(view2d.hole_to_screen(hole, document.board, "top"))
+
+        view.resize(500, 400)
+        view.center_on_holes(pair, document.board, "top")
+        seen = view.mapToScene(view.viewport().rect()).boundingRect()
+        assert seen.width() >= FINDING_FRAME_PITCHES * document.board.pitch - 1e-6
+        assert seen.height() >= FINDING_FRAME_PITCHES * document.board.pitch - 1e-6
+    finally:
+        view.close()
+
+
+def test_the_bar_opens_the_drawer_on_the_first_problem() -> None:
+    """"Problems 3" opened a list of folded groups, the three somewhere inside."""
+    window = _window_on(_trace_along_a_dip())
+    try:
+        assert window.problems_bar.warnings + window.problems_bar.errors
+        assert window.drc_tree.currentItem() is None
+        window.problems_bar.set_expanded(True, emit=True)
+        QApplication.processEvents()
+        picked = window.drc_tree.currentItem()
+        assert picked is not None and picked.childCount() == 0
+        parent = picked.parent()
+        while parent is not None:
+            assert parent.isExpanded()
+            parent = parent.parent()
+        # The rule it is under is in view above it, not scrolled out.
+        seen = window.drc_tree.viewport().rect()
+        assert seen.intersects(window.drc_tree.visualItemRect(picked.parent()))
+
+        # Closed and opened again, the row picked is the reader's place, and stays.
+        window.problems_bar.set_expanded(False, emit=True)
+        window.problems_bar.set_expanded(True, emit=True)
+        QApplication.processEvents()
+        assert window.drc_tree.currentItem() is picked
+    finally:
+        _close(window)
+
+
+def test_a_ring_says_its_finding_and_a_click_on_it_picks_the_row() -> None:
+    """The rings said only that something was wrong; what, and what to do, was a row in a
+    drawer that might be closed."""
+    from perfboard_studio.ui.main import ROLE_HOLES
+    from perfboard_studio.ui.problems import advice
+
+    window = _window_on(_trace_along_a_dip())
+    try:
+        board = window.bus.document.board
+        ringed = next(
+            v for v in window._last_violations if v.rule == "solder-trace-proximity"
+        ).holes[0]
+        at = view2d.hole_to_screen(ringed, board, window.side)
+        tip = window.scene.finding_tip_at(at)
+        assert html.escape(advice("drc", "solder-trace-proximity")) in tip
+        assert window.scene.finding_tip_at(
+            view2d.hole_to_screen(HoleCoord(15, 14), board, window.side)
+        ) == ""
+
+        assert not window.problems_bar.expanded
+        assert window.scene.pick_finding_at(at)
+        assert window.problems_bar.expanded
+        picked = window.drc_tree.currentItem()
+        assert picked is not None and ringed in picked.data(0, ROLE_HOLES)
+    finally:
+        _close(window)
+
+
+def test_a_click_on_a_ring_selects_what_a_click_on_its_row_selects() -> None:
+    """The ring's click picked the finding's row and left the board's selection on
+    whatever was selected before, so Properties described other copper than the row."""
+    from PySide6.QtTest import QTest
+
+    from perfboard_studio.ui.main import ROLE_HOLES
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.resize(1366, 768)
+        window.show()
+        _stray_trace(window)
+        QApplication.processEvents()
+        stray = window.bus.document.conductors[-1].id
+        finding = next(v for v in window._last_violations if v.rule == "solder-trace-proximity")
+        board = window.bus.document.board
+        window.view.center_on_holes(finding.holes, board, window.side)
+        QApplication.processEvents()
+
+        def selected():
+            return {id(item) for item in window.scene.selectedItems()}
+
+        # What was selected before -- the stray run just drawn -- is what the ring's
+        # click left in Properties.
+        window.scene.select_conductors([stray])
+        at = view2d.hole_to_screen(finding.holes[0], board, window.side)
+        QTest.mouseClick(
+            window.view.viewport(), Qt.MouseButton.LeftButton, pos=window.view.mapFromScene(at)
+        )
+        QApplication.processEvents()
+        by_ring = selected()
+        row = window.drc_tree.currentItem()
+        assert row is not None and finding.holes[0] in row.data(0, ROLE_HOLES)
+
+        window.scene.select_conductors([stray])
+        window._on_drc_item_clicked(row, 1)
+        assert by_ring == selected() != set()
+        assert all(
+            window.scene.conductor_items[cid].isSelected() for cid in finding.conductor_ids
+        )
+    finally:
+        _close(window)
+
+
+def test_a_part_drawn_in_error_says_why() -> None:
+    """The red tint said a part was wrong; the tooltip said only its name and value."""
+    from perfboard_studio.ui.main import ROLE_COMPONENT_IDS
+
+    window = _window_on(_load_dense())
+    try:
+        error = next(
+            v for v in window._last_violations if v.severity == "error" and v.component_ids
+        )
+        item = window.scene.component_items[error.component_ids[0]]
+        at = item.mapToScene(item.boundingRect().center())
+        part = window.scene._finding_part_at(at)
+        if part is None:
+            # Under another part's body at its middle: ask at its anchor's pad instead.
+            at = view2d.hole_to_screen(item.comp.anchor, window.bus.document.board, window.side)
+            part = window.scene._finding_part_at(at)
+        assert part is not None
+        tip = window.scene.finding_tip_at(at)
+        if "What to do:" not in tip:
+            pytest.skip("the part's anchor is a ringed hole here")
+        assert html.escape(part.comp.ref) in tip
+
+        # Clicked with the drawer shut, a part is selected for its own sake: no row.
+        assert window.scene.pick_finding_at(at)
+        assert not window.problems_bar.expanded
+        window.set_problems_open(True)
+        assert window.scene.pick_finding_at(at)
+        picked = window.drc_tree.currentItem()
+        assert picked is not None and part.comp.id in picked.data(0, ROLE_COMPONENT_IDS)
+    finally:
+        _close(window)
 
 
 def test_a_severity_has_the_same_colour_in_the_tree_as_on_the_status_bar() -> None:
