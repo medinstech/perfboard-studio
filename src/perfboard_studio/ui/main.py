@@ -4273,9 +4273,10 @@ class MainWindow(QMainWindow):
 
         ``examples_later`` is for a start: reading every example for its one-line summary
         was 17 ms of the first frame, for cards below Home's doors. Home goes up with none
-        and is handed them on the first turn of the event loop, once the window is shown;
-        whether the tour's example is there is a file name, so its card is in place from
-        the first frame."""
+        and is handed them a turn after its page is first painted (``after_first_frame``):
+        a zero timer set before the window is shown runs BEFORE that frame, which is what
+        this was until 0.25. Whether the tour's example is there is a file name, so its card
+        is in place from the first frame."""
         if self._home_page is not None:
             return self._home_page
 
@@ -4288,7 +4289,7 @@ class MainWindow(QMainWindow):
                 self.lookup,
                 has_walkthrough=any(path.stem == WALKTHROUGH for path in example_paths()),
             )
-            QTimer.singleShot(0, home, lambda: home.set_examples(examples()))
+            home.after_first_frame(lambda: home.set_examples(examples()))
         else:
             home = Home(examples(), self.lookup)
 

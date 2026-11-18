@@ -19669,8 +19669,10 @@ def test_the_harness_step_is_said_in_the_guides_language() -> None:
 
 def test_home_is_handed_its_examples_once_the_window_is_up() -> None:
     """Reading every example for its line was most of what Home cost a blank start: Home
-    goes up with its doors and the tour's card, and the examples come on the next turn of
-    the event loop -- the same examples, in the same order."""
+    goes up with its doors and the tour's card, and the examples come a turn after its
+    first frame (``Home.after_first_frame``) -- the same examples, in the same order. A
+    zero timer, which they had until 0.25, runs before the first frame when it is set
+    before the window is shown: until Home has been painted, they wait."""
     from PySide6.QtWidgets import QApplication
 
     from perfboard_studio.ui.main import example_boards
@@ -19683,6 +19685,9 @@ def test_home_is_handed_its_examples_once_the_window_is_up() -> None:
         assert home.cards == []
         assert not home.walkthrough_card.isHidden()
         _settle_events(QApplication, rounds=3)
+        assert home.cards == [], "not before Home's first frame"
+        window.show()
+        _settle_events(QApplication, rounds=6)
         assert [card.example.path for card in home.cards] == [p for p, _ in example_boards()]
     finally:
         _close(window)
