@@ -345,11 +345,13 @@ def test_drawing_takes_the_whole_conductor_out_and_puts_it_back_a_piece_at_a_tim
     drop = arrival.ArrivalAnimation()
     assert drop.start_drawing(ren, laid, lambda: None)
     assert all(not ren.HasViewProp(actor) for actor in laid.actors)
-    assert ren.GetActors().GetNumberOfItems() == before - len(laid.actors)
+    assert ren.GetActors().GetNumberOfItems() == before - len(laid.actors) + 2, "the rings"
     drop.show(0.5)
-    assert 0 < ren.GetActors().GetNumberOfItems() - (before - len(laid.actors)) <= len(laid.actors)
+    assert 0 < ren.GetActors().GetNumberOfItems() - (before - len(laid.actors)) <= (
+        len(laid.actors) + 2
+    ), "its pieces and the two rings round its ends"
     drop.show(1.0)
-    assert ren.GetActors().GetNumberOfItems() == before
+    assert ren.GetActors().GetNumberOfItems() == before + 2, "landed, and still ringed"
     drop.cancel()
     # No length, nothing to draw: and the conductor is where it was.
     empty = view3d.DrawOn(build=lambda _p: [], actors=list(laid.actors), length_mm=0.0)
@@ -380,3 +382,124 @@ def test_a_step_forward_onto_a_conductor_lays_it_and_redraws_it_whole(monkeypatc
     _pump_until(lambda: not drop.running)
     assert not drop.running
     _close_stage(window)
+
+
+def _a_laid_conductor():
+    from perfboard_studio.ui import view3d
+
+    doc = _load_dense()
+    lookup = footprint_lookup()
+    _index, focus, _steps = _a_conductor_step(doc, lookup)
+    ren = vtk.vtkRenderer()
+    drawing: list = []
+    view3d.populate_renderer(ren, doc, lookup, highlight=focus, drawing=drawing)
+    (laid,) = drawing
+    return doc, focus, ren, laid
+
+
+def test_a_conductor_is_ringed_at_both_end_holes() -> None:
+    from perfboard_studio.ui import view3d
+
+    doc, focus, _ren, laid = _a_laid_conductor()
+    cond = next(c for c in doc.conductors if c.id == focus)
+    assert laid.marks is not None
+
+    # The ring's centre is the end hole, at the copper of the face the conductor is on.
+    rings = laid.marks(0.0, 1.0)
+    assert len(rings) == 2
+    cells = view3d.finger_cells(doc)
+    ends = [view3d._place_xy(doc.board, hole, cells) for hole in (cond.path[0], cond.path[-1])]
+    z = view3d.pad_z(doc.board, cond.side)
+    for ring, (x, y) in zip(rings, ends, strict=True):
+        px, py, pz = ring.GetPosition()
+        assert (px, py) == pytest.approx((x, y))
+        assert abs(pz - z) == pytest.approx(view3d.END_MARK_LIFT_MM)
+        assert ring.GetProperty().GetOpacity() == 1.0
+    assert laid.marks(0.0, 0.0) == [], "nothing at zero opacity"
+    half = laid.marks(0.0, 0.5)
+    assert all(ring.GetProperty().GetOpacity() == 0.5 for ring in half)
+    # A pulse swells the ring, so it is a different size a quarter turn on.
+    wide = laid.marks(0.25, 1.0)[0].GetBounds()
+    narrow = laid.marks(0.75, 1.0)[0].GetBounds()
+    assert wide[1] - wide[0] > narrow[1] - narrow[0]
+
+
+def test_the_rings_are_there_from_the_first_frame_and_fade_after_it_has_landed() -> None:
+    _doc, _focus, ren, laid = _a_laid_conductor()
+    base = ren.GetActors().GetNumberOfItems() - len(laid.actors)
+    drop = arrival.ArrivalAnimation()
+    assert drop.start_drawing(ren, laid, lambda: None)
+    # Before any of the wire is: the two rings.
+    assert ren.GetActors().GetNumberOfItems() == base + 2
+    drop.show(1.0)
+    assert ren.GetActors().GetNumberOfItems() == base + len(laid.actors) + 2
+
+    # Landed: the window answers `finished` by drawing the step again, rings and all gone,
+    # and the animation puts the rings back to fade.
+    drop._clock.start()
+    drop._span_ms = 1
+    redrawn: list[bool] = []
+
+    def redraw() -> None:
+        for actor in list(ren.GetActors()):
+            ren.RemoveActor(actor)
+        for actor in laid.actors:
+            ren.AddActor(actor)
+        redrawn.append(True)
+
+    drop.finished.connect(redraw)
+    _pump_until(lambda: bool(redrawn))
+    assert not drop.running, "the step is over, Play goes on from here"
+    assert drop.fading
+    assert ren.GetActors().GetNumberOfItems() == len(laid.actors) + 2
+    drop.show_fade(0.5)
+    rings = [a for a in ren.GetActors() if a not in laid.actors]
+    assert [r.GetProperty().GetOpacity() for r in rings] == pytest.approx([0.5, 0.5])
+    drop.show_fade(1.0)
+    assert [r.GetProperty().GetOpacity() for r in rings] == [0.0, 0.0]
+    _pump_until(lambda: not drop.fading)
+    assert ren.GetActors().GetNumberOfItems() == len(laid.actors), "faded out and taken away"
+
+
+def test_the_fade_is_cut_short_by_the_next_step_or_by_a_redraw() -> None:
+    _doc, _focus, ren, laid = _a_laid_conductor()
+    drop = arrival.ArrivalAnimation()
+    drop.start_drawing(ren, laid, lambda: None)
+    drop._clock.start()
+    drop._span_ms = 1
+    _pump_until(lambda: drop.fading)
+    count = ren.GetActors().GetNumberOfItems()
+    assert drop.fading
+    # The next step begins while the rings are still fading: they are taken away at once.
+    drop.cancel()
+    assert not drop.fading
+    assert ren.GetActors().GetNumberOfItems() == count - 2
+
+    # A redraw that replaced them: the fade notices and stops, adding nothing to the new scene.
+    drop.start_drawing(ren, laid, lambda: None)
+    drop._clock.start()
+    drop._span_ms = 1
+    _pump_until(lambda: drop.fading)
+    for actor in list(ren.GetActors()):
+        ren.RemoveActor(actor)
+    drop.show_fade(0.3)
+    assert not drop.fading
+    assert ren.GetActors().GetNumberOfItems() == 0
+
+    # A conductor without marks has no fade, and a drop never had one.
+    from dataclasses import replace
+
+    bare = replace(laid, marks=None)
+    for actor in laid.actors:
+        ren.AddActor(actor)
+    assert drop.start_drawing(ren, bare, lambda: None)
+    drop._clock.start()
+    drop._span_ms = 1
+    _pump_until(lambda: not drop.running)
+    assert not drop.fading
+
+
+def test_the_fade_is_no_longer_than_plays_hold_so_it_costs_play_nothing() -> None:
+    from perfboard_studio.ui.main import MainWindow
+
+    assert arrival.MARK_FADE_MS <= MainWindow.ARRIVAL_HOLD_MS

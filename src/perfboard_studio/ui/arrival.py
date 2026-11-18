@@ -41,6 +41,13 @@ DRAW_MAX_MS = 900
 #: How high the part's lowest point starts above the board's component face.
 ARRIVAL_HEIGHT_MM = 15.0
 
+#: How long one pulse of the rings round a conductor's two ends takes while it is laid, and how
+#: long they fade over once it has landed. The fade is NOT part of the step: Play's hold after a
+#: landing is ``MainWindow.ARRIVAL_HOLD_MS`` (200), and a fade no longer than it costs Play
+#: nothing -- it ends as the next step begins.
+MARK_PULSE_MS = 450
+MARK_FADE_MS = 200
+
 #: The gap between frames. 16 ms is a display's rate; a render that takes longer simply
 #: runs back to back.
 FRAME_MS = 16
@@ -91,6 +98,17 @@ class ArrivalAnimation(QObject):
         self._timer = QTimer(self)
         self._timer.setInterval(FRAME_MS)
         self._timer.timeout.connect(self._on_frame)
+        #: The rings of a conductor that has landed, fading. A second timer, because the fade
+        #: is not the step: ``running`` (what the window asks, and what it cancels) is the
+        #: drawing alone, and Play goes on to the next step while the rings are still fading.
+        self._marks_pending: tuple[Any, Callable[[float, float], list[Any]], float] | None = None
+        self._rings: list[Any] = []
+        self._ring_ren: Any = None
+        self._fade_render: Callable[[], None] = lambda: None
+        self._fade_clock = QElapsedTimer()
+        self._fade_timer = QTimer(self)
+        self._fade_timer.setInterval(FRAME_MS)
+        self._fade_timer.timeout.connect(self._on_fade_frame)
 
     @property
     def running(self) -> bool:
@@ -136,17 +154,24 @@ class ArrivalAnimation(QObject):
         for actor in drawing.actors:
             ren.RemoveActor(actor)
         laid: list[Any] = []
+        rings: list[Any] = []
+        marks = getattr(drawing, "marks", None)
 
         def apply(progress: float) -> None:
-            for actor in laid:
+            for actor in (*laid, *rings):
                 ren.RemoveActor(actor)
-            laid[:] = drawing.build(ease_out_quad(max(0.0, min(1.0, progress))))
-            for actor in laid:
+            progress = max(0.0, progress)
+            laid[:] = drawing.build(ease_out_quad(min(1.0, progress)))
+            # Rings on both ends from the first frame, pulsing, until it has landed.
+            rings[:] = marks(progress * span / MARK_PULSE_MS, 1.0) if marks is not None else []
+            for actor in (*laid, *rings):
                 ren.AddActor(actor)
 
         self._apply = apply
         self._render = render
         self._span_ms = span
+        self._marks_pending = (ren, marks, span / MARK_PULSE_MS) if marks is not None else None
+        self._fade_render = render
         self.show(0.0)
         self._clock.start()
         self._timer.start()
@@ -167,6 +192,8 @@ class ArrivalAnimation(QObject):
         thrown away: every redraw of the view replaces them, and a timer still moving the
         old ones would be moving nothing."""
         self._timer.stop()
+        self._stop_fade()
+        self._marks_pending = None
         self._actors = []
         self._base = []
         self._span_ms = 0
@@ -176,5 +203,53 @@ class ArrivalAnimation(QObject):
         self.show(progress)
         self._render()
         if progress >= 1.0:
+            pending = self._marks_pending
+            self._timer.stop()
             self.cancel()
+            # The window answers this by drawing the step again, which takes the rings out
+            # with everything else; they are put back after it, and fade.
             self.finished.emit()
+            if pending is not None and not self._timer.isActive():
+                self._start_fade(*pending)
+
+    def _start_fade(
+        self, ren: Any, marks: Callable[[float, float], list[Any]], end_phase: float
+    ) -> None:
+        self._stop_fade()
+        self._rings = marks(end_phase, 1.0)
+        for ring in self._rings:
+            ren.AddActor(ring)
+        self._ring_ren = ren
+        self._fade_clock.start()
+        self._fade_timer.start()
+
+    def _stop_fade(self) -> None:
+        self._fade_timer.stop()
+        ren, rings = self._ring_ren, self._rings
+        self._ring_ren, self._rings = None, []
+        if ren is not None:
+            for ring in rings:
+                ren.RemoveActor(ring)
+
+    @property
+    def fading(self) -> bool:
+        return self._fade_timer.isActive()
+
+    def show_fade(self, progress: float) -> None:
+        """The rings ``progress`` (0 = whole, 1 = gone) of the way through fading. Also what a
+        test calls. Stops by itself when the scene has been drawn again without them."""
+        ren = self._ring_ren
+        if ren is None or not self._rings or not ren.HasViewProp(self._rings[0]):
+            self._stop_fade()
+            return
+        for ring in self._rings:
+            ring.GetProperty().SetOpacity(max(0.0, 1.0 - progress))
+
+    def _on_fade_frame(self) -> None:
+        progress = self._fade_clock.elapsed() / MARK_FADE_MS
+        self.show_fade(progress)
+        if self._ring_ren is None:
+            return
+        if progress >= 1.0:
+            self._stop_fade()
+        self._fade_render()

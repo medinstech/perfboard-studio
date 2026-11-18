@@ -7714,16 +7714,80 @@ def _pick_out(actor: vtk.vtkActor) -> vtk.vtkActor:
     return actor
 
 
+
+#: What Play rings the two ends of a conductor with while it is being laid: where it starts
+#: and where it will land, so a viewer sees WHAT is being joined and not only a line growing.
+#: Amber, against the blue the subject of a step is tinted towards, so the ring is never read
+#: as part of the wire. A flat ring round the pad, lit by nothing (like a leader), pulsing a
+#: little while the conductor is drawn and fading when it has landed.
+END_MARK_RGB: tuple[float, float, float] = (1.0, 0.78, 0.25)
+#: The ring's inside and outside edge, in mm beyond the pad's own edge.
+END_MARK_GAP_MM = 0.18
+END_MARK_WIDTH_MM = 0.7
+#: How much the ring swells and shrinks as it pulses, as a share of its radius.
+END_MARK_PULSE = 0.12
+END_MARK_SEGMENTS = 40
+END_MARK_MIN_OPACITY = 0.01
+#: How far off the copper it floats, so it is not in the pad's own plane.
+END_MARK_LIFT_MM = 0.06
+
+
+def _ring_polydata(inner: float, outer: float) -> vtk.vtkPolyData:
+    n = END_MARK_SEGMENTS
+    angles = [2 * math.pi * i / n for i in range(n)]
+    return _annulus(
+        [(outer * math.cos(a), outer * math.sin(a)) for a in angles],
+        [(inner * math.cos(a), inner * math.sin(a)) for a in angles],
+    )
+
+
+def build_end_marks(
+    points: Sequence[tuple[float, float, float]],
+    board: Board,
+    phase: float = 0.0,
+    opacity: float = 1.0,
+) -> list[vtk.vtkActor]:
+    """A glowing ring round each of ``points`` (board mm, at the copper), one actor each.
+
+    ``phase`` is how far through a pulse it is, in turns; ``opacity`` is 1 while the
+    conductor is being laid and runs to 0 as the mark fades. Nothing once it is too faint to
+    see (below ``END_MARK_MIN_OPACITY``), which is also what keeps a fade that ends a rounding
+    error short of zero from leaving two invisible rings in the scene."""
+    if opacity < END_MARK_MIN_OPACITY:
+        return []
+    extent_x, extent_y = pad_extent_mm(board)
+    swell = 1.0 + END_MARK_PULSE * math.sin(2 * math.pi * phase)
+    pad_r = max(extent_x, extent_y) / 2
+    inner = (pad_r + END_MARK_GAP_MM) * swell
+    outer = (pad_r + END_MARK_GAP_MM + END_MARK_WIDTH_MM) * swell
+    actors: list[vtk.vtkActor] = []
+    for x, y, z in points:
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(_ring_polydata(inner, outer))
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.SetPosition(x, y, z + (END_MARK_LIFT_MM if z >= -board.thickness / 2 else -END_MARK_LIFT_MM))
+        prop = actor.GetProperty()
+        prop.SetColor(*END_MARK_RGB)
+        prop.SetLighting(False)
+        prop.SetOpacity(min(1.0, opacity))
+        actors.append(actor)
+    return actors
+
+
 @dataclass(frozen=True, slots=True)
 class DrawOn:
     """A conductor that can be laid end to end: ``build(reveal)`` is its solids with that
     much of it laid, picked out as the step's subject; ``actors`` are the whole thing as
     ``populate_renderer`` already added it, which the animation takes out when it starts;
-    ``length_mm`` is how far it runs, which is how long drawing it takes."""
+    ``length_mm`` is how far it runs, which is how long drawing it takes. ``marks(phase,
+    opacity)``, when there is one, is the ring round each of its two end holes
+    (:func:`build_end_marks`), which the animation shows while it draws and fades after."""
 
     build: Callable[[float], list[vtk.vtkActor]]
     actors: list[vtk.vtkActor]
     length_mm: float
+    marks: Callable[[float, float], list[vtk.vtkActor]] | None = None
 
 
 def _laid_conductor(
@@ -7933,6 +7997,17 @@ def populate_renderer(
                         cells=cells,
                     ),
                     actors=laid_actors,
+                    marks=functools.partial(
+                        build_end_marks,
+                        [
+                            (
+                                *_place_xy(board, hole, cells),
+                                pad_z(board, cond.side),
+                            )
+                            for hole in (cond.path[0], cond.path[-1])
+                        ],
+                        board,
+                    ),
                     length_mm=sum(
                         math.dist(_place_xy(board, a, cells), _place_xy(board, b, cells))
                         for a, b in pairwise(cond.path)
