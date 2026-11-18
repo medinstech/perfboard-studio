@@ -20,6 +20,8 @@ closed without a bump.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-18
+
 ### Added
 
 - **A wire drawn between two nets joins them.** On the sheet, a wire from a pin on one net
@@ -6389,7 +6391,8 @@ was introduced during 0.4.0 development, so they are accurate but were not writt
 release time. Their compare links point at commits rather than tags for the same reason;
 from v0.4.0 onwards every release is tagged.
 
-[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/medinstech/perfboard-studio/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/medinstech/perfboard-studio/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/medinstech/perfboard-studio/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/medinstech/perfboard-studio/compare/v0.21.0...v0.22.0
