@@ -532,6 +532,33 @@ def test_a_short_through_the_plating_is_found_not_only_avoided() -> None:
     assert run_lvs(clear, LOOKUP).summary.shorts == before
 
 
+def test_a_short_through_the_plating_is_said_at_its_hole() -> None:
+    """A short two faces make through one pinless hole is not a solder bridge, and the net's
+    first hole is not where it is: the finding names the hole and the plating. A bridge on
+    one face is still said as a bridge."""
+    doc = dataclasses.replace(
+        persist.parse_document_or_throw(
+            (REPO / "examples" / "lm317-supply.perf").read_text(encoding="utf-8")
+        ),
+        conductors=(),
+    )
+    vout, gnd, via = (parse_hole(name, doc.board) for name in ("E8", "E10", "E9"))
+    top = SolderTraceConductor(id="top", path=(vout, via), side="top")
+
+    def shorts(*conductors: SolderTraceConductor) -> list[str]:
+        result = run_lvs(_with(doc, *conductors), LOOKUP)
+        return [issue.message for issue in result.issues if issue.kind == "short"]
+
+    (plated,) = shorts(top, SolderTraceConductor(id="under", path=(gnd, via), side="bottom"))
+    assert "joined through the plating of E9" in plated, plated
+    assert "solder bridge" not in plated
+    (bridge,) = shorts(
+        SolderTraceConductor(id="a", path=(vout, via), side="bottom"),
+        SolderTraceConductor(id="b", path=(gnd, via), side="bottom"),
+    )
+    assert "solder bridge" in bridge and "plating" not in bridge, bridge
+
+
 def test_the_guide_lays_the_component_side_after_the_parts_and_probes_each_via() -> None:
     """Solder on the component side opens phase 7: after the parts, whose leads a filled
     hole would keep out, and before the long wires. Every via gets one line on the first

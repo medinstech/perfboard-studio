@@ -601,6 +601,19 @@ def test_an_open_and_a_short_are_said_without_their_english_joins() -> None:
     assert "{U1.1} bu netteki başka hiçbir pine bağlı değil" in open_net, open_net
     assert "{J2.3} adreslenemeyen bir bağlantı" in open_net, open_net
     assert "'OUT' ve 'THRESH'" in short, short
+    set_language("tr")
+    try:
+        plated = finding_text(
+            "SHORT: schematic nets 'GND' and 'VOUT' are joined through the plating of E9 -- "
+            "pins C2.1, C2.2. A plated hole is one piece of copper, so solder of one net on one "
+            "face and of another on the other face meet in it; take one of them out of that "
+            "hole and re-measure isolation before applying power.",
+            {},
+        )
+    finally:
+        set_language(before)
+    assert plated.startswith("KISA DEVRE: şemadaki 'GND' ve 'VOUT' netleri"), plated
+    assert "(E9)" in plated, plated
     for said in (open_net, short):
         assert " near " not in said and "' and '" not in said, said
 

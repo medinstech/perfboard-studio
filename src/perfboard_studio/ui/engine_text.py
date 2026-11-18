@@ -434,6 +434,8 @@ FINDING_TEMPLATES: tuple[str, ...] = (
     'Conductor(s) {wires} form an isolated island at {holes} with no component pin attached -- likely a stray solder trace, wire or bridge left over from editing.',
     'CRITICAL SHORT (power tied to ground): {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.',
     'SHORT: {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.',
+    'CRITICAL SHORT (power tied to ground): schematic nets {netnames} are joined through the plating of {plated} -- pins {pins}. A plated hole is one piece of copper, so solder of one net on one face and of another on the other face meet in it; take one of them out of that hole and re-measure isolation before applying power.',
+    'SHORT: schematic nets {netnames} are joined through the plating of {plated} -- pins {pins}. A plated hole is one piece of copper, so solder of one net on one face and of another on the other face meet in it; take one of them out of that hole and re-measure isolation before applying power.',
     # ``partlist``, not ``refs``: ``refs`` is said as "the bodies of ..." (a face note's
     # covered pins), and "BT1, R1, U1 gövdelerinin henüz kartta yerleştirilmedi" was the
     # Turkish panel's first LVS line on a circuit with nothing placed yet.
@@ -543,6 +545,9 @@ _FIELDS: dict[str, str] = {
     "wirekind": r"Insulated wire|Bare wire|Top jumper|Bent lead|Solder trace",
     "why": r"(?: \(the gauge the cut list names for [^)]* A\))?",
     "where": r"the physical connection at .+?|an unaddressable physical connection",
+    # One hole or several, by address, joined by commas only so no word between them needs
+    # saying in another language.
+    "plated": r"[A-Za-z]+\d+(?:, [A-Za-z]+\d+)*",
     "advice": r".+",
     "reason": r".+",
     "groups": r".+",

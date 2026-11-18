@@ -6619,6 +6619,18 @@ TURKISH: Mapping[str, str] = {
                                                                                                                                                                                           "lehim köprüsü; gücü vermeden önce "
                                                                                                                                                                                           "pedleri ayırın ve yalıtımı yeniden "
                                                                                                                                                                                           "ölçün.",
+    'CRITICAL SHORT (power tied to ground): schematic nets {netnames} are joined through the plating of {plated} -- pins {pins}. A plated hole is one piece of copper, so solder of one net on one face and of another on the other face meet in it; take one of them out of that hole and re-measure isolation before applying power.': (
+        "KRİTİK KISA DEVRE (güç toprağa bağlı): şemadaki {netnames} netleri kaplamalı delik "
+        "üzerinden birleşiyor ({plated}) -- pinler {pins}. Kaplamalı delik tek parça bakırdır: "
+        "bir yüzdeki bir netin lehimi ile öbür yüzdeki başka bir netin lehimi orada buluşur. "
+        "Bunlardan birini o delikten çıkarın ve gücü vermeden önce yalıtımı yeniden ölçün."
+    ),
+    'SHORT: schematic nets {netnames} are joined through the plating of {plated} -- pins {pins}. A plated hole is one piece of copper, so solder of one net on one face and of another on the other face meet in it; take one of them out of that hole and re-measure isolation before applying power.': (
+        "KISA DEVRE: şemadaki {netnames} netleri kaplamalı delik üzerinden birleşiyor "
+        "({plated}) -- pinler {pins}. Kaplamalı delik tek parça bakırdır: bir yüzdeki bir netin "
+        "lehimi ile öbür yüzdeki başka bir netin lehimi orada buluşur. Bunlardan birini o "
+        "delikten çıkarın ve gücü vermeden önce yalıtımı yeniden ölçün."
+    ),
     "Net '{net}' references pin(s) {pins}, but component(s) {partlist} are not placed on the board.": "'{net}' netinin bağlandığı {partlist} henüz karta yerleştirilmedi (pinler: {pins}).",
     "Net '{net}' references pin(s) {pins} on component(s) {partlist}, whose footprint could not be resolved.": "'{net}' netinin bağlandığı {partlist} için "
                                                                                                            "kılıf bulunamadı (pinler: {pins}).",

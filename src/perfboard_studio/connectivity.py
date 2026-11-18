@@ -50,7 +50,7 @@ sorted so extraction is reproducible and diffable.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from itertools import pairwise
 
@@ -220,7 +220,22 @@ def extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[Ph
     return nets
 
 
-def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[PhysicalNet]:
+def extract_physical_nets_unplated(
+    doc: PerfDocument, lookup: FootprintLookup, holes: Iterable[HoleCoord]
+) -> list[PhysicalNet]:
+    """The islands as they would be if ``holes`` had no plating: what is soldered on their
+    two faces stays two pieces of copper (rule a' is not applied there). A pin still joins
+    its hole's faces -- the lead does that, not the plating.
+
+    A question about the board, never its answer: LVS asks it of a short's pinless holes to
+    find the one the short goes through. Not remembered, since each set of holes is asked
+    about once."""
+    return _extract_physical_nets(doc, lookup, unplated=frozenset(hole_key(h) for h in holes))
+
+
+def _extract_physical_nets(
+    doc: PerfDocument, lookup: FootprintLookup, *, unplated: frozenset[str] = frozenset()
+) -> list[PhysicalNet]:
     ds = _DisjointSet()
     node_info: dict[str, PhysicalNodeRef] = {}
 
@@ -306,6 +321,8 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
         no_copper = unusable_holes(doc) | cut_holes(doc)
         for key in meeting:
             hole = node_info[key].hole
+            if hole_key(hole) in unplated:
+                continue
             if hole_key(hole) not in no_copper and is_inside_board(hole, doc.board):
                 ds.union(key, _node_key(hole, "bottom"))
 

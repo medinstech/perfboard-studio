@@ -33,18 +33,25 @@ from dataclasses import dataclass, field, replace
 from itertools import pairwise
 from typing import Literal
 
-from .connectivity import FootprintLookup, PhysicalNet, PhysicalPinRef, extract_physical_nets
+from .connectivity import (
+    FootprintLookup,
+    PhysicalNet,
+    PhysicalPinRef,
+    extract_physical_nets,
+    extract_physical_nets_unplated,
+)
 
 # format_hole, not coord_to_hole_ref: everything below is building a MESSAGE, and the
 # strict encoder raises on a negative column by design. A board can legally hold a part
 # whose pins fall outside it -- rotating a part near an edge does exactly that, and DRC's
 # job is to report it -- so a strict encoder here means LVS crashes while describing the
 # very defect it exists to describe. See the note on geometry.format_hole.
-from .geometry import format_hole
+from .geometry import all_pin_holes, format_hole, hole_key
 from .model import (
     Board,
     ComponentInstance,
     ConductorId,
+    HoleCoord,
     Net,
     NetClass,
     NetId,
@@ -215,6 +222,59 @@ def run_lvs(doc: PerfDocument, lookup: FootprintLookup) -> LvsResult:
     return _board_lvs(doc, lookup, placed_only=False)
 
 
+def _shorted_through_plating(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    pn: PhysicalNet,
+    pin_to_net: dict[_PinKey, Net],
+) -> tuple[HoleCoord, ...]:
+    """The pinless holes of a shorted island whose plating makes the short, in board order:
+    each one that, unplated alone, leaves no piece holding pins of two schematic nets -- or,
+    when no single one does, all of them together if that does. Empty when the short is
+    made some other way (a bridge on one face, a pin, a wire's end), which is every short
+    on a board with copper on one face, so the golden fixtures' findings are unchanged."""
+    pin_holes = {
+        hole_key(hole)
+        for component in doc.components
+        for footprint in (lookup(component.footprint_id),)
+        if footprint is not None
+        for _pin, hole in all_pin_holes(component, footprint)
+    }
+    faces: dict[str, set[str]] = {}
+    for node in pn.nodes:
+        faces.setdefault(hole_key(node.hole), set()).add(node.side)
+    plated = sorted(
+        (
+            node.hole
+            for node in pn.nodes
+            if node.side == "top"
+            and faces[hole_key(node.hole)] == {"top", "bottom"}
+            and hole_key(node.hole) not in pin_holes
+        ),
+        key=lambda hole: (hole.row, hole.col),
+    )
+    if not plated:
+        return ()
+    mine = set(pn.pins)
+
+    def parted(holes: list[HoleCoord]) -> bool:
+        for piece in extract_physical_nets_unplated(doc, lookup, holes):
+            nets = {
+                net.id
+                for pin in piece.pins
+                if pin in mine
+                and (net := pin_to_net.get(_pin_key(pin.component_ref, pin.pin))) is not None
+            }
+            if len(nets) > 1:
+                return False
+        return True
+
+    alone = tuple(hole for hole in plated if parted([hole]))
+    if alone:
+        return alone
+    return tuple(plated) if len(plated) > 1 and parted(plated) else ()
+
+
 def _board_lvs(doc: PerfDocument, lookup: FootprintLookup, *, placed_only: bool) -> LvsResult:
     """One board's LVS. ``placed_only`` leaves out every pin of a part this board does not
     carry -- on a system, those are another board's or nobody's, and the system says which.
@@ -297,17 +357,33 @@ def _board_lvs(doc: PerfDocument, lookup: FootprintLookup, *, placed_only: bool)
         )
         prefix = "CRITICAL SHORT (power tied to ground): " if is_power_ground_short else "SHORT: "
         quoted_net_names = " and ".join(f"'{n}'" for n in net_names)
+        pins_said = ", ".join(_format_pin_ref(p) for p in all_pins)
+        plated = _shorted_through_plating(doc, lookup, pn, pin_to_net)
+        if plated:
+            # Not a bridge: copper of one net on one face and of another on the other face,
+            # soldered into one pinless hole, are one piece of copper through its plating.
+            # The old sentence sent the builder looking for a blob of solder between two pads
+            # at the net's first hole, which may be nowhere near it.
+            said = (
+                f"{prefix}schematic nets {quoted_net_names} are joined through the plating "
+                f"of {', '.join(format_hole(h, doc.board) for h in plated)} -- pins "
+                f"{pins_said}. A plated hole is one piece of copper, so solder of one net on "
+                "one face and of another on the other face meet in it; take one of them out of "
+                "that hole and re-measure isolation before applying power."
+            )
+        else:
+            said = (
+                f"{prefix}{where} ties together schematic nets "
+                f"{quoted_net_names} -- pins "
+                f"{pins_said}. "
+                "This is almost certainly a solder bridge; separate the pads and re-measure "
+                "isolation before applying power."
+            )
 
         issues.append(
             LvsIssue(
                 kind="short",
-                message=(
-                    f"{prefix}{where} ties together schematic nets "
-                    f"{quoted_net_names} -- pins "
-                    f"{', '.join(_format_pin_ref(p) for p in all_pins)}. "
-                    "This is almost certainly a solder bridge; separate the pads and re-measure "
-                    "isolation before applying power."
-                ),
+                message=said,
                 net_names=tuple(net_names),
                 pins=tuple(all_pins),
                 physical_net_ids=(pn.id,),
