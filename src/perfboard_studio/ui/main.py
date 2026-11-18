@@ -2624,6 +2624,7 @@ def _erc_title(rule: str) -> str:
         "part-unconnected": t("Part connected to nothing"),
         "part-not-defined": t("Net names a part that isn't there"),
         "value-missing": t("Part with no value"),
+        "pin-roles-incomplete": t("Pin roles don't fit the package"),
     }
     return titles.get(rule, rule)
 

@@ -680,6 +680,17 @@ def _circuits() -> list[object]:
             [plain("LED1", "led-5mm"), plain("R1", "r-axial-4")],
             {"+5V": ("LED1.2", "R1.1"), "GND": ("LED1.1", "R1.2")},
         ),
+        # pin-roles-incomplete: a pin with no role, and a role on a pin the package lacks
+        circuit(
+            [dc.replace(cat("U1", "ne555"), pin_roles=_NE555_ROLES[:7]),
+             plain("R1", "r-axial-4")],
+            {"OUT": ("U1.3", "R1.1"), "GND": ("U1.1", "R1.2")},
+        ),
+        circuit(
+            [dc.replace(cat("U1", "ne555"), pin_roles=(*_NE555_ROLES, ("9", "nc"))),
+             plain("R1", "r-axial-4")],
+            {"OUT": ("U1.3", "R1.1"), "GND": ("U1.1", "R1.2")},
+        ),
         # nc-pin-connected
         circuit(
             [cat("U1", "dht11"), plain("R1", "r-axial-4")],
@@ -688,9 +699,18 @@ def _circuits() -> list[object]:
     ]
 
 
+#: An NE555's pin roles, pin 1 to 8.
+_NE555_ROLES = (
+    ("1", "ground"), ("2", "in"), ("3", "out"), ("4", "in"),
+    ("5", "passive"), ("6", "in"), ("7", "out"), ("8", "power"),
+)
+
 #: The sentences no circuit above produces: a cable's (a system's), a negative supply, and
-#: the plural of a chip's open supplies and of the pins left wired beside one.
+#: the plural of a chip's open supplies and of the pins left wired beside one -- and of the
+#: pins a part has roles for and its package lacks.
 _SENTENCES = (
+    "U1 has a role for pins 9 and 10, which the package does not have, so it is drawn as a "
+    "numbered box.",
     "W1 lands on J2 pin 5, which hdr-1x4 does not have.",
     "U3 pin 4 (VEE) is connected to nothing, so the chip has no supply.",
     "U1 pins 7 and 20 (VCC) are connected to nothing, so the chip is not powered.",

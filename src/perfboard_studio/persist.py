@@ -79,6 +79,7 @@ from .model import (
     PartSymbol,
     PerfDocument,
     PinNames,
+    PinRoles,
     Point2,
     Rotation,
     SchematicPart,
@@ -93,6 +94,7 @@ from .model import (
     WireConductor,
     body_clearance_problem,
     normalized_pin_names,
+    normalized_pin_roles,
 )
 from .system import FIRST_BOARD, cable_problem
 
@@ -323,11 +325,12 @@ COMPONENT_KEY_ORDER: tuple[str, ...] = (
     "side",
     "locked",
     "pinNames",
+    "pinRoles",
     "symbol",
     "note",
 )
 PART_KEY_ORDER: tuple[str, ...] = (
-    "id", "ref", "value", "footprintId", "pinNames", "symbol", "note"
+    "id", "ref", "value", "footprintId", "pinNames", "pinRoles", "symbol", "note"
 )
 CONDUCTOR_KEY_ORDER: tuple[str, ...] = (
     "id",
@@ -501,14 +504,17 @@ def _declared_fields(part: ComponentInstance | SchematicPart) -> JsonObj:
     """What a part says about itself beyond its package, and nothing when it says nothing.
 
     OMITTED AT THEIR DEFAULT, the ``stripAxis`` rule: no fixture declares a pin name, a
-    symbol or a note, so a file that does none of them serializes to exactly the bytes it
-    always did.
-    ``pinNames`` is an object in PIN order -- ``normalized_pin_names`` already sorted the
-    pairs, and a dict keeps the order it is built in.
+    pin role, a symbol or a note, so a file that does none of them serializes to exactly
+    the bytes it always did.
+    ``pinNames`` and ``pinRoles`` are objects in PIN order -- ``normalized_pin_names`` and
+    ``normalized_pin_roles`` already sorted the pairs, and a dict keeps the order it is
+    built in.
     """
     values: JsonObj = {}
     if part.pin_names:
         values["pinNames"] = {number: name for number, name in part.pin_names}
+    if part.pin_roles:
+        values["pinRoles"] = {number: role for number, role in part.pin_roles}
     if part.symbol is not None:
         values["symbol"] = part.symbol
     if part.note:
@@ -1208,6 +1214,29 @@ def _parse_pin_names(obj: dict[str, object], path: str) -> PinNames:
         raise ValidationError("invalid-value", f"{err} (at \"{field_path}\")", field_path) from err
 
 
+def _parse_pin_roles(obj: dict[str, object], path: str) -> PinRoles:
+    """``pinRoles``, if present: an object of pin number to role.
+
+    Refused at load for what a command refuses (``normalized_pin_roles``): a role that is
+    not one, a blank pin number. Whether the roles cover the package's pins is not asked
+    here -- it takes the footprint registry, and a file is opened under whatever version of
+    it the reader has -- so the sheet and ERC report it instead.
+    """
+    raw = obj.get("pinRoles")
+    if raw is None:
+        return ()
+    field_path = _field_path(path, "pinRoles")
+    roles = _expect_object(raw, field_path)
+    pairs = [
+        (number, _expect_string(role, _field_path(field_path, number)))
+        for number, role in roles.items()
+    ]
+    try:
+        return normalized_pin_roles(pairs)
+    except ValueError as err:
+        raise ValidationError("invalid-value", f"{err} (at \"{field_path}\")", field_path) from err
+
+
 def _parse_note(obj: dict[str, object], path: str) -> str:
     raw = obj.get("note")
     if raw is None:
@@ -1567,6 +1596,7 @@ def _parse_component(raw: object, path: str, warnings: list[str]) -> ComponentIn
         symbol=_parse_part_symbol(obj, path),
         note=_parse_note(obj, path),
         side=side,
+        pin_roles=_parse_pin_roles(obj, path),
     )
 
 
@@ -1583,6 +1613,7 @@ def _parse_part(raw: object, path: str, warnings: list[str]) -> SchematicPart:
         pin_names=_parse_pin_names(obj, path),
         symbol=_parse_part_symbol(obj, path),
         note=_parse_note(obj, path),
+        pin_roles=_parse_pin_roles(obj, path),
     )
 
 

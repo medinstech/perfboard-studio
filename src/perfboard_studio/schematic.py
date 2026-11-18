@@ -86,6 +86,8 @@ from .model import (
     SheetWire,
     SymbolPlacement,
     pin_name_of,
+    pin_roles_misfit,
+    roles_misfit_phrase,
 )
 from .schsymbols import (
     _CONNECTOR_NAME_INSET_MM,
@@ -1245,6 +1247,13 @@ def _collect_symbols(
                 notes.append(
                     f"{ref}: names pin(s) {', '.join(unnamed)}, which {footprint.id} does not have"
                 )
+            # Roles that do not cover the package's pins exactly: the same line again, and
+            # ERC's ``pin-roles-incomplete`` says it in the same words.
+            misfit = pin_roles_misfit(
+                owner.pin_roles if owner else (), (pin.number for pin in footprint.pins)
+            )
+            if misfit is not None:
+                notes.append(f"{ref}: {roles_misfit_phrase(misfit)}, drawn as a numbered box")
         else:
             # No footprint to ask, so the netlist is the only account of what pins exist.
             specs = tuple(

@@ -20,6 +20,7 @@ project rests on.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias, get_args
 
@@ -605,6 +606,30 @@ PartSymbol: TypeAlias = Literal[  # noqa: UP040
 #: order is decided.
 type PinNames = tuple[tuple[str, str], ...]
 
+#: What a lead DOES, for the functional symbol an IC or a module is drawn as on the sheet:
+#: supplies on top, grounds at the bottom, inputs on the left, outputs on the right.
+#:
+#: - ``power``: a supply the part takes (VCC, VDD, VIN); ``power-neg``: the negative rail
+#:   of a split supply (VEE, V-); ``power-out``: a supply it gives (a module's 3V3 out).
+#: - ``ground``; ``in``; ``out`` (an open collector included); ``io``, both ways (a port).
+#: - ``passive``: analogue, a reference, a crystal or a divider tap (AREF, CTRL).
+#: - ``nc``: not connected inside the part.
+#:
+#: A part has a role for every pin or for none, and none is the numbered box it always
+#: was: a role is read from the maker's pin table into the catalog and copied onto the part
+#: when it is placed, NEVER guessed from a pin's name. Whether the roles cover exactly the
+#: package's pins takes the footprint registry, which no command and no file load has, so
+#: it is the sheet's to report, like a name on a pin the package lacks.
+#:
+#: Spelled with ``TypeAlias`` because ``normalized_pin_roles`` reads it at run time with
+#: ``get_args`` -- the trap this file documents above ``BodyArchetype``.
+PinRole: TypeAlias = Literal[  # noqa: UP040
+    "power", "power-neg", "power-out", "ground", "in", "out", "io", "passive", "nc"
+]
+
+#: Pin number -> role, in pin order like ``PinNames``.
+type PinRoles = tuple[tuple[str, PinRole], ...]
+
 
 def pin_number_sort_key(number: str) -> tuple[int, float, str]:
     """Pin "10" after pin "9", and a lettered pin after every numbered one.
@@ -650,6 +675,81 @@ def normalized_pin_names(names: object) -> PinNames:
     return tuple(sorted(kept.items(), key=lambda item: pin_number_sort_key(item[0])))
 
 
+def normalized_pin_roles(roles: object) -> PinRoles:
+    """Pin roles in canonical form: stripped, pin order, every role one ``PinRole`` names.
+
+    Takes a mapping or a sequence of pairs, as ``normalized_pin_names`` does, and refuses
+    with ``ValueError`` only what is wrong with the roles THEMSELVES: a role that is not a
+    role, a pin with no number, a pin given two roles. Unlike a blank name, a blank role is
+    refused rather than dropped, because "every pin or none" makes a dropped one a part
+    that can no longer be drawn by its roles.
+    """
+    pairs: list[object]
+    if isinstance(roles, dict):
+        pairs = list(roles.items())
+    elif isinstance(roles, (list, tuple)):
+        pairs = list(roles)
+    else:
+        raise ValueError("Pin roles are a mapping of pin number to role.")
+    allowed = get_args(PinRole)
+    kept: dict[str, PinRole] = {}
+    for entry in pairs:
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            raise ValueError("Each pin role is a (pin number, role) pair.")
+        number, role = entry
+        if not isinstance(number, str) or not isinstance(role, str):
+            raise ValueError("A pin number and a pin role are both text.")
+        number, role = number.strip(), role.strip()
+        if not number:
+            raise ValueError(f"The role {role!r} is given to a pin with no number.")
+        if role not in allowed:
+            raise ValueError(
+                f"Pin {number}: {role!r} is not a pin role. Use one of: {', '.join(allowed)}."
+            )
+        if number in kept:
+            raise ValueError(f"Pin {number} is given two roles.")
+        kept[number] = role  # type: ignore[assignment]
+    return tuple(sorted(kept.items(), key=lambda item: pin_number_sort_key(item[0])))
+
+
+def pin_roles_misfit(
+    roles: PinRoles, pin_numbers: Iterable[str]
+) -> tuple[int, int, tuple[str, ...]] | None:
+    """How a part's roles fail to cover its package's pins, or ``None`` when they cover them
+    exactly -- or when there are none, which is the numbered box and not a fault.
+
+    ``(pins with a role, pins the package has, roles on pins it lacks)``. Every pin or none
+    is the rule the functional symbol needs, and it is asked HERE, of the package the
+    reader's registry has, rather than refused by a command: see ``PinRole``. The sheet's
+    note and ERC's ``pin-roles-incomplete`` both read it, so the two say the same thing.
+    """
+    if not roles:
+        return None
+    numbers = list(dict.fromkeys(pin_numbers))
+    given = {number for number, _ in roles}
+    lacking = tuple(
+        sorted(given - set(numbers), key=pin_number_sort_key)
+    )
+    covered = sum(1 for number in numbers if number in given)
+    if not lacking and covered == len(numbers):
+        return None
+    return covered, len(numbers), lacking
+
+
+def roles_misfit_phrase(misfit: tuple[int, int, tuple[str, ...]]) -> str:
+    """``pin_roles_misfit`` in words: "roles for 7 of 8 pins", or "a role for pin 9, which
+    the package does not have" -- the second first, because it is the stranger fault."""
+    covered, total, lacking = misfit
+    if lacking:
+        pins = (
+            f"pin {lacking[0]}"
+            if len(lacking) == 1
+            else f"pins {', '.join(lacking[:-1])} and {lacking[-1]}"
+        )
+        return f"a role for {pins}, which the package does not have"
+    return f"roles for {covered} of {total} pins"
+
+
 @dataclass(frozen=True, slots=True)
 class ComponentInstance:
     id: ComponentId
@@ -680,6 +780,9 @@ class ComponentInstance:
     #: component side is the original engine's meaning of ``mirrored`` and stays legal.
     #: Left out of the file at "top".
     side: BoardSide = "top"
+    #: What each lead does (``PinRole``), copied from the catalog when the part is placed.
+    #: Empty, the part is drawn as a numbered box -- and the field is left out of the file.
+    pin_roles: PinRoles = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -701,8 +804,8 @@ class SchematicPart:
 
     It carries no rotation and no lock. Both are answers about a physical object on a
     board, and this is not on a board yet; they are chosen when it is placed. It DOES carry
-    the pin names, the symbol and the note, because those are answers about the part
-    itself: the same on the sheet before placement as after it, and moved across by
+    the pin names, the symbol, the note and the pin roles, because those are answers about
+    the part itself: the same on the sheet before placement as after it, and moved across by
     ``part.place``.
     """
 
@@ -713,6 +816,7 @@ class SchematicPart:
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
     note: str = ""
+    pin_roles: PinRoles = ()
 
 
 def declared_pin_name(part: ComponentInstance | SchematicPart, number: str) -> str | None:

@@ -1851,6 +1851,28 @@ Four decisions carry it, and each has a test that would notice it going:
       widens to whole grid squares to fit (`_named_body_width`, sized from
       `PIN_LABEL_MM`, which `SheetInk.pin_mm` now reads). A connector's names start past
       its shroud line. A box none of whose pins is named is byte-for-byte what it was.
+    - **The part carries what each pin DOES as well: `pin_roles`** (`model.PinRole`:
+      power, power-neg, power-out, ground, in, out, io, passive, nc), so an IC can be
+      drawn as a functional symbol rather than a numbered box. A role is read from the
+      maker's pin table into the catalogue and never guessed from a pin's name: "OUT" on
+      a regulator is a supply it gives, on an op-amp a signal. It goes everywhere the
+      names go, by the same rules: omitted from the file when empty, carried by
+      `part.place`, `component.unplace` and paste, and KEPT across a new value or a new
+      package (`tests/test_pin_roles.py`).
+    - **Roles that do not cover the package's pins exactly are reported, never refused.**
+      A command (`checked_pin_roles`) and a file load (`persist._parse_pin_roles`) refuse
+      only what is wrong with the roles themselves: a word outside the vocabulary, a pin
+      with no number, a pin given two roles. Whether they fit the package takes the
+      footprint registry, and neither has one. `CommandContext` carries an id generator
+      and nothing else, and a file is opened under whatever registry its reader has. A
+      check there would need the registry passed into the bus. It would also break the
+      kept-across-a-package-change rule: a part moved from a DIP-8 to a DIP-14 would have
+      to drop its roles, or the change would be refused because of them. So a part with
+      roles for some of its pins, or for a pin its package lacks, is drawn as the numbered
+      box it was. The sheet's note says why ("U1: roles for 7 of 8 pins, drawn as a
+      numbered box"), and so does ERC's `pin-roles-incomplete`, a warning beside
+      `pin-not-on-part`, in the same words. Both read `model.pin_roles_misfit` and
+      `roles_misfit_phrase`, so they cannot disagree.
   - A tactile switch and a relay get real shapes because the fact IS the package.
     `_switch_poles` reads four legs in two bonded pairs off the footprint's own geometry
     (the legs on one side of a 6 mm switch are bonded inside it, on every one ever made),

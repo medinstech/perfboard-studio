@@ -167,6 +167,11 @@ def advice(group: str, rule: str) -> str:
                 "Add the part, or take its pins off the net."),
             "value-missing": t(
                 "Give the part a value under Properties."),
+            "pin-roles-incomplete": t(
+                "These pin roles don't match this package. Give every pin of this package "
+                "a role, and only those pins, or put the part back on the package they were "
+                "written for. Until then it is drawn as a plain numbered box; nothing else "
+                "about the part changes."),
         },
     }
     return lines.get(group, {}).get(rule, "")

@@ -69,6 +69,7 @@ from perfboard_studio.model import (
     WireConductor,
     contacts_every_path_hole,
     normalized_pin_names,
+    normalized_pin_roles,
 )
 
 from .view2d import next_reference
@@ -206,6 +207,7 @@ def block_to_json(
                 **({"side": c.side} if c.side == "bottom" else {}),
                 # Only when declared, as in a .perf: a copied MOSFET pastes as a MOSFET.
                 **({"pinNames": dict(c.pin_names)} if c.pin_names else {}),
+                **({"pinRoles": dict(c.pin_roles)} if c.pin_roles else {}),
                 **({"symbol": c.symbol} if c.symbol is not None else {}),
                 **({"note": c.note} if c.note else {}),
             }
@@ -316,6 +318,10 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
         pin_names = normalized_pin_names(item.get("pinNames") or {})
     except ValueError:
         pin_names = ()
+    try:
+        pin_roles = normalized_pin_roles(item.get("pinRoles") or {})
+    except ValueError:
+        pin_roles = ()
     symbol = item.get("symbol")
     note = item.get("note")
     # A part on the solder side is mirrored by being there, whatever the text says.
@@ -335,6 +341,7 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
         pin_names=pin_names,
         symbol=cast(PartSymbol, symbol) if symbol in get_args(PartSymbol) else None,
         note=note.strip() if isinstance(note, str) else "",
+        pin_roles=pin_roles,
     )
 
 
@@ -581,6 +588,7 @@ def paste_payload(
                 pin_names=component.pin_names,
                 symbol=component.symbol,
                 note=component.note,
+                pin_roles=component.pin_roles,
             )
         )
 

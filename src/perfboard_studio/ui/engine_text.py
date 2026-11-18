@@ -328,6 +328,9 @@ TEMPLATES: tuple[str, ...] = (
     "{ref}: footprint '{footprint}' is not in the registry",
     "{ref}: the netlist names pin(s) {numbers}, which {footprint} does not have",
     "{ref}: names pin(s) {numbers}, which {footprint} does not have",
+    "{ref}: roles for {covered} of {count} pins, drawn as a numbered box",
+    "{ref}: a role for pin {pin_no}, which the package does not have, drawn as a numbered box",
+    "{ref}: a role for pins {pinlist}, which the package does not have, drawn as a numbered box",
     "{count} part(s) have no place on this sheet yet and are parked at the right-hand edge: {refs_listed}",
     # -- what a command says when it refuses: the ones a person meets in the window --------
     "{a} is on {net_a} and {b} is on {net_b}. Joining two nets is a change to the circuit — disconnect one of the pins first.",
@@ -447,6 +450,9 @@ FINDING_TEMPLATES: tuple[str, ...] = (
     # A chip's supply left open, the module's ground first: its ending is its own sentence,
     # and ``consequence`` is only ever one of the chip's.
     "{ref} has no value, so nothing says which one to fit.",
+    "{ref} has roles for {covered} of {count} pins, so it is drawn as a numbered box.",
+    "{ref} has a role for pin {pin_no}, which the package does not have, so it is drawn as a numbered box.",
+    "{ref} has a role for pins {pinlist}, which the package does not have, so it is drawn as a numbered box.",
     "{ref} is connected to nothing: no pin of it is on a net with another pin.",
     "Nothing brings power onto the board: no connector, terminal, battery clip or module is wired to {netlist}. Wire one to the supply and to ground.",
     "{cable} lands on {ref} pin {pin_no}, which {footprint_id} does not have.",

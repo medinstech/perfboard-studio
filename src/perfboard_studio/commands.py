@@ -111,6 +111,7 @@ from .model import (
     PartSymbol,
     PerfDocument,
     PinNames,
+    PinRoles,
     Point2,
     Rotation,
     SchematicPart,
@@ -128,6 +129,7 @@ from .model import (
     declared_pin_name,
     has_component_side_copper,
     normalized_pin_names,
+    normalized_pin_roles,
     shorts_supplies,
     supply_net_class,
 )
@@ -279,6 +281,7 @@ def part_of(component: ComponentInstance) -> SchematicPart:
         pin_names=component.pin_names,
         symbol=component.symbol,
         note=component.note,
+        pin_roles=component.pin_roles,
     )
 
 
@@ -487,6 +490,21 @@ def checked_pin_names(names: object, ref: str) -> PinNames:
         return normalized_pin_names(names)
     except ValueError as err:
         raise CommandError("invalid-pin-names", f"{ref}: {err}") from err
+
+
+def checked_pin_roles(roles: object, ref: str) -> PinRoles:
+    """Pin roles in canonical form, or a refusal naming what is wrong with them.
+
+    The same line as ``checked_pin_names``: only what is wrong with the roles themselves is
+    refused -- a role that is not one, a pin with no number, a pin given two roles. Whether
+    they cover exactly the package's pins takes the footprint registry, which a command has
+    none of; the sheet draws a numbered box and says why, and ERC reports it
+    (``pin-roles-incomplete``), as both do for a name on a pin the package lacks.
+    """
+    try:
+        return normalized_pin_roles(roles)
+    except ValueError as err:
+        raise CommandError("invalid-pin-roles", f"{ref}: {err}") from err
 
 
 def checked_note(note: object, ref: str) -> str:
@@ -792,6 +810,8 @@ class PlaceComponentPayload:
     #: here so a paste and an agent's ``place_component`` do not lose them on the way in.
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    #: What each lead does -- see ``model.PinRole``. Carried in as the names are.
+    pin_roles: PinRoles = ()
     note: str = ""
     #: The face the part goes on; None is the component side. "bottom" mirrors it too
     #: (``mirrored`` left None), as ``component.setSide`` does.
@@ -951,6 +971,9 @@ class UpdateComponentPayload:
     #: than merged, so what the dialog shows is exactly what the part ends up with.
     pin_names: PinNames | None = None
     symbol: PartSymbol | _Keep | None = KEEP
+    #: As ``pin_names``: None leaves them, an empty tuple clears them. KEPT across a new
+    #: value or a new package, exactly as the names are, and for the same reason.
+    pin_roles: PinRoles | None = None
     #: ``None`` leaves the note alone; an empty string clears it. A lock does not cover it:
     #: a lock is about where a part is, and the note is about why it is there.
     note: str | None = None
@@ -987,6 +1010,8 @@ class AddPartPayload:
     id: ComponentId | None = None
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    #: What each lead does -- see ``model.PinRole``. Carried in as the names are.
+    pin_roles: PinRoles = ()
     note: str = ""
 
 
@@ -1015,6 +1040,9 @@ class UpdatePartPayload:
     #: As on ``UpdateComponentPayload``: None leaves them, an empty tuple clears them.
     pin_names: PinNames | None = None
     symbol: PartSymbol | _Keep | None = KEEP
+    #: As ``pin_names``: None leaves them, an empty tuple clears them. KEPT across a new
+    #: value or a new package, exactly as the names are, and for the same reason.
+    pin_roles: PinRoles | None = None
     #: As on ``UpdateComponentPayload``: None leaves it, an empty string clears it.
     note: str | None = None
 
@@ -1780,6 +1808,7 @@ def _prepare_component(
         pin_names=checked_pin_names(p.pin_names, p.ref),
         symbol=checked_part_symbol(p.symbol, p.ref),
         note=checked_note(p.note, p.ref),
+        pin_roles=checked_pin_roles(p.pin_roles, p.ref),
         side=side,
     )
 
@@ -2025,6 +2054,9 @@ class _UpdateComponent:
         pin_names = (
             existing.pin_names if p.pin_names is None else checked_pin_names(p.pin_names, ref)
         )
+        pin_roles = (
+            existing.pin_roles if p.pin_roles is None else checked_pin_roles(p.pin_roles, ref)
+        )
         symbol = (
             existing.symbol if isinstance(p.symbol, _Keep) else checked_part_symbol(p.symbol, ref)
         )
@@ -2049,6 +2081,7 @@ class _UpdateComponent:
                 pin_names=pin_names,
                 symbol=symbol,
                 note=note,
+                pin_roles=pin_roles,
                 footprint_id=footprint_id,
             )
             if c.id == p.id
@@ -2260,6 +2293,7 @@ class _AddPart:
             pin_names=checked_pin_names(p.pin_names, ref),
             symbol=checked_part_symbol(p.symbol, ref),
             note=checked_note(p.note, ref),
+            pin_roles=checked_pin_roles(p.pin_roles, ref),
         )
         return dataclasses.replace(doc, parts=(*doc.parts, part))
 
@@ -2299,6 +2333,9 @@ class _UpdatePart:
         pin_names = (
             existing.pin_names if p.pin_names is None else checked_pin_names(p.pin_names, ref)
         )
+        pin_roles = (
+            existing.pin_roles if p.pin_roles is None else checked_pin_roles(p.pin_roles, ref)
+        )
         symbol = (
             existing.symbol if isinstance(p.symbol, _Keep) else checked_part_symbol(p.symbol, ref)
         )
@@ -2315,6 +2352,7 @@ class _UpdatePart:
                 pin_names=pin_names,
                 symbol=symbol,
                 note=note,
+                pin_roles=pin_roles,
             )
             if part.id == p.id
             else part
@@ -2391,6 +2429,7 @@ def _placed_from(part: SchematicPart, spec: PartPlacement, doc: PerfDocument) ->
         pin_names=part.pin_names,
         symbol=part.symbol,
         note=part.note,
+        pin_roles=part.pin_roles,
     )
 
 

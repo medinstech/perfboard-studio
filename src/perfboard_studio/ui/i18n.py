@@ -1065,8 +1065,12 @@ TURKISH: Mapping[str, str] = {
     "Deleted {count} conductors · Ctrl+Z brings them back": "{count} iletken silindi · Ctrl+Z ile geri getirebilirsiniz",
     "Select All of {net}": "{net} Netinin Tümünü Seç",
     "Part with no value": "Değeri olmayan parça",
+    "Pin roles don't fit the package": "Pin görevleri kılıfa uymuyor",
     # -- the circuit's findings, said where they are shown (ui/engine_text.FINDING_TEMPLATES)
     "{ref} has no value, so nothing says which one to fit.": "{ref} parçasının değeri yok; hangisinin takılacağı hiçbir yerde yazmıyor.",
+    "{ref} has roles for {covered} of {count} pins, so it is drawn as a numbered box.": "{ref} parçasının {count} pininden yalnızca {covered} tanesinin görevi var; bu yüzden numaralı bir kutu olarak çiziliyor.",
+    "{ref} has a role for pin {pin_no}, which the package does not have, so it is drawn as a numbered box.": "{ref} parçasının {pin_no}. pinine görev verilmiş, ama kılıfında böyle bir pin yok; bu yüzden numaralı bir kutu olarak çiziliyor.",
+    "{ref} has a role for pins {pinlist}, which the package does not have, so it is drawn as a numbered box.": "{ref} parçasının {pinlist} pinlerine görev verilmiş, ama kılıfında bu pinler yok; bu yüzden numaralı bir kutu olarak çiziliyor.",
     "{ref} is connected to nothing: no pin of it is on a net with another pin.": "{ref} hiçbir yere bağlı değil: hiçbir pini başka bir pinle aynı nette değil.",
     "Nothing brings power onto the board: no connector, terminal, battery clip or module is wired to {netlist}. Wire one to the supply and to ground.": "Karta güç getiren bir şey yok: {netlist} için hiçbir konnektör, klemens, pil klipsi ya da modül bağlı değil. Birini beslemeye ve toprağa bağlayın.",
     "{cable} lands on {ref} pin {pin_no}, which {footprint_id} does not have.": "{cable}, {ref} parçasının {pin_no}. pinine iniyor, ama {footprint_id} kılıfında böyle bir pin yok.",
@@ -1331,6 +1335,7 @@ TURKISH: Mapping[str, str] = {
     "Wire the part into the circuit, or delete it.": "Parçayı devreye bağlayın ya da silin.",
     "Add the part, or take its pins off the net.": "Parçayı ekleyin ya da pinlerini netten çıkarın.",
     'Give the part a value under Properties.': "Özellikler'den parçaya bir değer verin.",
+    "These pin roles don't match this package. Give every pin of this package a role, and only those pins, or put the part back on the package they were written for. Until then it is drawn as a plain numbered box; nothing else about the part changes.": "Bu pin görevleri bu kılıfa uymuyor. Bu kılıfın her pinine, yalnızca onlara, bir görev verin ya da parçayı görevlerin yazıldığı kılıfa geri alın. O zamana kadar parça düz, numaralı bir kutu olarak çizilir; parçanın başka hiçbir şeyi değişmez.",
     "What to do:": "Ne yapmalı:",
     "Point at a problem, or pick one: it is said here in full, with what to do about it.": (
         "Bir sorunun üzerine gelin ya da birini seçin: tamamı ve ne yapılacağı burada yazar."
@@ -6324,6 +6329,9 @@ TURKISH: Mapping[str, str] = {
     "{ref}: footprint '{footprint}' is not in the registry": "{ref}: '{footprint}' kılıfı kayıtlı değil",
     "{ref}: the netlist names pin(s) {numbers}, which {footprint} does not have": "{ref}: net listesi {numbers} pinlerini adlandırıyor, ama {footprint} kılıfında bunlar yok",
     "{ref}: names pin(s) {numbers}, which {footprint} does not have": "{ref}: {numbers} pinlerini adlandırıyor, ama {footprint} kılıfında bunlar yok",
+    "{ref}: roles for {covered} of {count} pins, drawn as a numbered box": "{ref}: {count} pinin yalnızca {covered} tanesinin görevi var, numaralı kutu olarak çizildi",
+    "{ref}: a role for pin {pin_no}, which the package does not have, drawn as a numbered box": "{ref}: kılıfta olmayan {pin_no}. pine görev verilmiş, numaralı kutu olarak çizildi",
+    "{ref}: a role for pins {pinlist}, which the package does not have, drawn as a numbered box": "{ref}: kılıfta olmayan {pinlist} pinlerine görev verilmiş, numaralı kutu olarak çizildi",
     "{count} part(s) have no place on this sheet yet and are parked at the right-hand edge: {refs_listed}": "{count} parçanın bu şemada henüz yeri yok, sağ kenarda bekliyor: {refs_listed}",
     "{pins} and {count} more": "{pins} ve {count} tane daha",
     "{old} joined {new}: {pins} is on {new} now.": "{old}, {new} netine katıldı: {pins} artık {new} netinde.",

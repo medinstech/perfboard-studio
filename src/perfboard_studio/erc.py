@@ -56,6 +56,10 @@ and the warnings:
   about which one to fit, and the guide's step read "R1 -- I6 -> L6" with every check green
   (the newcomer walk). A chip, a module, a connector, a switch or an LED is named by its
   package or its pins, so it is never asked for one.
+- ``pin-roles-incomplete`` -- a part whose pin roles (``model.PinRole``) do not cover its
+  package's pins exactly: a pin with none, or a role on a pin the package lacks. The
+  functional symbol needs every pin, so the part is drawn as a numbered box. Reported, not
+  refused, for the reason ``pin-not-on-part`` is; the sheet's note says the same words.
 
 "CONNECTED" MEANS ON A NET WITH ANOTHER PIN THAT EXISTS. A VCC pin alone on a net called
 VCC is connected to nothing, and is both a single-pin net and an unpowered chip.
@@ -84,6 +88,8 @@ from .model import (
     SupplyKind,
     is_negative_rail,
     pin_name_of,
+    pin_roles_misfit,
+    roles_misfit_phrase,
     shorts_supplies,
     supply_kind,
 )
@@ -105,6 +111,7 @@ RULES: tuple[str, ...] = (
     "part-unconnected",
     "part-not-defined",
     "value-missing",
+    "pin-roles-incomplete",
 )
 
 SEVERITY: dict[str, ErcSeverity] = {
@@ -119,6 +126,7 @@ SEVERITY: dict[str, ErcSeverity] = {
     "part-unconnected": "warning",
     "part-not-defined": "warning",
     "value-missing": "warning",
+    "pin-roles-incomplete": "warning",
 }
 
 
@@ -324,6 +332,13 @@ def run_erc(doc: PerfDocument, lookup: FootprintLookup) -> tuple[ErcFinding, ...
             circuit.report(
                 "value-missing",
                 f"{ref} has no value, so nothing says which one to fit.",
+                refs=(ref,),
+            )
+        misfit = pin_roles_misfit(part.pin_roles, (pin.number for pin in footprint.pins))
+        if misfit is not None:
+            circuit.report(
+                "pin-roles-incomplete",
+                f"{ref} has {roles_misfit_phrase(misfit)}, so it is drawn as a numbered box.",
                 refs=(ref,),
             )
         pins = tuple(_Pin(pin.number, pin_name_of(part, pin)) for pin in footprint.pins)

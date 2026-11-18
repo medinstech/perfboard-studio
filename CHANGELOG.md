@@ -20,6 +20,17 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **A part can say what each of its pins does.** Each pin can carry a role: a supply in or
+  out, ground, an input, an output, both ways, passive, or not connected. Roles are kept in
+  the file as `pinRoles` and left out when a part has none, so every board saved before
+  this opens and saves byte for byte as it did. They travel with the part wherever its pin
+  names do. They are the ground the sheet's functional symbols will be drawn on: supplies
+  on top, ground below, inputs left, outputs right. Roles that do not cover the package's
+  pins exactly leave the part a numbered box, and the circuit check says why
+  (`pin-roles-incomplete`).
+
 ### Changed
 
 - **The sheet names a wire only where its name tells you something.** Every wired net's
@@ -28,6 +39,24 @@ closed without a bump.
   reaches a connector, a jack, a battery or a part off the board. Every other wire's name
   is shown while its net is lit, and the exports leave it out. Names written at a pin are
   unchanged.
+- **Every problem says what to do about it, in full.** A row in the Problems drawer cut its
+  sentence off at the column's edge, and nothing said what to do. A pane beside the list now
+  shows the picked (or pointed-at) finding whole, with a "What to do:" step for its rule.
+  There is one for every DRC rule, LVS kind and ERC code, and a test reads them off the
+  engine so a new rule cannot arrive without one. Every row carries the same text as its
+  tooltip.
+- **The board against the circuit comes right after the circuit.** "Matches circuit (LVS)"
+  (broken nets, shorts, stray copper: a board that will not work) was the drawer's last
+  group, under every DRC warning. It is now second, with its wrong kinds before what is only
+  left to wire, and it opens by itself when the board is not the circuit.
+- **Opening Problems goes to the first problem.** A click on the bar or Ctrl+7 opened a list
+  of folded groups. Now it picks the first finding, with its rule's row in view. A row
+  already picked is kept.
+- **Going to a finding shows the board round it.** Two pads were framed alone at the zoom's
+  limit. The view now frames at least 8 holes each way and never zooms past 24 px per mm.
+- **A ring or a part drawn in error explains itself.** Hovering a ringed hole, or a part
+  drawn red, shows its findings and what to do. A click on a ring opens the drawer to its
+  row and selects what the row selects, so Properties shows the copper the finding is about.
 
 ## [0.25.0] - 2026-11-18
 
