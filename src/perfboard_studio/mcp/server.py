@@ -44,6 +44,13 @@ forgetting are five different verbs -- and ``update_net`` carries the only route
 whole API to ``current_a`` and ``voltage_v``, which two DRC rules and the guide's wire
 gauge are silent without.
 
+``merge_nets`` is the netlist group's sixth verb, and the one the window had and the
+server did not: drawing a wire or a label between two nets on the sheet joins them
+(``net.merge``). It does not compose from the five. ``connect_pins`` refuses a pin another
+net holds, so the only route was ``disconnect_pins`` then ``connect_pins`` per net, two undo
+steps with a circuit wrong in between, a net left behind to ``delete_net``, and the current,
+voltage and face it declared, and the copper that claimed it, lost on the way.
+
 The newest two are inverses that were missing. ``delete_conductors`` is the only way an
 agent can take back a wire it laid other than ``undo``, which reaches the last step only;
 ``reroute`` and ``remove_stale_conductors`` take only copper that claims a net or no longer
@@ -574,6 +581,15 @@ def connect_pins(net: str, pins: list[str]) -> dict[str, Any]:
 def disconnect_pins(net: str, pins: list[str]) -> dict[str, Any]:
     """Take pins off a net, as one undo step."""
     return session.disconnect_pins(net, pins)
+
+
+@mcp.tool()
+def merge_nets(name: str, into: str) -> dict[str, Any]:
+    """Join net `name` into net `into`, as one undo step: `into` keeps its name and class,
+    gains every pin of `name`, and `name` is gone. Copper laid for `name` now belongs to
+    `into` but is not moved, so run_lvs reports `into` split until the pieces are wired.
+    A supply and its ground are refused (code "two-supplies")."""
+    return session.merge_nets(name, into)
 
 
 @mcp.tool()

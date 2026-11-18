@@ -89,6 +89,7 @@ from perfboard_studio.commands import (
     DeletePartPayload,
     DisconnectPinsPayload,
     ImportNetlistPayload,
+    MergeNetsPayload,
     MoveComponentPayload,
     MoveToBoardPayload,
     NewConductor,
@@ -1025,6 +1026,23 @@ class BoardSession:
             DisconnectPinsPayload(
                 id=self._net_id_strict(net), nodes=tuple(_pin(spec) for spec in pins)
             ),
+        )
+
+    def merge_nets(self, name: str, into: str) -> dict[str, Any]:
+        """Join the net ``name`` into ``into``, as one undo step, and ``name`` is gone.
+
+        ``into`` keeps its name and class and gains the other's pins after its own, and a
+        current, voltage or face it does not declare is taken from the net that went.
+        Copper that claimed ``name`` now claims ``into``; nothing is moved or deleted, so
+        until the two pieces are wired together ``run_lvs`` reports ``into`` split and the
+        ratsnest has the connection still to make. A supply and its ground are refused
+        (``two-supplies``): that is a short. The only way to it otherwise was taking every
+        pin off one net and putting it on the other, a step per call and a circuit that
+        is wrong in between, which also lost what the net declared.
+        """
+        return self._dispatch(
+            "net.merge",
+            MergeNetsPayload(id=self._net_id_strict(name), into=self._net_id_strict(into)),
         )
 
     # -- the design, before the board ----------------------------------------

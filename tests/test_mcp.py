@@ -1064,7 +1064,12 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # the window. One board.applyPreset, as the board chooser dispatches it -- not a
     # parameter on set_board, because a stock board is a product, not a size (the strips and
     # screws arrive with it), and the window keeps the two apart for the same reason.
-    assert len(tools) <= 69, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 70, for merge_nets: net.merge, which the window reaches by drawing a wire or a
+    # label between two nets on the sheet. connect_pins refuses a pin another net holds, so
+    # an agent could only take pins off one net and put them on the other -- several undo
+    # steps, a circuit wrong in between, and what the net declared lost with it.
+    assert len(tools) <= 70, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"
@@ -1494,6 +1499,46 @@ def test_disconnecting_a_pin_takes_it_off_and_undoes_as_one_step(
     assert len(session.history()) == depth + 1
     session.undo()
     assert session.get_nets()[0]["pins"] == ["R1.1", "R1.2"]
+
+
+def test_merging_a_net_moves_its_pins_and_what_it_declared_in_one_undo_step(
+    session: BoardSession,
+) -> None:
+    session.place_component("R1", "r-axial-5", "C3")
+    session.place_component("R2", "r-axial-5", "C8")
+    session.create_net("N1", "signal", ["R1.2"], current_a=0.5)
+    session.create_net("RESET", "signal", ["R2.1"])
+    depth = len(session.history())
+
+    merged = session.merge_nets("N1", into="RESET")
+
+    assert merged["ok"], merged
+    assert "Join net N1 into RESET" in merged["description"]
+    (net,) = session.get_nets()
+    assert (net["name"], net["pins"]) == ("RESET", ["R2.1", "R1.2"])
+    assert net["current_a"] == 0.5
+    assert len(session.history()) == depth + 1
+    session.undo()
+    assert [n["name"] for n in session.get_nets()] == ["N1", "RESET"]
+
+
+def test_a_supply_and_its_ground_are_not_merged(session: BoardSession) -> None:
+    session.place_component("R1", "r-axial-5", "C3")
+    session.create_net("GND", "ground", ["R1.1"])
+    session.create_net("+5V", "power", ["R1.2"])
+
+    result = session.merge_nets("GND", into="+5V")
+
+    assert result["ok"] is False
+    assert result["code"] == "two-supplies"
+    assert len(session.get_nets()) == 2
+
+
+def test_merging_into_an_unknown_net_raises_rather_than_refusing(session: BoardSession) -> None:
+    """A name that is not a net did not make sense; it is not a "no"."""
+    session.create_net("GND", "ground")
+    with pytest.raises(SessionError, match="No net called 'VCC'"):
+        session.merge_nets("GND", into="VCC")
 
 
 def test_current_and_voltage_can_only_be_stated_here_and_are_not_erased_by_omission(
