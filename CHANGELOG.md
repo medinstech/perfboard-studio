@@ -230,9 +230,8 @@ closed without a bump.
 - **What you draw goes on the face you are looking at.** On a board with pads on both
   faces, the drawing tools lay their copper on the face in view, and Ctrl+F turns the
   drawing over with the board. Draw on: Solder Side | Component Side, under the banner
-  while a solder tool or Insulated Wire is armed, puts it on the other face until the next
-  flip, and the banner names the face, adding that the copper goes on the far face when it
-  does. An insulated wire drawn on the component side is laid as a jumper over the parts,
+  while a solder tool or Insulated Wire is armed, turns the board to the face picked, as
+  Ctrl+F does, and the banner names the face. An insulated wire drawn on the component side is laid as a jumper over the parts,
   corners and all; a bare wire always goes underneath, and the banner says why while the
   component side is in view. A run is carried on from its end only on its own face, and a
   run made reinforced in its Properties stays on the face it was on. A board with pads on
@@ -374,6 +373,13 @@ closed without a bump.
 
 ### Changed
 
+- **Copper joined to no pin is a warning.** A run or wire left on empty holes is counted on
+  the Problems bar and in the Checks step. Before, it was listed only in the findings' last
+  group, under "Matches the circuit: 7 of 7 nets". Every LVS row now goes to its place: a
+  click frames its holes and selects its copper or its parts.
+- **Measure says what to click and gives the answer in its banner.** Click the first hole,
+  then the second. The holes across, mm between centres and steps of solder trace appear
+  over the board, not at the far end of the status bar.
 - **A sheet drawn for you looks the same after your first edit.** The first change to a
   sheet drawn for you turns it into a hand-drawn one, and that used to redraw it: symbols
   moved onto the grid and their wires were laid again, every ground and supply changed
@@ -506,6 +512,7 @@ closed without a bump.
 
 ### Fixed
 
+- **No draw ring past the board's edge.** The next click's ring is drawn only over a hole.
 - **A wire on a sheet drawn for you can end on another wire's middle.** The T was looked
   for only on wires already drawn by hand, so on an example's sheet the click put a corner
   there and the wire went on. Now the wire takes the T, and one Ctrl+Z puts the sheet drawn

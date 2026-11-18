@@ -141,8 +141,8 @@ A solder run has no such line, since it is soldered to everything it passes.
   copper stacked on copper takes the next one down each time. Delete takes copper up without
   asking; Ctrl+Z brings it back.
 - **Both faces.** On a board with pads on both faces, what you draw goes on the face you are
-  looking at, and Ctrl+F turns the board over with it; **Draw on** under the banner puts it on
-  the other face until the next flip. A net's Properties has a **Face** row, **Either**,
+  looking at, and Ctrl+F turns the board over with it; **Draw on** under the banner turns the
+  board to the face you pick, the same turn. A net's Properties has a **Face** row, **Either**,
   **Component Side** or **Solder Side**, and Auto-wire keeps the net on its face wherever it
   can. Under the row it says what the last wiring did with the face: kept it, naming a pin
   under a part whose wire ends in the free hole beside it, joined to the pin by a lead

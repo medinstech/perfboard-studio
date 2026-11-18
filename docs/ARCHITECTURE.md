@@ -4104,8 +4104,10 @@ other columns and zero on one face, and the scoreboard has a `via` column, `--fa
 `--prefer NET=top|bottom`.
 
 **Drawing by hand follows the view.** The window's drawing tools lay copper on the face being
-looked at, and a flip turns the drawing over with the board; Draw on is an override for the
-face not in view, until the next flip, and the banner names the face. The first version made
+looked at, and a flip turns the drawing over with the board. Draw on turns the board to the
+face picked, with the same turn as Ctrl+F, since that is where the drawing will be, and the
+banner names the face; picking the face in view does nothing. As an override for the face not
+in view it left a builder drawing on a face they could not see. The first version made
 Draw on a choice of its own, the solder side at every start, because the window opens on the
 component side and copper that followed the view would go on top unasked -- but a builder who
 turned the board over to look at the solder side and drew there found the run on the other
