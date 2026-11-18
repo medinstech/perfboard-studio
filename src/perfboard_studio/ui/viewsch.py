@@ -1470,18 +1470,22 @@ class SchematicView(QGraphicsView):
         Only a wire somebody drew (``Wire.ends``): a net label's stub and a rail are the
         sheet's own shorthand, and a branch off one would be a branch off nothing stored.
         Snapped to the grid along the run it lands on, and kept on that run.
+
+        OR ONE THE FREEZE WILL KEEP, on a sheet still being arranged (``wire_runs``, as a
+        click selects it). Reading only the drawn ones, a wire could not be ended on another
+        wire's middle until something had frozen the sheet: the click added a corner there
+        instead and the wire went on. The window freezes the sheet in the T's own command,
+        and with nothing moving in the freeze the wire it lands on is this one.
         """
         if self.item is None:
             return None
         best: tuple[float, tuple[NetNode, NetNode], QPointF, QPointF] | None = None
-        for wire in self.item.drawing.wires:
-            if wire.ends is None:
-                continue
-            for start, end in zip(wire.path, wire.path[1:], strict=False):
+        for ends, path in self.wire_runs():
+            for start, end in itertools.pairwise(path):
                 a, b = _point(start), _point(end)
                 distance = _distance_to_segment(scene_pos, a, b)
                 if distance <= PICK_MM and (best is None or distance < best[0]):
-                    best = (distance, wire.ends, a, b)
+                    best = (distance, ends, a, b)
         if best is None:
             return None
         _distance, ends, a, b = best

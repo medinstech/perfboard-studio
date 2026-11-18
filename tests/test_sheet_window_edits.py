@@ -323,3 +323,58 @@ def test_cutting_the_coil_trunk_on_nano_relay_says_coil_went(window_for, monkeyp
     assert "went with it." in said, said
     assert "COIL is gone: " in said, said
     assert all(net.name != "COIL" for net in window.bus.system_document.nets)
+
+
+def test_a_t_onto_a_wire_of_a_sheet_still_arranged_freezes_it_in_the_same_step(window_for) -> None:
+    """Sinan's dev3 try: on the example's arranged sheet a wire could not be ended on
+    another wire's middle -- the T was only looked for on wires already drawn, so the click
+    put a corner there and the wire went on. Now the wire the freeze would keep takes the T,
+    the freeze rides in the T's own command, and one Ctrl+Z puts the arranged sheet back."""
+    import pathlib
+
+    from PySide6.QtCore import QPointF
+
+    from perfboard_studio import persist
+    from perfboard_studio.schematic import wires_as_drawn
+
+    golden = pathlib.Path(__file__).resolve().parent.parent / "examples" / "atmega328-relay.perf"
+    document = persist.deserialize_document(golden.read_text(encoding="utf-8")).document
+    window = window_for(document)
+    document = window.bus.system_document
+    drawing = build_schematic(document, window.lookup)
+    view = window.schematic_view
+    view.set_unfrozen_wires(wires_as_drawn(drawing, document))
+    view.set_drawing(drawing)
+    before = window.bus.system_document
+    depth = len(window.bus.history())
+
+    host = max(wires_as_drawn(drawing, document), key=lambda w: len(w.path))
+    start, end = max(
+        zip(host.path, host.path[1:], strict=False),
+        key=lambda run: abs(run[1].x - run[0].x) + abs(run[1].y - run[0].y),
+    )
+    middle = QPointF((start.x + end.x) / 2, (start.y + end.y) / 2)
+    tee = view.tee_at(middle)
+    assert tee is not None and set(tee.ends) == {host.a, host.b}
+
+    wired = {node for net in document.nets for node in net.nodes}
+    free = next(
+        (symbol.ref, pin.number)
+        for symbol in drawing.symbols
+        for pin in symbol.pins
+        if NetNode(component_ref=symbol.ref, pin=pin.number) not in wired
+    )
+    view.set_pending_pin(free)
+    view._tee_click(tee)
+
+    after = window.bus.system_document
+    assert after.sheet, "the T froze the sheet"
+    assert len(window.bus.history()) == depth + 1
+    joined = next(net for net in after.nets if host.a in net.nodes)
+    assert NetNode(component_ref=free[0], pin=free[1]) in joined.nodes
+    assert any(w.tap is not None and w.a.component_ref == free[0] for w in after.sheet_wires)
+    assert "drawn by hand from now on" in window.statusBar().currentMessage()
+
+    window.on_undo()
+    assert window.bus.system_document.sheet == before.sheet == ()
+    assert window.bus.system_document.nets == before.nets

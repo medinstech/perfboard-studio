@@ -8354,21 +8354,26 @@ class MainWindow(QMainWindow):
 
         One ``sheet.wire``, as a wire from pin to pin is: the pin joins the net the wire is
         on -- through the wire's first pin, which is on it -- and the line is stored ending
-        on the wire (``SheetWire.tap``). The sheet is frozen already: there is a drawn wire.
+        on the wire (``SheetWire.tap``). On a sheet still being arranged the wire is one the
+        freeze keeps (``SchematicView.tee_at``), so the freeze rides in the same command, as
+        it does for a wire from pin to pin.
         """
         if not isinstance(path, list) or len(path) < 2:
             return
+        freeze = self._sheet_freeze()
         wire = SheetWire(
             a=NetNode(component_ref=ref, pin=pin),
             b=NetNode(component_ref=ref_a, pin=pin_a),
             path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
             tap=NetNode(component_ref=ref_b, pin=pin_b),
         )
-        result = self.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=wire))
+        result = self.bus.dispatch(
+            "sheet.wire", DrawSheetWirePayload(wire=wire, freeze=freeze)
+        )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(did(result.description), 6000)
+        self._say_on_sheet(did(result.description), freeze, 6000)
 
     def on_sheet_label(self, ref: str, pin: str) -> None:
         """Join a pin to a net by NAME rather than by drawing a line to it.
