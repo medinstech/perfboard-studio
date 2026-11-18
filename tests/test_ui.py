@@ -8539,10 +8539,13 @@ def _drag_over_board(window, fmt: str, payload: str, hole):
     data.setText(payload)
     scene = window.scene
     point = window.view.mapFromScene(hole_to_screen(hole, scene.document.board, scene.side))
-    event = QDragMoveEvent(
-        point, Qt.DropAction.CopyAction, data, Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-    )
+    rest = (data, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    try:
+        # PySide6 6.12 takes the position as a QPointF and warns that the QPoint form is
+        # deprecated; 6.10 has the QPoint form only.
+        event = QDragMoveEvent(point.toPointF(), Qt.DropAction.CopyAction, *rest)
+    except TypeError:
+        event = QDragMoveEvent(point, Qt.DropAction.CopyAction, *rest)
     window.view.dragMoveEvent(event)
     return scene._drop_ghost
 
