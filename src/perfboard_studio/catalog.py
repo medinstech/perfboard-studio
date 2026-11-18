@@ -3878,8 +3878,10 @@ PIN_ROLES: dict[str, str] = {
     # 3V3 pins are typed only "P" or "power input/output" by the makers (Espressif lists feeding
     # the board from either as one of three power options; Seeed says its 5V is USB's 5 V out and
     # "can also be used as a voltage input"), so they follow the Nano's decision above: the
-    # regulated or USB rail the board gives is a supply it gives ("pwr-out"), and a pin named VIN,
-    # RAW or VSYS, which only feeds the board's regulator, a supply it takes.
+    # regulated rail the board gives is a supply it gives ("pwr-out"), and a pin named VIN, RAW,
+    # VSYS or VBUS, which feeds the board, a supply it takes. Feeding a board through its 5V pin
+    # is a common way to power one, so the schematic's ERC must NOT read a dev board fed that
+    # way as two outputs fighting: a "power-out" pin met by a source is not a conflict.
     # Espressif's ESP32-DevKitC V4 user guide, J2 and J3 header tables (type P, I, I/O, G):
     "esp32-devkitc": ("pwr-out gnd in io in io in io in io in io io gnd io io io io io io io io io io io io "
                       "gnd io io io io io io io io io pwr-out io"),
