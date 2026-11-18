@@ -98,6 +98,11 @@ git push --tags
 Pushing the tag is what builds the installers: `.github/workflows/release.yml` refuses
 to publish unless the tag, `version.py` and `CHANGELOG.md` agree, then builds and
 smoke-tests a bundle on each of the three platforms and attaches them to the release.
+The release is created as a **draft**, which nobody outside the repository sees and no
+update check reads, and it goes public only in the last step of `attach-bundles`, once
+the Windows installer, the AppImage, the disk image and `SHA256SUMS` are all on it. If a
+build fails, the release stays a draft: re-run the failed job, or, once every file is
+there, publish it by hand with `gh release edit v0.4.0 --draft=false`.
 See [Packaging](#packaging) below.
 
 **6. Open the next cycle.** Set `__version__` to the next `.dev0` (`0.5.0.dev0`) and add
