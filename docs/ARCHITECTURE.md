@@ -1640,8 +1640,8 @@ Four things keep the stored half honest:
 **`sheet.wire` joins the pins AND stores the line, in one command.** Two would mean an undo
 that took back the drawing and kept the connection, which is a lie about what just happened.
 What joining two pins MEANS is `commands.plan_pin_join`, which `view2d.join_pins` reads too —
-one fact, two consumers, the shape this codebase uses everywhere. Two nets are never merged:
-that is a change to the circuit rather than to a drawing.
+one fact, two consumers, the shape this codebase uses everywhere. A wire between two nets
+joins them, as below.
 
 **The first edit of an arranged sheet carries its freeze, so it is one undo step.** Every
 change to a wire -- drawn, reshaped, an end moved, cut, rubbed out -- on a sheet the layout
@@ -1658,8 +1658,8 @@ that the sheet is drawn by hand from now on. A symbol dragged was already one co
 freeze in its own `wires`. `test_one_undo_takes_the_first_edit_of_an_example_sheet_back_whole`
 holds it on atmega328-relay and nano-relay.
 
-**A label with another net's name joins that net; a drawn wire between two nets still does
-not.** Calling a wire VCC or GND is how most people put it on VCC or GND, and the label used
+**A label with another net's name joins that net, and so does a wire drawn between two
+nets.** Calling a wire VCC or GND is how most people put it on VCC or GND, and the label used
 to refuse it ("R1.1 already belongs to net N1, disconnect it first"), because the only way
 to join two nets was to disconnect every pin of one and connect it again. `net.merge` is that
 join as one command: the net the label names stays (id, name, class), the other's pins go
@@ -1672,10 +1672,20 @@ split and the ratsnest draws the link still to wire --
 `test_a_merged_net_the_board_does_not_join_is_an_open_not_a_match` holds it on the NE555.
 A supply and its ground are refused (`model.shorts_supplies`, the same predicate ERC's
 `supply-on-wrong-net` reads), with the way out in the refusal: disconnect the one pin to
-move it. Two supplies of one class (+5V and VCC) are joined, as ERC does not report them. A
-wire dragged from a pin on one net to a pin on another is still refused (`two-nets`): a
-label names a net and is asked for by name, while a drag that happens to end on the wrong
-pin is the commoner way to join two nets by mistake.
+move it. Two supplies of one class (+5V and VCC) are joined, as ERC does not report them.
+
+A wire drawn from a pin on one net to a pin on another was refused at first (`two-nets`),
+on the argument that a drag ending on the wrong pin is the commoner way to join two nets by
+mistake. In use it read as the sheet taking one connection to a point: once two pins were
+wired, nothing more could be drawn between them, on a schematic where a line between two
+nets joins them everywhere else. `sheet.wire` now joins them through the same merge
+(`commands._merged_nets`), in the one command, with the same refusal for a supply and its
+ground; the mistake is answered by the undo label and the status line saying what joined
+what ("Wire R2.1 to R3.1, joining N1 into RESET") and one Ctrl+Z. The net that stays is the
+one that says more (`commands._kept_of`): a supply or ground over a signal, a chosen name
+over an automatic `N3`, then the larger. Moving the END of a drawn wire onto a pin of another
+net is still refused (`sheet.wire.reconnect`): that gesture is about where a wire goes, not
+about the circuit. `tests/test_sheet_wire_joins.py`.
 
 **A note is a person writing on the drawing** (`model.SheetNote`). Nothing derives anything
 from one: not DRC, not LVS, and no command refuses one for overlapping anything. A drawing
