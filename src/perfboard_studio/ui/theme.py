@@ -647,6 +647,8 @@ QPushButton#headerSearch {{
     text-align: left;
     min-width: 220px;
 }}
+/* Narrow: the magnifier alone, so the step bar keeps the current step's name. */
+QPushButton#headerSearch[narrow="true"] {{ min-width: 0px; padding: {s["xs"]}px {s["sm"]}px; }}
 QPushButton#headerSearch:hover {{
     background: {k.bg_hover};
     border-color: {k.border_strong};

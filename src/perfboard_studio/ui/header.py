@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QResizeEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import icons
+from . import icons, theme
 from .i18n import t
 from .workflow import WorkflowBar
 
@@ -153,8 +153,10 @@ class HeaderBar(QWidget):
 
         # The way to every command by its name (``ui/palette.py``), where a person looks
         # for a search field: in the header, saying its key.
-        self.search = QPushButton(icons.icon("search"), t("Search or run a command…"))
+        self._search_words = t("Search or run a command…")
+        self.search = QPushButton(icons.icon("search"), self._search_words)
         self.search.setObjectName("headerSearch")
+        self._fitting = False
         self.search.setToolTip(t("Every command by its name, and any part or net (Ctrl+K)."))
         self.search.setCursor(Qt.CursorShape.PointingHandCursor)
         self.search.clicked.connect(search.trigger)
@@ -169,6 +171,41 @@ class HeaderBar(QWidget):
 
         # Styled by name in the one sheet (``theme.stylesheet``): #header, #headerTitle,
         # #headerUnsaved, and the steps as #workflowBar's buttons by their status.
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_search()
+
+    def _fit_search(self) -> None:
+        """The search's words go before the current step's name does.
+
+        The step bar sheds its words as the header narrows (``WorkflowBar._fit``), and its
+        last is the name of the step you are on -- the only place the bar says where you
+        are. With Home › before the board's name, a 1366 px window in Turkish lost "Montaj"
+        while the search still said "Komut arayın ya da çalıştırın…" across 230 px. Below
+        that width the search is the magnifier alone; Ctrl+K and its tooltip still say it.
+        """
+        if self._fitting or self._on_home:
+            return
+        layout = self.layout()
+        if layout is None:
+            return
+        self._fitting = True
+        try:
+            self._narrow_search(False)
+            layout.setGeometry(self.rect())
+            if self.steps.fit_mode == "tiny":
+                self._narrow_search(True)
+                layout.setGeometry(self.rect())
+        finally:
+            self._fitting = False
+
+    def _narrow_search(self, narrow: bool) -> None:
+        if bool(self.search.property("narrow")) == narrow:
+            return
+        self.search.setText("" if narrow else self._search_words)
+        self.search.setProperty("narrow", narrow)
+        theme.restyle(self.search)
 
     def minimumSizeHint(self) -> QSize:
         # Claims no width: a toolbar hides a widget that does not fit, and the steps shed
@@ -193,6 +230,8 @@ class HeaderBar(QWidget):
         self.place.setVisible(bool(place) and not self._on_home)
         self._modified = modified
         self.unsaved.setVisible(modified and not self._on_home)
+        # A longer name, "Not saved" or a board's place take room from the steps.
+        self._fit_search()
 
     def set_update(self, version: str | None) -> None:
         """The pill for release ``version``, or none (``None``: nothing newer, or hidden)."""
@@ -223,6 +262,11 @@ class HeaderBar(QWidget):
         self.place.setVisible(bool(self.place.text()) and not on)
         self.unsaved.setVisible(self._modified and not on)
         self.update_pill.setVisible(self._version is not None and not on)
+        # Over Home the steps are gone and the search has the room; off it, it fits again.
+        if on:
+            self._narrow_search(False)
+        else:
+            self._fit_search()
 
     def open_menu(self, menu: QMenu | None = None) -> QMenu:
         """Every menu under ☰ -- or one of them, opened straight away, for Alt+its letter

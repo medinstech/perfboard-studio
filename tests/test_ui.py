@@ -13325,6 +13325,36 @@ def test_home_is_one_click_away_with_the_board_left_open(monkeypatch) -> None:
         _close(window)
 
 
+def test_the_search_gives_up_its_words_before_the_step_bar_gives_up_the_step(monkeypatch) -> None:
+    """With Home › before the board's name, a 1366 px window in Turkish lost the current
+    step's name -- the only word on the bar that says where you are -- while the search
+    still had 230 px of words. The search goes to the magnifier first now: across a sweep
+    of widths, a search with its words never stands beside a bar of dots alone, and some
+    width keeps the step's name only because the search gave way."""
+    from PySide6.QtWidgets import QApplication
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        header = window.header
+        seen: list[tuple[bool, str]] = []
+        for width in range(1900, 760, -20):
+            window.resize(width, 900)
+            _settle_events(QApplication)
+            narrow = bool(header.search.property("narrow"))
+            seen.append((narrow, header.steps.fit_mode))
+            assert narrow == (header.search.text() == "")
+        assert seen[0] == (False, seen[0][1]) and seen[0][1] != "tiny"
+        assert all(mode != "tiny" for narrow, mode in seen if not narrow)
+        assert (True, "current") in seen, "the search gave way and the step kept its name"
+
+        window.resize(1900, 900)
+        _settle_events(QApplication)
+        assert not header.search.property("narrow")
+        assert header.search.text() == "Search or run a command…"
+    finally:
+        _close(window)
+
+
 def test_new_circuit_from_home_over_a_board_asks_about_it_first(monkeypatch) -> None:
     """At a start the window is already on an empty design and New Circuit only opens the
     sheet. Over a board left open, it would have put the new circuit's first part into

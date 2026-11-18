@@ -672,3 +672,8 @@ class WorkflowBar(QWidget):
     def next_key(self) -> StepKey:
         return self._next
 
+    @property
+    def fit_mode(self) -> FitMode:
+        """How much the bar says at its width now (``_fit``)."""
+        return self._mode
+
