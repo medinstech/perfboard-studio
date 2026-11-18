@@ -133,6 +133,8 @@ TEMPLATES: tuple[str, ...] = (
     "Lay {count} symbol out automatically",
     "Lay {count} symbols out automatically",
     "Lay the whole sheet out automatically",
+    "Wire {a} onto the wire from {b} to {c}, joining {old} into {new}",
+    "Wire {a} to {b}, joining {old} into {new}",
     "Wire {a} onto the wire from {b} to {c}",
     "Wire {a} to {b}",
     "Rub out {count} wire on the sheet and {branches} branch off it",

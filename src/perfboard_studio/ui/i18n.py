@@ -6185,6 +6185,8 @@ TURKISH: Mapping[str, str] = {
     "Lay {count} symbol out automatically": "{count} sembolü otomatik diz",
     "Lay {count} symbols out automatically": "{count} sembolü otomatik diz",
     "Lay the whole sheet out automatically": "Bütün şemayı otomatik diz",
+    "Wire {a} onto the wire from {b} to {c}, joining {old} into {new}": "{a} pinini {b}–{c} teline bağla; {old} netini {new} netine kat",
+    "Wire {a} to {b}, joining {old} into {new}": "{a} pinini {b} pinine tel ile bağla; {old} netini {new} netine kat",
     "Wire {a} onto the wire from {b} to {c}": "{a} pinini {b}–{c} teline bağla",
     "Wire {a} to {b}": "{a} pinini {b} pinine tel ile bağla",
     "Rub out {count} wire on the sheet and {branches} branch off it": "Şemadaki {count} teli ve ondan çıkan {branches} dalı sil",

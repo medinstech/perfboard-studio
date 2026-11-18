@@ -3150,9 +3150,13 @@ class _DrawSheetWire:
     and a redo that could put them back in the other order.
 
     What joining two pins means is ``plan_pin_join``, shared with the board's connect tool.
-    Two nets are never merged here: that is a change to the circuit rather than to a
-    drawing, and the refusal names both nets so the user can disconnect one pin and try
-    again.
+
+    A LINE BETWEEN TWO NETS JOINS THEM, as it does on every schematic. It used to be
+    refused -- "disconnect one of the pins first" -- so once two pins were wired, nothing
+    more could be drawn between them and the sheet read as taking one connection to a
+    point. The join is ``net.merge``'s (``_merged_nets``), in this one command: the net
+    that stays is ``_kept_of``'s, its copper is the stayer's, one Ctrl+Z separates them
+    again, and a supply and its ground are still refused as the short they would be.
     """
 
     type = "sheet.wire"
@@ -3174,12 +3178,10 @@ class _DrawSheetWire:
         plan = plan_pin_join(doc, wire.a, wire.b)
         if plan.kind == "two-nets":
             assert plan.net_a is not None and plan.net_b is not None
-            raise CommandError(
-                "two-nets",
-                f"{_pin_name(wire.a)} is on {plan.net_a.name} and {_pin_name(wire.b)} is "
-                f"on {plan.net_b.name}. Joining two nets is a change to the circuit \u2014 "
-                f"disconnect one of the pins first.",
-            )
+            kept = _kept_of(plan.net_a, plan.net_b)
+            gone = plan.net_b if kept is plan.net_a else plan.net_a
+            doc = _merged_nets(doc, gone, kept)
+            plan = plan_pin_join(doc, wire.a, wire.b)
 
         # An identical wire twice is a no-op on the undo stack, and two lines drawn on top
         # of one another that only one delete removes.
@@ -3206,11 +3208,42 @@ class _DrawSheetWire:
 
     def describe(self, p: DrawSheetWirePayload, doc: PerfDocument) -> str:
         if p.wire.tap is not None:
-            return (
+            said = (
                 f"Wire {_pin_name(p.wire.a)} onto the wire from {_pin_name(p.wire.b)} "
                 f"to {_pin_name(p.wire.tap)}"
             )
-        return f"Wire {_pin_name(p.wire.a)} to {_pin_name(p.wire.b)}"
+        else:
+            said = f"Wire {_pin_name(p.wire.a)} to {_pin_name(p.wire.b)}"
+        net_a = next((net for net in doc.nets if p.wire.a in net.nodes), None)
+        net_b = next((net for net in doc.nets if p.wire.b in net.nodes), None)
+        if net_a is None or net_b is None or net_a.id == net_b.id:
+            return said
+        kept = _kept_of(net_a, net_b)
+        gone = net_b if kept is net_a else net_a
+        return f"{said}, joining {gone.name} into {kept.name}"
+
+
+#: A net name nobody chose: what ``next_net_name`` hands out.
+_AUTOMATIC_NET_NAME = re.compile(r"N\d+")
+
+
+def _kept_of(net_a: Net, net_b: Net) -> Net:
+    """Which of two nets a wire drawn between them joins the other into.
+
+    The one that says more: a supply or a ground over a signal (N3 wired to GND is on GND),
+    then a name somebody chose over an automatic one (N3 wired to RESET is on RESET), then
+    the larger, so the fewest pins change net; ``net_b`` -- the pin the wire was drawn to --
+    when nothing else decides.
+    """
+
+    def says(net: Net) -> tuple[bool, bool, int]:
+        return (
+            net.net_class != "signal",
+            _AUTOMATIC_NET_NAME.fullmatch(net.name) is None,
+            len(net.nodes),
+        )
+
+    return net_a if says(net_a) > says(net_b) else net_b
 
 
 class _ReshapeSheetWire:
@@ -3986,44 +4019,7 @@ class _MergeNets:
         kept = require_net(doc, p.into)
         if gone.id == kept.id:
             raise CommandError("same-net", f"{kept.name} cannot be joined into itself.")
-        if shorts_supplies(gone.net_class, kept.net_class):
-            raise CommandError(
-                "two-supplies",
-                f"{gone.name} and {kept.name} are a supply and a ground: joining them would "
-                f"short one to the other. To move a single pin across, disconnect it from its "
-                f"net first.",
-            )
-        held = set(kept.nodes)
-        merged = dataclasses.replace(
-            kept,
-            nodes=kept.nodes + tuple(node for node in gone.nodes if node not in held),
-            current_a=kept.current_a if kept.current_a is not None else gone.current_a,
-            voltage_v=kept.voltage_v if kept.voltage_v is not None else gone.voltage_v,
-            preferred_side=(
-                kept.preferred_side if kept.preferred_side is not None else gone.preferred_side
-            ),
-        )
-        nets = tuple(merged if net.id == kept.id else net for net in doc.nets if net.id != gone.id)
-
-        def claimed(conductors: tuple[Conductor, ...]) -> tuple[Conductor, ...]:
-            if not any(c.net_id == gone.id for c in conductors):
-                return conductors
-            return tuple(
-                dataclasses.replace(c, net_id=kept.id) if c.net_id == gone.id else c
-                for c in conductors
-            )
-
-        return dataclasses.replace(
-            doc,
-            nets=nets,
-            conductors=claimed(doc.conductors),
-            boards=tuple(
-                dataclasses.replace(extra, conductors=claimed(extra.conductors))
-                if any(c.net_id == gone.id for c in extra.conductors)
-                else extra
-                for extra in doc.boards
-            ),
-        )
+        return _merged_nets(doc, gone, kept)
 
     def describe(self, p: MergeNetsPayload, doc: PerfDocument) -> str:
         gone = next((n for n in doc.nets if n.id == p.id), None)
@@ -4031,6 +4027,49 @@ class _MergeNets:
         return (
             f"Join net {gone.name if gone else p.id} into {kept.name if kept else p.into}"
         )
+
+
+def _merged_nets(doc: PerfDocument, gone: Net, kept: Net) -> PerfDocument:
+    """``gone`` joined into ``kept``, as ``net.merge`` and a wire drawn between them join
+    it: see ``_MergeNets``. A supply and its ground are refused."""
+    if shorts_supplies(gone.net_class, kept.net_class):
+        raise CommandError(
+            "two-supplies",
+            f"{gone.name} and {kept.name} are a supply and a ground: joining them would "
+            f"short one to the other. To move a single pin across, disconnect it from its "
+            f"net first.",
+        )
+    held = set(kept.nodes)
+    merged = dataclasses.replace(
+        kept,
+        nodes=kept.nodes + tuple(node for node in gone.nodes if node not in held),
+        current_a=kept.current_a if kept.current_a is not None else gone.current_a,
+        voltage_v=kept.voltage_v if kept.voltage_v is not None else gone.voltage_v,
+        preferred_side=(
+            kept.preferred_side if kept.preferred_side is not None else gone.preferred_side
+        ),
+    )
+    nets = tuple(merged if net.id == kept.id else net for net in doc.nets if net.id != gone.id)
+
+    def claimed(conductors: tuple[Conductor, ...]) -> tuple[Conductor, ...]:
+        if not any(c.net_id == gone.id for c in conductors):
+            return conductors
+        return tuple(
+            dataclasses.replace(c, net_id=kept.id) if c.net_id == gone.id else c
+            for c in conductors
+        )
+
+    return dataclasses.replace(
+        doc,
+        nets=nets,
+        conductors=claimed(doc.conductors),
+        boards=tuple(
+            dataclasses.replace(extra, conductors=claimed(extra.conductors))
+            if any(c.net_id == gone.id for c in extra.conductors)
+            else extra
+            for extra in doc.boards
+        ),
+    )
 
 
 class _ConnectPins:

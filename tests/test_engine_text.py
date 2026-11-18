@@ -461,7 +461,9 @@ def test_the_refusals_a_person_meets_are_said_in_turkish(turkish: None) -> None:
     a, b = net_a.nodes[0], net_b.nodes[0]
     path = (Point2(x=0, y=0), Point2(x=5, y=0))
     refusals = [
-        bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=SheetWire(a=a, b=b, path=path))),
+        # A wire between two nets joins them now (``_DrawSheetWire``); a pin to itself is
+        # still refused.
+        bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=SheetWire(a=a, b=a, path=path))),
         bus.dispatch("part.add", AddPartPayload(ref=first.ref, footprint_id="r-axial-3")),
         bus.dispatch(
             "component.move", MoveComponentPayload(id=first.id, anchor=HoleCoord(col=500, row=2))
