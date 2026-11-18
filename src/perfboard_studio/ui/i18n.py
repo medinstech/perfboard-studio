@@ -562,8 +562,13 @@ TURKISH: Mapping[str, str] = {
     "Cutting tracks": "Şerit kesiliyor",
     "click a hole, Esc ends": "bir deliğe tıklayın, Esc bitirir",
     "Measuring": "Ölçülüyor",
-    "click two holes": "iki deliğe tıklayın",
-    "from": "başlangıç",
+    "click the first hole, then the second: holes across, mm between centres, steps of "
+    "solder trace": (
+        "önce ilk deliğe, sonra ikinciye tıklayın: kaç delik, merkezler arası mm, kaç adım "
+        "lehim yolu"
+    ),
+    "click the second hole": "ikinci deliğe tıklayın",
+    "click two more holes to measure again": "yeniden ölçmek için iki deliğe daha tıklayın",
     "Esc ends": "Esc bitirir",
     "Adding pins to": "Pin ekleniyor:",
     "Enter or right-click finishes, Esc cancels": "Enter veya sağ tık bitirir, Esc iptal eder",

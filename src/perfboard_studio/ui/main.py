@@ -271,6 +271,7 @@ from perfboard_studio.geometry import (
     format_hole,
     hole_key,
     hole_span_mm,
+    is_inside_board,
     legend_label,
     path_length_mm,
     pin_hole,
@@ -2622,6 +2623,14 @@ def _erc_title(rule: str) -> str:
     return titles.get(rule, rule)
 
 
+def stray_copper(lvs: LvsResult) -> int:
+    """Islands of copper joined to no pin (LVS ``floating-conductor``): a run or a wire left
+    on empty holes. Counted as a warning on the drawer's bar and the Checks step -- listed
+    only in the tree's last group, a board with stray solder on it read "Matches the
+    circuit: 7 of 7 nets" and "No problems"."""
+    return sum(1 for issue in lvs.issues if issue.kind == "floating-conductor")
+
+
 def _lvs_title(kind: str) -> str:
     """The same, for an LVS finding's kind."""
     titles = {
@@ -2713,6 +2722,7 @@ def facts_from(
         ),
         drc_unwired=sum(1 for v in violations if v.rule in UNWIRED_RULES),
         lvs_problems=problems,
+        stray_copper=stray_copper(lvs) if lvs is not None else 0,
         erc_errors=sum(1 for f in erc_shown if f.severity == "error"),
         erc_warnings=sum(1 for f in erc_shown if f.severity == "warning"),
         lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
@@ -3213,6 +3223,8 @@ class MainWindow(QMainWindow):
         #: tool does.
         self._draw_problem = ""
         self._draw_hint = ""
+        #: What the measuring tool last said: the live span, or where to click.
+        self._measured = ""
         #: Where the conductor being drawn has got to ("F1 → F3 · 3 pads · LED_A"), "" for
         #: nothing drawn yet.
         self._draw_progress = ""
@@ -6819,7 +6831,14 @@ class MainWindow(QMainWindow):
         return banner.geometry().translated(self.view.viewport().pos())
 
     def on_draw_face(self, face: BoardSide) -> None:
-        """The Draw on choice, until the next flip."""
+        """Draw on, picked: the board turns to that face, since that is where the drawing
+        will be, and the face drawn on follows the turn (``_flip_board``). The face already
+        in view is already the one drawn on, unless Ctrl+F's turn has not caught up."""
+        if face != self.side:
+            self.act_draw_face[face].setChecked(True)
+            self.on_flip_board()
+            self._refresh_mode_banner()
+            return
         self.scene.set_draw_face(face)
         self.act_draw_face[face].setChecked(True)
         self._refresh_mode_banner()
@@ -7342,11 +7361,26 @@ class MainWindow(QMainWindow):
             return f"{t('Cutting tracks')}  ·  {t('click a hole, Esc ends')}"
 
         if self.scene.measure_armed:
+            # What to click, and then the answer itself, here at the top of the board: it was
+            # three numbers at the far end of the status bar, under a banner saying only
+            # "click two holes", and nobody could tell what the tool did.
             from_ = self.scene.measure_from()
-            where = (
-                f"{t('from')} {format_hole(from_, self.bus.system_document.board)}" if from_ is not None else t("click two holes")
-            )
-            return f"{t('Measuring')}  ·  {where}, {t('Esc ends')}"
+            live = self._measured
+            if from_ is not None:
+                start = format_hole(from_, self.scene.document.board)
+                said = (
+                    f"{live}  ·  {t('click the second hole')}"
+                    if live.startswith(f"{start} →")
+                    else live or start
+                )
+            elif self.scene.measurement:
+                said = f"{self.scene.measurement}  ·  {t('click two more holes to measure again')}"
+            else:
+                said = t(
+                    "click the first hole, then the second: holes across, mm between "
+                    "centres, steps of solder trace"
+                )
+            return f"{t('Measuring')}  ·  {said}  ·  {t('Esc ends')}"
 
         return ""
 
@@ -11693,10 +11727,12 @@ class MainWindow(QMainWindow):
             if v.severity == "warning" and v.rule not in waiting and not is_bench_check(v)
         )
         lvs_wrong = 0
+        stray = 0
         matched: int | None = None
         nets = 0
         if self._last_lvs is not None:
             s = self._last_lvs.summary
+            stray = stray_copper(self._last_lvs)
             lvs_wrong = (0 if "open" in waiting else s.opens) + (
                 0 if "short" in waiting else s.shorts
             )
@@ -11705,7 +11741,7 @@ class MainWindow(QMainWindow):
                 matched = s.matched_nets
         self.problems_bar.set_counts(
             errors=erc_errors + drc_errors + lvs_wrong,
-            warnings=erc_warns + drc_warns,
+            warnings=erc_warns + drc_warns + stray,
             to_wire=summarize(self._last_ratsnest).links,
             matched=matched,
             nets=nets,
@@ -11891,9 +11927,37 @@ class MainWindow(QMainWindow):
                 issue_refs = {p.component_ref for p in iss.pins}
                 issue_component_ids = tuple(c.id for c in self.bus.document.components if c.ref in issue_refs)
                 leaf.setData(0, ROLE_COMPONENT_IDS, issue_component_ids)
+                # Where it is, as a DRC finding says: a click frames it and the copper or
+                # the parts are selected. An LVS row used to select its parts and stay
+                # where the view was, and a stray island -- no part -- did nothing at all.
+                leaf.setData(0, ROLE_HOLES, self._lvs_holes(iss))
+                leaf.setData(0, ROLE_CONDUCTOR_IDS, iss.conductor_ids)
                 kind_item.addChild(leaf)
             kind_item.setExpanded(f"lvs:{kind}" in expanded)
         lvs_root.setExpanded("LVS" in expanded or not expanded)
+
+    def _lvs_holes(self, issue: LvsIssue) -> tuple[HoleCoord, ...]:
+        """The holes an LVS finding is about, on the board in front: its copper's and its
+        pins'."""
+        document = self.bus.document
+        conductors = {conductor.id: conductor for conductor in document.conductors}
+        holes = [
+            hole
+            for conductor_id in issue.conductor_ids
+            if (conductor := conductors.get(conductor_id)) is not None
+            for hole in conductor.path
+            if is_inside_board(hole, document.board)
+        ]
+        parts = {component.ref: component for component in document.components}
+        for pin in issue.pins:
+            component = parts.get(pin.component_ref)
+            footprint = self.lookup(component.footprint_id) if component is not None else None
+            if component is None or footprint is None:
+                continue
+            hole = pin_hole(component, footprint, pin.pin)
+            if hole is not None:
+                holes.append(hole)
+        return tuple(dict.fromkeys(holes))
 
     def _add_erc_findings(self, needle: str, expanded: set[str]) -> None:
         """The circuit's findings, as the tree's first group: the circuit comes before the
@@ -14434,12 +14498,10 @@ class MainWindow(QMainWindow):
         self._refresh_mode_banner()
 
     def _on_measured(self, text: str) -> None:
-        """The measurement, live, in the status bar. Timeout 0: it stays until it changes,
-        because it is being read off the screen while a part is held against the board."""
-        if text:
-            self.statusBar().showMessage(text, 0)
-        else:
-            self.statusBar().clearMessage()
+        """The measurement, live, in the banner over the board (``_mode_banner_text``),
+        where the eye already is while a part is held against the board."""
+        self._measured = text
+        self._refresh_mode_banner()
 
     def on_stop_tool(self) -> None:
         """Leave whatever mode the board is in. What Escape does, from anywhere.

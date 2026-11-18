@@ -1794,8 +1794,8 @@ def describe_span(a: HoleCoord, b: HoleCoord, board: Board) -> str:
         else f"{max(d_col, d_row) + 1} {t('holes')}"
     )
     return (
-        f"{format_hole(a, board)} → {format_hole(b, board)}   {span}   "
-        f"{t('{mm:.2f} mm apart').format(mm=mm)}   "
+        f"{format_hole(a, board)} → {format_hole(b, board)}  ·  {span}  ·  "
+        f"{t('{mm:.2f} mm apart').format(mm=mm)}  ·  "
         f"{counted(steps, t('{count} step by trace'), t('{count} steps by trace'))}"
     )
 
@@ -5326,6 +5326,8 @@ class BoardScene(QGraphicsScene):
         self._measure_armed = False
         self._measure_from: HoleCoord | None = None
         self._measure_item: PickedPinsItem | None = None
+        #: The last finished measurement (``describe_span``), until the next first click.
+        self.measurement = ""
         self._cut_armed = False
         #: Set when a mode consumed a right press, read and cleared by the view before it
         #: decides whether to offer a context menu. See take_consumed_right_click.
@@ -6405,6 +6407,10 @@ class BoardScene(QGraphicsScene):
     def _refresh_draw_preview(self, cursor: HoleCoord | None) -> None:
         if self._draw_preview is None:
             return
+        # Off the board there is no hole to draw to, and the ring the next click would take
+        # was drawn there anyway, red, over the empty canvas past the edge.
+        if cursor is not None and not is_inside_board(cursor, self.document.board):
+            cursor = None
         ok = cursor is None or self._step_is_legal(cursor)
         run = (
             self._step_to(cursor)
@@ -6647,6 +6653,7 @@ class BoardScene(QGraphicsScene):
             self.removeItem(self._measure_item)
             self._measure_item = None
         self._measure_from = None
+        self.measurement = ""
 
     def measure_click(self, at: HoleCoord) -> None:
         """Take the first hole, or finish the measurement at the second.
@@ -6660,6 +6667,7 @@ class BoardScene(QGraphicsScene):
             return
         if self._measure_from is None or self._measure_from == at:
             self._measure_from = at
+            self.measurement = ""
             if self._measure_item is None:
                 self._measure_item = PickedPinsItem(self.document.board, self.side)
                 self.addItem(self._measure_item)
@@ -6669,8 +6677,10 @@ class BoardScene(QGraphicsScene):
 
         if self._measure_item is not None:
             self._measure_item.set_holes([self._measure_from, at])
-        self.measured.emit(describe_span(self._measure_from, at, self.document.board))
+        # Finished before it is said, so whoever hears it sees a tool waiting for the next pair.
+        self.measurement = describe_span(self._measure_from, at, self.document.board)
         self._measure_from = None
+        self.measured.emit(self.measurement)
 
     # -- leaving whatever mode you are in ------------------------------------
 

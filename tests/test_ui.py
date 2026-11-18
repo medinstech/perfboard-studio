@@ -2759,6 +2759,141 @@ def test_going_to_a_part_selects_it_and_moves_the_view() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _stray_trace(window):
+    """Two pads joined with solder where nothing else is: no pin, no copper, no neighbour."""
+    from perfboard_studio.commands import AddConductorPayload, NewSolderTraceConductor
+    from perfboard_studio.geometry import all_pin_holes
+
+    document = window.bus.document
+    taken = {hole for conductor in document.conductors for hole in conductor.path}
+    for component in document.components:
+        footprint = window.lookup(component.footprint_id)
+        if footprint is not None:
+            taken.update(hole for _pin, hole in all_pin_holes(component, footprint))
+    board = document.board
+
+    def clear(col: int, row: int) -> bool:
+        return all(
+            HoleCoord(col + dc, row + dr) not in taken
+            for dc in (-1, 0, 1)
+            for dr in (-1, 0, 1)
+        )
+
+    for row in range(1, board.rows - 1):
+        for col in range(1, board.cols - 2):
+            if clear(col, row) and clear(col + 1, row):
+                path = (HoleCoord(col, row), HoleCoord(col + 1, row))
+                result = window.bus.dispatch(
+                    "conductor.add",
+                    AddConductorPayload(conductor=NewSolderTraceConductor(path=path)),
+                )
+                assert result.ok
+                return path
+    raise AssertionError("no two empty pads on the board")
+
+
+def test_stray_copper_is_a_warning_the_drawer_goes_to() -> None:
+    """A run on empty holes is joined to no pin. LVS said so, in the tree's last group only:
+    the drawer's bar and the Checks step counted opens and shorts, so the board read
+    "Matches the circuit: 7 of 7 nets" over solder nobody meant -- and the row, with no part
+    in it, did nothing when clicked."""
+    from perfboard_studio.ui.main import ROLE_CONDUCTOR_IDS, ROLE_HOLES
+    from perfboard_studio.ui.workflow import workflow_steps
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        warnings = window.problems_bar.warnings
+        check = next(s for s in workflow_steps(window.workflow_facts()) if s.key == "check")
+        path = _stray_trace(window)
+        stray = window.bus.document.conductors[-1].id
+
+        assert window.problems_bar.warnings == warnings + 1
+        assert window.workflow_facts().stray_copper == 1
+        after = next(s for s in workflow_steps(window.workflow_facts()) if s.key == "check")
+        assert after.summary != check.summary and after.status == check.status
+
+        leaf = None
+        for index in range(window.drc_tree.topLevelItemCount()):
+            root = window.drc_tree.topLevelItem(index)
+            for k in range(root.childCount()):
+                kind = root.child(k)
+                for j in range(kind.childCount()):
+                    if kind.child(j).data(0, ROLE_CONDUCTOR_IDS) == (stray,):
+                        leaf = kind.child(j)
+        assert leaf is not None, "the island is a row of its own"
+        assert set(leaf.data(0, ROLE_HOLES)) == set(path)
+        window._on_drc_item_clicked(leaf, 1)
+        assert window.scene.conductor_items[stray].isSelected()
+    finally:
+        _close(window)
+
+
+def test_no_ring_is_drawn_where_there_is_no_hole() -> None:
+    """The draw tools' ring for the next click followed the pointer off the board and was
+    drawn there in red, over the canvas past the edge, where nothing can be drawn."""
+    doc = _example_document("ne555-astable")
+    scene = BoardScene(doc, footprint_lookup(), side="top")
+    scene.arm_drawing("solder-trace")
+    preview = scene._draw_preview
+    assert preview is not None
+
+    scene.hover_at(view2d.hole_to_screen(HoleCoord(2, 1), doc.board, "top"))
+    assert preview.next_hole == HoleCoord(2, 1) and preview.next_ok
+    scene.hover_at(view2d.hole_to_screen(HoleCoord(5, -1), doc.board, "top"))
+    assert preview.next_hole is None
+
+
+def test_picking_the_face_to_draw_on_turns_the_board_to_it() -> None:
+    """Draw on: Solder Side while looking at the component side turns the board over, as
+    Ctrl+F does, since that is where the drawing will be; the face already in view does
+    nothing."""
+    from perfboard_studio.model import has_component_side_copper
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        assert has_component_side_copper(window.bus.document.board)
+        window.act_draw["solder-trace"].trigger()
+        assert window.side == "top" and window.scene.draw_face == "top"
+
+        window.act_draw_face["bottom"].trigger()
+        assert window.side == "bottom"
+        assert window.scene.draw_face == "bottom"
+        assert window.act_draw_face["bottom"].isChecked()
+
+        window.act_draw_face["bottom"].trigger()
+        assert window.side == "bottom"
+
+        window.act_draw_face["top"].trigger()
+        assert window.side == "top" and window.scene.draw_face == "top"
+    finally:
+        _close(window)
+
+
+def test_the_measuring_banner_says_what_to_click_and_then_the_answer() -> None:
+    """The answer was three numbers at the far end of the status bar, under a banner that
+    said only "click two holes"."""
+    window = _window_on(_load_dense())
+    try:
+        banner = window.view.mode_banner
+        window.act_measure.setChecked(True)
+        assert "click the first hole, then the second" in banner.text()
+        assert "mm between centres" in banner.text()
+
+        window.scene.measure_click(HoleCoord(1, 1))
+        assert "B2" in banner.text() and "click the second hole" in banner.text()
+
+        window.scene.measure_click(HoleCoord(1, 5))
+        said = banner.text()
+        assert "B2 → B6" in said and "5 holes" in said and "10.16 mm" in said
+        assert "click two more holes to measure again" in said
+        assert "Esc ends" in said
+
+        window.act_measure.setChecked(False)
+        assert banner.isHidden() or "Measuring" not in banner.text()
+    finally:
+        _close(window)
+
+
 def test_measuring_reports_three_different_distances() -> None:
     """They are three answers, not one rounded three ways: holes across is what a
     footprint is written in, mm is what a lead-bending jig is set to, and steps is how
@@ -14825,9 +14960,16 @@ def test_the_findings_and_the_status_bar_colour_a_finding_by_one_rule() -> None:
             bar = window.problems_bar
             erc_errors = sum(1 for f in window._last_erc if f.severity == "error")
             erc_warnings = len(window._last_erc) - erc_errors
-            assert bar.warnings == counted[WARNING.lower()] + erc_warnings, (state, counted)
-
             lvs = _findings_root(window, "LVS")
+            # Copper joined to no pin: an amber row of its own under LVS, and a warning.
+            stray = sum(
+                int(lvs.child(row).text(1))
+                for row in range(lvs.childCount())
+                if lvs.child(row).toolTip(0) == "floating-conductor"
+                and lvs.child(row).foreground(0).color().name() == WARNING.lower()
+            )
+            assert bar.warnings == counted[WARNING.lower()] + erc_warnings + stray, (state, counted)
+
             colours = {}
             for row in range(lvs.childCount()):
                 group = lvs.child(row)
@@ -21774,11 +21916,11 @@ def test_solder_on_an_outside_finger_is_drawn_on_the_finger_in_2d() -> None:
         _close(window)
 
 
-def test_what_is_drawn_goes_on_the_face_in_view_and_draw_on_overrides_it_until_a_flip() -> None:
+def test_what_is_drawn_goes_on_the_face_in_view_and_draw_on_turns_the_board_to_its_face() -> None:
     """On a board with pads on both faces, what is drawn goes on the face being looked at,
     and Ctrl+F turns the drawing over with the view. Draw on, under the banner while a run
-    or an insulated wire is armed, picks the other face until the next flip, and the banner
-    names the face. An insulated wire on the component side is laid as a top jumper, corners
+    or an insulated wire is armed, turns the board to the face picked, since that is where
+    the drawing will be, and the banner names the face. An insulated wire on the component side is laid as a top jumper, corners
     and all; a bare wire stays under the board, and the banner says so. A run on the other
     face is not carried on from its end, and a board with pads on one face has no choice to
     make."""
@@ -21859,18 +22001,20 @@ def test_what_is_drawn_goes_on_the_face_in_view_and_draw_on_overrides_it_until_a
         window.scene.draw_click(HoleCoord(5, 4))
         assert window.scene.continuing is None
         window.on_draw_mode("solder-trace", False)
-        # Draw on picks the face not in view, and the banner says so...
+        # Draw on picks the face not in view: the board turns to it, and the tool stays.
         window.on_draw_mode("solder-trace", True)
         window.act_draw_face["top"].trigger()
-        assert window.scene.solder_draw_face == "top"
-        assert on_top in window._mode_text() and far in window._mode_text()
+        assert (window.scene.side, window.scene.solder_draw_face) == ("top", "top")
+        assert window.scene.armed_draw_kind == "solder-trace"
+        assert on_top in window._mode_text() and far not in window._mode_text()
         assert draw(window, "solder-trace", HoleCoord(2, 12), HoleCoord(5, 12)).side == "top"
-        # ...until the next flip, which chooses the face again.
-        window.on_flip_board()
-        window.on_flip_board()
+        # The face already in view turns nothing; the other one turns it back.
+        window.on_draw_mode("solder-trace", True)
+        window.act_draw_face["top"].trigger()
+        assert window.scene.side == "top"
+        window.act_draw_face["bottom"].trigger()
         assert (window.scene.side, window.scene.draw_face) == ("bottom", "bottom")
         assert window.act_draw_face["bottom"].isChecked()
-        window.on_draw_mode("solder-trace", True)
         assert far not in window._mode_text()
     finally:
         _close(window)

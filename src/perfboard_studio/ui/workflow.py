@@ -70,6 +70,9 @@ class WorkflowFacts:
     drc_warnings: int
     #: LVS opens and shorts: the board is not the circuit.
     lvs_problems: int
+    #: Islands of copper joined to no pin (``main.stray_copper``): a warning on the Checks
+    #: step, never holding it back. Copper nobody meant is still solder on the board.
+    stray_copper: int = 0
     #: ERC errors: the circuit itself cannot work as drawn (``erc.py``). Warnings are
     #: counted for the step's line and never hold it back.
     erc_errors: int = 0
@@ -414,7 +417,9 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     if facts.parts_on_board == 0:
         checked = t("nothing to check yet")
     else:
-        warnings = facts.drc_warnings - (0 if route_done else facts.drc_unwired)
+        warnings = (
+            facts.drc_warnings - (0 if route_done else facts.drc_unwired) + facts.stray_copper
+        )
         errors = _counted(
             facts.drc_errors + lvs_errors, t("{count} error"), t("{count} errors")
         )
