@@ -3976,11 +3976,17 @@ PIN_ROLES: dict[str, str] = {
     # is "io".
     "lm35": "pwr out gnd",
     "tmp36": "pwr out gnd",
+    # TODO before landing: DQ is the 1-Wire data line, bidirectional; re-read against Maxim's DS18B20
+    # sheet on analog.com (it did not load from here).
     "ds18b20": "gnd io pwr",
     "a3144": "pwr gnd out",
     "ss49e": "pwr gnd out",
+    # Aosong DHT22 sheet: pin 2 DATA is the single bus MCU and sensor both talk on, pin 3 NC; the
+    # DHT11 has the same four pins (its own sheet not read).
     "dht11": "pwr io nc gnd",
     "dht22": "pwr io nc gnd",
+    # HC-SR04 sheet (SparkFun copy of the maker's): Trig is the trigger pulse input, Echo the
+    # echo pulse output.
     "hc-sr04": "pwr in out gnd",
     "hc-sr501": "pwr out gnd",
     "tsop38238": "out gnd pwr",
@@ -3989,31 +3995,48 @@ PIN_ROLES: dict[str, str] = {
     "ttp223-touch": "gnd pwr out",
     "ssd1306-i2c-gnd-vcc": "gnd pwr in io",
     "ssd1306-i2c-vcc-gnd": "pwr gnd in io",
+    # TODO before landing: the backpack's pins are the I2C slave's by name only; no maker sheet read.
     "lcd-1602-i2c": "gnd pwr io in",
-    # Hitachi HD44780 pin table: RS, R/W and E are inputs, DB0-DB7 bidirectional, VO the contrast
-    # voltage (a trimmer's wiper: "passive"); A and K are the backlight LED's supply and return.
+    # Hitachi HD44780U sheet: RS, R/W and E are inputs, DB0-DB7 bidirectional tri-state. VO (the
+    # contrast voltage, a trimmer's wiper: "passive") and A/K (the backlight LED's supply and
+    # return) are the module's, not the chip's: TODO before landing, a module maker's pin table.
     "lcd-1602": "gnd pwr pas in in in io io io io io io io io pwr gnd",
-    # MPU-6050: XDA/XCL are the auxiliary I2C master's data and clock, AD0 the address bit,
-    # INT an output.
+    # InvenSense PS-MPU-6000A-00 rev 3.2 pin table (University of Pennsylvania's host of the
+    # maker's PDF; invensense.tdk.com no longer serves it): AUX_DA "I2C master serial data" and
+    # AUX_CL "I2C master serial clock, for connecting to external sensors" (the board calls them
+    # XDA and XCL), AD0 "I2C slave address LSB", INT "interrupt digital output".
     "gy-521": "pwr gnd in io io out in out",
     "gy-bme280": "pwr gnd in io",
     "gy-bmp280": "pwr gnd in io in io",
     "gy-bme280-3v3": "pwr gnd in io in io",
-    # Adafruit's BME280/BMP280 boards: 3Vo is the 3.3 V their regulator gives, SCK is the SPI
-    # clock or I2C SCL, SDI the SPI data in or I2C SDA, SDO the SPI data out or the I2C address.
+    # Bosch BME280 and BMP280 sheets: SCK is the SPI clock or I2C SCL, SDI the SPI data input or
+    # (bidirectional, open drain) I2C SDA, SDO the SPI data output or the I2C address bit -- so
+    # SDI and SDO are "io". On Adafruit's boards 3Vo is the 3.3 V their regulator gives.
     "adafruit-bme280": "pwr pwr-out gnd in io io in",
     "adafruit-bmp280": "pwr pwr-out gnd in io io in",
     "adafruit-bmp280-stemma-qt": "pwr pwr-out gnd in io io in",
     "adafruit-aht20": "pwr gnd in io",
-    # INA219: VIN+ and VIN- are the two ends of the shunt the load current passes through.
+    # TI INA219 pin table: IN+ and IN- are "Analog Input", the two ends of the shunt the load
+    # current passes through: "passive" here, as the shunt is a conductor between them.
     "adafruit-ina219": "pwr gnd in io pas pas",
     "adafruit-ina219-stemma-qt": "pwr gnd in io pas pas",
+    # Nordic nRF24L01+ product spec pin table: CE, CSN, SCK and MOSI are digital inputs, MISO and
+    # IRQ digital outputs.
     "nrf24l01": "gnd pwr in in in in out out",
+    # TODO before landing: DIO is the data line the chip both reads and drives; no maker sheet read.
     "tm1637-display": "in io pwr gnd",
     "max7219-matrix": "pwr gnd in in in",
-    # MFRC522: the board's SDA is the SPI chip select and the I2C data line, so "io".
-    "rc522-module": "pwr in gnd out out in in io",
+    # NXP MFRC522 sheet, read from nxp.com: pin 24 SDA/NSS/RX is NSS, "SPI signal input", in SPI
+    # mode -- which is how these boards are wired, so "in" (it is I/O only as I2C SDA). In SPI
+    # mode SCK and MOSI are inputs and MISO the output ("SPI master in, slave out"); the sheet
+    # types MOSI and MISO "I/O" because they are other things in other modes. IRQ is an output,
+    # NRSTPD (the board's RST) an input.
+    "rc522-module": "pwr in gnd out out in in in",
     # Stepper drivers: the motor coils are outputs, VMOT the motor supply and VDD the logic's.
+    # Allegro A4988 terminal list: STEP, DIR, MS1-3, RESET, SLEEP and ENABLE are "Logic input",
+    # OUT1A/1B/2A/2B outputs, VDD "Logic supply", VBB "Load supply" (the board's VMOT). TI DRV8825
+    # pin functions: STEP, DIR, MODE0-2, nENBL, nRESET, nSLEEP are I, nFAULT OD (open drain), the
+    # A/B outputs O, VMx the motor supply.
     "pololu-a4988": "in pwr in gnd in out in out in out in out in pwr in gnd",
     "pololu-drv8825": "in pwr in gnd in out in out in out in out in out in gnd",
     # Vishay 6N137 pin configuration: 1 NC, 2 anode, 3 cathode, 4 NC, 5 GND, 6 VO, 7 VE (enable
