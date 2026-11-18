@@ -69,9 +69,10 @@ closed without a bump.
   arrow for a part, which is now moved by its body.
 - **Install and Restart, on Windows.** When a newer release is out, the header shows an
   "Update 0.25.0" pill and Home opens with a card at the top saying which version it is and
-  what changed, with the one button that does what comes next. While Home is in front the
-  strip over the board does not say it a second time; leaving Home brings it back, and a
-  download's progress, a file landed or a failure still show over Home. On a copy installed with the
+  what changed, with the one button that does what comes next. While Home is in front, its
+  update card is the only notice: it shows the download's progress, the file once it is
+  downloaded and checked, and a failed or refused install with the button to try again; the
+  strip across the window comes back when you leave Home. On a copy installed with the
   Windows installer, once the download's checksum has matched, the strip offers Install and
   Restart: it asks about unsaved work as closing the window does, checks the file again,
   runs the installer silently behind Windows' own administrator prompt, and the installer
