@@ -35,11 +35,18 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, replace
+from typing import Literal, TypeAlias
 
 from .model import PartSymbol, PerfDocument, PinNames
 from .system import references_in_use
+
+# STUB until model.py carries them (reach's commit after the 0.25 tag): the same names, so
+# this import is the only line that changes.
+PinRole: TypeAlias = Literal[  # noqa: UP040
+    "power", "power-out", "ground", "in", "out", "io", "passive", "nc"
+]
+type PinRoles = tuple[tuple[str, PinRole], ...]
 
 #: What a part is, for grouping a list of them. Engine text; the interface translates the
 #: group headings itself.
@@ -101,6 +108,12 @@ class CatalogPart:
     summary: str
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    #: What each lead DOES, for the functional symbol an IC or module is drawn as on the
+    #: sheet: supplies on top, grounds at the bottom, inputs left, outputs right. Pin
+    #: number -> role, in pin order. A part has a role for every pin or none at all --
+    #: empty is "not verified", and the sheet draws the numbered box it always did.
+    #: Filled from ``PIN_ROLES`` below, one table so a batch reads in one place.
+    pin_roles: PinRoles = ()
     #: What goes on the bill. Empty means the name.
     value: str = ""
     #: The reference letter, when the package's own would be wrong -- a 7805 is a TO-220
@@ -439,6 +452,11 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "NPN, 40 V, 600 mA, switching (plastic TO-92, sold as PN2222A)",
                 _legs("E", "B", "C"), "npn", source=f"onsemi P2N2222A/D; {_TO92_ORDER}",
                 check="The metal-can (TO-18) 2N2222 is pinned differently. " + _CHECK_LEGS),
+    CatalogPart("2n5088", "2N5088", "transistor", "to92", "NPN, 30 V, 50 mA, low noise, high gain",
+                _legs("E", "B", "C"), "npn",
+                source=f"onsemi 2N5088/D, Central Semiconductor 2N5088 (1 Emitter, 2 Base, "
+                       f"3 Collector); {_TO92_ORDER}",
+                check=_CHECK_LEGS),
     CatalogPart("2n3904", "2N3904", "transistor", "to92", "NPN, 40 V, 200 mA, general purpose",
                 _legs("E", "B", "C"), "npn", source=f"onsemi 2N3903/D; {_TO92_ORDER}",
                 check=_CHECK_LEGS),
@@ -3819,6 +3837,60 @@ CATALOG: tuple[CatalogPart, ...] = (
                 aliases=("joystick", "thumb", "analog stick", "kumanda")),
 )
 
+#: What each lead of a part DOES, one string per part, one word per pin in pin order. Read
+#: from the maker's pin-function table and cross-checked against KiCad 10's symbol of the
+#: same part; a part whose roles are not verified is simply absent, and keeps its numbered
+#: box on the sheet. ``pwr`` is a supply the part takes, ``pwr-out`` one it gives, ``pas``
+#: a lead that is analogue, a reference or a divider tap rather than a signal in or out.
+#: Where this table and KiCad differ, the maker's datasheet is followed and the difference
+#: is said in the part's own ``source``.
+_ROLE_WORDS: dict[str, PinRole] = {
+    "pwr": "power", "pwr-out": "power-out", "gnd": "ground", "in": "in", "out": "out",
+    "io": "io", "pas": "passive", "nc": "nc",
+}
+PIN_ROLES: dict[str, str] = {
+    # TI NE555 pin functions. KiCad 10 Timer:NE555D agrees on every pin but one: CONT is
+    # passive there too (a bypass capacitor sits on it, and it is no signal input). DISCH
+    # differs ON PURPOSE: KiCad types it "input", TI's table says O -- it is an open
+    # collector that pulls the timing node low, and the sheet should draw it with the outputs.
+    "ne555": "gnd in out in pas in out pwr",
+    # Microchip ATmega328P. KiCad 10 (ATmega48PV-10P, which ATmega328P-P extends) types every
+    # port pin bidirectional, and so do these. Differs ON PURPOSE on three pins: RESET is "in"
+    # and XTAL1/XTAL2 are "in"/"out" (KiCad makes all three bidirectional, as the PC6/PB6/PB7
+    # ports they can be configured as): this catalogue names them for the functions a board
+    # uses them for, a reset line and an oscillator. KiCad also types the second GND "passive"
+    # where it is a ground; AREF is "passive" in both.
+    "atmega328p": ("in io io io io io pwr gnd in out io io io io io io io io io pwr pas gnd "
+                   "io io io io io io"),
+    # Arduino Nano v3 schematic, KiCad 10 MCU_Module:Arduino_Nano_v3.x. Agrees on VIN (in),
+    # GND, both RESET pins (in), 3V3 and +5V (power_out) and every D pin. +5V is the regulated
+    # rail an on-board regulator gives and the examples feed their relay and sensors from; it
+    # can also be fed from outside, but that is the unusual way round, so it is a supply the
+    # part gives. Differs ON PURPOSE on A6/A7 (KiCad: bidirectional; the 328P gives them no
+    # digital function, so "in") and AREF (KiCad: input; the reference pin of the chip is
+    # "passive" in the ATmega's own symbol too, and it can be driven or left to the chip).
+    "arduino-nano": ("io pwr io gnd in in gnd pwr-out io in io in io io io io io io io io io "
+                     "io io io io pas io pwr-out io io"),
+    # No KiCad symbol: a generic one-channel relay board, its three pins as its maker prints
+    # them (VCC, GND, IN).
+    "relay-module-1ch": "pwr gnd in",
+}
+
+
+def _with_roles(part: CatalogPart) -> CatalogPart:
+    words = PIN_ROLES.get(part.id)
+    if words is None:
+        return part
+    return replace(
+        part,
+        pin_roles=tuple(
+            (number, _ROLE_WORDS[word])
+            for (number, _), word in zip(part.pin_names, words.split(), strict=True)
+        ),
+    )
+
+
+CATALOG = tuple(_with_roles(part) for part in CATALOG)
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}
 
 

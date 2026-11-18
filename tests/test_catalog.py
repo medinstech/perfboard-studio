@@ -1623,3 +1623,41 @@ def test_a_turkish_beginners_word_finds_the_package(typed, found) -> None:
 )
 def test_a_turkish_beginners_word_finds_the_catalog_part(typed, found) -> None:
     assert found in {part.id for part in search_catalog(typed)}
+
+
+def test_a_part_has_a_role_for_every_pin_or_none() -> None:
+    """The sheet never guesses: a part's roles are all there or not there at all, on the
+    pin numbers its names are on."""
+    from perfboard_studio.catalog import PIN_ROLES
+
+    assert set(PIN_ROLES) <= {part.id for part in CATALOG}, "a roles row names no part"
+    for part in CATALOG:
+        if not part.pin_roles:
+            continue
+        assert part.pin_names, f"{part.id} has roles and no pin names"
+        assert [n for n, _ in part.pin_roles] == [n for n, _ in part.pin_names], part.id
+
+
+def test_the_roles_of_the_first_batch_read_as_the_datasheet_does() -> None:
+    def roles(part_id: str) -> dict[str, str]:
+        part = catalog_part(part_id)
+        assert part is not None
+        return {name: role for (_, name), (_, role) in zip(part.pin_names, part.pin_roles, strict=True)}
+
+    ne555 = roles("ne555")
+    assert ne555["VCC"] == "power" and ne555["GND"] == "ground"
+    assert (ne555["TRIG"], ne555["THR"], ne555["RESET"]) == ("in", "in", "in")
+    assert (ne555["OUT"], ne555["DIS"], ne555["CTRL"]) == ("out", "out", "passive")
+    mega = roles("atmega328p")
+    assert (mega["VCC"], mega["AVCC"], mega["GND"]) == ("power", "power", "ground")
+    assert (mega["RESET"], mega["XTAL1"], mega["XTAL2"], mega["AREF"]) == ("in", "in", "out", "passive")
+    assert all(mega[f"PC{n}"] == "io" for n in range(6))
+    nano = roles("arduino-nano")
+    assert (nano["VIN"], nano["+5V"], nano["3V3"]) == ("power", "power-out", "power-out")
+    assert (nano["A6"], nano["A7"], nano["A0"]) == ("in", "in", "io")
+
+
+def test_a_part_whose_roles_are_not_verified_has_none() -> None:
+    for part_id in ("bc547", "tact-6x6", "jst-xh-2", "ds3231-rtc"):
+        part = catalog_part(part_id)
+        assert part is not None and part.pin_roles == (), part_id
