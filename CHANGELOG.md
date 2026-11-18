@@ -22,6 +22,19 @@ closed without a bump.
 
 ### Added
 
+- **A wire drawn between two nets joins them.** On the sheet, a wire from a pin on one net
+  to a pin on another was refused, so once two pins were wired nothing more could be drawn
+  between them. Now it joins the two nets, as a label with another net's name already did:
+  the net that says more stays -- a supply or ground over a signal, a chosen name over an
+  automatic N3 -- and the undo label and the status line say what joined what ("Wire R2.1
+  to R3.1, joining N1 into RESET"). One Ctrl+Z separates them again. A supply and its
+  ground are still refused, and moving the end of a drawn wire onto another net's pin
+  still is: that is about where a wire goes, not about the circuit.
+- **Home is one click away once a board is open.** Home › in the header, File ▸ Home or
+  Alt+Home. The board stays open, and Continue or Esc on Home goes back to it.
+- **3D Play rings the two end holes of a wire or solder run while it is laid**: an amber
+  ring on the first and last hole from the first frame, pulsing until the run has landed,
+  then fading over a fifth of a second while Play moves on to the next step.
 - **A label with another net's name joins that net.** Labelling a wire or a pin VCC or GND
   is how most schematics put it on VCC or GND, and on a wire that was already on a net the
   label refused ("disconnect it first"). Now the wire's whole net joins the one named, as
@@ -361,6 +374,34 @@ closed without a bump.
 
 ### Changed
 
+- **A sheet drawn for you looks the same after your first edit.** The first change to a
+  sheet drawn for you turns it into a hand-drawn one, and that used to redraw it: symbols
+  moved onto the grid and their wires were laid again, every ground and supply changed
+  shape, and net names moved, 13 of them across four of the examples. The sheet drawn for
+  you now keeps every symbol on the grid, draws each ground and supply at its pin as the
+  hand-drawn sheet does, and both kinds name a net by one rule, over its longest level run,
+  so the first edit moves no symbol, no wire, no rail and no name.
+- **A ground points down and a supply up, at its pin.** A ground or supply runs out of its
+  pin along the pin's row and turns, down to a ground's bars or up to a supply's bar with
+  its name beside it, wherever the pin is on the symbol. They used to run to a lane of their
+  own between two rows of parts. The sheets drawn for you come out a fifth to a third wider
+  for it, so on a big board more net names wait for a closer zoom: 17 of 39 on
+  atmega328-relay in an 820 × 710 panel, where 11 did.
+- **The board's tool rail shows every tool.** The two solder traces, then the three wires,
+  each on its own button and key, with a hairline between kinds. The conductor groups are
+  gone, along with their chevron, right-click and press-and-hold. A tool's name pill now
+  also says in a line what it lays. On a solderless breadboard the solder tools and bare
+  wire leave the rail, and the empty run's hairline goes with them.
+- **Both Faces | This Face in the board's corner pill** switches whether the copper on the
+  far face is drawn through the board; before, this was only a tick in View ▸ Show on the
+  Board. "This Face" is whichever face is in front, so it turns with Ctrl+F. On a
+  solderless breadboard it is not shown, since nothing is ever on the far face. In a view
+  too narrow for the whole pill, its Show button gives up its word first and then the
+  switch goes; the setting is still in Show ▾ and the View menu.
+- **Ctrl+F turns the board over where you can see it**: a quarter-second turn about the
+  middle of the view, so which edge went where is plain. A second press lands it at once.
+- **On a narrow window the header's search becomes a magnifier**, so the step bar keeps the
+  name of the step you are on.
 - **Home is laid out anew.** A sidebar holds New Circuit and Open… and lists the page's
   places -- Home, Recent, Examples, Tour -- lighting the one you have scrolled to. The board
   you opened last stands in a banner with its picture, its six steps and what to do next,
@@ -465,6 +506,21 @@ closed without a bump.
 
 ### Fixed
 
+- **A wire on a sheet drawn for you can end on another wire's middle.** The T was looked
+  for only on wires already drawn by hand, so on an example's sheet the click put a corner
+  there and the wire went on. Now the wire takes the T, and one Ctrl+Z puts the sheet drawn
+  for you back.
+- **Selecting a part on the sheet keeps its supply and ground their own colour.** A lit net
+  turned blue, so selecting the regulator turned +5V and GND blue with it. A lit net keeps
+  its colour, drawn heavier on a glow of the accent.
+- **A net's name on the sheet no longer covers a ground or supply, or runs off the edge.**
+  Held at a readable size zoomed out, XTAL1's name covered U1's ground on the ATmega board,
+  and RELAY_DRIVE printed as "ELAY_DRIVE" at the left edge. Such a name tries on its wire,
+  then under it, and otherwise waits for a closer zoom.
+- **The line to a connection still to make points at the nearest copper.** A wire whose end
+  was dragged off a pad drew its dashed line from the pad to the far pad the wire still
+  reaches. Now it is drawn to the wire's free end, or to the nearest hole along a solder run.
+  The count of connections left is unchanged.
 - **The Turkish window no longer calls a part without a value worthless.** It was
   "değersiz" on the Circuit step and in the Library's placing hint, which reads as
   "worthless"; it is "değer eksik", a value missing. The check's line for parts not yet on
@@ -499,11 +555,10 @@ closed without a bump.
   English.
 - **One Ctrl+Z takes back the first edit of an example sheet.** The first change to a wire
   on a sheet drawn for you -- dragging the middle of a wire on atmega328-relay, say -- turns
-  it into a hand-drawn sheet: rails become short stubs at their pins and names move. That was
-  its own undo step, so one Ctrl+Z took back the edit and left the changed drawing on the
-  screen, and it took a second to get the sheet back. The edit and the change to a hand-drawn
-  sheet are now one step, and the status line says once that the sheet is drawn by hand from
-  now on.
+  it into a hand-drawn sheet, which then still redrew it. That was its own undo step, so one
+  Ctrl+Z took back the edit and left the changed drawing on the screen, and it took a second
+  to get the sheet back. The edit and the change to a hand-drawn sheet are now one step, and
+  the status line says once that the sheet is drawn by hand from now on.
 - **A label on the board is no longer edited by a drag of something else.** A label whose
   offset from its hole was off the quarter-millimetre step it snaps to -- both of the
   nano-relay example's -- counted as moved from the moment it was drawn, so every drag of a
