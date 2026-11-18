@@ -20,6 +20,15 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Changed
+
+- **The sheet names a wire only where its name tells you something.** Every wired net's
+  name was printed over its longest run, so the relay example printed 39 names, most of
+  them saying nothing the wire did not. A net drawn as a wire is now named where it
+  reaches a connector, a jack, a battery or a part off the board. Every other wire's name
+  is shown while its net is lit, and the exports leave it out. Names written at a pin are
+  unchanged.
+
 ## [0.25.0] - 2026-11-18
 
 ### Added

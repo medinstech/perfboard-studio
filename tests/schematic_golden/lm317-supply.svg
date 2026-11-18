@@ -94,6 +94,4 @@
 <text x="22.86" y="64.993" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">3</text>
 <text x="16.002" y="72.771" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VIN</text>
 <text x="13.462" y="37.211" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VOUT</text>
-<text x="16.002" y="75.311" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">ADJ</text>
-<text x="168.402" y="72.771" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">LED_A</text>
 </svg>

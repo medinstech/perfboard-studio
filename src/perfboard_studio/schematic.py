@@ -66,7 +66,7 @@ import heapq
 import itertools
 import math
 from collections import defaultdict, deque
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -390,6 +390,10 @@ class SchematicDrawing:
     junctions: tuple[Junction, ...] = ()
     no_connects: tuple[NoConnect, ...] = ()
     labels: tuple[Label, ...] = ()
+    #: The name of each net drawn as a wire that ``labels`` does not name, with the net it
+    #: belongs to: placed like the rest, and drawn by the panel only while that net is lit
+    #: (``_worth_naming``). Never printed: the exports read ``labels`` alone.
+    quiet_names: tuple[tuple[NetId, Label], ...] = ()
     #: Captions and boxes, in both kinds of sheet. Nothing derives anything from them.
     annotations: tuple[Annotation, ...] = ()
     width: Mm = 0.0
@@ -1556,11 +1560,41 @@ def _net_label_at(
     return Point2(x=best, y=above)
 
 
+#: The symbols where a circuit leaves the board: what is wired to one of these is a name
+#: somebody outside the board -- the cable, the panel, the next board -- goes by.
+_WHERE_THE_BOARD_ENDS: frozenset[SymbolKind] = frozenset({"connector", "jack", "battery"})
+
+
+def _worth_naming(net_pins: Sequence[tuple[str, SymbolPin]], symbols: Mapping[str, _Placed]) -> bool:
+    """Whether a net drawn as a wire has its name printed over it.
+
+    ONLY WHERE THE NAME SAYS SOMETHING THE WIRE DOES NOT. A wire already says which pins
+    are joined; its name adds something only where the net leaves the board, at a header,
+    a terminal, a jack or a part off the board, because there the name is what the cable
+    and the other end are called. Every other wired net was named over its longest run
+    too, and a sheet that names every wire reads nothing like KiCad's, where a net carries
+    a label only where somebody put one: 39 names on atmega328-relay. A name
+    held back is not lost: the panel prints it while its net is lit (``quiet_names``), and a
+    net said by name at its pins is said there as before, because there the name IS the
+    connection.
+    """
+    for ref, _ in net_pins:
+        placed = symbols.get(ref)
+        if placed is None:
+            continue
+        if placed.kind in _WHERE_THE_BOARD_ENDS:
+            return True
+        if placed.footprint_id is not None and placed.footprint_id.startswith("wire-"):
+            return True
+    return False
+
+
 def _name_nets(
     nets: Sequence[Net],
     runs_of: Sequence[Wire],
     obstacles: list[tuple[Point2, Point2]],
-) -> list[Label]:
+    worth: Callable[[Net], bool] = lambda net: True,
+) -> tuple[list[Label], list[tuple[NetId, Label]]]:
     """Each net's name, once, over its longest level run -- ONE RULE FOR BOTH KINDS OF SHEET.
 
     The derived sheet used to name a net over its trunk and the hand-drawn one over the
@@ -1575,6 +1609,11 @@ def _name_nets(
 
     ``runs_of`` is the wires a net may be named over: not a stub a name is said at, which
     is named already. ``obstacles`` is everything else in the way and grows by each name.
+
+    Only a net ``worth`` naming is printed (``_worth_naming``); the rest are placed after
+    all of those, by the same rule, and handed back apart as the names the panel shows
+    while their net is lit. They do not grow ``obstacles``: one net is lit at a time, and
+    a printed name must not move for a name nobody sees.
     """
     levels: dict[NetId, list[tuple[Mm, Mm, Mm]]] = {}
     for wire in runs_of:
@@ -1583,8 +1622,7 @@ def _name_nets(
                 levels.setdefault(wire.net_id, []).append(
                     (round(start.y, 6), min(start.x, end.x), max(start.x, end.x))
                 )
-    labels: list[Label] = []
-    for net in nets:
+    def longest(net: Net) -> tuple[Mm, Mm, Mm] | None:
         merged: list[tuple[Mm, Mm, Mm]] = []
         for y, x0, x1 in sorted(levels.get(net.id, ())):
             if merged and merged[-1][0] == y and x0 <= merged[-1][2] + 1e-9:
@@ -1592,12 +1630,27 @@ def _name_nets(
             else:
                 merged.append((y, x0, x1))
         if not merged:
+            return None
+        return min(merged, key=lambda run: (-(run[2] - run[1]), run[0], run[1]))
+
+    labels: list[Label] = []
+    quiet: list[tuple[NetId, Label]] = []
+    for net in nets:
+        run = longest(net) if worth(net) else None
+        if run is None:
             continue
-        y, x0, x1 = min(merged, key=lambda run: (-(run[2] - run[1]), run[0], run[1]))
+        y, x0, x1 = run
         at = _net_label_at(net.name, (x0, x1), y, obstacles)
         labels.append(Label(text=net.name, at=at, kind="net", anchor="left"))
         obstacles.extend(_box_obstacle(_label_box(net.name, at.x, at.y)))
-    return labels
+    for net in nets:
+        run = None if worth(net) else longest(net)
+        if run is None:
+            continue
+        y, x0, x1 = run
+        at = _net_label_at(net.name, (x0, x1), y, obstacles)
+        quiet.append((net.id, Label(text=net.name, at=at, kind="net", anchor="left")))
+    return labels, quiet
 
 
 def _names_in_the_way(
@@ -2503,13 +2556,14 @@ def _hand_drawn_sheet(
     ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
     part_labels = _part_labels(ordered, options)
     rail_names = _rail_names(rails)
-    net_labels.extend(
-        _name_nets(
-            [item.net for item in resolved if not item.rail],
-            drawn_wires,
-            _names_in_the_way(wires, rails, part_labels, rail_names, net_labels),
-        )
+    pins_of = {item.net.id: item.pins for item in resolved}
+    named, quiet_names = _name_nets(
+        [item.net for item in resolved if not item.rail],
+        drawn_wires,
+        _names_in_the_way(wires, rails, part_labels, rail_names, net_labels),
+        lambda net: _worth_naming(pins_of[net.id], symbols),
     )
+    net_labels.extend(named)
 
     # -- dots where three or more ends of one net meet, and at every T ------
     junctions = tuple(sorted(
@@ -2539,6 +2593,7 @@ def _hand_drawn_sheet(
         junctions=junctions,
         no_connects=tuple(no_connects),
         labels=(*part_labels, *rail_names, *net_labels),
+        quiet_names=tuple(quiet_names),
         annotations=annotations,
         width=width,
         height=height,
@@ -3145,13 +3200,14 @@ def _derived_sheet(
 
     rail_names = _rail_names(rails)
     net_labels.extend(pin_names)
-    net_labels.extend(
-        _name_nets(
-            [item.net for item in resolved if not item.rail],
-            [wire for wire in wires if not any(wire is stub for stub in said_stubs)],
-            _names_in_the_way(wires, rails, part_labels, rail_names, pin_names),
-        )
+    pins_of = {item.net.id: item.pins for item in resolved}
+    printed, quiet_names = _name_nets(
+        [item.net for item in resolved if not item.rail],
+        [wire for wire in wires if not any(wire is stub for stub in said_stubs)],
+        _names_in_the_way(wires, rails, part_labels, rail_names, pin_names),
+        lambda net: _worth_naming(pins_of[net.id], symbols),
     )
+    net_labels.extend(printed)
 
     drawn = tuple(
         Symbol(
@@ -3177,6 +3233,7 @@ def _derived_sheet(
         junctions=tuple(junctions),
         no_connects=tuple(no_connects),
         labels=(*part_labels, *rail_names, *net_labels),
+        quiet_names=tuple(quiet_names),
         annotations=annotations,
         width=width,
         height=height,

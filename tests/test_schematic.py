@@ -28,6 +28,7 @@ would call a change and coarse enough to absorb a last-ULP disagreement between 
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import difflib
 import itertools
@@ -402,14 +403,16 @@ def test_a_name_with_no_room_above_its_wire_goes_under_it() -> None:
     above a longer lead, and the one name left under its wire is relay-and-supply's
     PWR_LED."""
     drawing = build_schematic(load(EXAMPLES_DIR / "relay-and-supply.perf"), REGISTRY)
+    # PWR_LED is a name held back for a lit net (``_worth_naming``), placed by the same rule.
+    every = [*drawing.labels, *(label for _, label in drawing.quiet_names)]
     moved = {
         label.text
-        for label in drawing.labels
+        for label in every
         if label.kind == "net"
         and _own_run_beside(label, drawing, -(NET_LABEL_CLEARANCE_MM + NET_LABEL_MM))
     }
     assert "PWR_LED" in moved
-    for label in drawing.labels:
+    for label in every:
         if label.kind == "net" and label.text == "PWR_LED":
             box = net_label_box(label)
             assert not any(
@@ -1411,6 +1414,8 @@ def dump(drawing: SchematicDrawing) -> str:
         lines.append(
             f"label [{label.kind}/{label.anchor}] {label.at.x:.2f},{label.at.y:.2f} {label.text}"
         )
+    for net_id, label in drawing.quiet_names:
+        lines.append(f"quiet {net_id} {label.at.x:.2f},{label.at.y:.2f} {label.text}")
     for note in drawing.notes:
         lines.append(f"note {note}")
     return "\n".join(lines) + "\n"
@@ -1791,7 +1796,8 @@ def test_a_freeze_moves_no_name(path: Path) -> None:
     longest wire somebody drew, each with different things kept out of its way, so the
     first click on a sheet moved 13 names on four of the examples that nobody had touched.
     Both name every net by one rule now (``_name_nets``): every net's name, and every name
-    said at a pin, is where it was."""
+    said at a pin, is where it was -- the printed ones and the ones held back for a lit net
+    alike."""
     doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
     derived = build_schematic(doc, REGISTRY)
     drawn = build_schematic(_frozen(doc, derived), REGISTRY)
@@ -1799,8 +1805,53 @@ def test_a_freeze_moves_no_name(path: Path) -> None:
     def names(drawing: SchematicDrawing) -> list[Label]:
         return sorted((label for label in drawing.labels if label.kind == "net"), key=repr)
 
-    assert names(derived)
+    def quiet(drawing: SchematicDrawing) -> list[tuple[str, Label]]:
+        return sorted(drawing.quiet_names, key=repr)
+
+    assert names(derived) or quiet(derived)
     assert names(drawn) == names(derived)
+    assert quiet(drawn) == quiet(derived)
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+@pytest.mark.parametrize("frozen", [False, True], ids=["derived", "frozen"])
+def test_a_wire_is_named_only_where_the_board_ends(path: Path, frozen: bool) -> None:
+    """Every wired net was named over its longest run, so atmega328-relay printed 39 names
+    and a wire's name said nothing the wire did not. A net drawn as a wire has its name
+    printed only where it reaches a connector, a jack, a cell or a part off the board, and
+    every other wired net's name is held back for the panel to show while the net is lit.
+    Names said at a pin are untouched: there the name is the connection."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    drawing = build_schematic(doc, REGISTRY)
+    if frozen:
+        drawing = build_schematic(_frozen(doc, drawing), REGISTRY)
+    kinds = {symbol.ref: symbol for symbol in drawing.symbols}
+
+    def leaves(net: Net) -> bool:
+        return any(
+            kinds[node.component_ref].kind in ("connector", "jack", "battery")
+            or (kinds[node.component_ref].footprint_id or "").startswith("wire-")
+            for node in net.nodes
+            if node.component_ref in kinds
+        )
+
+    by_name = {net.name: net for net in doc.nets}
+    held = {by_name[label.text].id for _, label in drawing.quiet_names}
+    assert all(not leaves(by_name[label.text]) for _, label in drawing.quiet_names)
+    assert all(net_id == by_name[label.text].id for net_id, label in drawing.quiet_names)
+    said = collections.Counter(label.text for label in drawing.labels if label.kind == "net")
+    for name, count in said.items():
+        # Printed once over a wire where the board ends, or said at two pins or more.
+        assert leaves(by_name[name]) or count > 1, name
+        assert by_name[name].id not in held, name
+
+
+def test_a_name_held_back_is_not_printed() -> None:
+    """The exports read ``labels`` alone: a name held for a lit net never reaches paper."""
+    drawing = build_schematic(load(EXAMPLES_DIR / "atmega328-relay.perf"), REGISTRY)
+    held = {label.text for _, label in drawing.quiet_names}
+    assert {"Q1_BASE", "COIL", "LED_A", "VRAW"} <= held
+    assert not held & {label.text for label in drawing.labels}
 
 
 @pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)

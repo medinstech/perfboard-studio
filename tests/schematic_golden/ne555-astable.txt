@@ -96,8 +96,8 @@ label [pin/centre] 58.42,69.72 5
 label [rail/left] 68.53,51.45 VCC
 label [rail/right] 88.95,59.07 VCC
 label [rail/right] 182.93,56.53 VCC
-label [net/left] 13.46,77.85 OUT
-label [net/left] 168.40,93.09 LED_A
-label [net/left] 13.46,37.21 THRESH
-label [net/left] 79.50,39.75 DISCH
-label [net/left] 79.50,93.09 CTRL
+quiet net-2 13.46,77.85 OUT
+quiet net-4 168.40,93.09 LED_A
+quiet net-5 13.46,37.21 THRESH
+quiet net-6 79.50,39.75 DISCH
+quiet net-7 79.50,93.09 CTRL

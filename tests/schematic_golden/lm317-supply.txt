@@ -105,5 +105,5 @@ label [pin/left] 26.67,63.50 IN
 label [pin/centre] 22.86,64.64 3
 label [net/left] 16.00,72.77 VIN
 label [net/left] 13.46,37.21 VOUT
-label [net/left] 16.00,75.31 ADJ
-label [net/left] 168.40,72.77 LED_A
+quiet net-4 16.00,75.31 ADJ
+quiet net-5 168.40,72.77 LED_A

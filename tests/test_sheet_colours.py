@@ -32,6 +32,39 @@ def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])  # type: ignore[return-value]
 
 
+def test_a_lit_net_says_its_name_where_the_sheet_does_not() -> None:
+    """A wired net's name the sheet holds back (``schematic._worth_naming``) is drawn while
+    the net is lit, so clicking a wire or a part on it says what it is called."""
+    document = persist.deserialize_document(EXAMPLE.read_text(encoding="utf-8")).document
+    drawing = build_schematic(document, footprint_lookup())
+    assert drawing.quiet_names
+    net_id, label = drawing.quiet_names[0]
+    said: list[str] = []
+    original = viewsch.draw_flag_label
+
+    def spy(painter, at, text, *args, **kwargs):  # type: ignore[no-untyped-def]
+        said.append(text)
+        return original(painter, at, text, *args, **kwargs)
+
+    viewsch.draw_flag_label = spy  # type: ignore[assignment]
+    try:
+        view = viewsch.SchematicView()
+        view.set_drawing(drawing)
+        item = view.item
+        assert item is not None
+        for lit in (False, True):
+            said.clear()
+            item.set_highlight([], {net_id} if lit else set())
+            image = QImage(400, 300, QImage.Format.Format_RGB32)
+            painter = QPainter(image)
+            painter.scale(2.0, 2.0)
+            item.paint(painter, QStyleOptionGraphicsItem(), None)
+            painter.end()
+            assert (label.text in said) == lit
+    finally:
+        viewsch.draw_flag_label = original  # type: ignore[assignment]
+
+
 def _distance(a: QColor, b: QColor) -> int:
     return abs(a.red() - b.red()) + abs(a.green() - b.green()) + abs(a.blue() - b.blue())
 

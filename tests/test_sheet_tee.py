@@ -116,7 +116,8 @@ def test_a_tee_joins_its_pin_to_the_net_of_the_wire_it_lands_on() -> None:
     # And R3.1 is drawn, so it gets no stub and no name of its own at the pin: every run
     # on the sheet is a drawn wire, and the net is named once, over its wire.
     assert all(wire.ends is not None for wire in drawing.wires)
-    assert [label.text for label in drawing.labels if label.kind == "net"] == [net.name]
+    # Named once, held back for a lit net: it reaches no connector (``_worth_naming``).
+    assert [label.text for _, label in drawing.quiet_names] == [net.name]
 
 
 def test_a_tee_round_trips_and_a_sheet_without_one_is_written_as_it_was() -> None:

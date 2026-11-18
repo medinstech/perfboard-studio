@@ -1543,6 +1543,25 @@ derived one as one segment. On the NE555 two names moved for it, CTRL and LED_A,
 a trunk one pin wide to the longer lead of the part it comes from.
 `test_a_freeze_moves_no_name` holds every name through a freeze.
 
+**A wire's name is printed only where the board ends** (`schematic._worth_naming`). Every
+wired net used to be named over its longest run, so atmega328-relay printed 39 names and
+most said nothing the wire did not: a wire already says which pins are joined. In KiCad a
+net carries a label only where somebody put one. Now a net
+drawn as a wire has its name printed where it reaches a connector, a jack, a cell or a part
+off the board -- there the name is what the cable and the other end go by -- and every
+other wired net's name is placed by the same rule, after the printed ones and in nobody's
+way, and handed back apart (`SchematicDrawing.quiet_names`). The panel draws it while its
+net is lit, so a click on a wire or a part still says what the wire is called; the exports
+never print it. A net said by name at its pins (a big chip's, or one nobody drew a wire
+for) is untouched, because there the name IS the connection. On the examples: atmega328-relay
+39 → 35, nano-relay 12 → 9, relay-and-supply 15 → 10, ne555-astable 5 → 0, lm317-supply
+4 → 2. The ATmega board moves least because 30 of its names are said at U1's pins. Wiring
+the nets that join U1 only to its support parts (crystal, reset, a base resistor) was tried
+and dropped: on today's grid layout those parts sit cells away, and XTAL1 ran round half the
+sheet. That waits for the layout to put a support part beside its pin.
+`test_a_wire_is_named_only_where_the_board_ends` holds the rule on both kinds of sheet, and
+`test_a_lit_net_says_its_name_where_the_sheet_does_not` the panel's half.
+
 **The panel draws the sheet for a screen; the export draws it for paper.** `viewsch`
 puts a net's name on a flag, outlines text in the paper's colour, fills a symbol's body
 with a tint (`BODY_FILL`) and leaves out a pin's name and number while the pins are
@@ -1585,8 +1604,9 @@ panel opens it at. And a name by a pin at the left edge ran off the sheet and pr
 wire's end is on most schematics, then under it, and otherwise waits for a closer zoom like
 any label that would land on another. Every label is held inside the sheet the same way
 (`label_places`' `bounds`). The cost is names: on the ATmega board at that zoom 17 of 39 net
-names wait for a closer look, where 11 did with rails in lanes, because the sheet is wider
-and so fitted smaller; nano-relay 1 of 12 (1), relay-and-supply 6 of 15 (1).
+names waited for a closer look, where 11 did with rails in lanes, because the sheet is wider
+and so fitted smaller; nano-relay 1 of 12 (1), relay-and-supply 6 of 15 (1). With a wire's
+name printed only where the board ends, 16 of 35, 1 of 9 and 3 of 10.
 `test_zoomed_out_no_name_covers_a_rail_or_leaves_the_sheet` holds both on both kinds of sheet.
 
 **Past a fan-out, a net is said by name at its pins on the derived sheet too.** A net

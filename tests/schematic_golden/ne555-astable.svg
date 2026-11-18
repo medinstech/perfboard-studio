@@ -88,9 +88,4 @@
 <text x="68.529" y="51.45" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
 <text x="88.951" y="59.07" font-size="1.3" fill="#111111" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
 <text x="182.931" y="56.53" font-size="1.3" fill="#111111" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
-<text x="13.462" y="77.851" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">OUT</text>
-<text x="168.402" y="93.091" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">LED_A</text>
-<text x="13.462" y="37.211" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">THRESH</text>
-<text x="79.502" y="39.751" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">DISCH</text>
-<text x="79.502" y="93.091" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">CTRL</text>
 </svg>
