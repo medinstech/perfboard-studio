@@ -3911,6 +3911,8 @@ PIN_ROLES: dict[str, str] = {
     # KiCad types RESET, PB3, PB4 and PB0 bidirectional (they are ports as well); RESET is
     # "in" here for the reason the ATmega328P's is.
     "attiny85": "in io io gnd io io io pwr",
+    # TODO before landing: re-read against analog.com's DS1307.pdf (it did not load from here;
+    # this is from distributor copies of the Maxim sheet).
     # X1/X2 are the two ends of a 32.768 kHz crystal: "passive", where KiCad has two inputs --
     # the datasheet gives no direction (X1 alone takes an external oscillator, X2 then floats).
     # SQW/OUT is open drain and needs a pull-up (datasheet; KiCad: open_collector), "out".
@@ -3918,7 +3920,8 @@ PIN_ROLES: dict[str, str] = {
     # TI ULN2003A pin table: 1B-7B I (Darlington bases), 1C-7C O (collectors), COM "--" (the
     # flyback diodes' common cathode, wired to the load's supply): "passive", as KiCad.
     "uln2003a": "in in in in in in in gnd pas out out out out out out out",
-    # Maxim/Analog MAX485 pin description: RO receiver output, ~RE receiver output enable and DE
+    # TODO before landing: re-read against analog.com's MAX1487-MAX491.pdf (it did not load
+    # from here; this is from distributor copies of Maxim's sheet). MAX485 pin description: RO receiver output, ~RE receiver output enable and DE
     # driver output enable (both inputs), DI driver input, A and B the driver outputs and the
     # receiver inputs at once, so "io".
     "max485": "out in in in gnd io io pwr",
