@@ -14947,6 +14947,10 @@ class MainWindow(QMainWindow):
             self.view.zoom_by(factor)
 
     def on_flip_board(self) -> None:
+        """The other face, with the board seen turning over (``BoardView.turn_over``)."""
+        self.view.turn_over(self._flip_board)
+
+    def _flip_board(self) -> None:
         # The view stays on the same PART of the board. The scene is mirrored about the
         # hole span's midpoint, so the point under the middle of the viewport has to be
         # mirrored with it -- otherwise a flip while zoomed in on the left edge showed the

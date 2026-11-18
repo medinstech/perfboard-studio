@@ -25,12 +25,23 @@ from __future__ import annotations
 import contextlib
 import math
 from collections import Counter
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import replace
 from functools import lru_cache
 from typing import Any, NamedTuple, cast
 
-from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QMimeData,
+    QPoint,
+    QPointF,
+    QRect,
+    QRectF,
+    Qt,
+    QVariantAnimation,
+    Signal,
+)
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -7824,6 +7835,77 @@ MIN_SCALE = 1.5
 MAX_SCALE = 90.0
 
 
+class FlipCurtain(QWidget):
+    """The board turning over (``BoardView.turn_over``): the face seen before, pictured,
+    turning edge-on about the middle of the view, and the face after turning in from
+    edge-on -- as a hand turns a board over to solder it.
+
+    The scene under it is ALREADY the other face. The curtain is two pictures and a
+    quarter of a second; it takes no click and changes nothing, so a click while it turns
+    lands on the board as it now is."""
+
+    done = Signal()
+
+    #: How far the eye is from the board, in widths of the view: the perspective of the
+    #: turn, enough to read as turning rather than squeezing.
+    EYE_DISTANCE = 2.5
+
+    def __init__(
+        self, viewport: QWidget, before: QPixmap, after: QPixmap, ms: int, background: QColor
+    ) -> None:
+        super().__init__(viewport)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setGeometry(viewport.rect())
+        self._before = before
+        self._after = after
+        self._background = background
+        self._turn = 0.0
+        self._over = False
+        animation = QVariantAnimation(self)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.setDuration(ms)
+        animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        animation.valueChanged.connect(self._on_turn)
+        animation.finished.connect(self.finish)
+        self._animation = animation
+        animation.start()
+
+    def _on_turn(self, value: object) -> None:
+        self._turn = float(cast(float, value))
+        self.update()
+
+    def finish(self) -> None:
+        """Land: the board as it now is, and the curtain gone. Once."""
+        if self._over:
+            return
+        self._over = True
+        self._animation.stop()
+        self.hide()
+        self.deleteLater()
+        self.done.emit()
+
+    def paintEvent(self, event: object) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self._background)
+        angle = 180.0 * self._turn
+        picture = self._before if angle < 90.0 else self._after
+        tilt = angle if angle < 90.0 else angle - 180.0
+        half_w, half_h = self.width() / 2.0, self.height() / 2.0
+        turned = QTransform()
+        turned.translate(half_w, half_h)
+        turned.rotate(tilt, Qt.Axis.YAxis, self.width() * self.EYE_DISTANCE)
+        turned.translate(-half_w, -half_h)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.setTransform(turned)
+        painter.drawPixmap(0, 0, picture)
+        # Darker as it goes edge-on, the way a face turned from the light is.
+        painter.resetTransform()
+        shade = QColor(0, 0, 0, round(70 * math.sin(math.radians(angle))))
+        painter.fillRect(self.rect(), shade)
+        painter.end()
+
+
 class ViewOverlay(QLabel):
     """A line of text pinned over the board itself.
 
@@ -7982,7 +8064,57 @@ class BoardView(QGraphicsView):
         #: Where a dragged part is going and what is in the way. Styled as the mode banner,
         #: and under it when a mode is up too.
         self.drag_banner = ViewOverlay(self.viewport(), "modeBanner")
+        #: The board turning over, while it does (``turn_over``).
+        self._curtain: FlipCurtain | None = None
         self.viewport().installEventFilter(self)
+
+    # -- turning the board over -----------------------------------------------
+
+    #: How long the board takes to turn over, in milliseconds.
+    FLIP_MS = 260
+
+    def turn_over(self, turn: Callable[[], None]) -> None:
+        """Run ``turn`` -- which shows the other face -- with the board seen turning over
+        about the middle of the view (``FlipCurtain``).
+
+        The solder side is the component side's mirror image, and that is what a beginner
+        loses track of: the picture jumped, and which edge had gone where was a puzzle. The
+        turn says it. The scene flips at once, under the curtain, so nothing waits on the
+        animation; a press while it is turning lands it and flips straight back."""
+        curtain = self._curtain
+        if curtain is not None:
+            curtain.finish()
+        viewport = self.viewport()
+        if curtain is not None or not viewport.isVisible() or viewport.width() < 2:
+            turn()
+            return
+        before = self._frame()
+        turn()
+        after = self._frame()
+        curtain = FlipCurtain(viewport, before, after, self.FLIP_MS, BACKGROUND)
+        curtain.done.connect(self._curtain_down)
+        # Under the banners: "Measuring" and its kind stay readable through the turn.
+        curtain.lower()
+        curtain.show()
+        self._curtain = curtain
+
+    def _curtain_down(self) -> None:
+        self._curtain = None
+
+    def _frame(self) -> QPixmap:
+        """The board as the view shows it now, without the view's own overlays."""
+        viewport = self.viewport()
+        ratio = viewport.devicePixelRatioF()
+        pixmap = QPixmap(round(viewport.width() * ratio), round(viewport.height() * ratio))
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(BACKGROUND)
+        painter = QPainter(pixmap)
+        painter.setRenderHints(self.renderHints())
+        self.render(
+            painter, QRectF(0, 0, viewport.width(), viewport.height()), viewport.rect()
+        )
+        painter.end()
+        return pixmap
 
     # -- a part dropped from the sheet ---------------------------------------
 

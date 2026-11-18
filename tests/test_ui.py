@@ -13355,6 +13355,42 @@ def test_the_search_gives_up_its_words_before_the_step_bar_gives_up_the_step(mon
         _close(window)
 
 
+def test_ctrl_f_turns_the_board_over_where_it_can_be_seen(monkeypatch) -> None:
+    """The dev3 sitting asked whether the flip should be seen happening: the solder side is
+    the component side's mirror image, and with the picture simply replaced, which edge
+    had gone where was a puzzle. Ctrl+F turns the board over in a quarter of a second --
+    over a scene ALREADY on the other face, so nothing waits on it -- and a second press
+    while it turns lands it and flips straight back, with no turn of its own."""
+    from PySide6.QtCore import QElapsedTimer
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui.view2d import FlipCurtain
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        view = window.view
+        window.on_flip_board()
+        curtain = view._curtain
+        assert isinstance(curtain, FlipCurtain) and curtain.isVisible()
+        assert window.side == "bottom" and window.scene.side == "bottom", "flipped at once"
+        assert curtain.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        assert curtain.geometry() == view.viewport().rect()
+
+        window.on_flip_board()  # again, while it turns
+        assert view._curtain is None and window.scene.side == "top"
+
+        window.on_flip_board()
+        assert view._curtain is not None
+        clock = QElapsedTimer()
+        clock.start()
+        while view._curtain is not None and clock.elapsed() < 3000:
+            QApplication.processEvents()
+        assert view._curtain is None, "the curtain goes once it has turned"
+        assert window.scene.side == "bottom"
+    finally:
+        _close(window)
+
+
 def test_new_circuit_from_home_over_a_board_asks_about_it_first(monkeypatch) -> None:
     """At a start the window is already on an empty design and New Circuit only opens the
     sheet. Over a board left open, it would have put the new circuit's first part into
