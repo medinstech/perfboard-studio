@@ -447,6 +447,7 @@ src/perfboard_studio/            the engine: document model, command bus, connec
 src/perfboard_studio/guide.py    the soldering guide, and guide_export.py for HTML/CSV/JSON
 src/perfboard_studio/schematic.py  the sheet, drawn from the netlist until somebody draws it,
                            and schematic_export.py for the SVG the PDF and PNG come from
+src/perfboard_studio/schsymbols.py  what each part looks like on the sheet, drawn unturned
 src/perfboard_studio/boardfit.py which stock board to buy, by building the design on each
 src/perfboard_studio/step_export.py  the board as STEP solids, the bodies DRC measured
 src/perfboard_studio/stripboard.py  the board whose copper arrives joined, and striproute.py

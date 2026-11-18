@@ -1460,6 +1460,16 @@ from a test that hands it a document; two sheets are frozen whole in
 `tests/schematic_golden/` (`PERFBOARD_STUDIO_BLESS_SCHEMATIC=1`), for the reason
 `test_guide_golden` exists.
 
+**What a symbol looks like is `schsymbols.py`, and only `schematic.py` imports it.** A body
+is a builder `(pins, footprint) -> SymbolBody` in `schsymbols.BUILDERS`, drawn unturned:
+its origin is the top-left, everything lies inside its width and height in whole grid
+steps, every pin's free end is on the 2.54 mm grid (the first edit freezes a sheet by
+snapping every symbol to the grid, so a pin off it would move), and it holds no text but
+pin names. Turning, mirroring, placing, wiring and naming stay in `schematic.py`, which
+re-exports what the window, the exporter and the tests have always read from it. The
+split is a seam, so the bodies can be redrawn without touching the layout, and it moved
+nothing: both schematic goldens kept every byte.
+
 ## Two kinds of sheet, and the document decides which
 
 **The sheet used to be a picture you could look at and not draw**, and the reason given for

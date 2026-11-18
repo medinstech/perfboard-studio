@@ -59,8 +59,6 @@ from perfboard_studio.model import (
     SymbolPlacement,
 )
 from perfboard_studio.schematic import (
-    _KIND_BY_ARCHETYPE,
-    _SYMBOL_BUILDERS,
     DEFAULT_SCHEMATIC_OPTIONS,
     GRID_MM,
     LEAD_MM,
@@ -85,11 +83,8 @@ from perfboard_studio.schematic import (
     SymbolKind,
     _net_name_box,
     _part_label_box,
-    _PinSpec,
     _rail_at_pin,
-    _relay_sides,
     _split_tall_layers,
-    _switch_poles,
     _text_width,
     build_schematic,
     pin_at,
@@ -100,6 +95,13 @@ from perfboard_studio.schematic import (
     symbol_at,
     symbol_kind_for,
     wires_as_drawn,
+)
+from perfboard_studio.schsymbols import (
+    _KIND_BY_ARCHETYPE,
+    BUILDERS,
+    PinSpec,
+    _relay_sides,
+    _switch_poles,
 )
 from perfboard_studio.system import circuit_parts
 
@@ -1026,8 +1028,8 @@ def test_both_legs_of_a_switch_pole_are_drawn_and_meet() -> None:
     pair have to arrive at one point, or somebody wires across a pair that is already
     shorted and wonders why the switch does nothing."""
     real = standard_footprints()["sw-tactile"]
-    body = _SYMBOL_BUILDERS["switch"](
-        tuple(_PinSpec(number=pin.number, name=pin.name) for pin in real.pins), real
+    body = BUILDERS["switch"](
+        tuple(PinSpec(number=pin.number, name=pin.name) for pin in real.pins), real
     )
 
     assert [(pin.number, pin.side) for pin in body.pins] == [
@@ -1166,7 +1168,7 @@ def test_every_body_archetype_maps_to_a_symbol() -> None:
 
 
 def test_every_symbol_kind_has_a_builder() -> None:
-    assert set(get_args(SymbolKind)) == set(_SYMBOL_BUILDERS)
+    assert set(get_args(SymbolKind)) == set(BUILDERS)
 
 
 def test_every_symbol_kind_is_reachable_from_the_registry_or_deliberately_is_not() -> None:

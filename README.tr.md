@@ -449,6 +449,7 @@ src/perfboard_studio/            motor: doküman modeli, komut veri yolu, bağla
 src/perfboard_studio/guide.py    lehimleme rehberi; HTML/CSV/JSON için guide_export.py
 src/perfboard_studio/schematic.py  şema sayfası, biri çizene kadar netlist'ten çizilir; PDF
                            ve PNG'nin üretildiği SVG için schematic_export.py
+src/perfboard_studio/schsymbols.py  her parçanın şemadaki çizimi, döndürülmeden
 src/perfboard_studio/boardfit.py hangi hazır kartın alınacağı, tasarım her birinde kurularak
 src/perfboard_studio/step_export.py  STEP katıları olarak kart: DRC'nin ölçtüğü gövdeler
 src/perfboard_studio/stripboard.py  bakırı baştan bağlı gelen kart; striproute.py onun üstünde
