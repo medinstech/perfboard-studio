@@ -29,6 +29,7 @@ from perfboard_studio.commands import (
     AddPartPayload,
     AddPartsPayload,
     AddSheetNotePayload,
+    AddSheetPortPayload,
     ApplyBoardPresetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
@@ -39,14 +40,17 @@ from perfboard_studio.commands import (
     DeleteNetPayload,
     DeletePartPayload,
     DeleteSheetNotesPayload,
+    DeleteSheetPortsPayload,
     DeleteSheetWiresPayload,
     DisconnectPinsPayload,
     DrawSheetWirePayload,
     ImportNetlistPayload,
+    LinkSheetPortPayload,
     LockComponentsPayload,
     MirrorComponentPayload,
     MirrorComponentsPayload,
     MoveComponentPayload,
+    MoveSheetPortPayload,
     MoveSymbolsPayload,
     PartPlacement,
     PlacePartsPayload,
@@ -67,7 +71,14 @@ from perfboard_studio.commands import (
     create_standard_registry,
 )
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.model import HoleCoord, NetNode, Point2, SheetWire, SymbolPlacement
+from perfboard_studio.model import (
+    HoleCoord,
+    NetNode,
+    Point2,
+    PortLink,
+    SheetWire,
+    SymbolPlacement,
+)
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.ui.engine_text import TEMPLATES, say
@@ -337,6 +348,43 @@ def _session() -> list[str]:
     run(
         "sheet.note.delete",
         DeleteSheetNotesPayload(ids=tuple(n.id for n in bus.document.sheet_notes)),
+    )
+    # A ground on a pin, a supply and a name put down on bare sheet, a pin wired to one,
+    # each moved and taken off: every way a port is described.
+    def stub(ref: str, pin: str) -> PortLink:
+        return PortLink(
+            pin=NetNode(ref, pin), path=(Point2(10.16, 10.16), Point2(10.16, 15.24))
+        )
+
+    run("part.add", AddPartPayload(ref="R20", footprint_id="r-axial-3"))
+    run("part.add", AddPartPayload(ref="R21", footprint_id="r-axial-3"))
+    run(
+        "sheet.port.add",
+        AddSheetPortPayload(
+            kind="ground", name="GND", at=Point2(10.16, 15.24), links=(stub("R20", "1"),)
+        ),
+    )
+    run(
+        "sheet.port.add",
+        AddSheetPortPayload(
+            kind="supply",
+            name="+5V",
+            at=Point2(20.32, 5.08),
+            links=(stub("R21", "1"), stub("R21", "2")),
+        ),
+    )
+    run("sheet.port.add", AddSheetPortPayload(kind="label", name="CLK", at=Point2(30.48, 5.08)))
+    ports = {port.kind: port.id for port in bus.document.sheet_ports}
+    run("sheet.port.link", LinkSheetPortPayload(id=ports["label"], link=stub("R20", "2")))
+    run("sheet.port.move", MoveSheetPortPayload(id=ports["ground"], at=Point2(12.7, 17.78)))
+    run("sheet.port.move", MoveSheetPortPayload(id=ports["supply"], at=Point2(22.86, 5.08)))
+    run("sheet.port.move", MoveSheetPortPayload(id=ports["label"], at=Point2(33.02, 5.08)))
+    run("sheet.port.delete", DeleteSheetPortsPayload(ids=(ports["label"],)))
+    run("sheet.port.delete", DeleteSheetPortsPayload(ids=(ports["ground"],), cut=True))
+    run("sheet.port.add", AddSheetPortPayload(kind="ground", name="GND", at=Point2(5.08, 5.08)))
+    run(
+        "sheet.port.delete",
+        DeleteSheetPortsPayload(ids=tuple(port.id for port in bus.document.sheet_ports)),
     )
 
     # The board itself.

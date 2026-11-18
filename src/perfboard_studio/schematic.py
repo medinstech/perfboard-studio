@@ -83,8 +83,11 @@ from .model import (
     Rotation,
     SchematicPart,
     SheetNoteKind,
+    SheetPort,
+    SheetPortKind,
     SheetWire,
     SymbolPlacement,
+    net_named,
     pin_name_of,
     pin_roles_misfit,
     roles_misfit_phrase,
@@ -295,6 +298,21 @@ class Rail:
     path: tuple[Point2, ...]
     at: Point2
     direction: Literal["down", "up"]
+    #: The id of the ``SheetPort`` this glyph draws, when somebody put it down; None for
+    #: the glyph the sheet draws at a pin nothing else is wired at.
+    port: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PlacedPort:
+    """Where a port somebody put down is on the drawing, for a click to find it: its glyph
+    or its name, as ``box`` (x0, y0, x1, y1, sheet millimetres)."""
+
+    id: str
+    kind: SheetPortKind
+    name: str
+    at: Point2
+    box: tuple[Mm, Mm, Mm, Mm]
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,6 +415,10 @@ class SchematicDrawing:
     #: belongs to: placed like the rest, and drawn by the panel only while that net is lit
     #: (``_worth_naming``). Never printed: the exports read ``labels`` alone.
     quiet_names: tuple[tuple[NetId, Label], ...] = ()
+    #: The ports somebody put on a hand-drawn sheet (``SheetPort``), each drawn as a rail or
+    #: a net's name in ``rails`` and ``labels`` like any other; this is where a click finds
+    #: one. Empty on the sheet drawn for you.
+    ports: tuple[PlacedPort, ...] = ()
     #: Captions and boxes, in both kinds of sheet. Nothing derives anything from them.
     annotations: tuple[Annotation, ...] = ()
     width: Mm = 0.0
@@ -2520,10 +2542,22 @@ def _hand_drawn_sheet(
             stalled = True
         waiting = still
 
-    # -- and a name, or a rail glyph, on everything else ---------------------
-    drawn_wires = list(wires)
+    # -- the ports somebody put down, and the wires to them --------------------
     rails: list[Rail] = []
     net_labels: list[Label] = []
+    port_rails, port_labels, port_wires, ports = _ports_drawn(doc, symbols, drawn_pins)
+    rails.extend(port_rails)
+    net_labels.extend(port_labels)
+    wires.extend(port_wires)
+    # A net somebody named with a label is named where they put it, and nowhere else.
+    labelled = {
+        net.id
+        for port in doc.sheet_ports
+        if port.kind == "label" and (net := net_named(doc.nets, port.name)) is not None
+    }
+
+    # -- and a name, or a rail glyph, on everything else ---------------------
+    drawn_wires = list(wires)
     outs = _rail_outs(
         symbols,
         [
@@ -2569,7 +2603,7 @@ def _hand_drawn_sheet(
     rail_names = _rail_names(rails)
     pins_of = {item.net.id: item.pins for item in resolved}
     named, quiet_names = _name_nets(
-        [item.net for item in resolved if not item.rail],
+        [item.net for item in resolved if not item.rail and item.net.id not in labelled],
         drawn_wires,
         _names_in_the_way(wires, rails, part_labels, rail_names, net_labels),
         lambda net: _worth_naming(pins_of[net.id], symbols),
@@ -2605,11 +2639,90 @@ def _hand_drawn_sheet(
         no_connects=tuple(no_connects),
         labels=(*part_labels, *rail_names, *net_labels),
         quiet_names=tuple(quiet_names),
+        ports=ports,
         annotations=annotations,
         width=width,
         height=height,
         notes=tuple(notes),
     )
+
+
+def _ports_drawn(
+    doc: PerfDocument,
+    symbols: dict[str, _Placed],
+    drawn_pins: set[tuple[str, str]],
+) -> tuple[list[Rail], list[Label], list[Wire], tuple[PlacedPort, ...]]:
+    """Every port on a hand-drawn sheet as the glyph or the name it is, and its wires.
+
+    A LINK IS DRAWN ONLY WHILE ITS PIN IS ON THE NET ITS PORT NAMES, as a drawn wire is
+    only while its two pins share one (``SheetWire``): the drawing never says a pin is on
+    GND that the netlist does not put there. A pin a link is drawn to joins ``drawn_pins``,
+    so it gets no glyph or name of its own -- two grounds on one pin read as two.
+
+    A supply or a ground with one wire is drawn as the glyph at its pin always was, the
+    wire its stem, so a glyph dragged off a pin is still the same glyph; with none or
+    several, its stem is its own point and each wire runs to it.
+    """
+    rails: list[Rail] = []
+    labels: list[Label] = []
+    wires: list[Wire] = []
+    placed: list[PlacedPort] = []
+    for port in sorted(doc.sheet_ports, key=lambda port: port.id):
+        net = net_named(doc.nets, port.name)
+        net_class: NetClass = (
+            "power" if port.kind == "supply"
+            else "ground" if port.kind == "ground"
+            else net.net_class if net is not None
+            else "signal"
+        )
+        net_id = net.id if net is not None else ""
+        paths: list[tuple[Point2, ...]] = []
+        for link in port.links:
+            if net is None or link.pin not in net.nodes:
+                continue
+            start = _pin_of(symbols, link.pin)
+            if start is None:
+                continue
+            paths.append(_reanchored(link.path, start, port.at))
+            drawn_pins.add((link.pin.component_ref, link.pin.pin))
+        glyph = port.kind != "label"
+        stem = paths[0] if glyph and len(paths) == 1 else (port.at,)
+        for path in paths:
+            if path is stem:
+                continue
+            wires.append(Wire(net_id=net_id, net_name=port.name, net_class=net_class, path=path))
+        if glyph:
+            rail = Rail(
+                net_id=net_id,
+                net_name=port.name,
+                net_class=net_class,
+                path=stem,
+                at=port.at,
+                direction="up" if port.kind == "supply" else "down",
+                port=port.id,
+            )
+            rails.append(rail)
+            box = rail_glyph_box(rail)
+        else:
+            label = _port_label(port, paths)
+            labels.append(label)
+            box = _net_name_box(label)
+        placed.append(PlacedPort(id=port.id, kind=port.kind, name=port.name, at=port.at, box=box))
+    return rails, labels, wires, tuple(placed)
+
+
+def _port_label(port: SheetPort, paths: Sequence[tuple[Point2, ...]]) -> Label:
+    """A label port's name, on a flag at its point: running on the way its first wire came
+    in, so it reads on from the wire as a name said at a pin does (``_said_at_pin``)."""
+    leftward = False
+    if paths and len(paths[0]) >= 2:
+        before, end = paths[0][-2], paths[0][-1]
+        leftward = end.x < before.x - 1e-9
+    if leftward:
+        at = _p(port.at.x - NET_LABEL_INSET_MM, port.at.y - NET_LABEL_CLEARANCE_MM)
+        return Label(text=port.name, at=at, kind="net", anchor="right")
+    at = _p(port.at.x + NET_LABEL_INSET_MM, port.at.y - NET_LABEL_CLEARANCE_MM)
+    return Label(text=port.name, at=at, kind="net", anchor="left")
 
 
 def _symbols_drawn(

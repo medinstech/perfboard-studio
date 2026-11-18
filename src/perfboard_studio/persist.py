@@ -44,6 +44,7 @@ from .model import (
     DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
     SHEET_NOTE_KINDS,
+    SHEET_PORT_KINDS,
     VALID_ROTATIONS,
     AxisLegend,
     Board,
@@ -81,9 +82,11 @@ from .model import (
     PinNames,
     PinRoles,
     Point2,
+    PortLink,
     Rotation,
     SchematicPart,
     SheetNote,
+    SheetPort,
     SheetWire,
     SolderBuildup,
     SolderTraceConductor,
@@ -229,6 +232,7 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "nets",
     "sheet",
     "sheetWires",
+    "sheetPorts",
     "sheetNotes",
     "boards",
     "cables",
@@ -253,6 +257,8 @@ EXTRA_BOARD_KEY_ORDER: tuple[str, ...] = (
 )
 SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored")
 SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path", "tap")
+SHEET_PORT_KEY_ORDER: tuple[str, ...] = ("id", "kind", "name", "at", "links")
+PORT_LINK_KEY_ORDER: tuple[str, ...] = ("pin", "path")
 SHEET_NOTE_KEY_ORDER: tuple[str, ...] = ("id", "kind", "at", "to", "text", "sizeMm")
 BOARD_NOTE_KEY_ORDER: tuple[str, ...] = (
     "id",
@@ -664,6 +670,40 @@ def _ordered_sheet_wire(wire: SheetWire, index: int) -> JsonObj:
     )
 
 
+def _ordered_sheet_port(port: SheetPort, index: int) -> JsonObj:
+    path = _index_path("sheetPorts", index)
+    values: dict[str, JsonValue] = {
+        "id": port.id,
+        "kind": port.kind,
+        "name": port.name,
+        "at": _ordered_point(port.at, _field_path(path, "at")),
+    }
+    # A port nothing is wired to yet -- a ground put down before its wires -- says nothing
+    # about links.
+    if port.links:
+        links_path = _field_path(path, "links")
+        values["links"] = [
+            _build_ordered(
+                PORT_LINK_KEY_ORDER,
+                {
+                    "pin": _build_ordered(
+                        NET_NODE_KEY_ORDER,
+                        {"componentRef": link.pin.component_ref, "pin": link.pin.pin},
+                    ),
+                    "path": [
+                        _ordered_point(
+                            point,
+                            _index_path(_field_path(_index_path(links_path, i), "path"), j),
+                        )
+                        for j, point in enumerate(link.path)
+                    ],
+                },
+            )
+            for i, link in enumerate(port.links)
+        ]
+    return _build_ordered(SHEET_PORT_KEY_ORDER, values)
+
+
 def _ordered_sheet_note(note: SheetNote, index: int) -> JsonObj:
     path = _index_path("sheetNotes", index)
     values: dict[str, JsonValue] = {
@@ -735,6 +775,7 @@ def serialize_document(doc: PerfDocument) -> str:
     # Sorted for a readable diff, like everything else here: moving one symbol must not
     # reorder the file. A wire is named by its two pins and a note by its id.
     sheet_wires = sorted(doc.sheet_wires, key=lambda wire: (wire.a, wire.b))
+    sheet_ports = sorted(doc.sheet_ports, key=lambda port: port.id)
     sheet_notes = sorted(doc.sheet_notes, key=lambda note: note.id)
 
     root = _build_ordered(
@@ -790,6 +831,17 @@ def serialize_document(doc: PerfDocument) -> str:
                     ]
                 }
                 if sheet_wires
+                else {}
+            ),
+            # The supplies, grounds and names somebody put down, by the same rule: no
+            # document before 0.26 has one, so none of them changes by a byte.
+            **(
+                {
+                    "sheetPorts": [
+                        _ordered_sheet_port(port, i) for i, port in enumerate(sheet_ports)
+                    ]
+                }
+                if sheet_ports
                 else {}
             ),
             **(
@@ -1697,6 +1749,60 @@ def _parse_sheet_wire(raw: object, path: str, warnings: list[str]) -> SheetWire:
     )
 
 
+def _parse_sheet_port(raw: object, path: str, warnings: list[str]) -> SheetPort:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, SHEET_PORT_KEY_ORDER, path, warnings)
+    kind = _expect_string(_require_field(obj, "kind", path), _field_path(path, "kind"))
+    if kind not in SHEET_PORT_KINDS:
+        raise ValidationError(
+            "sheet-port-kind-invalid",
+            f'"{kind}" is not a kind of port; expected one of {", ".join(SHEET_PORT_KINDS)}.',
+            _field_path(path, "kind"),
+        )
+    name = _expect_string(_require_field(obj, "name", path), _field_path(path, "name"))
+    if not name.strip():
+        raise ValidationError(
+            "sheet-port-unnamed",
+            "A port on the sheet names the net it stands for, and this one names none.",
+            _field_path(path, "name"),
+        )
+    links_path = _field_path(path, "links")
+    links: list[PortLink] = []
+    for i, item in enumerate(_expect_array(obj.get("links", []), links_path)):
+        link_path = _index_path(links_path, i)
+        link = _expect_object(item, link_path)
+        _check_unknown_keys(link, PORT_LINK_KEY_ORDER, link_path, warnings)
+        points = _expect_array(
+            _require_field(link, "path", link_path), _field_path(link_path, "path")
+        )
+        if len(points) < 2:
+            raise ValidationError(
+                "sheet-wire-too-short",
+                "A wire on the sheet needs at least two points.",
+                _field_path(link_path, "path"),
+            )
+        links.append(
+            PortLink(
+                pin=_parse_net_node(
+                    _require_field(link, "pin", link_path),
+                    _field_path(link_path, "pin"),
+                    warnings,
+                ),
+                path=tuple(
+                    _parse_point(point, _index_path(_field_path(link_path, "path"), j), warnings)
+                    for j, point in enumerate(points)
+                ),
+            )
+        )
+    return SheetPort(
+        id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
+        kind=kind,
+        name=name,
+        at=_parse_point(_require_field(obj, "at", path), _field_path(path, "at"), warnings),
+        links=tuple(links),
+    )
+
+
 def _parse_sheet_note(raw: object, path: str, warnings: list[str]) -> SheetNote:
     obj = _expect_object(raw, path)
     _check_unknown_keys(obj, SHEET_NOTE_KEY_ORDER, path, warnings)
@@ -2218,6 +2324,31 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         _parse_sheet_wire(item, _index_path("sheetWires", index), warnings)
         for index, item in enumerate(wires_raw)
     )
+    # A port, like a wire, is the drawing and not the circuit: a link to a pin that is not
+    # on the net the port names is said below, once the nets are known, and not refused.
+    ports_raw = _expect_array(migrated.get("sheetPorts", []), "sheetPorts")
+    sheet_ports: list[SheetPort] = []
+    seen_ports: set[str] = set()
+    for index, item in enumerate(ports_raw):
+        port = _parse_sheet_port(item, _index_path("sheetPorts", index), warnings)
+        if port.id in seen_ports:
+            raise ValidationError(
+                "duplicate-id",
+                f'Two ports on the sheet share the id "{port.id}".',
+                _index_path("sheetPorts", index),
+            )
+        seen_ports.add(port.id)
+        sheet_ports.append(port)
+    named = {net.name.strip().upper(): net for net in nets}
+    for index, port in enumerate(sheet_ports):
+        net = named.get(port.name.strip().upper())
+        for i, link in enumerate(port.links):
+            if net is None or link.pin not in net.nodes:
+                warnings.append(
+                    f"{_field_path(_index_path('sheetPorts', index), 'links')}[{i}]: "
+                    f"{link.pin.component_ref}.{link.pin.pin} is not on {port.name}, so its "
+                    f"wire to that {port.kind} is not drawn."
+                )
     notes_raw = _expect_array(migrated.get("sheetNotes", []), "sheetNotes")
     sheet_notes: list[SheetNote] = []
     seen_notes: set[str] = set()
@@ -2278,6 +2409,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         nets=nets,
         sheet=tuple(sheet),
         sheet_wires=sheet_wires,
+        sheet_ports=tuple(sheet_ports),
         sheet_notes=tuple(sheet_notes),
         boards=tuple(boards),
         cables=tuple(cables),

@@ -1777,6 +1777,41 @@ over an automatic `N3`, then the larger. Moving the END of a drawn wire onto a p
 net is still refused (`sheet.wire.reconnect`): that gesture is about where a wire goes, not
 about the circuit. `tests/test_sheet_wire_joins.py`.
 
+**A supply, a ground or a name somebody puts on the sheet is a port, and it names its net by
+NAME** (`model.SheetPort`). The first plan pointed a port at a `NetId`, as a conductor points
+at its net. That fails twice. A ground put down before anything is wired to it would need an
+empty net to point at, and nothing else on the document is an empty net. A ground whose net
+was deleted and drawn again would point at an id that no longer exists and come back wrong.
+KiCad's label has the same reason: the name is what the reader sees and what joins.
+Matching follows `model.net_named` (case and surrounding spaces ignored), the rule a label
+already used, so typing `gnd` puts a pin on GND.
+
+Linking a pin to a port is the netlist change and the drawing in ONE command
+(`sheet.port.add`, `sheet.port.link`), as `sheet.wire` is, through `_onto_port_net`:
+- a pin on no net joins the named net, made and classed by the port if there is none;
+- a pin on a net, when nothing has the name yet, names that net (N3 becomes GND);
+- a pin on another net merges it into the named one, with `net.merge`'s refusal for a
+  supply against its ground.
+
+A port never turns a supply or a ground into a signal, and a supply never names a ground net.
+
+**A link is drawn only while its pin is on the net its port names, and it is dropped in the
+same step that takes the pin off.** That covers `net.disconnect`, `net.delete`, `part.delete`,
+a merge and a reconnect. The first draft gave each of those commands its own clean-up, and the
+next command added would have forgotten one. Instead `CommandBus.dispatch` runs
+`model.with_honest_ports` on every command's result, so no command can leave a dangling link
+and the undo of the command brings it back. A rename and a merge carry the ports to the new name
+first (`commands._renamed_ports`), so a port is never dropped for a rename. A hand-edited file
+whose link and nets disagree still opens, with a warning, and the link is not drawn, as with a
+`SheetWire`.
+
+A supply or ground port with exactly one link is drawn as the glyph at a pin always was, with
+the link as its stem, so dragging a glyph off its pin changes nothing about how it looks. A pin
+with a link gets no derived glyph or name (`drawn_pins`), because two grounds on one pin read
+as two. A net with a label port is named where the label was put and nowhere else. Handing
+the sheet back to the layout (`symbol.auto` on every symbol) takes the ports with it, as it
+takes the drawn wires; the nets stay. `tests/test_sheet_ports.py`.
+
 **A note is a person writing on the drawing** (`model.SheetNote`). Nothing derives anything
 from one: not DRC, not LVS, and no command refuses one for overlapping anything. A drawing
 tool that argued with what was written on it would be worse than one with no notes at all.

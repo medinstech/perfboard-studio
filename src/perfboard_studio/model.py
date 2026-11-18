@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal, TypeAlias, get_args
 
 # ---------------------------------------------------------------------------
@@ -996,6 +996,49 @@ class SheetWire:
         return None if self.tap is None else frozenset((self.b, self.tap))
 
 
+#: What a port on the sheet is: a supply's bar, a ground's bars, or a net's name on a flag.
+type SheetPortKind = Literal["supply", "ground", "label"]
+
+#: Every member of the above, spelled out, for the reason ``SHEET_NOTE_KINDS`` is.
+SHEET_PORT_KINDS: tuple[SheetPortKind, ...] = ("supply", "ground", "label")
+
+
+@dataclass(frozen=True, slots=True)
+class PortLink:
+    """A wire from a pin to a port, as it was drawn: ``path`` runs from the pin to the
+    port's ``at``, orthogonal, in sheet millimetres. Its ends are put back on the pin and
+    the port every time the sheet is drawn, as a ``SheetWire``'s are."""
+
+    pin: NetNode
+    path: tuple[Point2, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SheetPort:
+    """A supply, a ground or a net's name somebody PUT on the sheet.
+
+    THE NETLIST IS STILL THE CIRCUIT. A port names the net it stands for by NAME, as a
+    label does in KiCad, and joins nothing by itself: the command that links a pin to it
+    puts the pin on that net (``sheet.port.add``, ``sheet.port.link``), and a link is drawn
+    only while its pin is on the net the port names -- the ``SheetWire`` rule, that the
+    drawing never asserts a connection ``doc.nets`` does not have. By name and not by id so
+    that a ground dropped in empty space needs no empty net to point at, and is still a
+    ground after the net it named was dropped and made again; renaming a net and merging
+    one into another carry its ports with it.
+
+    ``at`` is where the glyph's stem starts, or the point of a name's flag, and every link
+    ends there. A port whose kind is ``supply`` or ``ground`` is drawn upright -- a supply
+    points up and a ground down, wherever its wires come from -- which is why it has no
+    rotation.
+    """
+
+    id: str
+    kind: SheetPortKind
+    name: str
+    at: Point2
+    links: tuple[PortLink, ...] = ()
+
+
 #: What a sheet note draws. Text, and the three shapes an annotation is made of -- which is
 #: the same argument ``SymbolShape`` makes about having three kinds and no more.
 type SheetNoteKind = Literal["text", "line", "rectangle", "circle"]
@@ -1340,6 +1383,9 @@ class PerfDocument:
     #: Wires somebody drew between two pins. Geometry only -- what is CONNECTED is still
     #: ``nets``, and a wire whose two pins are no longer on one net is simply not drawn.
     sheet_wires: tuple[SheetWire, ...] = ()
+    #: Supplies, grounds and names somebody put on the sheet -- see ``SheetPort``. Drawing
+    #: only, as the wires are: which pins a port joins is what ``nets`` says.
+    sheet_ports: tuple[SheetPort, ...] = ()
     #: Captions and boxes on the drawing. Nothing derives anything from them.
     sheet_notes: tuple[SheetNote, ...] = ()
     #: Mechanical features of the board. They sit on the document rather than on
@@ -1446,3 +1492,37 @@ def contacts_every_path_hole(c: Conductor) -> bool:
     board that is wired differently from what the screen shows.
     """
     return c.kind in ("solder-trace", "solder-trace-wired", "strip")
+
+
+def net_named(nets: tuple[Net, ...], name: str) -> Net | None:
+    """The net called ``name``, as a port or a label says it: by name, ignoring case and the
+    spaces round it, which is how two nets are told apart everywhere a name is typed."""
+    wanted = name.strip().upper()
+    return next((net for net in nets if net.name.strip().upper() == wanted), None)
+
+
+def with_honest_ports(doc: PerfDocument) -> PerfDocument:
+    """``doc`` with every port link whose pin is not on the net its port names taken off.
+
+    A LINK CLAIMS ITS PIN IS ON THAT NET, and ``nets`` is the truth. Every command that
+    takes a pin off a net -- a disconnect, a deleted net, a deleted or unplaced part, a cut
+    wire -- would otherwise leave a ground drawn on a pin that is not on ground, so the bus
+    settles it here after every command (``CommandBus.dispatch``), once, rather than in
+    each of them and in every one written later. Renaming a net and merging one into
+    another carry the ports with them first, so neither loses a link here. The port stays:
+    a ground with nothing wired to it is still a ground somebody put down.
+    """
+    if not doc.sheet_ports:
+        return doc
+    changed = False
+    ports: list[SheetPort] = []
+    for port in doc.sheet_ports:
+        net = net_named(doc.nets, port.name)
+        links = tuple(
+            link for link in port.links if net is not None and link.pin in net.nodes
+        )
+        if len(links) != len(port.links):
+            changed = True
+            port = replace(port, links=links)
+        ports.append(port)
+    return replace(doc, sheet_ports=tuple(ports)) if changed else doc

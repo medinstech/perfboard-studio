@@ -33,6 +33,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
+from .model import with_honest_ports
+
 if TYPE_CHECKING:
     from .model import PerfDocument
 
@@ -252,7 +254,9 @@ class CommandBus:
 
         before = self._document
         try:
-            after = definition.apply(before, payload, self._ctx)
+            # A port linked to a pin the command took off its net is unlinked here, after
+            # every command, once (``model.with_honest_ports``).
+            after = with_honest_ports(definition.apply(before, payload, self._ctx))
             description = definition.describe(payload, before)
         except CommandError as err:
             return DispatchResult(ok=False, code=err.code, message=err.message)

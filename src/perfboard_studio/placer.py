@@ -3350,7 +3350,9 @@ def placement_inputs(doc: PerfDocument) -> PerfDocument:
     dates a save changes. Every other field counts, including any added later, because a
     stale placement committed onto a changed board is the failure this key exists to stop.
     """
-    return replace(doc, meta=_BLANK_META, sheet=(), sheet_wires=(), sheet_notes=())
+    return replace(
+        doc, meta=_BLANK_META, sheet=(), sheet_wires=(), sheet_ports=(), sheet_notes=()
+    )
 
 
 # ---------------------------------------------------------------------------

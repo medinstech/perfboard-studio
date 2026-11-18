@@ -80,6 +80,7 @@ from .model import (
     DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
     SHEET_NOTE_KINDS,
+    SHEET_PORT_KINDS,
     VALID_ROTATIONS,
     Board,
     BoardEdge,
@@ -113,10 +114,13 @@ from .model import (
     PinNames,
     PinRoles,
     Point2,
+    PortLink,
     Rotation,
     SchematicPart,
     SheetNote,
     SheetNoteKind,
+    SheetPort,
+    SheetPortKind,
     SheetWire,
     SolderBuildup,
     SolderTraceConductor,
@@ -128,6 +132,7 @@ from .model import (
     body_clearance_problem,
     declared_pin_name,
     has_component_side_copper,
+    net_named,
     normalized_pin_names,
     normalized_pin_roles,
     shorts_supplies,
@@ -1201,6 +1206,60 @@ class ReconnectSheetWirePayload:
     #: The freeze this edit is the first change of, when the sheet is still drawn by the
     #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
     #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AddSheetPortPayload:
+    """A supply, a ground or a net's name put down on the sheet, and the pins wired to it.
+
+    ONE COMMAND FOR BOTH HALVES, as a drawn wire is: each pin in ``links`` goes onto the
+    net called ``name`` (``_onto_port_net``) and the port is drawn with a wire to it, so
+    one undo takes back the port and the connections together."""
+
+    kind: SheetPortKind
+    name: str
+    at: Point2
+    links: tuple[PortLink, ...] = ()
+    #: The port's id, or None to have one made.
+    id: str | None = None
+    #: The freeze this edit is the first change of, when the sheet is still drawn by the
+    #: layout: ``symbol.move`` with every symbol where it is drawn, applied first in the same
+    #: command (``_frozen``). None on a sheet that is already the user's.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LinkSheetPortPayload:
+    """A wire drawn from a pin to a port already on the sheet: the pin joins the port's
+    net, as it would joining a wire on it."""
+
+    id: str
+    link: PortLink
+    #: As ``AddSheetPortPayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MoveSheetPortPayload:
+    """A port dragged to ``at``. The drawing only: its wires follow it the way a wire's
+    ends follow a moved symbol (``schematic._reanchored``)."""
+
+    id: str
+    at: Point2
+    #: As ``AddSheetPortPayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteSheetPortsPayload:
+    """Ports taken off the sheet. With ``cut``, the pins only they drew go off the net as
+    well, as a cut wire's do; without it the connections stay and the pins get the glyph
+    or the name the sheet draws for a pin nothing is wired at."""
+
+    ids: tuple[str, ...]
+    cut: bool = False
+    #: As ``AddSheetPortPayload.freeze``.
     freeze: MoveSymbolsPayload | None = None
 
 
@@ -3146,7 +3205,7 @@ class _AutoSymbols:
             # The whole sheet, so the wires go too -- see AutoSymbolsPayload. Notes stay:
             # a caption is a person writing on the drawing and has nothing to do with
             # where the layout decides to put a resistor.
-            return dataclasses.replace(doc, sheet=(), sheet_wires=())
+            return dataclasses.replace(doc, sheet=(), sheet_wires=(), sheet_ports=())
         dropped = set(p.ids)
         kept = tuple(placement for placement in doc.sheet if placement.id not in dropped)
         if len(kept) == len(doc.sheet):
@@ -3671,6 +3730,286 @@ def _split_by_wires(
     return [tuple(piece) for piece in order]
 
 
+#: The class a port of each kind gives a net it makes. A label's net is classed by its
+#: name, as a net named in the Nets panel is.
+_PORT_NET_CLASS: dict[SheetPortKind, NetClass] = {"supply": "power", "ground": "ground"}
+
+
+def _port_net_class(kind: SheetPortKind, name: str) -> NetClass:
+    return _PORT_NET_CLASS.get(kind) or infer_net_class(name)
+
+
+def _check_port_kind(kind: SheetPortKind, net: Net | None, name: str) -> None:
+    """A supply names a power net and a ground a ground one; a label names any net."""
+    if kind not in SHEET_PORT_KINDS:
+        raise CommandError("unknown-kind", f'"{kind}" is not a kind of port on the sheet.')
+    if not name.strip():
+        raise CommandError("empty-name", "A port on the sheet names the net it stands for.")
+    wanted = _PORT_NET_CLASS.get(kind)
+    if net is not None and wanted is not None and net.net_class != wanted:
+        said = "a supply" if kind == "supply" else "a ground"
+        raise CommandError(
+            "wrong-class",
+            f"{net.name} is a {net.net_class} net, so it is not {said}: put a label "
+            f"with its name there instead.",
+        )
+
+
+def _check_link(link: PortLink) -> None:
+    if len(link.path) < 2:
+        raise CommandError("path-too-short", "A wire on the sheet needs at least two points.")
+    for start, end in zip(link.path, link.path[1:], strict=False):
+        if abs(start.x - end.x) > 1e-6 and abs(start.y - end.y) > 1e-6:
+            raise CommandError(
+                "diagonal-wire",
+                f"The wire from {_pin_name(link.pin)} runs on a slant between "
+                f"({start.x:g}, {start.y:g}) and ({end.x:g}, {end.y:g}); a wire on the sheet "
+                f"runs across or down.",
+            )
+
+
+def _renamed_ports(doc: PerfDocument, was: str, now: str) -> tuple[SheetPort, ...]:
+    """The ports naming ``was`` renamed ``now``: a port names its net, so a renamed net
+    takes its ports with it (``with_honest_ports`` would otherwise unlink every one)."""
+    wanted = was.strip().upper()
+    if not any(port.name.strip().upper() == wanted for port in doc.sheet_ports):
+        return doc.sheet_ports
+    return tuple(
+        dataclasses.replace(port, name=now) if port.name.strip().upper() == wanted else port
+        for port in doc.sheet_ports
+    )
+
+
+def _onto_port_net(
+    doc: PerfDocument, kind: SheetPortKind, name: str, pin: NetNode, ctx: CommandContext
+) -> PerfDocument:
+    """``pin`` put on the net called ``name``, as wiring it to a port of ``kind`` says.
+
+    THE PORT NAMES THE NET, as a label does in every schematic editor:
+
+    - A pin on no net joins the named net, which is made -- classed by the port -- when
+      there is none.
+    - A pin on a net, where no net has the name yet, NAMES its net: N3 with a ground put on
+      it is GND, as the label tool already renames it (``rename_net_payload``).
+    - A pin on another net joins that whole net into the named one (``_merged_nets``),
+      which keeps the name: wiring a pin to GND puts its net on ground. A supply and its
+      ground are refused there, as the short they would be, and a supply or a ground is
+      never made part of a signal by a label -- that would rename the rail.
+    """
+    target = net_named(doc.nets, name)
+    _check_port_kind(kind, target, name)
+    on = next((net for net in doc.nets if pin in net.nodes), None)
+    if target is None and on is None:
+        net = Net(
+            id=ctx.next_id("net"),
+            name=name.strip(),
+            net_class=_port_net_class(kind, name),
+            nodes=(pin,),
+        )
+        return dataclasses.replace(doc, nets=(*doc.nets, net))
+    if target is None:
+        assert on is not None
+        payload = rename_net_payload(on, name.strip())
+        net_class = payload.net_class or on.net_class
+        if kind in _PORT_NET_CLASS:
+            net_class = _PORT_NET_CLASS[kind]
+        if on.net_class != "signal" and net_class != on.net_class:
+            raise CommandError(
+                "wrong-class",
+                f"{_pin_name(pin)} is on {on.name}, a {on.net_class} net: a "
+                f"{'supply' if kind == 'supply' else kind} called {name.strip()} would "
+                f"make it something else. Take the pin off {on.name} first.",
+            )
+        renamed = dataclasses.replace(on, name=name.strip(), net_class=net_class)
+        return dataclasses.replace(
+            doc,
+            nets=tuple(renamed if net.id == on.id else net for net in doc.nets),
+            sheet_ports=_renamed_ports(doc, on.name, name.strip()),
+        )
+    if on is None:
+        joined = dataclasses.replace(target, nodes=(*target.nodes, pin))
+        return dataclasses.replace(
+            doc, nets=tuple(joined if net.id == target.id else net for net in doc.nets)
+        )
+    if on.id == target.id:
+        return doc
+    if on.net_class != "signal" and target.net_class == "signal":
+        raise CommandError(
+            "wrong-class",
+            f"{_pin_name(pin)} is on {on.name}, a {on.net_class} net: joining it to "
+            f"{target.name} would put the whole of {on.name} on a signal. Take the pin "
+            f"off {on.name} first.",
+        )
+    return _merged_nets(doc, on, target)
+
+
+def _port_named(doc: PerfDocument, id_: str) -> SheetPort:
+    port = next((port for port in doc.sheet_ports if port.id == id_), None)
+    if port is None:
+        raise CommandError("unknown-port", f'No port on the sheet has the id "{id_}".')
+    return port
+
+
+def _port_said(port: SheetPort | AddSheetPortPayload) -> str:
+    """A port as a description names it: "the ground GND", "the supply +5V", "the label
+    CLK". THE KIND IS SAID, because the name alone is a part's reference to a reader -- and
+    to ``ui/engine_text``, which could not tell "Move GND on the sheet" from "Move U1 on the
+    sheet", or "Wire U1.3 to GND" from a wire between two pins."""
+    return f"the {port.kind} {port.name.strip()}"
+
+
+class _AddSheetPort:
+    """Put a supply, a ground or a net's name on the sheet, wired to the pins in ``links``.
+
+    THE NETLIST IS STILL THE CIRCUIT: the port is drawing, and each pin it is wired to goes
+    onto the net it names here, in the same command (``_onto_port_net``). A port wired to
+    nothing yet -- a ground put down before its wires -- changes no net at all.
+    """
+
+    type = "sheet.port.add"
+
+    def apply(
+        self, doc: PerfDocument, p: AddSheetPortPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        _check_port_kind(p.kind, net_named(doc.nets, p.name), p.name)
+        pins = [link.pin for link in p.links]
+        if len(set(pins)) != len(pins):
+            raise CommandError("duplicate-pin", "A port is wired to each pin once.")
+        for link in p.links:
+            _check_link(link)
+        id_ = p.id if p.id is not None else ctx.next_id("port")
+        if any(port.id == id_ for port in doc.sheet_ports):
+            raise CommandError("duplicate-id", f'A port with id "{id_}" is already on the sheet.')
+        for pin in pins:
+            doc = _onto_port_net(doc, p.kind, p.name, pin, ctx)
+        net = net_named(doc.nets, p.name)
+        port = SheetPort(
+            id=id_,
+            kind=p.kind,
+            name=net.name if net is not None else p.name.strip(),
+            at=p.at,
+            links=p.links,
+        )
+        return dataclasses.replace(doc, sheet_ports=(*doc.sheet_ports, port))
+
+    def describe(self, p: AddSheetPortPayload, doc: PerfDocument) -> str:
+        if len(p.links) == 1:
+            return f"Put {_port_said(p)} on {_pin_name(p.links[0].pin)}"
+        if p.links:
+            return f"Put {_port_said(p)} on {count_noun(len(p.links), 'pin')}"
+        return f"Put {_port_said(p)} on the sheet"
+
+
+class _LinkSheetPort:
+    """Wire a pin to a port already on the sheet, and put it on the port's net."""
+
+    type = "sheet.port.link"
+
+    def apply(
+        self, doc: PerfDocument, p: LinkSheetPortPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        port = _port_named(doc, p.id)
+        _check_link(p.link)
+        doc = _onto_port_net(doc, port.kind, port.name, p.link.pin, ctx)
+        # The port may have been renamed with the pin's net (``_renamed_ports``).
+        port = _port_named(doc, p.id)
+        linked = dataclasses.replace(
+            port,
+            links=(*(link for link in port.links if link.pin != p.link.pin), p.link),
+        )
+        return dataclasses.replace(
+            doc,
+            sheet_ports=tuple(linked if q.id == p.id else q for q in doc.sheet_ports),
+        )
+
+    def describe(self, p: LinkSheetPortPayload, doc: PerfDocument) -> str:
+        port = next((port for port in doc.sheet_ports if port.id == p.id), None)
+        said = _port_said(port) if port is not None else p.id
+        return f"Wire {_pin_name(p.link.pin)} to {said}"
+
+
+class _MoveSheetPort:
+    """Drag a port somewhere else on the sheet. Drawing only: no net changes."""
+
+    type = "sheet.port.move"
+
+    def apply(
+        self, doc: PerfDocument, p: MoveSheetPortPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        port = _port_named(doc, p.id)
+        moved = dataclasses.replace(port, at=p.at)
+        return dataclasses.replace(
+            doc, sheet_ports=tuple(moved if q.id == p.id else q for q in doc.sheet_ports)
+        )
+
+    def describe(self, p: MoveSheetPortPayload, doc: PerfDocument) -> str:
+        port = next((port for port in doc.sheet_ports if port.id == p.id), None)
+        return f"Move {_port_said(port) if port is not None else p.id} on the sheet"
+
+
+class _DeleteSheetPorts:
+    """Take ports off the sheet; with ``cut``, the connections only they drew as well.
+
+    Without ``cut`` it is a rub-out, as ``sheet.wire.delete`` is: every pin stays on its
+    net, and the sheet draws the glyph or the name it draws for a pin nothing is wired at.
+    With it, a pin a port was wired to leaves the net when no wire still drawn ends at it
+    and no port left is wired to it -- the rule ``sheet.wire.cut`` cuts by -- and a net
+    left with no pin is dropped.
+    """
+
+    type = "sheet.port.delete"
+
+    def apply(
+        self, doc: PerfDocument, p: DeleteSheetPortsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        if not p.ids:
+            raise CommandError("empty-batch", "sheet.port.delete needs at least one port.")
+        gone = [_port_named(doc, id_) for id_ in p.ids]
+        dropped = set(p.ids)
+        kept = tuple(port for port in doc.sheet_ports if port.id not in dropped)
+        doc = dataclasses.replace(doc, sheet_ports=kept)
+        if not p.cut:
+            return doc
+        held: set[NetNode] = {link.pin for port in kept for link in port.links}
+        for wire in doc.sheet_wires:
+            held.add(wire.a)
+            if wire.tap is None:
+                held.add(wire.b)
+        leaving: set[NetNode] = set()
+        for port in gone:
+            net = net_named(doc.nets, port.name)
+            for link in port.links:
+                if net is not None and link.pin in net.nodes and link.pin not in held:
+                    leaving.add(link.pin)
+        if not leaving:
+            return doc
+        nets = tuple(
+            dataclasses.replace(net, nodes=tuple(n for n in net.nodes if n not in leaving))
+            for net in doc.nets
+        )
+        return dataclasses.replace(
+            doc,
+            nets=tuple(
+                net
+                for net, was in zip(nets, doc.nets, strict=True)
+                if net.nodes or not was.nodes
+            ),
+        )
+
+    def describe(self, p: DeleteSheetPortsPayload, doc: PerfDocument) -> str:
+        names = [
+            _port_said(port) for port in doc.sheet_ports if port.id in set(p.ids)
+        ] or list(p.ids)
+        verb = "Delete" if p.cut else "Rub out"
+        if len(names) == 1:
+            return f"{verb} {names[0]} on the sheet"
+        return f"{verb} {count_noun(len(names), 'port')} on the sheet"
+
+
 class _AddSheetNote:
     type = "sheet.note.add"
 
@@ -3985,7 +4324,10 @@ class _UpdateNet:
             else net
             for net in doc.nets
         )
-        return dataclasses.replace(doc, nets=nets)
+        # A port names its net (``SheetPort``), so a renamed net takes its ports with it.
+        return dataclasses.replace(
+            doc, nets=nets, sheet_ports=_renamed_ports(doc, existing.name, name)
+        )
 
     def describe(self, p: UpdateNetPayload, doc: PerfDocument) -> str:
         existing = next((n for n in doc.nets if n.id == p.id), None)
@@ -4101,6 +4443,8 @@ def _merged_nets(doc: PerfDocument, gone: Net, kept: Net) -> PerfDocument:
     return dataclasses.replace(
         doc,
         nets=nets,
+        # A port naming the net that went names the one that stayed, as its copper does.
+        sheet_ports=_renamed_ports(doc, gone.name, kept.name),
         conductors=claimed(doc.conductors),
         boards=tuple(
             dataclasses.replace(extra, conductors=claimed(extra.conductors))
@@ -4801,6 +5145,10 @@ DESIGN_COMMANDS = frozenset(
         "sheet.note.add",
         "sheet.note.delete",
         "sheet.note.update",
+        "sheet.port.add",
+        "sheet.port.delete",
+        "sheet.port.link",
+        "sheet.port.move",
         "sheet.wire",
         "sheet.wire.cut",
         "sheet.wire.reconnect",
@@ -5251,6 +5599,10 @@ delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWir
 cut_sheet_wires: CommandDefinition[CutSheetWiresPayload] = _CutSheetWires()
 reshape_sheet_wire: CommandDefinition[ReshapeSheetWirePayload] = _ReshapeSheetWire()
 reconnect_sheet_wire: CommandDefinition[ReconnectSheetWirePayload] = _ReconnectSheetWire()
+add_sheet_port: CommandDefinition[AddSheetPortPayload] = _AddSheetPort()
+link_sheet_port: CommandDefinition[LinkSheetPortPayload] = _LinkSheetPort()
+move_sheet_port: CommandDefinition[MoveSheetPortPayload] = _MoveSheetPort()
+delete_sheet_ports: CommandDefinition[DeleteSheetPortsPayload] = _DeleteSheetPorts()
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
@@ -5325,6 +5677,10 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     cut_sheet_wires,
     reshape_sheet_wire,
     reconnect_sheet_wire,
+    add_sheet_port,
+    link_sheet_port,
+    move_sheet_port,
+    delete_sheet_ports,
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,
