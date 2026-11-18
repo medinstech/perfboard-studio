@@ -3937,6 +3937,37 @@ PIN_ROLES: dict[str, str] = {
     # "passive" and it is a ground.
     "max7219": ("in out out gnd out out out out gnd out out in in out out out out pas pwr "
                 "out out out out out"),
+    # -- batch 3. Analogue pins that only take a resistor, a capacitor or a trimmer (gain,
+    # bypass, offset null, balance) are "passive", where KiCad types them input.
+    # TI LM386 pin table: GAIN "gain setting pin" (twice), BYPASS "bypass decoupling path".
+    "lm386": "pas in in gnd out pwr pas pas",
+    # NULL1/NULL2 take the offset trimmer; pin 8 is not connected inside.
+    "lm741": "pas in in neg pas out pwr nc",
+    "lm339": "out out pwr in in in in in in in in gnd out out",
+    # TI LM311 pin table types BALANCE, BAL/STRB as I (strobe), COL OUT and EMIT OUT as O. The
+    # emitter is the output transistor's, normally on ground, so it is "passive" (as KiCad does:
+    # an "out" on a ground net would read as two outputs); BALANCE takes a trimmer.
+    "lm311": "pas in in neg pas in out pwr",
+    # Microchip MCP2551 pin table: TXD input, RXD output, VREF "Reference Output Voltage"
+    # (VDD/2: an output, not a supply, where KiCad types it power_out), CANH/CANL "I/O", and RS
+    # the "Slope Resistor Input".
+    "mcp2551": "in gnd pwr out out io io in",
+    # Bus buffer, decoder and multiplexer. Directions follow from the names (DIR, OE, the
+    # address and enable inputs); the 245's A and B are bus terminals that each side drives in turn,
+    # "io" (KiCad types them tri_state, which is half of that); the 4051's channels and common are analogue "passive",
+    # as KiCad types them, and its VEE is a negative supply.
+    "74hc245": "in io io io io io io io io gnd io io io io io io io io in pwr",
+    "74hc138": "in in in in in in out gnd out out out out out out out pwr",
+    "74hc4051": "pas pas pas pas pas in neg gnd in in in pas pas pas pas pwr",
+    # CD40xx. VSS is the ground of a single-supply part. TI CD4060B: the oscillator's phi-I
+    # (pin 11) is the input and phi-O, not-phi-O (9, 10) its outputs -- KiCad types all three
+    # "input", which does not match the datasheet's logic diagram. The 4066's switch terminals
+    # are analogue "passive", its control pins inputs.
+    "cd4011": "in in out out in in gnd in in out out in in pwr",
+    "cd4093": "in in out out in in gnd in in out out in in pwr",
+    "cd4013": "out out in in in in gnd in in in in out out pwr",
+    "cd4060": "out out out out out out out gnd out out in in out out out pwr",
+    "cd4066": "pas pas pas pas in in gnd pas pas pas pas in in pwr",
 }
 
 
