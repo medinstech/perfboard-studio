@@ -1675,7 +1675,9 @@ def test_a_pin_named_for_a_supply_or_a_ground_has_that_role() -> None:
                 assert role == "ground", f"{part.id} {name} is {role}"
                 seen += 1
             elif name in supplies:
-                assert role == "power", f"{part.id} {name} is {role}"
+                # A dev board's VCC is the rail its regulator gives: a supply it gives.
+                allowed = {"power", "power-out"} if part.category == "module" else {"power"}
+                assert role in allowed, f"{part.id} {name} is {role}"
                 seen += 1
     assert seen > 40
 
@@ -1688,3 +1690,25 @@ def test_a_logic_gates_outputs_are_the_pins_named_y() -> None:
             if name in {"GND", "VCC"}:
                 continue
             assert role == ("out" if name.endswith("Y") else "in"), (part_id, name, role)
+
+
+def test_a_dev_boards_inputs_and_supplies_read_from_its_makers_tables() -> None:
+    """Pinned from Espressif's header tables, Seeed's wiki and the Pico datasheet: the ESP32's
+    VP, VN, IO34 and IO35 are the only input-only GPIOs, a reset is an input, and the 3V3 a
+    board's regulator gives is a supply it gives."""
+    def roles(part_id: str) -> dict[str, set[str]]:
+        part = catalog_part(part_id)
+        assert part is not None
+        out: dict[str, set[str]] = {}
+        for (_, name), (_, role) in zip(part.pin_names, part.pin_roles, strict=True):
+            out.setdefault(name, set()).add(role)
+        return out
+
+    esp = roles("esp32-devkitc")
+    assert {esp[n].pop() for n in ("VP", "VN", "IO34", "IO35", "EN")} == {"in"}
+    assert esp["IO32"] == {"io"} and esp["3V3"] == {"power-out"} and esp["GND"] == {"ground"}
+    pico = roles("raspberry-pi-pico")
+    assert pico["VSYS"] == {"power"} and pico["3V3"] == {"power-out"}
+    assert pico["RUN"] == {"in"} and pico["3V3_EN"] == {"in"} and pico["AGND"] == {"ground"}
+    assert roles("esp32-c3-devkitm-1")["RST"] == {"in"}
+    assert roles("seeed-xiao-esp32c3")["5V"] == {"power-out"}

@@ -3872,6 +3872,47 @@ PIN_ROLES: dict[str, str] = {
     # "passive" in the ATmega's own symbol too, and it can be driven or left to the chip).
     "arduino-nano": ("io pwr io gnd in in gnd pwr-out io in io in io io io io io io io io io "
                      "io io io io pas io pwr-out io io"),
+    # -- dev boards, a header pin at a time. Two judgements run through all of them. A GPIO is
+    # "io" (the makers type them I/O or I/O/T), except the ones a maker types plain I: the
+    # ESP32's VP, VN, IO34 and IO35 are input-only. A reset or enable pin is "in". The 5 V and
+    # 3V3 pins are typed only "P" or "power input/output" by the makers (Espressif lists feeding
+    # the board from either as one of three power options; Seeed says its 5V is USB's 5 V out and
+    # "can also be used as a voltage input"), so they follow the Nano's decision above: the
+    # regulated or USB rail the board gives is a supply it gives ("pwr-out"), and a pin named VIN,
+    # RAW or VSYS, which only feeds the board's regulator, a supply it takes.
+    # Espressif's ESP32-DevKitC V4 user guide, J2 and J3 header tables (type P, I, I/O, G):
+    "esp32-devkitc": ("pwr-out gnd in io in io in io in io in io io gnd io io io io io io io io io io io io "
+                      "gnd io io io io io io io io io pwr-out io"),
+    # The 30-pin DevKit V1 is the same module on a clone's board: its names are the DevKitC's, its
+    # VIN the regulator's input. TODO before landing: the clone maker's own pin table.
+    "esp32-devkit-v1": ("in io in io in io in io in io io io io io io io io io io io io io io io io io gnd "
+                        "gnd pwr pwr-out"),
+    # Espressif's ESP32-C3-DevKitM-1 and ESP32-S3-DevKitC-1 v1.1 user guides: RST is typed I.
+    "esp32-c3-devkitm-1": ("gnd gnd pwr-out io pwr-out io io gnd io io gnd io in gnd gnd io io io io io io io "
+                           "gnd gnd pwr-out io pwr-out io gnd gnd"),
+    "esp32-s3-devkitc-1": ("pwr-out gnd pwr-out io in io io io io io io io io io io io io io io io io io io io "
+                           "io io io io io io io io io io io io io io io io pwr-out gnd gnd gnd"),
+    # Seeed's XIAO wiki pin maps: 5V "Power Input/Output", 3V3 "Power Output", D0-D10 GPIO. Neither
+    # XIAO brings its reset out to a header pin.
+    "seeed-xiao-esp32c3": ("io pwr-out io gnd io pwr-out io io io io io io io io"),
+    "seeed-xiao-rp2040": ("io pwr-out io gnd io pwr-out io io io io io io io io"),
+    # Raspberry Pi Pico datasheet, section 2.1: VBUS is "the micro-USB input voltage" and VSYS "the
+    # main system input voltage" (both supplies the board takes: a Pico is also fed by 5 V on
+    # VBUS), 3V3 the SMPS output that "can be used to power external circuitry", 3V3_EN and RUN
+    # the enable pins, ADC_VREF the ADC reference ("passive": filtered 3.3 V that an external
+    # reference may replace), AGND a ground.
+    "raspberry-pi-pico": ("io pwr io pwr gnd gnd io in io pwr-out io pas io io gnd gnd io io io io io in io io "
+                          "gnd gnd io io io io io io io io gnd gnd io io io io"),
+    # TODO before landing, no maker document read for the rest of this block: the Pro Mini's and
+    # Pro Micro's RAW (regulator input) and VCC (the regulated rail), the D1 mini's pin text (its
+    # page has the pins only as a picture) and 5V, the NodeMCU's reserved and flash pins, the
+    # ESP-01's pins.
+    "sparkfun-pro-mini": ("io pwr io gnd in in gnd pwr-out io io io io io io io io io io io io io io io io"),
+    "sparkfun-pro-micro": ("io pwr io gnd gnd in gnd pwr-out io io io io io io io io io io io io io io io io"),
+    "wemos-d1-mini": ("in io in io io io io io io io io io io gnd pwr-out pwr-out"),
+    "nodemcu-devkit-1.0": ("in io nc io nc io io io io io io pwr-out io gnd io io io io gnd io pwr-out io in io "
+                           "in io gnd gnd pwr pwr-out"),
+    "esp-01": ("gnd io io io io in in pwr"),
     # No KiCad symbol: a generic one-channel relay board, its three pins as its maker prints
     # them (VCC, GND, IN).
     "relay-module-1ch": "pwr gnd in",
