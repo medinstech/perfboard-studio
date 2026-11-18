@@ -6687,8 +6687,8 @@ def test_the_examples_open_as_untitled_copies() -> None:
 def test_the_boards_tools_float_on_the_board() -> None:
     """They were a row of fifteen buttons across the window, wider than a laptop screen,
     that came and went with the board panel. They are on the board now: the pointer,
-    Connect, two groups for the solder and the wire tools, Cut Strip and Measure down the
-    left, and Show, Flip, zoom and Fit in the bottom-right corner. Each button IS its menu
+    Connect, every conductor tool, Cut Strip and Measure down the left, and Show, the face
+    switch, Flip, zoom and Fit in the bottom-right corner. Each button IS its menu
     action, so a key, a menu and a button cannot disagree about what is armed."""
     from PySide6.QtWidgets import QToolBar
 
@@ -6709,32 +6709,62 @@ def test_the_boards_tools_float_on_the_board() -> None:
             assert action in corner
         shown = window.board_view_tools.buttons[0].menu().actions()
         assert window.act_ratsnest in shown and window.act_values in shown
+        assert window.face_switch.parent() is window.board_view_tools
     finally:
         _close(window)
 
 
-def test_tools_that_are_one_idea_share_a_button_that_shows_the_one_picked() -> None:
-    """Five conductor buttons that differed only in what ran between two pads became two:
-    solder, and wire. The button arms the tool it shows, offers the rest from its menu,
-    and shows whichever was picked last -- by the menu, the key or the button."""
+def test_every_tool_is_on_the_rail_with_a_hairline_between_kinds() -> None:
+    """The five conductors were two buttons, solder and wire, the rest of each behind a
+    chevron, a right-click or a press held down -- and at the window the insulated wire and
+    the jumper were looked for and not found. Each is a button of its own now, on its own
+    key, the solder and the wires in runs with a hairline between kinds, and a click arms
+    the tool it shows: no button holds a second tool, and none opens anything."""
+    from PySide6.QtWidgets import QFrame
+
     window = _window_on(_load_dense())
     try:
-        wires = window.wire_tools
-        assert list(wires.tools) == [
-            window.act_draw["bare-wire"],
-            window.act_draw["insulated-wire"],
-            window.act_draw["top-jumper"],
+        tools = window.board_tools
+        draw = window.act_draw
+        shown = [
+            button.defaultAction() for button in tools.buttons if button.isVisibleTo(tools)
         ]
-        assert wires.defaultAction() is window.act_draw["bare-wire"]
-        window.act_draw["insulated-wire"].trigger()
-        assert wires.defaultAction() is window.act_draw["insulated-wire"]
-        assert window.act_draw["insulated-wire"].isChecked()
+        assert shown == [
+            window.act_select_tool,
+            window.act_connect,
+            draw["solder-trace"],
+            draw["solder-trace-wired"],
+            draw["bare-wire"],
+            draw["insulated-wire"],
+            draw["top-jumper"],
+            window.act_measure,
+        ]
+        keys = {kind: draw[kind].shortcut().toString() for kind in window.draw_tools}
+        assert keys == {
+            "solder-trace": "T",
+            "solder-trace-wired": "Shift+T",
+            "bare-wire": "W",
+            "insulated-wire": "Shift+W",
+            "top-jumper": "J",
+        }
+        for kind, button in window.draw_tools.items():
+            assert button.actions() == [draw[kind]]
+            assert button.menu() is None
+        # The kinds apart: pointer and Connect | the solder | the wires | Measure.
+        order: list[str] = []
+        layout = tools.layout()
+        for index in range(layout.count()):
+            widget = layout.itemAt(index).widget()
+            if widget is None or not widget.isVisibleTo(tools):
+                continue
+            order.append("|" if isinstance(widget, QFrame) and widget not in tools.buttons
+                         else "b")
+        assert "".join(order) == "bb|bb|bbb|b"
+        window.draw_tools["top-jumper"].click()
+        assert draw["top-jumper"].isChecked()
         assert not window.act_select_tool.isChecked()
         window.on_stop_tool()
         assert window.act_select_tool.isChecked()
-        assert window.act_draw["top-jumper"].shortcut().toString() == "J"
-        solder = list(window.solder_tools.tools)
-        assert solder == [window.act_draw["solder-trace"], window.act_draw["solder-trace-wired"]]
     finally:
         _close(window)
 
@@ -6742,9 +6772,24 @@ def test_tools_that_are_one_idea_share_a_button_that_shows_the_one_picked() -> N
 def test_a_tool_the_board_cannot_take_leaves_the_board() -> None:
     """Cut Strip on a perfboard, solder on a solderless breadboard: a greyed button for a
     tool that cannot apply is clutter, not information. Cut Strip is there on a stripboard
-    only; a group whose every tool is out goes; a group whose shown tool is out shows one
-    that is in -- the insulated wire, on a breadboard, rather than a bare wire that is not
-    a thing there."""
+    only; a tool the board cannot take goes, and a run of them left empty takes one
+    hairline with it -- one, not both: the kinds either side stay apart."""
+    from PySide6.QtWidgets import QFrame
+
+    from perfboard_studio.breadboard import breadboard
+
+    def rail() -> str:
+        """The rail as a pattern: b a button, | a hairline, as shown."""
+        tools = window.board_tools
+        seen = ""
+        layout = tools.layout()
+        for index in range(layout.count()):
+            widget = layout.itemAt(index).widget()
+            if widget is None or not widget.isVisibleTo(tools):
+                continue
+            seen += "|" if isinstance(widget, QFrame) and widget not in tools.buttons else "b"
+        return seen
+
     example = _example_document("ne555-astable")
     window = _window_on(example)
     try:
@@ -6752,11 +6797,27 @@ def test_a_tool_the_board_cannot_take_leaves_the_board() -> None:
         assert not window.cut_tool.isVisibleTo(tools)
         for kind in ("solder-trace", "solder-trace-wired", "bare-wire"):
             window.act_draw[kind].setEnabled(False)
-        assert not window.solder_tools.isVisibleTo(tools)
-        assert window.wire_tools.isVisibleTo(tools)
-        assert window.wire_tools.defaultAction() is window.act_draw["insulated-wire"]
+        for kind in ("solder-trace", "solder-trace-wired", "bare-wire"):
+            assert not window.draw_tools[kind].isVisibleTo(tools), kind
+        assert window.draw_tools["insulated-wire"].isVisibleTo(tools)
+        # Pointer and Connect | insulated wire and jumper | Measure: one hairline each.
+        assert rail() == "bb|bb|b"
         window.act_draw["solder-trace"].setEnabled(True)
-        assert window.solder_tools.isVisibleTo(tools)
+        assert window.draw_tools["solder-trace"].isVisibleTo(tools)
+        assert rail() == "bb|b|bb|b"
+        # The face switch is there on a board with two faces.
+        assert window.face_switch.isVisibleTo(window.board_view_tools)
+    finally:
+        _close(window)
+
+    # A solderless breadboard has nothing on its far face: the switch goes from the corner,
+    # and the setting it shows stays for the next board.
+    plastic = dataclasses.replace(example, board=breadboard("400"), components=(), conductors=())
+    window = _window_on(plastic)
+    try:
+        assert not window.face_switch.isVisibleTo(window.board_view_tools)
+        assert window.act_far_side.isChecked()
+        assert not window.draw_tools["solder-trace"].isVisibleTo(window.board_tools)
     finally:
         _close(window)
 
@@ -6790,6 +6851,16 @@ def test_a_narrow_window_keeps_every_board_tool_on_screen() -> None:
                 continue  # a stripboard's tool, not on this board
             assert button.isVisibleTo(window), button.toolTip()
         assert window.view.rect().contains(bar.geometry())
+    # The corner pill gives up Show's word, then the face switch -- whose setting is still
+    # in Show's menu -- before it would run off the view, and takes them back with room.
+    show = window.board_view_tools.buttons[0]
+    assert window.act_far_side in show.menu().actions()
+    window.resize(3000, 1000)
+    for _ in range(10):
+        QApplication.processEvents()
+    assert window.face_switch.isVisibleTo(window.board_view_tools)
+    assert show.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+    assert window.view.rect().contains(window.board_view_tools.geometry())
     assert window.dock_nets.widget().minimumWidth() >= window.SIDE_PANEL_MIN_WIDTH
     assert window.dock_library.widget().minimumWidth() >= window.SIDE_PANEL_MIN_WIDTH
     _close(window)
@@ -16059,11 +16130,15 @@ def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(m
             QApplication.sendEvent(button, QEvent(QEvent.Type.Leave))
             assert pill.isHidden()
         assert shown == []
-        # The wire group names the tool it would arm.
-        window.act_draw["insulated-wire"].trigger()
-        window.on_stop_tool()
-        QApplication.sendEvent(window.wire_tools, QEvent(QEvent.Type.Enter))
+        # A conductor says under its name what it lays: the line its group's list said.
+        import html
+
+        from perfboard_studio.ui.main import TOOL_NOTES
+
+        QApplication.sendEvent(window.draw_tools["insulated-wire"], QEvent(QEvent.Type.Enter))
         assert QKeySequence("Shift+W").toString(QKeySequence.SequenceFormat.NativeText) in pill.text()
+        assert html.escape(TOOL_NOTES["insulated-wire"]()) in pill.text()
+        QApplication.sendEvent(window.draw_tools["insulated-wire"], QEvent(QEvent.Type.Leave))
         # And the sheet's rail, the same way: one behaviour on every canvas rail.
         sheet = window.sheet_tools
         assert sheet.name_pill is not None
@@ -16193,65 +16268,30 @@ def test_the_bare_wires_first_banner_names_the_solder_side_once() -> None:
         _close(window)
 
 
-def test_a_group_lists_its_tools_with_their_names_keys_and_what_they_lay() -> None:
-    """The chevron beside a group's picture opens it (the triangle in its corner was not
-    seen): each tool a row with its name, a line on what it lays and its key. A row arms
-    its tool and puts the list away; the armed tool is lit; a tool the board cannot take is
-    greyed, as a menu greys it."""
-    from PySide6.QtCore import QEvent, QPointF, Qt
-    from PySide6.QtGui import QMouseEvent
-    from PySide6.QtWidgets import QApplication
-
-    from perfboard_studio.ui import canvastools
-    from perfboard_studio.ui.main import TOOL_NOTES
-
+def test_the_far_face_is_switched_on_the_board_in_two_words() -> None:
+    """The far face's copper was a tick two menus deep (View > Show on the Board), so a
+    board whose wires were on the face away read as unwired to anybody who never opened it.
+    Both Faces | This Face in the board's corner says which is in force and switches it in
+    one click; the menu entry, the stored setting and the switch are one action."""
     window = _window_on(_load_dense())
-    window.show()
     try:
-        wires = window.wire_tools
-        assert wires.iconSize().width() > wires.iconSize().height()  # the chevron's room
-        at = QPointF(wires.width() - 3, wires.height() / 2)
-        wires.mousePressEvent(
-            QMouseEvent(
-                QEvent.Type.MouseButtonPress, at, wires.mapToGlobal(at.toPoint()),
-                Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
-            )
-        )
-        flyout = wires.flyout
-        assert flyout is not None and flyout.isVisible()
-        # Still open once the events have run: a label shown before it had a parent was a
-        # window of its own, and it closed the list as it opened.
-        QApplication.processEvents()
-        assert flyout.isVisible()
-        assert not window.act_draw["bare-wire"].isChecked()  # the chevron arms nothing
-        rows = flyout.rows
-        assert [row.action_ for row in rows] == list(wires.tools)
-        for row in rows:
-            kind = next(k for k, a in window.act_draw.items() if a is row.action_)
-            assert row.name.text() == canvastools.tool_name(row.action_)
-            assert row.note.text() == TOOL_NOTES[kind]()
-            assert row.key.text() == canvastools.tool_key(row.action_)
-        # Beside the bar, not over it.
-        assert flyout.geometry().left() >= window.board_tools.mapToGlobal(
-            window.board_tools.rect().topRight()
-        ).x() - flyout.SHADOW
-        rows[1].click()
-        assert not flyout.isVisible()
-        assert window.act_draw["insulated-wire"].isChecked()
-        assert wires.defaultAction() is window.act_draw["insulated-wire"]
-        # One action on the button, so Qt draws no menu arrow of its own under the chevron.
-        assert wires.actions() == [window.act_draw["insulated-wire"]]
-        # Opened again: the armed one is lit, and picking it again keeps it armed.
-        wires.open_group()
-        assert [row.isChecked() for row in rows] == [False, True, False]
-        rows[1].click()
-        assert window.act_draw["insulated-wire"].isChecked()
-        window.on_stop_tool()
-        # A right-click opens it too; a tool the board cannot take is grey there.
-        window.act_draw["bare-wire"].setEnabled(False)
-        wires.open_group()
-        assert not rows[0].isEnabled() and rows[2].isEnabled()
-        flyout.hide()
+        switch = window.face_switch
+        both, this = switch.on_button, switch.off_button
+        assert window.act_far_side.isChecked() and both.isChecked() and not this.isChecked()
+        this.click()
+        assert not window.act_far_side.isChecked()
+        assert window.scene.show_far_side is False
+        assert this.isChecked() and not both.isChecked()
+        this.click()  # the answer in force, again: still in force, still marked
+        assert not window.act_far_side.isChecked() and this.isChecked()
+        window.act_far_side.setChecked(True)  # from the menu
+        assert both.isChecked() and not this.isChecked()
+        assert window.scene.show_far_side is True
+        # "This face" is whichever is in front: Flip turns it with the board.
+        this.click()
+        window._flip_board()
+        assert window.scene.side == "bottom" and window.scene.show_far_side is False
+        assert this.isChecked()
     finally:
         _close(window)
 

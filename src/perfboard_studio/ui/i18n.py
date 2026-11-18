@@ -373,6 +373,16 @@ TURKISH: Mapping[str, str] = {
     "Show &Missing Connections": "Eksik &Bağlantıları Göster",
     "Show Hole &Addresses": "Delik &Adreslerini Göster",
     "&Copper on the Far Side": "Karşı &Yüzdeki Bakır",
+    "Both Faces": "İki Yüz",
+    "This Face": "Bu Yüz",
+    "The copper on the far face is drawn through the board, dimmed.": (
+        "Karşı yüzdeki bakır kartın içinden, soluk olarak çizilir."
+    ),
+    "Only the face in front. A selected wire or a lit net's copper still shows from the far "
+    "face.": (
+        "Yalnızca öndeki yüz. Seçili bir tel ya da vurgulanan bir netin bakırı karşı yüzden "
+        "yine görünür."
+    ),
     "Measure &Distance": "&Mesafe Ölç",
     "&Go to Part…": "Parçaya G&it…",
     "Filter parts…  (R37, 10k, TO-220, C7)": "Parçaları süz…  (R37, 10k, TO-220, C7)",

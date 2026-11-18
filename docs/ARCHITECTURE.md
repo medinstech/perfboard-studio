@@ -1988,8 +1988,9 @@ the same parts. `rank` puts a name that starts with what was typed first, then o
 word that does, then one that only contains it.
 
 There is no tool row under it. **The board's tools float on the board** (`ui/canvastools.py`,
-`_build_canvas_tools`): the pointer, Connect, a Solder group and a Wire group, Cut Strip on a
-stripboard, and Measure down the left; Show, Flip, zoom and Fit in the bottom-right corner.
+`_build_canvas_tools`): the pointer, Connect, the two solder tools, Cut Strip on a
+stripboard, the three wires and Measure down the left; Show, Both Faces | This Face, Flip,
+zoom and Fit in the bottom-right corner.
 Tools (which arm a mode) and the view (how the canvas is looked at) are two bars, as in any
 drawing program, and a one-off command is on neither: it is Next when it is the next step, a
 menu entry and a Ctrl+K entry always. Each button IS its menu action, so a key, a menu and a
@@ -2130,13 +2131,37 @@ it: the 3D view is a native OpenGL window, and Qt cannot paint a widget over one
 laid on it would be underneath. Its own toolbar over the view was a second row for two
 buttons.
 
-**Tools that are one idea share a button** (`FloatingBar.add_group`): solder trace and
-reinforced trace; bare wire, insulated wire and a jumper over the parts. The button shows
-and arms the one picked last -- by the menu, its key or the button. A chevron beside its
-picture opens a list of the group (`_ToolFlyout`), as a right-click and a press held down
-do: each tool with its name, its key and a line on what it lays. It was a triangle in the
-picture's corner, a fifth of the icon wide, and offered a plain menu of names: the builder
-did not see it, and a group read as the one tool it showed.
+**Every tool has a button of its own, and a hairline keeps the kinds apart.** This
+reverses a decision. The five conductors were two buttons: solder trace and reinforced
+trace behind one, bare wire, insulated wire and the jumper behind the other, each showing
+the tool picked last, the rest listed with a line on what each lays by a chevron beside the
+picture, a right-click or a press held a third of a second. Its first form, a triangle in
+the picture's corner, had already gone for not being seen. It saved three buttons' height
+and cost what a rail is for: at a sitting with the window the builder looked for the
+insulated wire and the jumper on the rail and did not find them -- a tool behind another
+tool's picture is not there to someone who has not met it -- and a press held a moment long
+opened a list where a click was meant to arm. Of four rendered rails (a click that lists, a
+corner that lists, the chevron as it was, every tool out) the last was chosen: the pointer
+and Connect, the solder run with Cut Strip, the wire run, then Measure, a hairline between
+each (`FloatingBar.add_separator`). Every button keeps its key (T, Shift+T, W, Shift+W, J),
+and the line the list said under a tool's name is now the second line of its name pill
+(`TOOL_NOTES`). A tool the board cannot take is gone rather than grey, as Cut Strip always
+was, and a run left empty takes its hairline with it (`FloatingBar._tidy`): a solderless
+breadboard shows the pointer, Connect, the insulated wire and the jumper, and no two
+hairlines meet. `test_every_tool_is_on_the_rail_with_a_hairline_between_kinds` pins the
+order.
+
+**The far face is switched on the board, in two words.** Whether the copper on the face
+away from the viewer is drawn through the board (`act_far_side`) was a tick in View > Show
+on the Board, and a board whose wires were all on the far face read as unwired to anybody
+who never opened that menu. Both Faces | This Face sits in the corner pill
+(`canvastools.TwoWaySwitch`), the one in force marked; the action stays the one truth, so
+its menu entry, its stored setting and the switch cannot disagree. "This face" is the face
+in front, whichever it is, so Flip turns it with the board. On a solderless breadboard,
+whose underside is adhesive backing with nothing on it, the switch is not there, as the
+solder tools are not on the rail; the setting waits for the next board. Chosen over an eye per face in
+a Layers popover and a single eye naming the far face: words say the state without a
+legend, and an eye's open or shut has to be learned.
 
 **The rail is told apart by shape, and a tool names itself at once.** At 22 px Connect,
 Solder Trace, Bare Wire and Insulated Wire were all "a line between two dots" -- five

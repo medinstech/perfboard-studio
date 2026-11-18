@@ -399,7 +399,7 @@ from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
 from .boardstrip import SYSTEM_ENTRY, BoardStrip
 from .cabledialog import CableDialog
-from .canvastools import FloatingBar
+from .canvastools import FloatingBar, TwoWaySwitch
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
 from .drawcheck import DrawCheck, DrawProblem
 from .emptystate import EmptyOverlay, EmptyState
@@ -2934,8 +2934,9 @@ class _LeaveWatcher(QObject):
         return False
 
 
-#: What each drawing tool lays, in a line, for the list a group button opens. Functions,
-#: so ``t`` is asked once the language is chosen rather than at import.
+#: What each drawing tool lays, in a line, under its name in the pill beside its button
+#: on the rail. Functions, so ``t`` is asked once the language is chosen rather than at
+#: import.
 TOOL_NOTES: dict[str, Callable[[], str]] = {
     "solder-trace": lambda: t("Solder flowed pad to pad, joined at every pad"),
     "solder-trace-wired": lambda: t("Solder over a tinned wire, for current"),
@@ -6664,21 +6665,28 @@ class MainWindow(QMainWindow):
         tools.add_action(self.act_select_tool, key="Esc")
         tools.add_action(self.act_connect)
         tools.add_separator()
-        pictures = {self.act_draw[kind]: icons.icon(kind) for kind in self.act_draw}
-        notes = {self.act_draw[kind]: TOOL_NOTES[kind]() for kind in self.act_draw}
-        self.solder_tools = tools.add_group(
-            [self.act_draw["solder-trace"], self.act_draw["solder-trace-wired"]], pictures, notes
-        )
-        self.wire_tools = tools.add_group(
-            [self.act_draw["bare-wire"], self.act_draw["insulated-wire"],
-             self.act_draw["top-jumper"]],
-            pictures,
-            notes,
-        )
-        # Only where there is a strip to cut: on any other board it is a disabled button
-        # for a tool that cannot apply, which is clutter rather than information.
+        # Every conductor on the rail, the solder in one run and the wires in the next
+        # (``canvastools``: why they are no longer two buttons with the rest behind them).
+        # A tool the board cannot take is gone, not grey -- solder and bare wire on a
+        # solderless breadboard -- and a run left empty takes its hairline with it.
+        self.draw_tools: dict[str, QToolButton] = {}
+
+        def conductor(kind: str) -> None:
+            self.draw_tools[kind] = tools.add_action(
+                self.act_draw[kind], icons.icon(kind), only_when_enabled=True,
+                note=TOOL_NOTES[kind](),
+            )
+
+        conductor("solder-trace")
+        conductor("solder-trace-wired")
+        # With the solder: cutting a strip is the copper taken away. Only where there is a
+        # strip to cut; on any other board it is a disabled button for a tool that cannot
+        # apply, which is clutter rather than information.
         self.act_cut.setIcon(icons.icon("cut-strip"))
         self.cut_tool = tools.add_action(self.act_cut, only_when_enabled=True)
+        tools.add_separator()
+        for kind in ("bare-wire", "insulated-wire", "top-jumper"):
+            conductor(kind)
         tools.add_separator()
         tools.add_action(self.act_measure)
         self.board_tools = tools
@@ -6686,10 +6694,39 @@ class MainWindow(QMainWindow):
         # View ▸ Show on the Board itself: one menu, two ways in.
         shown = self.menu_show
         view = FloatingBar(self.view, Qt.Corner.BottomRightCorner, vertical=False, name="boardView")
-        view.add_menu(icons.icon("show"), shown, t("What the board shows: the connections still "
-                                                  "missing, hole addresses, pin names, values."),
-                      t("Show"))
+        show_button = view.add_menu(
+            icons.icon("show"), shown, t("What the board shows: the connections still "
+                                         "missing, hole addresses, pin names, values."),
+            t("Show"),
+        )
+        # The far face's copper, said on the board rather than as a tick two menus deep: the
+        # copper the other side of the board is drawn through it, dimmed, or only the face
+        # in front is. "This face" is whichever is in front, so Flip turns it with the board.
+        self.face_switch = TwoWaySwitch(
+            self.act_far_side,
+            (t("Both Faces"), t("The copper on the far face is drawn through the board, "
+                                "dimmed.")),
+            (t("This Face"), t("Only the face in front. A selected wire or a lit net's "
+                               "copper still shows from the far face.")),
+            name="faceSwitch",
+        )
+        view.add_widget(self.face_switch)
         view.add_action(self.act_flip)
+        # A view narrower than the pill -- a small window with both side panels open -- takes
+        # Show's word first and then the switch, whose setting is still in Show's menu; the
+        # rest is one picture each and stays.
+        view.when_narrow(
+            lambda narrow: show_button.setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonIconOnly
+                if narrow
+                else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            )
+        )
+        view.when_narrow(
+            lambda narrow: self.face_switch.setVisible(
+                not narrow and not is_breadboard(self.bus.document.board)
+            )
+        )
         view.add_separator()
         view.add_action(self.act_zoom_out)
         view.add_action(self.act_zoom_in)
@@ -11616,6 +11653,12 @@ class MainWindow(QMainWindow):
                     if usable
                     else t("Nothing is soldered on a breadboard: use a jumper or an insulated wire.")
                 )
+        # Nothing is ever on a breadboard's far face -- underneath is the adhesive backing --
+        # so the face switch goes from the corner as the solder tools go from the rail. The
+        # setting it shows is left as it is, for the next board with two faces.
+        if hasattr(self, "face_switch"):
+            # The pill decides, as it does for a narrow view (``when_narrow`` above).
+            self.board_view_tools.place()
 
         # The two 3D-only items do nothing until the panel has been opened, and a menu
         # item that silently does nothing is worse than one that is visibly unavailable

@@ -695,17 +695,16 @@ QFrame[floating="true"] QToolButton {{
 }}
 QFrame[floating="true"] QToolButton:hover {{ background: {k.bg_hover}; }}
 QFrame[floating="true"] QToolButton:checked {{ background: {k.accent_subtle}; color: {k.accent_text}; }}
-/* A group's list of tools (canvastools._ToolFlyout): a row lights under the pointer and
-   while its tool is armed; its key sits in a hairline cap. */
-QFrame#toolFlyout QLabel {{ background: transparent; }}
-QFrame#toolFlyoutRow {{ background: transparent; border: none; border-radius: {RADIUS_SM}px; }}
-QFrame#toolFlyoutRow:hover, QFrame#toolFlyoutRow:focus {{ background: {k.bg_hover}; }}
-QFrame#toolFlyoutRow[armed="true"] {{ background: {k.accent_subtle}; }}
-QLabel#toolKey {{
+/* Two answers in one hairline frame on a canvas's bar (canvastools.TwoWaySwitch), the one
+   in force marked as a segment is -- at the same weight, so the pill does not change width
+   as it is switched. */
+QFrame[switch="true"] {{
+    background: transparent;
     border: 1px solid {k.border};
-    border-radius: {RADIUS_SM}px;
-    padding: 0 {s["xs"]}px;
+    border-radius: {RADIUS_MD}px;
 }}
+QFrame[switch="true"] QToolButton {{ padding: {s["2xs"]}px {s["sm"]}px; }}
+QFrame[switch="true"] QToolButton:checked {{ font-weight: normal; }}
 QWidget#problemsBar {{ background: {k.bg_surface}; border-top: 1px solid {k.border}; }}
 QLabel#problemsBadge[tone="danger"], QLabel#problemsBadge[tone="warning"] {{
     border-radius: 8px;

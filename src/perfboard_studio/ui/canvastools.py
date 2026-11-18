@@ -15,43 +15,35 @@ one-off command (route everything, place everything) is not a tool and is on nei
 the header's Next button when it is the next step, and a menu entry and a Ctrl+K entry
 always.
 
-TOOLS THAT ARE ONE IDEA SHARE A BUTTON (``add_group``). Solder trace and reinforced trace
-are both solder; bare wire, insulated wire and a jumper over the parts are all a wire. The
-button shows the one picked last and arms it on a click; the chevron beside its picture
-opens the group -- as do a right-click and a press held down -- listing each tool with its
-name, its key and a line on what it lays. Five conductor buttons that differed only in what
-ran between two pads became two, and each keeps its own key (T, Shift+T, W, Shift+W, J).
+EVERY TOOL HAS A BUTTON OF ITS OWN, AND A HAIRLINE KEEPS THE KINDS APART
+(``add_separator``). The five conductors were once two buttons, solder and wire, each showing
+the tool picked last with the rest behind a chevron, a right-click or a press held down.
+It saved three buttons' height and hid what a rail is for: the builder at the window looked
+for the insulated wire and the jumper and did not find them, and a press held a moment long
+opened a list where a click was meant to arm. A run whose every tool the board cannot take
+goes with its hairline (``_tidy``), so a solderless breadboard shows no empty run.
 
 A TOOL SAYS ITS NAME THE MOMENT THE POINTER IS ON IT (``names=True``). The rail is pictures
 alone, and a picture was named only by a tooltip a second later: the builder could not tell
 four of them apart, and hovered each in turn to find out. Now a pill beside the button says
 the tool and its key at once, and stands in for the tooltip rather than adding to it -- two
-labels saying one name, one late, is clutter. The group's list says the rest.
+labels saying one name, one late, is clutter. A conductor's pill says under its name, in a
+line, what it lays (``note``).
 """
 
 from __future__ import annotations
 
 import html
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import (
-    QAction,
-    QContextMenuEvent,
-    QIcon,
-    QKeyEvent,
-    QKeySequence,
-    QMouseEvent,
-    QPainter,
-    QPixmap,
-)
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt
+from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
     QMenu,
-    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -62,32 +54,6 @@ from . import icons, theme
 #: How far a floating bar keeps from the canvas's edges, in logical pixels.
 MARGIN = 12
 
-
-#: How wide the chevron beside a group's picture is, in logical pixels.
-CHEVRON = 8
-
-#: How long a press is held before it opens a group instead of arming its tool.
-HOLD_MS = 350
-
-
-def with_chevron(icon: QIcon, size: int = icons.SIZE) -> QIcon:
-    """``icon`` with a chevron beside it that says the button holds more than one tool.
-
-    It was a triangle in the picture's corner, a fifth of the icon wide, and the builder did
-    not see it: a group read as one tool, and the rest of it as not there at all."""
-    width = size + CHEVRON
-    pixmap = QPixmap(width * 2, size * 2)
-    pixmap.setDevicePixelRatio(2)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    icon.paint(painter, 0, 0, size, size)
-    pen = icons._pen(theme.colour("secondary"), 1.6)
-    painter.setPen(pen)
-    x, mid = size + 2.5, size / 2
-    painter.drawPolyline([QPointF(x, mid - 4), QPointF(x + 4, mid), QPointF(x, mid + 4)])
-    painter.end()
-    return QIcon(pixmap)
 
 
 def tool_name(action: QAction) -> str:
@@ -102,253 +68,56 @@ def tool_key(action: QAction) -> str:
     return "" if shortcut.isEmpty() else shortcut.toString(QKeySequence.SequenceFormat.NativeText)
 
 
-def _plain_label(text: str, role: theme.Role) -> QLabel:
-    label = QLabel(text)
-    label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-    theme.tone(label, role)
-    return label
+class TwoWaySwitch(QFrame):
+    """A checkable action said as its two answers side by side, the one in force marked:
+    the board pill's [Both Faces | This Face].
 
-
-class _FlyoutRow(QFrame):
-    """One tool in a group's list: its picture, its name with a line on what it lays under
-    it, and its key -- the three things the rail's picture could not say.
-
-    A frame that clicks rather than a tool button: a QToolButton with a layout of its own
-    inside a popup closed the popup the moment it was shown."""
-
-    clicked = Signal()
-
-    def __init__(self, action: QAction, picture: QIcon, note: str) -> None:
-        super().__init__()
-        self.action_ = action
-        self._picture = picture
-        self._armed = False
-        self.setObjectName("toolFlyoutRow")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(6, 4, 8, 4)
-        row.setSpacing(8)
-        self.picture = QLabel()
-        self.picture.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        row.addWidget(self.picture, 0, Qt.AlignmentFlag.AlignTop)
-        # Into the row before anything is put in it, and a label only ever HIDDEN: a label
-        # shown before it has a parent is a window of its own, and one flashing up beside
-        # the popup took the activation from it and closed it as it opened.
-        words = QVBoxLayout()
-        words.setSpacing(0)
-        row.addLayout(words, 1)
-        self.name = _plain_label(tool_name(action), "text")
-        words.addWidget(self.name)
-        self.note = _plain_label(note, "secondary")
-        small = self.note.font()
-        small.setPointSizeF(small.pointSizeF() * 0.9)
-        self.note.setFont(small)
-        words.addWidget(self.note)
-        if not note:
-            self.note.hide()
-        self.key = _plain_label(tool_key(action), "tertiary")
-        self.key.setObjectName("toolKey")
-        row.addWidget(self.key, 0, Qt.AlignmentFlag.AlignTop)
-        if not self.key.text():
-            self.key.hide()
-        self.refresh()
-
-    def refresh(self) -> None:
-        """In step with the action: lit while it is the tool armed, grey while the board
-        cannot take it (bare wire on a breadboard)."""
-        armed = self.action_.isChecked()
-        self._armed = armed
-        self.setProperty("armed", armed)
-        theme.restyle(self)
-        self.setEnabled(self.action_.isEnabled())
-        state = QIcon.State.On if armed else QIcon.State.Off
-        mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
-        self.picture.setPixmap(self._picture.pixmap(QSize(icons.SIZE, icons.SIZE), mode, state))
-        role: theme.Role = "accent" if armed else ("text" if self.isEnabled() else "tertiary")
-        theme.tone(self.name, role)
-
-    def isChecked(self) -> bool:
-        """Whether this row's tool is the one armed."""
-        return self._armed
-
-    def click(self) -> None:
-        if self.isEnabled():
-            self.clicked.emit()
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
-            event.position().toPoint()
-        ):
-            self.click()
-            return
-        super().mouseReleaseEvent(event)
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.click()
-            return
-        super().keyPressEvent(event)
-
-
-class _ToolFlyout(QFrame):
-    """A group's tools, listed beside its button: a popup, so a click anywhere else or
-    Escape puts it away, and a click on a row arms that tool."""
-
-    #: Room left round the card for its shadow, which a popup window would otherwise clip.
-    SHADOW = 10
-
-    def __init__(self, owner: _GroupButton) -> None:
-        super().__init__(owner, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setObjectName("toolFlyoutWindow")
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(self.SHADOW, self.SHADOW, self.SHADOW, self.SHADOW)
-        card = QFrame()
-        card.setObjectName("toolFlyout")
-        card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        card.setProperty("floating", True)
-        theme.elevate(card)
-        outer.addWidget(card)
-        rows = QVBoxLayout(card)
-        rows.setContentsMargins(4, 4, 4, 4)
-        rows.setSpacing(1)
-        self.rows: list[_FlyoutRow] = []
-        for action in owner.tools:
-            row = _FlyoutRow(action, owner.picture(action), owner.note(action))
-            row.clicked.connect(lambda _checked=False, a=action: self._pick(a))
-            rows.addWidget(row)
-            self.rows.append(row)
-
-    def open_beside(self, button: QToolButton) -> None:
-        """Beside the bar ``button`` is on, its first row level with the button."""
-        for row in self.rows:
-            row.refresh()
-        self.adjustSize()
-        bar = button.parentWidget() or button
-        x = bar.mapToGlobal(QPoint(bar.width(), 0)).x() + 6 - self.SHADOW
-        y = button.mapToGlobal(QPoint(0, 0)).y() - 4 - self.SHADOW
-        self.move(QPoint(x, y))
-        self.show()
-        focus = next((r for r in self.rows if r.isChecked()), None) or next(
-            (r for r in self.rows if r.isEnabled()), None
-        )
-        if focus is not None:
-            focus.setFocus(Qt.FocusReason.PopupFocusReason)
-
-    def _pick(self, action: QAction) -> None:
-        self.hide()
-        # Picking the tool that is already armed keeps it armed: triggering a checked
-        # action would put it down, which is not what choosing it from a list means.
-        if action.isEnabled() and not action.isChecked():
-            action.trigger()
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        key = event.key()
-        if key in (Qt.Key.Key_Down, Qt.Key.Key_Up):
-            self.focusNextPrevChild(key == Qt.Key.Key_Down)
-            return
-        super().keyPressEvent(event)
-
-
-class _GroupButton(QToolButton):
-    """One button for a group of tools: shows the tool picked last and arms it on a click;
-    the chevron beside its picture lists the whole group, as a right-click and a press held
-    down do."""
+    A menu entry with a tick says what is on only to somebody who opens the menu; two words
+    on the board say it to anybody looking at the board, and either is one click. The action
+    stays the one truth -- its menu entry, its stored setting and this switch all follow it."""
 
     def __init__(
-        self,
-        actions: Sequence[QAction],
-        pictures: dict[QAction, QIcon],
-        notes: dict[QAction, str] | None = None,
+        self, action: QAction, on: tuple[str, str], off: tuple[str, str], *, name: str
     ) -> None:
+        """``on`` and ``off`` are each a word and its tooltip: what the switch says for the
+        action checked, and for it not."""
         super().__init__()
-        self._pictures = pictures
-        self._notes = dict(notes or {})
-        self.tools = tuple(actions)
-        for action in actions:
-            action.triggered.connect(lambda _checked=False, a=action: self.show_tool(a))
-            action.changed.connect(self._skip_a_tool_that_cannot_apply)
-        self._hold = QTimer(self)
-        self._hold.setSingleShot(True)
-        self._hold.setInterval(HOLD_MS)
-        self._hold.timeout.connect(self._open_on_hold)
-        self.flyout: _ToolFlyout | None = None
-        self.show_tool(actions[0])
-        self._skip_a_tool_that_cannot_apply()
+        self.setObjectName(name)
+        self.setProperty("switch", True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(2, 2, 2, 2)
+        row.setSpacing(2)
+        self._action = action
+        self.on_button = self._side(row, *on, value=True)
+        self.off_button = self._side(row, *off, value=False)
+        action.toggled.connect(self._sync)
+        action.changed.connect(self._sync)
+        self._sync()
 
-    def picture(self, action: QAction) -> QIcon:
-        return self._pictures.get(action, action.icon())
+    def _side(self, row: QHBoxLayout, text: str, tip: str, *, value: bool) -> QToolButton:
+        button = QToolButton()
+        button.setText(text)
+        button.setToolTip(tip)
+        button.setCheckable(True)
+        button.setAutoRaise(True)
+        # One of a row of choices: the theme marks the chosen one (``segment``).
+        button.setProperty("segment", True)
+        button.clicked.connect(lambda _checked=False: self._choose(value))
+        row.addWidget(button)
+        return button
 
-    def note(self, action: QAction) -> str:
-        return self._notes.get(action, "")
+    def _choose(self, value: bool) -> None:
+        if self._action.isEnabled():
+            self._action.setChecked(value)
+        # A click on the answer already in force leaves it marked, not unmarked.
+        self._sync()
 
-    def show_tool(self, action: QAction) -> None:
-        """Make ``action`` the one the button shows and arms."""
-        # setDefaultAction ADDS the action to the button, and a tool button holding more
-        # than one action draws a menu arrow and offers them on a held press itself -- a
-        # second way into the group, under the chevron, once a second tool was picked.
-        shown = self.defaultAction()
-        self.setDefaultAction(action)
-        if shown is not None and shown is not action:
-            self.removeAction(shown)
-        self._mark()
-
-    def _mark(self) -> None:
-        shown = self.defaultAction()
-        if shown is not None:
-            self.setIcon(with_chevron(self.picture(shown)))
-
-    def actionEvent(self, event: QEvent) -> None:
-        # A button takes its default action's icon back whenever the action changes -- on
-        # every arming, since arming checks it -- and that dropped the chevron.
-        super().actionEvent(event)  # type: ignore[arg-type]
-        self._mark()
-
-    def _skip_a_tool_that_cannot_apply(self) -> None:
-        """Show a tool the board can take: on a breadboard the wire button is the
-        insulated wire, because bare wire under a breadboard is not a thing."""
-        shown = self.defaultAction()
-        if shown is not None and shown.isEnabled():
-            return
-        usable = next((action for action in self.tools if action.isEnabled()), None)
-        if usable is not None:
-            self.show_tool(usable)
-
-    def open_group(self) -> None:
-        """List the group's tools beside the button."""
-        self._hold.stop()
-        if self.flyout is None:
-            self.flyout = _ToolFlyout(self)
-        self.flyout.open_beside(self)
-
-    def _on_chevron(self, x: float) -> bool:
-        return x >= self.width() - CHEVRON - 6
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self._on_chevron(event.position().x()):
-            event.accept()
-            self.open_group()
-            return
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._hold.start()
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        self._hold.stop()
-        super().mouseReleaseEvent(event)
-
-    def _open_on_hold(self) -> None:
-        if self.isDown():
-            # Held, not clicked: the press opens the list and arms nothing.
-            self.setDown(False)
-            self.open_group()
-
-    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
-        event.accept()
-        self.open_group()
+    def _sync(self, *_: object) -> None:
+        on = self._action.isChecked()
+        self.on_button.setChecked(on)
+        self.off_button.setChecked(not on)
+        self.setEnabled(self._action.isEnabled())
 
 
 class FloatingBar(QFrame):
@@ -383,10 +152,16 @@ class FloatingBar(QFrame):
         self._vertical = vertical
         #: The buttons in the order they were added, each with what it does.
         self.buttons: list[QToolButton] = []
+        #: The hairlines between kinds, which go when the run they close has nothing in it.
+        self._separators: list[QFrame] = []
+        #: What the bar gives up, in order, when the canvas is too small for all of it
+        #: (``when_narrow``).
+        self._narrowing: list[Callable[[bool], None]] = []
         #: ``names``: each button says its tool and key in a pill beside it while the
         #: pointer is on it, in place of its tooltip (see the module's last paragraph).
         self._names = names
         self._keys: dict[QToolButton, str] = {}
+        self._notes: dict[QToolButton, str] = {}
         self.name_pill: QLabel | None = None
         if names:
             pill = QLabel(host)
@@ -409,12 +184,15 @@ class FloatingBar(QFrame):
         button.setAutoRaise(True)
         return button
 
-    def _named(self, button: QToolButton, key: str = "") -> None:
+    def _named(self, button: QToolButton, key: str = "", note: str = "") -> None:
         """Watch ``button`` for the pointer, to name it; ``key`` stands in for an action
-        with no key of its own (the pointer, which Escape comes back to)."""
+        with no key of its own (the pointer, which Escape comes back to), and ``note`` is
+        a line under the name on what the tool lays."""
         if self._names:
             if key:
                 self._keys[button] = key
+            if note:
+                self._notes[button] = note
             button.installEventFilter(self)
 
     def pill_text(self, button: QToolButton) -> str:
@@ -423,10 +201,13 @@ class FloatingBar(QFrame):
         if action is None:
             return ""
         key = tool_key(action) or self._keys.get(button, "")
-        name = html.escape(tool_name(action))
-        if not key:
-            return name
-        return f"{name}&nbsp;&nbsp;{theme.ink(html.escape(key), 'tertiary')}"
+        said = html.escape(tool_name(action))
+        if key:
+            said += f"&nbsp;&nbsp;{theme.ink(html.escape(key), 'tertiary')}"
+        note = self._notes.get(button, "")
+        if note:
+            said += "<br>" + theme.ink(html.escape(note), "secondary")
+        return said
 
     def _show_name(self, button: QToolButton) -> None:
         pill = self.name_pill
@@ -455,10 +236,12 @@ class FloatingBar(QFrame):
         *,
         only_when_enabled: bool = False,
         key: str = "",
+        note: str = "",
     ) -> QToolButton:
         """``action``'s button. ``only_when_enabled``: gone, not greyed, while the action
         cannot apply -- Cut Strip on a board with no strips is clutter, not information.
-        ``key``: what the name pill gives as its key when the action has none."""
+        ``key``: what the name pill gives as its key when the action has none; ``note``:
+        what it says under the name."""
         button = self._button()
         button.setDefaultAction(action)
         if picture is not None:
@@ -468,26 +251,7 @@ class FloatingBar(QFrame):
         self.buttons.append(button)
         if only_when_enabled:
             self._follow_enabled(button, (action,))
-        self._named(button, key)
-        self.adjustSize()
-        return button
-
-    def add_group(
-        self,
-        actions: Sequence[QAction],
-        pictures: dict[QAction, QIcon],
-        notes: dict[QAction, str] | None = None,
-    ) -> _GroupButton:
-        """Several tools behind one button (see the module's first paragraphs), ``notes``
-        saying in a line what each lays. Gone while none of them can apply: the solder
-        tools on a solderless breadboard."""
-        button = _GroupButton(actions, pictures, notes)
-        button.setIconSize(QSize(icons.SIZE + CHEVRON, icons.SIZE))
-        button.setAutoRaise(True)
-        self._named(button)
-        self._layout.addWidget(button)
-        self.buttons.append(button)
-        self._follow_enabled(button, tuple(actions))
+        self._named(button, key, note)
         self.adjustSize()
         return button
 
@@ -527,7 +291,56 @@ class FloatingBar(QFrame):
         line.setFrameShadow(QFrame.Shadow.Plain)
         line.setFixedSize(QSize(22, 1) if self._vertical else QSize(1, 22))
         self._layout.addWidget(line, 0, Qt.AlignmentFlag.AlignCenter)
+        self._separators.append(line)
         self.adjustSize()
+
+    def when_narrow(self, step: Callable[[bool], None]) -> None:
+        """``step(True)`` gives something up when the bar is longer than its canvas has
+        room for, and ``step(False)`` takes it back; the steps are taken in the order they
+        were given, each only while the bar still does not fit -- as the header sheds its
+        words before the step bar loses a step's name."""
+        self._narrowing.append(step)
+
+    def _fit(self) -> None:
+        if not self._narrowing:
+            return
+        room = (self._host.height() if self._vertical else self._host.width()) - 2 * MARGIN
+
+        def length() -> int:
+            hint = self.sizeHint()
+            return hint.height() if self._vertical else hint.width()
+
+        for step in self._narrowing:
+            step(False)
+        for step in self._narrowing:
+            if length() <= room:
+                break
+            step(True)
+
+    def _tidy(self) -> None:
+        """A hairline only between two kinds that are both there: one closing a run whose
+        every button is gone goes too, as does one with nothing after it."""
+        # A hairline is held back until a button after it shows; a second one while it is
+        # held back, or one before any button, is a run with nothing in it.
+        pending: QFrame | None = None
+        seen = False
+        for index in range(self._layout.count()):
+            item = self._layout.itemAt(index)
+            widget = item.widget() if item is not None else None
+            if widget is None:
+                continue
+            if widget in self._separators:
+                if seen and pending is None:
+                    pending = widget
+                else:
+                    widget.setVisible(False)
+            elif widget.isVisibleTo(self):
+                if pending is not None:
+                    pending.setVisible(True)
+                    pending = None
+                seen = True
+        if pending is not None:
+            pending.setVisible(False)
 
     def track(self, source: Callable[[], QRect | None], watched: QWidget) -> None:
         """Follow whatever ``source`` says, asked again every time ``watched`` repaints.
@@ -551,6 +364,9 @@ class FloatingBar(QFrame):
     def place(self) -> None:
         """Into its corner of the canvas, above whatever the canvas draws -- or, for a bar
         that follows something, centred over it, and under it when there is no room above."""
+        if self._corner is not None:
+            self._fit()
+        self._tidy()
         self.adjustSize()
         width, height = self._host.width(), self._host.height()
         if self._corner is None:
