@@ -3968,6 +3968,58 @@ PIN_ROLES: dict[str, str] = {
     "cd4013": "out out in in in in gnd in in in in out out pwr",
     "cd4060": "out out out out out out out gnd out out in in out out out pwr",
     "cd4066": "pas pas pas pas in in gnd pas pas pas pas in in pwr",
+    # -- batch 4: sensors and modules. The pin NAMES are the maker's (checked when the part was
+    # added); the directions are those of the chip on the board, read from its datasheet:
+    # a module's SCL is an input and its SDA bidirectional (it is an I2C slave), SPI is seen
+    # from the module (SCK, MOSI and CS in, MISO out), an interrupt or alert line is an output.
+    # A pin that is a clock in one mode and a data line in another (SDO/SDI, a reader's SDA)
+    # is "io".
+    "lm35": "pwr out gnd",
+    "tmp36": "pwr out gnd",
+    "ds18b20": "gnd io pwr",
+    "a3144": "pwr gnd out",
+    "ss49e": "pwr gnd out",
+    "dht11": "pwr io nc gnd",
+    "dht22": "pwr io nc gnd",
+    "hc-sr04": "pwr in out gnd",
+    "hc-sr501": "pwr out gnd",
+    "tsop38238": "out gnd pwr",
+    "sparkfun-soil-moisture": "out gnd pwr",
+    "sparkfun-temt6000": "pwr gnd out",
+    "ttp223-touch": "gnd pwr out",
+    "ssd1306-i2c-gnd-vcc": "gnd pwr in io",
+    "ssd1306-i2c-vcc-gnd": "pwr gnd in io",
+    "lcd-1602-i2c": "gnd pwr io in",
+    # Hitachi HD44780 pin table: RS, R/W and E are inputs, DB0-DB7 bidirectional, VO the contrast
+    # voltage (a trimmer's wiper: "passive"); A and K are the backlight LED's supply and return.
+    "lcd-1602": "gnd pwr pas in in in io io io io io io io io pwr gnd",
+    # MPU-6050: XDA/XCL are the auxiliary I2C master's data and clock, AD0 the address bit,
+    # INT an output.
+    "gy-521": "pwr gnd in io io out in out",
+    "gy-bme280": "pwr gnd in io",
+    "gy-bmp280": "pwr gnd in io in io",
+    "gy-bme280-3v3": "pwr gnd in io in io",
+    # Adafruit's BME280/BMP280 boards: 3Vo is the 3.3 V their regulator gives, SCK is the SPI
+    # clock or I2C SCL, SDI the SPI data in or I2C SDA, SDO the SPI data out or the I2C address.
+    "adafruit-bme280": "pwr pwr-out gnd in io io in",
+    "adafruit-bmp280": "pwr pwr-out gnd in io io in",
+    "adafruit-bmp280-stemma-qt": "pwr pwr-out gnd in io io in",
+    "adafruit-aht20": "pwr gnd in io",
+    # INA219: VIN+ and VIN- are the two ends of the shunt the load current passes through.
+    "adafruit-ina219": "pwr gnd in io pas pas",
+    "adafruit-ina219-stemma-qt": "pwr gnd in io pas pas",
+    "nrf24l01": "gnd pwr in in in in out out",
+    "tm1637-display": "in io pwr gnd",
+    "max7219-matrix": "pwr gnd in in in",
+    # MFRC522: the board's SDA is the SPI chip select and the I2C data line, so "io".
+    "rc522-module": "pwr in gnd out out in in io",
+    # Stepper drivers: the motor coils are outputs, VMOT the motor supply and VDD the logic's.
+    "pololu-a4988": "in pwr in gnd in out in out in out in out in pwr in gnd",
+    "pololu-drv8825": "in pwr in gnd in out in out in out in out in out in gnd",
+    # Vishay 6N137 pin configuration: 1 NC, 2 anode, 3 cathode, 4 NC, 5 GND, 6 VO, 7 VE (enable
+    # input), 8 VCC. Both ends of the input LED are "in": on the sheet that means "on the input
+    # side", and the two ends of one LED belong together there.
+    "6n137": "nc in in nc gnd out in pwr",
 }
 
 
