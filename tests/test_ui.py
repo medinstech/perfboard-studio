@@ -9460,9 +9460,11 @@ def test_clicking_the_same_pin_twice_cancels_instead_of_wiring_it_to_itself() ->
     _close(window)
 
 
-def test_wiring_two_pins_that_are_already_on_different_nets_is_refused() -> None:
-    """Merging two nets is a change to the circuit, not to two clicks -- and the refusal
-    reads the same here as on the board, because both come from ``plan_pin_join``."""
+def test_wiring_two_pins_that_are_already_on_different_nets_joins_them() -> None:
+    """A pin takes as many wires as the circuit needs, so a line drawn between two nets
+    joins them, as a label naming the other net does -- in one undo step, through the
+    window's own wire tool. The engine's rules (which name stays, a supply and its
+    ground refused) are pinned in ``test_sheet_wire_joins.py``."""
     from perfboard_studio.commands import AddNetPayload
     from perfboard_studio.model import NetNode
 
@@ -9477,9 +9479,12 @@ def test_wiring_two_pins_that_are_already_on_different_nets_is_refused() -> None
     window.schematic_view._wire_click(("R1", "1"))
     window.schematic_view._wire_click(("R2", "1"))
 
+    nets = window.bus.document.nets
+    assert len(nets) == 1
+    assert {(n.component_ref, n.pin) for n in nets[0].nodes} == {("R1", "1"), ("R2", "1")}
+
+    window.bus.undo()
     assert len(window.bus.document.nets) == 2
-    assert window.bus.document.sheet_wires == ()
-    assert "disconnect one of the pins first" in window.statusBar().currentMessage()
     _close(window)
 
 
