@@ -44,7 +44,7 @@ from .system import references_in_use
 # STUB until model.py carries them (reach's commit after the 0.25 tag): the same names, so
 # this import is the only line that changes.
 PinRole: TypeAlias = Literal[  # noqa: UP040
-    "power", "power-out", "ground", "in", "out", "io", "passive", "nc"
+    "power", "power-neg", "power-out", "ground", "in", "out", "io", "passive", "nc"
 ]
 type PinRoles = tuple[tuple[str, PinRole], ...]
 
@@ -3840,12 +3840,13 @@ CATALOG: tuple[CatalogPart, ...] = (
 #: What each lead of a part DOES, one string per part, one word per pin in pin order. Read
 #: from the maker's pin-function table and cross-checked against KiCad 10's symbol of the
 #: same part; a part whose roles are not verified is simply absent, and keeps its numbered
-#: box on the sheet. ``pwr`` is a supply the part takes, ``pwr-out`` one it gives, ``pas``
+#: box on the sheet. ``pwr`` is a supply the part takes, ``neg`` a negative one of a split
+#: supply, ``pwr-out`` one it gives, ``pas``
 #: a lead that is analogue, a reference or a divider tap rather than a signal in or out.
 #: Where this table and KiCad differ, the maker's datasheet is followed and the difference
 #: is said in the part's own ``source``.
 _ROLE_WORDS: dict[str, PinRole] = {
-    "pwr": "power", "pwr-out": "power-out", "gnd": "ground", "in": "in", "out": "out",
+    "pwr": "power", "neg": "power-neg", "pwr-out": "power-out", "gnd": "ground", "in": "in", "out": "out",
     "io": "io", "pas": "passive", "nc": "nc",
 }
 PIN_ROLES: dict[str, str] = {
@@ -3876,12 +3877,12 @@ PIN_ROLES: dict[str, str] = {
     "relay-module-1ch": "pwr gnd in",
     # -- the logic and analogue ICs. Each row was compared pin for pin with KiCad 10's symbol of
     # the same part (every pin number agrees); a difference is said beside its row. A negative
-    # supply (V-, VEE) is "power": it is a supply the part takes, whatever net it is wired to.
+    # supply of a split-supply part (V-, VEE) is "neg": the sheet draws it beside the ground.
     # Op-amps and comparators: an open-collector output (LM393) is still "out".
     "lm358": "out in in gnd in in out pwr",
     "lm393": "out in in gnd in in out pwr",
-    "tl072": "out in in pwr in in out pwr",
-    "ne5532": "out in in pwr in in out pwr",
+    "tl072": "out in in neg in in out pwr",
+    "ne5532": "out in in neg in in out pwr",
     "lm324": "out in in pwr in in out out in in gnd in in out",
     # Gates and inverters, as TI's SN74HC pin functions name them.
     "74hc00": "in in out in in out gnd out in in out in in pwr",
@@ -3891,10 +3892,15 @@ PIN_ROLES: dict[str, str] = {
     "74hc04": "in out in out in out gnd out in out in out in pwr",
     "74hc14": "in out in out in out gnd out in out in out in pwr",
     # Shift registers and counters: QA-QH are three-state outputs (KiCad: tri_state), "out".
+    # Direction read from the pin-function tables: TI SN74HC595 (OE, SRCLR, SRCLK, RCLK, SER are
+    # I; QA-QH and QH' are O), TI SN74HC165 (SH/LD, CLK, CLK INH, SER, A-H are I; QH and ~QH are
+    # O) and TI CD4017B (CLOCK, CLOCK INHIBIT, RESET in; CARRY OUT and the decoded outputs out).
     "74hc595": "out out out out out out out gnd out in in in in in out pwr",
     "74hc165": "in in in in in in out gnd out in in in in in in pwr",
     "cd4017": "out out out out out out out gnd out out out out in in in pwr",
     # Serial parts. SDA is bidirectional, SCL a master's clock so an input to the part.
+    # Microchip 24XX256 pin table: A0-A2 "User Configurable Chip Select" and WP "Write-Protect
+    # Input" (it may be left floating, an internal pull-down keeps it at VSS), so all four "in".
     "24lc256": "in in in gnd io in in pwr",
     # INT is open drain (KiCad: open_collector): "out".
     "pcf8574": "in in in io io io io gnd io io io io out in io pwr",
@@ -3906,16 +3912,23 @@ PIN_ROLES: dict[str, str] = {
     # "in" here for the reason the ATmega328P's is.
     "attiny85": "in io io gnd io io io pwr",
     # X1/X2 are the two ends of a 32.768 kHz crystal: "passive", where KiCad has two inputs --
-    # the datasheet gives no direction, and an oscillator's output is not an input.
-    # SQW/OUT is open drain (KiCad: open_collector), "out".
+    # the datasheet gives no direction (X1 alone takes an external oscillator, X2 then floats).
+    # SQW/OUT is open drain and needs a pull-up (datasheet; KiCad: open_collector), "out".
     "ds1307": "pas pas pwr gnd io in out pwr",
-    # COM is the clamp diodes' common cathode, wired to the load's supply: "passive", as KiCad.
+    # TI ULN2003A pin table: 1B-7B I (Darlington bases), 1C-7C O (collectors), COM "--" (the
+    # flyback diodes' common cathode, wired to the load's supply): "passive", as KiCad.
     "uln2003a": "in in in in in in in gnd pas out out out out out out out",
+    # Maxim/Analog MAX485 pin description: RO receiver output, ~RE receiver output enable and DE
+    # driver output enable (both inputs), DI driver input, A and B the driver outputs and the
+    # receiver inputs at once, so "io".
     "max485": "out in in in gnd io io pwr",
-    # VREF is the reference the conversion is measured against: "passive" (KiCad: power_in);
+    # Microchip MCP3008 pin table: CS/SHDN, DIN and CLK are inputs, DOUT an output, CH0-CH7 analog
+    # inputs. VREF is the reference the conversion is measured against: "passive" (KiCad:
+    # power_in; the table says "Reference Voltage Input");
     # the analogue and digital grounds are both "ground".
     "mcp3008": "in in in in in in in in gnd in in out in gnd pas pwr",
-    # VCC1 is the logic supply, VCC2 the motor supply: both are supplies the part takes.
+    # TI L293D pin table: nEN and nA are I, nY is O; VCC1 is the 5 V logic supply and VCC2 the
+    # drive supply (4.5-36 V): both are supplies the part takes.
     "l293d": "in in out gnd gnd out in pwr in in out gnd gnd out in pwr",
     # ISET takes a resistor to V+, so "passive" (KiCad: input); KiCad types the second GND
     # "passive" and it is a ground.
