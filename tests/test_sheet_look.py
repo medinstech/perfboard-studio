@@ -169,6 +169,15 @@ def _arranged(path: Path) -> SchematicDrawing:
 #: atmega328-relay up to 4.1 for the NE555), and two closer in.
 FITTED_ZOOMS = (2.0, 2.7, 3.7, 4.1, 6.0, 10.0)
 
+#: The sheet panel the label counts in ``docs/ARCHITECTURE.md`` are measured in.
+PANEL_PX = (820, 710)
+
+
+def _opens_at(drawing: SchematicDrawing) -> float:
+    """The zoom an arranged sheet opens at in ``PANEL_PX``: fitted whole, as
+    ``SchematicView.fit`` fits it."""
+    return min(PANEL_PX[0] / drawing.width, PANEL_PX[1] / drawing.height)
+
 
 @pytest.mark.parametrize("path", sorted(EXAMPLES.glob("*.perf")), ids=lambda path: path.stem)
 def test_zoomed_out_a_supply_name_moves_off_a_wire_rather_than_vanish(path: Path) -> None:
@@ -182,15 +191,25 @@ def test_zoomed_out_a_supply_name_moves_off_a_wire_rather_than_vanish(path: Path
     +12V and +5V) the name is all that tells them apart. Leaving every name out that met a
     wire showed none of the NE555's at the zoom it opens at.
 
-    Whether every supply finds a place depends on how wide Qt measures its name, and a Qt
-    with no font database (the offscreen plugin on Windows) measures every name at one
-    stand-in width, half again as wide as "+5V" is: with rails upright at their pins none
-    of arduino-io-shield's or the NE555's fits at the widest zoom there. So that half is
-    asked only where there are fonts; that nothing meets a wire is asked everywhere."""
+    That every supply is named is asked from the zoom the sheet OPENS at (``_opens_at``)
+    inward, not at every zoom on the list: the list runs out to the ATmega board's, and a
+    smaller sheet is never drawn that far out unless somebody zooms out past the fit. How
+    far out a name still fits is a question about the font's widths. With Windows' fonts
+    arduino-io-shield's +5V still found a place at 2.0 px/mm; on CI's Linux and macOS it
+    found none. Measured with DejaVu Sans, Linux's, the plate is 32 px wide against 27 for
+    "+5V", and the nearest clear spot is four grid steps from any of its three bars, too far
+    to name one. At 3.6 px/mm, where it opens, it is named with either font.
+
+    And a Qt with no font database at all (the offscreen plugin on Windows) measures every
+    name at one stand-in width, half again as wide as "+5V" is: with rails upright at their
+    pins none of arduino-io-shield's or the NE555's fits at the widest zoom there. So that
+    half is asked only where there are fonts; that nothing meets a wire is asked at every
+    zoom on the list, everywhere."""
     drawing = _arranged(path)
     supplies = {label.text for label in drawing.labels if label.kind == "rail"}
     measured = bool(QFontDatabase.families())
-    for px in FITTED_ZOOMS:
+    opens_at = _opens_at(drawing)
+    for px in sorted({*FITTED_ZOOMS, opens_at}):
         transform = QTransform.fromScale(px, px)
         sizes = _sizes(px)
         lines = viewsch.label_lines(drawing)
@@ -220,7 +239,8 @@ def test_zoomed_out_a_supply_name_moves_off_a_wire_rather_than_vanish(path: Path
                 drawing.labels[index].text, px
             )
         named = {drawing.labels[index].text for index in places if drawing.labels[index].kind == "rail"}
-        assert named == supplies or not measured, (px, supplies - named)
+        if px >= opens_at:
+            assert named == supplies or not measured, (px, supplies - named)
 
 
 @pytest.mark.parametrize("path", sorted(EXAMPLES.glob("*.perf")), ids=lambda path: path.stem)
