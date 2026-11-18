@@ -1661,3 +1661,30 @@ def test_a_part_whose_roles_are_not_verified_has_none() -> None:
     for part_id in ("bc547", "tact-6x6", "jst-xh-2", "ds3231-rtc"):
         part = catalog_part(part_id)
         assert part is not None and part.pin_roles == (), part_id
+
+
+def test_a_pin_named_for_a_supply_or_a_ground_has_that_role() -> None:
+    """The one cross-check the table can make against itself: a roles row is typed by hand
+    against a pin list, and a word out of step shows up as a ground that is an input."""
+    grounds = {"GND", "VSS", "DGND", "AGND"}
+    supplies = {"VCC", "VDD", "V+", "VCC1", "VCC2", "AVCC", "VBAT", "VIN"}
+    seen = 0
+    for part in CATALOG:
+        for (_, name), (_, role) in zip(part.pin_names, part.pin_roles, strict=False):
+            if name in grounds:
+                assert role == "ground", f"{part.id} {name} is {role}"
+                seen += 1
+            elif name in supplies:
+                assert role == "power", f"{part.id} {name} is {role}"
+                seen += 1
+    assert seen > 40
+
+
+def test_a_logic_gates_outputs_are_the_pins_named_y() -> None:
+    for part_id in ("74hc00", "74hc04", "74hc08", "74hc14", "74hc32", "74hc86"):
+        part = catalog_part(part_id)
+        assert part is not None
+        for (_, name), (_, role) in zip(part.pin_names, part.pin_roles, strict=True):
+            if name in {"GND", "VCC"}:
+                continue
+            assert role == ("out" if name.endswith("Y") else "in"), (part_id, name, role)

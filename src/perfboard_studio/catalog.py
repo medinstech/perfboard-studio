@@ -3874,6 +3874,53 @@ PIN_ROLES: dict[str, str] = {
     # No KiCad symbol: a generic one-channel relay board, its three pins as its maker prints
     # them (VCC, GND, IN).
     "relay-module-1ch": "pwr gnd in",
+    # -- the logic and analogue ICs. Each row was compared pin for pin with KiCad 10's symbol of
+    # the same part (every pin number agrees); a difference is said beside its row. A negative
+    # supply (V-, VEE) is "power": it is a supply the part takes, whatever net it is wired to.
+    # Op-amps and comparators: an open-collector output (LM393) is still "out".
+    "lm358": "out in in gnd in in out pwr",
+    "lm393": "out in in gnd in in out pwr",
+    "tl072": "out in in pwr in in out pwr",
+    "ne5532": "out in in pwr in in out pwr",
+    "lm324": "out in in pwr in in out out in in gnd in in out",
+    # Gates and inverters, as TI's SN74HC pin functions name them.
+    "74hc00": "in in out in in out gnd out in in out in in pwr",
+    "74hc08": "in in out in in out gnd out in in out in in pwr",
+    "74hc32": "in in out in in out gnd out in in out in in pwr",
+    "74hc86": "in in out in in out gnd out in in out in in pwr",
+    "74hc04": "in out in out in out gnd out in out in out in pwr",
+    "74hc14": "in out in out in out gnd out in out in out in pwr",
+    # Shift registers and counters: QA-QH are three-state outputs (KiCad: tri_state), "out".
+    "74hc595": "out out out out out out out gnd out in in in in in out pwr",
+    "74hc165": "in in in in in in out gnd out in in in in in in pwr",
+    "cd4017": "out out out out out out out gnd out out out out in in in pwr",
+    # Serial parts. SDA is bidirectional, SCL a master's clock so an input to the part.
+    "24lc256": "in in in gnd io in in pwr",
+    # INT is open drain (KiCad: open_collector): "out".
+    "pcf8574": "in in in io io io io gnd io io io io out in io pwr",
+    # KiCad types GPA7 and GPB7 "output"; the datasheet's pin table calls every GPAn/GPBn
+    # bidirectional, and so do these. The two NC pins are "nc" in both.
+    "mcp23017": ("io io io io io io io io pwr gnd nc in io nc in in in in out out "
+                 "io io io io io io io io"),
+    # KiCad types RESET, PB3, PB4 and PB0 bidirectional (they are ports as well); RESET is
+    # "in" here for the reason the ATmega328P's is.
+    "attiny85": "in io io gnd io io io pwr",
+    # X1/X2 are the two ends of a 32.768 kHz crystal: "passive", where KiCad has two inputs --
+    # the datasheet gives no direction, and an oscillator's output is not an input.
+    # SQW/OUT is open drain (KiCad: open_collector), "out".
+    "ds1307": "pas pas pwr gnd io in out pwr",
+    # COM is the clamp diodes' common cathode, wired to the load's supply: "passive", as KiCad.
+    "uln2003a": "in in in in in in in gnd pas out out out out out out out",
+    "max485": "out in in in gnd io io pwr",
+    # VREF is the reference the conversion is measured against: "passive" (KiCad: power_in);
+    # the analogue and digital grounds are both "ground".
+    "mcp3008": "in in in in in in in in gnd in in out in gnd pas pwr",
+    # VCC1 is the logic supply, VCC2 the motor supply: both are supplies the part takes.
+    "l293d": "in in out gnd gnd out in pwr in in out gnd gnd out in pwr",
+    # ISET takes a resistor to V+, so "passive" (KiCad: input); KiCad types the second GND
+    # "passive" and it is a ground.
+    "max7219": ("in out out gnd out out out out gnd out out in in out out out out pas pwr "
+                "out out out out out"),
 }
 
 
