@@ -169,7 +169,7 @@ from perfboard_studio.model import (
 )
 from perfboard_studio.occupancy import build_occupancy, stacking_layers
 from perfboard_studio.phrasebook import guide_language, phrasebook
-from perfboard_studio.ratsnest import RatsnestLink, all_links, ratsnest
+from perfboard_studio.ratsnest import RatsnestLine, ratsnest_lines
 from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
 from perfboard_studio.system import references_in_use
 
@@ -1965,7 +1965,7 @@ class RatsnestItem(QGraphicsItem):
 
     def __init__(
         self,
-        links: Sequence[RatsnestLink],
+        links: Sequence[RatsnestLine],
         board: Board,
         side: BoardSide,
         highlight: Sequence[str] = (),
@@ -5256,7 +5256,7 @@ class BoardScene(QGraphicsScene):
         self._focused_holes: tuple[HoleCoord, ...] = ()
         self._bench_holes: frozenset[tuple[int, int]] = frozenset()
         self._ratsnest_item: RatsnestItem | None = None
-        self._ratsnest_links: tuple[RatsnestLink, ...] = ()
+        self._ratsnest_links: tuple[RatsnestLine, ...] = ()
         self._armed_footprint: Footprint | None = None
         #: How the part about to be placed is turned and flipped (R, Shift+R and M while
         #: placing). Kept across placements of the same part -- a row of resistors all go
@@ -5772,7 +5772,7 @@ class BoardScene(QGraphicsScene):
 
         # Recomputed on every rebuild rather than cached across one: a rebuild follows a
         # committed command, which is exactly when what remains to be connected changes.
-        self._ratsnest_links = all_links(ratsnest(self.document, self.lookup))
+        self._ratsnest_links = ratsnest_lines(self.document, self.lookup)
         self._rebuild_ratsnest()
         self._apply_violations()
         # The ghost is an item like any other, so the rebuild above removed it. Placement is a
@@ -5873,7 +5873,7 @@ class BoardScene(QGraphicsScene):
         )
         self.addItem(self._ratsnest_item)
 
-    def ratsnest_links(self) -> tuple[RatsnestLink, ...]:
+    def ratsnest_links(self) -> tuple[RatsnestLine, ...]:
         """What the scene is currently drawing as outstanding, for a status readout."""
         return self._ratsnest_links
 

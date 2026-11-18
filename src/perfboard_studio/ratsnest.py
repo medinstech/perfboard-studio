@@ -24,6 +24,12 @@ unresolvable footprint, a pin number the footprint does not have -- is reported 
 routed, but silently omitting it would understate the remaining work; LVS raises the
 matching issue, and this keeps the two accounts consistent.
 
+WHAT IS DRAWN IS NOT QUITE WHAT IS ROUTED. A link runs pin to pin, because a router needs a
+pin to start from. The line the board view draws (``ratsnest_lines``) runs between the
+nearest COPPER of the two groups instead, so a wire whose end was dragged off a pad points
+from that pad to the wire's free end two holes away, not to the far pad the wire still
+reaches. The same groups and the same count; only the drawn ends move.
+
 Pure and deterministic: no I/O, no clock, no randomness. Ties in the spanning tree are
 broken by pin identity, so the same board always produces the same links in the same
 order.
@@ -81,6 +87,23 @@ class NetRatsnest:
     group_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class RatsnestLine:
+    """One remaining connection as the board view draws it: from the nearest copper of one
+    group to the nearest copper of the other.
+
+    Not a ``RatsnestLink``: an end may be a wire's free end or a hole along a solder run,
+    where no pin is, and nothing routes from a line. A net has as many lines as links.
+    """
+
+    net_id: NetId
+    net_name: str
+    net_class: NetClass
+    from_: HoleCoord
+    to: HoleCoord
+    length_mm: float
+
+
 # ---------------------------------------------------------------------------
 # Extraction
 # ---------------------------------------------------------------------------
@@ -124,24 +147,56 @@ class _PinIndex:
 
     physical_net_of: dict[tuple[str, str], str]
     components_by_ref: dict[str, ComponentInstance]
+    #: The holes where each physical net's copper makes contact, for ``ratsnest_lines``
+    #: only. Empty unless asked for: the autorouter builds this index after every
+    #: connection it lays.
+    contact_holes_of: dict[str, frozenset[HoleCoord]]
 
     @staticmethod
-    def of(doc: PerfDocument, lookup: FootprintLookup) -> _PinIndex:
+    def of(doc: PerfDocument, lookup: FootprintLookup, *, copper: bool = False) -> _PinIndex:
         physical_net_of: dict[tuple[str, str], str] = {}
+        contact_holes_of: dict[str, frozenset[HoleCoord]] = {}
         for pn in extract_physical_nets(doc, lookup):
             for pin in pn.pins:
                 physical_net_of[(pin.component_ref, pin.pin)] = pn.id
+            if copper:
+                contact_holes_of[pn.id] = frozenset(node.hole for node in pn.nodes)
         # First component wins on a duplicate ref, matching lvs.run_lvs -- the two must
         # agree about which hardware a schematic ref refers to or their reports contradict.
         components_by_ref: dict[str, ComponentInstance] = {}
         for component in doc.components:
             components_by_ref.setdefault(component.ref, component)
-        return _PinIndex(physical_net_of=physical_net_of, components_by_ref=components_by_ref)
+        return _PinIndex(
+            physical_net_of=physical_net_of,
+            components_by_ref=components_by_ref,
+            contact_holes_of=contact_holes_of,
+        )
 
 
 def _net_ratsnest(
     net: Net, where: _PinIndex, doc: PerfDocument, lookup: FootprintLookup
 ) -> NetRatsnest:
+    resolved, unresolved = _resolve(net, where, lookup)
+    groups = _group_by_physical_net(resolved)
+    links = _spanning_links(net.id, net.name, net.net_class, groups, doc)
+
+    pin_holes = sorted({(entry.hole.col, entry.hole.row) for entry in resolved})
+    return NetRatsnest(
+        net_id=net.id,
+        net_name=net.name,
+        net_class=net.net_class,
+        links=links,
+        pin_holes=tuple(HoleCoord(col=col, row=row) for col, row in pin_holes),
+        unresolved_pins=tuple(sorted(unresolved)),
+        group_count=len(groups),
+    )
+
+
+def _resolve(
+    net: Net, where: _PinIndex, lookup: FootprintLookup
+) -> tuple[list[_ResolvedPin], list[PhysicalPinRef]]:
+    """The net's pins the board can locate, each with its hole and physical net, and the
+    ones it cannot."""
     resolved: list[_ResolvedPin] = []
     unresolved: list[PhysicalPinRef] = []
 
@@ -159,20 +214,7 @@ def _net_ratsnest(
             unresolved.append(ref)
             continue
         resolved.append(_ResolvedPin(pin=ref, hole=hole, physical_net_id=physical_net_id))
-
-    groups = _group_by_physical_net(resolved)
-    links = _spanning_links(net.id, net.name, net.net_class, groups, doc)
-
-    pin_holes = sorted({(entry.hole.col, entry.hole.row) for entry in resolved})
-    return NetRatsnest(
-        net_id=net.id,
-        net_name=net.name,
-        net_class=net.net_class,
-        links=links,
-        pin_holes=tuple(HoleCoord(col=col, row=row) for col, row in pin_holes),
-        unresolved_pins=tuple(sorted(unresolved)),
-        group_count=len(groups),
-    )
+    return resolved, unresolved
 
 
 def _group_by_physical_net(resolved: list[_ResolvedPin]) -> list[list[_ResolvedPin]]:
@@ -266,6 +308,103 @@ def _spanning_links(
                 best_to[index] = crossing
 
     return tuple(links)
+
+
+# ---------------------------------------------------------------------------
+# Lines, for the board view
+# ---------------------------------------------------------------------------
+
+#: How a place a line may end ranks in a tie: a pin of the net is (0, ref, pin), any other
+#: contact (1, "", ""). Between equal lengths a pin wins, so a board whose groups touch no
+#: copper but their own pins draws exactly its links.
+_Rank = tuple[int, str, str]
+_End = tuple[HoleCoord, _Rank]
+#: (length, the end in the tree, the end outside it, then their holes for a total order).
+_LineKey = tuple[float, _Rank, _Rank, int, int, int, int]
+_LineCrossing = tuple[_LineKey, HoleCoord, HoleCoord]
+
+
+def ratsnest_lines(doc: PerfDocument, lookup: FootprintLookup) -> tuple[RatsnestLine, ...]:
+    """Every remaining connection as the board view draws it, in ``doc.nets`` order.
+
+    The same groups as ``ratsnest`` and as many lines as it has links, but each line is
+    measured between every hole where a group's copper makes contact -- its pins, a
+    wire's two ends, every hole along a solder run -- and not only between its pins. A
+    hole a wire merely lies over is not a contact, so no line ends there. This is for the
+    eye only: the autorouter, the MCP server and every count and length still read
+    ``ratsnest``, whose links run pin to pin.
+    """
+    where = _PinIndex.of(doc, lookup, copper=True)
+    lines: list[RatsnestLine] = []
+    for net in doc.nets:
+        resolved, _ = _resolve(net, where, lookup)
+        groups = _group_by_physical_net(resolved)
+        if len(groups) < 2:
+            continue
+        ends = [_contact_ends(group, where) for group in groups]
+        for length, hole_a, hole_b in _spanning_lines(ends, doc.board):
+            lines.append(
+                RatsnestLine(
+                    net_id=net.id,
+                    net_name=net.name,
+                    net_class=net.net_class,
+                    from_=hole_a,
+                    to=hole_b,
+                    length_mm=length,
+                )
+            )
+    return tuple(lines)
+
+
+def _contact_ends(group: list[_ResolvedPin], where: _PinIndex) -> list[_End]:
+    """Where a line may end on one group: its pins, then the rest of its copper's
+    contacts, each hole once."""
+    rank: dict[HoleCoord, _Rank] = {}
+    for entry in group:
+        key = (0, entry.pin.component_ref, entry.pin.pin)
+        if entry.hole not in rank or key < rank[entry.hole]:
+            rank[entry.hole] = key
+    for contact in where.contact_holes_of.get(group[0].physical_net_id, frozenset()):
+        rank.setdefault(contact, (1, "", ""))
+    return sorted(rank.items(), key=lambda end: (end[1], end[0].col, end[0].row))
+
+
+def _closest_line(tree_ends: list[_End], other_ends: list[_End], board: Board) -> _LineCrossing:
+    best: _LineCrossing | None = None
+    for hole_a, key_a in tree_ends:
+        for hole_b, key_b in other_ends:
+            order: _LineKey = (
+                path_length_mm((hole_a, hole_b), board),
+                key_a,
+                key_b,
+                hole_a.col,
+                hole_a.row,
+                hole_b.col,
+                hole_b.row,
+            )
+            if best is None or order < best[0]:
+                best = (order, hole_a, hole_b)
+    assert best is not None  # Every group holds at least one pin by construction.
+    return best
+
+
+def _spanning_lines(
+    ends: list[list[_End]], board: Board
+) -> list[tuple[float, HoleCoord, HoleCoord]]:
+    """``_spanning_links``' Prim's, cached the same way, over contact holes instead of pins."""
+    out: list[tuple[float, HoleCoord, HoleCoord]] = []
+    best_to: dict[int, _LineCrossing] = {
+        index: _closest_line(ends[0], ends[index], board) for index in range(1, len(ends))
+    }
+    while best_to:
+        chosen = min(best_to, key=lambda index: best_to[index][0])
+        order, hole_a, hole_b = best_to.pop(chosen)
+        out.append((order[0], hole_a, hole_b))
+        for index, current in best_to.items():
+            crossing = _closest_line(ends[chosen], ends[index], board)
+            if crossing[0] < current[0]:
+                best_to[index] = crossing
+    return out
 
 
 # ---------------------------------------------------------------------------

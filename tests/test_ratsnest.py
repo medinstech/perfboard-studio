@@ -21,6 +21,7 @@ import pytest
 from perfboard_studio import persist
 from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef
 from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import format_hole
 from perfboard_studio.model import (
     Board,
     BodySpec,
@@ -37,7 +38,14 @@ from perfboard_studio.model import (
     SolderTraceConductor,
     WireConductor,
 )
-from perfboard_studio.ratsnest import all_links, net_ratsnest, ratsnest, summarize
+from perfboard_studio.ratsnest import (
+    RatsnestLine,
+    all_links,
+    net_ratsnest,
+    ratsnest,
+    ratsnest_lines,
+    summarize,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -366,3 +374,123 @@ def test_one_net_is_what_the_whole_board_says_about_it(path: Path) -> None:
         for entry in whole:
             assert net_ratsnest(board, lookup, entry.net_id) == entry
     assert net_ratsnest(doc, lookup, "no-such-net") is None
+
+
+# ---------------------------------------------------------------------------
+# The lines the board view draws
+# ---------------------------------------------------------------------------
+
+
+def _ends(line: RatsnestLine) -> set[tuple[int, int]]:
+    return {(line.from_.col, line.from_.row), (line.to.col, line.to.row)}
+
+
+def test_a_line_ends_at_a_wires_free_end_not_at_the_pad_the_wire_reaches() -> None:
+    """Sinan's board: a wire ran from C7's pad down to R2's, and its top end was dragged two
+    holes off C7. The link still runs pad to pad -- that is where a router starts -- but the
+    line drawn points from C7 to the wire's free end, the nearest copper of the net."""
+    components = (
+        make_component("c1", "R1", "fp1", hole(5, 0)),
+        make_component("c2", "R2", "fp1", hole(5, 12)),
+    )
+    wire = WireConductor(id="w1", path=(hole(5, 2), hole(5, 12)), kind="insulated-wire", side="bottom")
+    doc = make_doc(
+        components=components,
+        conductors=(wire,),
+        nets=(net("n1", "RESET", "signal", (("R1", "1"), ("R2", "1"))),),
+    )
+
+    (link,) = ratsnest(doc, FOUR_PIN_LOOKUP)[0].links
+    (line,) = ratsnest_lines(doc, FOUR_PIN_LOOKUP)
+
+    assert {(link.from_.col, link.from_.row), (link.to.col, link.to.row)} == {(5, 0), (5, 12)}
+    assert _ends(line) == {(5, 0), (5, 2)}
+    assert line.length_mm == 2 * BOARD.pitch
+    assert (line.net_id, line.net_name, line.net_class) == ("n1", "RESET", "signal")
+
+
+def test_a_line_never_ends_on_a_hole_a_wire_only_lies_over() -> None:
+    """A wire touches its two ends; the bend between them is over a hole, not in it."""
+    components = (
+        make_component("c1", "R1", "fp1", hole(0, 5)),
+        make_component("c2", "R2", "fp1", hole(10, 0)),
+    )
+    wire = WireConductor(
+        id="w1", path=(hole(10, 0), hole(10, 5), hole(20, 5)), kind="bare-wire", side="bottom"
+    )
+    doc = make_doc(
+        components=components,
+        conductors=(wire,),
+        nets=(net("n1", "SIG", "signal", (("R1", "1"), ("R2", "1"))),),
+    )
+
+    (line,) = ratsnest_lines(doc, FOUR_PIN_LOOKUP)
+
+    # (10, 5) is 10 holes from R1 and would be nearest, but nothing is soldered there.
+    assert _ends(line) == {(0, 5), (10, 0)}
+
+
+def test_a_line_may_end_anywhere_along_a_solder_run() -> None:
+    """A solder trace is soldered at every pad it crosses, so its middle is copper too."""
+    components = (
+        make_component("c1", "R1", "fp1", hole(5, 3)),
+        make_component("c2", "R2", "fp1", hole(10, 0)),
+    )
+    trace = solder_trace("t1", tuple(hole(col, 0) for col in range(10, 1, -1)))
+    doc = make_doc(
+        components=components,
+        conductors=(trace,),
+        nets=(net("n1", "SIG", "signal", (("R1", "1"), ("R2", "1"))),),
+    )
+
+    (line,) = ratsnest_lines(doc, FOUR_PIN_LOOKUP)
+
+    assert _ends(line) == {(5, 3), (5, 0)}
+    assert line.length_mm == 3 * BOARD.pitch
+
+
+def test_a_closed_net_draws_no_line() -> None:
+    trace = solder_trace("t1", tuple(hole(col, 0) for col in range(0, 13)))
+    doc = make_doc(components=FOUR_PIN_COMPONENTS, conductors=(trace,), nets=(FOUR_PIN_NET,))
+
+    assert ratsnest_lines(doc, FOUR_PIN_LOOKUP) == ()
+
+
+@pytest.mark.parametrize("path", _BOARDS, ids=lambda path: path.stem)
+def test_the_board_draws_one_line_per_link_and_with_no_copper_exactly_the_links(
+    path: Path,
+) -> None:
+    """The lines are the links with their ends moved to copper, never more or fewer of them,
+    so the "N left" readout and what is drawn agree. With no conductors on the board a
+    group's only copper is its pins, and every line is then its link, end for end."""
+    doc = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    lookup = footprint_lookup()
+    for board, bare in ((doc, False), (dataclasses.replace(doc, conductors=()), True)):
+        nets = ratsnest(board, lookup)
+        lines = ratsnest_lines(board, lookup)
+        assert [line.net_id for line in lines] == [link.net_id for link in all_links(nets)]
+        for link, line in zip(all_links(nets), lines, strict=True):
+            assert line.length_mm <= link.length_mm + 1e-9
+            if bare:
+                assert (line.from_, line.to, line.length_mm) == (link.from_, link.to, link.length_mm)
+
+
+def test_sinans_dragged_wire_on_the_atmega_relay_example() -> None:
+    """The board in the report: the RESET wire's C7 end (U8) dragged to U10."""
+    path = Path(__file__).resolve().parents[1] / "examples" / "atmega328-relay.perf"
+    doc = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    lookup = footprint_lookup()
+    conductors = tuple(
+        dataclasses.replace(c, path=(hole(c.path[0].col, c.path[0].row + 2), *c.path[1:]))
+        if c.id == "cond-30"
+        else c
+        for c in doc.conductors
+    )
+    dragged = dataclasses.replace(doc, conductors=conductors)
+
+    (link,) = all_links(ratsnest(dragged, lookup))
+    (line,) = ratsnest_lines(dragged, lookup)
+
+    board = dragged.board
+    assert {format_hole(link.from_, board), format_hole(link.to, board)} == {"U8", "U21"}
+    assert {format_hole(line.from_, board), format_hole(line.to, board)} == {"U8", "U10"}
