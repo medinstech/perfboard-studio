@@ -106,12 +106,20 @@ class LastBoard:
     """The board opened last, as Home offers to go on with it: its file, the document read
     from it (for its picture), the step bar's steps for it, and the one sentence that says
     what to do next. The window works it out -- the steps are its checks, on the file --
-    and Home only shows it."""
+    and Home only shows it.
 
-    path: Path
+    ``open`` is the board open in the window right now, Home having been reached from File
+    ▸ Home or the header's house: Continue goes back to it rather than reading it again, and
+    the window says its ``name`` and whether it is ``modified``, since it may never have
+    been saved (``path`` None)."""
+
+    path: Path | None
     document: PerfDocument
     steps: tuple[StepState, ...]
     hint: str
+    open: bool = False
+    name: str = ""
+    modified: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,6 +520,8 @@ class Home(QWidget):
     openExample = Signal(str)
     #: A recent board's path, as a string.
     openRecent = Signal(str)
+    #: Continue, or Esc, on the board still open behind Home: back to it as it was.
+    resumeBoard = Signal()
     showAtStartChanged = Signal(bool)
     #: The update card's buttons. The window decides what the primary one does
     #: (download, or install and restart); Home only says it was pressed.
@@ -713,14 +723,17 @@ class Home(QWidget):
         if self.isVisible():
             self._draw_pictures()
 
-    def set_recent(self, paths: Sequence[str]) -> None:
+    def set_recent(self, paths: Sequence[str], *, returning: bool | None = None) -> None:
         """The boards opened last, newest first. With none, Home is the first-start page;
-        with any, it leads with them and the examples shrink to a row. The last board's
-        banner goes until ``set_last`` says again which of them it is."""
+        with any, it leads with them and the examples shrink to a row -- or as
+        ``returning`` says, for a window with a board open and nothing saved yet, whose
+        Home is not a first start either. The last board's banner goes until ``set_last``
+        says again which of them it is."""
         self._recent = [str(p) for p in paths]
         self._last = None
         self.last_card.hide()
-        returning = bool(self._recent)
+        if returning is None:
+            returning = bool(self._recent)
         self.first_run.setVisible(not returning)
         self.welcome.setText(
             theme.heading(t("Welcome back") if returning else t("Welcome to Perfboard Studio"))
@@ -744,12 +757,16 @@ class Home(QWidget):
             self.last_card.hide()
             self._fill_recent()
             return
-        self.last_name.setText(theme.heading(html.escape(last.path.stem)))
-        self.last_name.setToolTip(str(last.path))
-        self.last_folder.setText(
-            "  ·  ".join(part for part in (saved_when(last.path), last.path.parent.name) if part)
-        )
-        self.last_card.setToolTip(str(last.path))
+        path = last.path
+        called = last.name or (path.stem if path is not None else "")
+        self.last_caption.setText(t("Open now") if last.open else t("Last opened"))
+        self.last_name.setText(theme.heading(html.escape(called)))
+        where = str(path) if path is not None else called
+        self.last_name.setToolTip(where)
+        when = t("Not saved") if last.modified else (saved_when(path) if path else "")
+        folder = path.parent.name if path is not None else ""
+        self.last_folder.setText("  ·  ".join(part for part in (when, folder) if part))
+        self.last_card.setToolTip(where)
         drawn = self._picture_of_document(last.document, LAST_PICTURE)
         if drawn is not None:
             self.last_picture.set_picture(drawn[0], on_paper=drawn[1])
@@ -831,6 +848,10 @@ class Home(QWidget):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Enter presses the button the keyboard is on -- a push button outside a dialog
         lets Enter go by -- and, on nothing in particular, opens the board opened last."""
+        if event.key() == Qt.Key.Key_Escape and self._last is not None and self._last.open:
+            # Home over a board left open is a step away from it, and Esc is the step back.
+            self.resumeBoard.emit()
+            return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             focused = self.focusWidget()
             if isinstance(focused, QPushButton) and self.isAncestorOf(focused):
@@ -1026,7 +1047,8 @@ class Home(QWidget):
         six steps as one line, the next thing to do, and Continue. Empty until
         ``set_last``."""
         card, self.last_picture, words = self._banner("homeLast")
-        words.addWidget(_caption(t("Last opened")))
+        self.last_caption = _caption(t("Last opened"))
+        words.addWidget(self.last_caption)
         self.last_name = QLabel()
         self.last_folder = QLabel()
         self.last_folder.setTextFormat(Qt.TextFormat.PlainText)
@@ -1051,7 +1073,11 @@ class Home(QWidget):
         return card
 
     def _continue(self) -> None:
-        if self._last is not None:
+        if self._last is None:
+            return
+        if self._last.open:
+            self.resumeBoard.emit()
+        elif self._last.path is not None:
             self.openRecent.emit(str(self._last.path))
 
     def _shown_recent(self) -> list[str]:

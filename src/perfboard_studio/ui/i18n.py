@@ -6071,9 +6071,21 @@ TURKISH: Mapping[str, str] = {
     "Ready to build. {count} wires are worth a look if you like, once it is open.": (
         "Montaja hazır. İsterseniz açtıktan sonra {count} tele bakabilirsiniz."
     ),
+    "Ready to build. {count} wire is worth a look if you like, back on the board.": (
+        "Montaja hazır. İsterseniz karta döndüğünüzde {count} tele bakabilirsiniz."
+    ),
+    "Ready to build. {count} wires are worth a look if you like, back on the board.": (
+        "Montaja hazır. İsterseniz karta döndüğünüzde {count} tele bakabilirsiniz."
+    ),
     "Last opened": "Son açılan",
     "Welcome to Perfboard Studio": "Perfboard Studio'ya hoş geldiniz",
     "Home": "Ana Sayfa",
+    "&Home": "Ana Sayfaya &Git",
+    "Open now": "Şu an açık",
+    "Home: your boards and the examples. This board stays open (Alt+Home).":
+        "Ana Sayfa: kartlarınız ve örnekler. Bu kart açık kalır (Alt+Home).",
+    "Your boards and the examples. This board stays open, and Continue comes back to it.":
+        "Kartlarınız ve örnekler. Bu kart açık kalır; Devam Et ile ona dönersiniz.",
     "Tour": "Tur",
     "Show All": "Tümünü Göster",
     "Saved today": "Bugün kaydedildi",

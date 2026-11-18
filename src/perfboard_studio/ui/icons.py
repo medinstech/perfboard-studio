@@ -566,6 +566,24 @@ def _camera(p: QPainter) -> None:
     p.drawEllipse(QPointF(50, 57), 15, 15)
 
 
+def _home(p: QPainter) -> None:
+    """A house: Home, the page with the boards and the examples on it."""
+    roof = QPainterPath(QPointF(14, 50))
+    roof.lineTo(QPointF(50, 18))
+    roof.lineTo(QPointF(86, 50))
+    p.drawPath(roof)
+    walls = QPainterPath(QPointF(26, 40))
+    walls.lineTo(QPointF(26, 84))
+    walls.lineTo(QPointF(74, 84))
+    walls.lineTo(QPointF(74, 40))
+    p.drawPath(walls)
+    door = QPainterPath(QPointF(42, 84))
+    door.lineTo(QPointF(42, 62))
+    door.lineTo(QPointF(58, 62))
+    door.lineTo(QPointF(58, 84))
+    p.drawPath(door)
+
+
 def _menu(p: QPainter) -> None:
     """Three lines: the menus, all of them, behind one button in the header."""
     for y in (28, 50, 72):
@@ -606,6 +624,7 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "fit": _fit,
     "delete": _delete,
     "menu": _menu,
+    "home": _home,
     "next-step": _next_step,
     "clear": _clear,
     "exploded": _exploded,

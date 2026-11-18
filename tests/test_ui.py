@@ -13276,6 +13276,108 @@ def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkey
         _close(window)
 
 
+def test_home_is_one_click_away_with_the_board_left_open(monkeypatch) -> None:
+    """The dev3 sitting: Home came up at a start and never again, so once a board was open
+    the page with the boards on it was gone until the window closed. The header's Home,
+    File ▸ Home and Alt+Home bring it up over the board, whose banner is the board open now;
+    Continue and Esc go back to it as it was, and nothing is read from disk again."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        header = window.header
+        assert window.act_home.shortcut() == QKeySequence("Alt+Home")
+        assert window.act_home in window.menuBar().actions()[0].menu().actions()
+        assert not header.home_button.isHidden() and header.home_button.text() == "Home"
+        document = window.bus.system_document
+        monkeypatch.setattr(window, "on_open_recent", lambda path: pytest.fail("read again"))
+
+        header.home_button.click()
+        _settle_events(QApplication)
+        home = window._home_page
+        assert window.home_is_showing() and home is not None
+        assert header.home_button.isHidden() and header.crumb.isHidden()
+        assert not window.act_home.isEnabled(), "File ▸ Home over Home does nothing"
+        assert not home.last_card.isHidden()
+        assert home.last_caption.text() == "Open now"
+        assert window._document_name() in home.last_name.text()
+        assert home.continue_button.hasFocus() or home.focusWidget() is home.continue_button
+
+        home.continue_button.click()
+        _settle_events(QApplication)
+        assert not window.home_is_showing()
+        assert window.bus.system_document is document
+        assert not header.home_button.isHidden() and not header.title.isHidden()
+        assert window.act_home.isEnabled()
+
+        window.act_home.trigger()
+        window.act_home.trigger()  # again, over Home: nothing
+        _settle_events(QApplication)
+        assert window.home_is_showing()
+        QTest.keyClick(home, Qt.Key.Key_Escape)
+        _settle_events(QApplication)
+        assert not window.home_is_showing()
+        assert window.bus.system_document is document
+    finally:
+        _close(window)
+
+
+def test_new_circuit_from_home_over_a_board_asks_about_it_first(monkeypatch) -> None:
+    """At a start the window is already on an empty design and New Circuit only opens the
+    sheet. Over a board left open, it would have put the new circuit's first part into
+    THAT board: it is New Board first now, which asks about unsaved work, and a Cancel
+    there leaves the board as it was."""
+    from PySide6.QtWidgets import QApplication
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        document = window.bus.system_document
+        asked: list[bool] = []
+        monkeypatch.setattr(window, "_offer_to_save", lambda: asked.append(False) or False)
+        window.on_home()
+        window._home_page.new_button.click()
+        _settle_events(QApplication)
+        assert asked and not window.home_is_showing()
+        assert window.bus.system_document is document
+
+        monkeypatch.setattr(window, "_offer_to_save", lambda: asked.append(True) or True)
+        window.on_home()
+        window._home_page.new_button.click()
+        _settle_events(QApplication)
+        assert asked[-1] is True and not window.home_is_showing()
+        fresh = window.bus.system_document
+        assert fresh is not document and not fresh.parts and not fresh.components
+        assert window.current_path is None
+        assert window.is_showing(window.dock_schematic)
+    finally:
+        _close(window)
+
+
+def test_a_blank_window_s_home_has_no_banner_for_it(monkeypatch) -> None:
+    """A window with nothing in it -- no file, no edit, no part -- has nothing to go back
+    to: Home over it is the page a start shows, with no banner for an empty board."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
+    from perfboard_studio.ui.main import MainWindow
+
+    monkeypatch.setattr(MainWindow, "_create_3d_widget", lambda self: None)
+    window = _window_on(create_starter_document(DocumentMeta(name="untitled", created="", modified="")))
+    try:
+        window.show()
+        _settle_events(QApplication)
+        assert window._is_blank()
+        window.on_home()
+        _settle_events(QApplication)
+        assert window.home_is_showing() and window._home_page.last_card.isHidden()
+    finally:
+        _close(window)
+
+
 @pytest.mark.parametrize("size", [(1366, 728), (1920, 1032)])
 def test_an_example_opened_from_home_leaves_the_views_the_room(monkeypatch, size) -> None:
     """The release candidate opened an example from Home with the library across half of a

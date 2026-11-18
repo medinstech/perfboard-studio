@@ -321,10 +321,18 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     return t("The board is ready to build. The build guide takes you through it one part at a time.")
 
 
-def resume_hint(key: StepKey, facts: WorkflowFacts) -> str:
+def resume_hint(key: StepKey, facts: WorkflowFacts, *, behind: bool = False) -> str:
     """``step_hint`` for a board not open yet -- Home's, over the board opened last. The
     one hint that points at the window ("Worth a look, below") says what is there once it
-    is open instead; every other already reads the same before as after."""
+    is open instead; every other already reads the same before as after. ``behind`` is
+    the board open in the window behind Home (File ▸ Home), which is not opened again but
+    gone back to."""
+    if key == "build" and facts.wiring_to_review and behind:
+        return _counted(
+            facts.wiring_to_review,
+            t("Ready to build. {count} wire is worth a look if you like, back on the board."),
+            t("Ready to build. {count} wires are worth a look if you like, back on the board."),
+        )
     if key == "build" and facts.wiring_to_review:
         return _counted(
             facts.wiring_to_review,

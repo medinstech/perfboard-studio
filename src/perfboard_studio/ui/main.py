@@ -3512,6 +3512,7 @@ class MainWindow(QMainWindow):
         )
         # The pill opens the notes, which carry the one action that is possible now.
         self.header.updateRequested.connect(self._on_update_notes)
+        self.header.homeRequested.connect(self.on_home)
         home_menu = QMenu(self)
         home_menu.setToolTipsVisible(True)
         home_menu.aboutToShow.connect(lambda: self._fill_home_menu(home_menu))
@@ -4105,6 +4106,9 @@ class MainWindow(QMainWindow):
             for dock in self.findChildren(QDockWidget):
                 dock.hide()
             self.statusBar().hide()
+        act_home = getattr(self, "act_home", None)
+        if act_home is not None:
+            act_home.setEnabled(False)
         # The header stays, for ☰ and the search; what it says about a board goes.
         self.header.set_home(True)
         self._home = home
@@ -4119,6 +4123,7 @@ class MainWindow(QMainWindow):
             return
         self._central_stack.setCurrentIndex(0)
         self.header.set_home(False)
+        self.act_home.setEnabled(True)
         self.statusBar().show()
         if self._layout_before_home is not None:
             self._restore_layout(self._layout_before_home)
@@ -4277,6 +4282,7 @@ class MainWindow(QMainWindow):
             lambda path: through(lambda: self.on_open_example(Path(path)))()
         )
         home.openRecent.connect(lambda path: through(lambda: self.on_open_recent(Path(path)))())
+        home.resumeBoard.connect(self.leave_home)
         home.showAtStartChanged.connect(
             lambda on: app_settings().setValue(SHOW_WELCOME_KEY, bool(on))
         )
@@ -4289,8 +4295,15 @@ class MainWindow(QMainWindow):
         return home
 
     def _start_a_circuit(self) -> None:
-        """The first door: the window is already on an empty design, so drawing starts on the
-        sheet, with the library open on the first part."""
+        """The first door: on a start the window is already on an empty design, so drawing
+        starts on the sheet, with the library open on the first part. Reached from File ▸
+        Home over a board, it is New Board first -- which asks about unsaved work, and a
+        Cancel there leaves the board as it was."""
+        if not self._is_blank():
+            before = self.bus
+            self.on_new()
+            if self.bus is before:
+                return
         self.show_schematic()
         self.on_schematic_add_part()
 
@@ -5507,6 +5520,15 @@ class MainWindow(QMainWindow):
         for each in (file_menu, edit_menu, circuit_menu, board_menu, route_menu, view_menu,
                      help_menu):
             each.setToolTipsVisible(True)
+        # The way back to Home with the board left open (``on_home``), first in File, where
+        # a person looks for the way back to where they started.
+        act_home = self.act_home = file_menu.addAction(t("&Home"))
+        act_home.setShortcut(QKeySequence("Alt+Home"))
+        act_home.setToolTip(
+            t("Your boards and the examples. This board stays open, and Continue comes back to it.")
+        )
+        act_home.triggered.connect(self.on_home)
+        file_menu.addSeparator()
         # A project first, a bare board second, and that order is the recommendation.
         # A board with a home has somewhere to autosave to, somewhere to put its build
         # guide and something to put in the recent list; an untitled one has none of the
@@ -6567,7 +6589,8 @@ class MainWindow(QMainWindow):
         self._home_keepers: set[int] = {
             pointer(each)
             for each in (
-                act_new_project, act_new, act_open, act_open_project, act_import, act_quit,
+                act_home, act_new_project, act_new, act_open, act_open_project, act_import,
+                act_quit,
                 self.menu_recent.menuAction(), self.menu_examples.menuAction(),
                 language_menu.menuAction(), theme_menu.menuAction(), help_menu.menuAction(),
             )
@@ -16310,14 +16333,7 @@ class MainWindow(QMainWindow):
         """
         if not _stored_bool(app_settings(), SHOW_WELCOME_KEY, True):
             return
-        document = self.bus.system_document
-        if (
-            self.current_path is not None
-            or self.is_modified
-            or every_component(document)
-            or document.parts
-            or document.nets
-        ):
+        if not self._is_blank():
             return
         home = self._make_home(examples_later=True)
         recent = [entry for entry in self._recent_paths() if Path(entry).is_file()][:8]
@@ -16330,6 +16346,53 @@ class MainWindow(QMainWindow):
         # zero timer set here would run before it. Home is up with the row of boards, and
         # the last one comes forward once Home has been painted.
         home.after_first_frame(partial(self._offer_last_board, home, recent))
+
+    def _is_blank(self) -> bool:
+        """Whether the window holds nothing anybody could lose: no file, no edit, and no
+        part, symbol or net."""
+        document = self.bus.system_document
+        return not (
+            self.current_path is not None
+            or self.is_modified
+            or every_component(document)
+            or document.parts
+            or document.nets
+        )
+
+    def on_home(self) -> None:
+        """Home in front of the window with the board LEFT OPEN behind it: File ▸ Home,
+        Alt+Home and the house in the header.
+
+        Home came up at a start and never again, so once a board was open the page with
+        the boards and the examples on it was gone until the window was closed. Here its
+        banner is the board open now, with where it stands; Continue or Esc goes back to it
+        exactly as it was (``leave_home``), and every other door is the command it is
+        anywhere else, so one that replaces the board asks about unsaved work first.
+        """
+        if self.home_is_showing():
+            return
+        home = self._make_home()
+        recent = [entry for entry in self._recent_paths() if Path(entry).is_file()][:8]
+        blank = self._is_blank()
+        home.set_recent([str(entry) for entry in recent], returning=bool(recent) or not blank)
+        home.set_show_at_start(_stored_bool(app_settings(), SHOW_WELCOME_KEY, True))
+        home.set_last(None if blank else self._open_board())
+        self.show_home(home)
+        home.focus_first()
+
+    def _open_board(self) -> LastBoard:
+        """The board open now, as Home's banner shows it (``on_home``)."""
+        facts = self.workflow_facts()
+        steps = workflow_steps(facts)
+        return LastBoard(
+            path=self.current_path,
+            document=self.bus.system_document,
+            steps=steps,
+            hint=resume_hint(next_step(steps), facts, behind=True),
+            open=True,
+            name=self._document_name(),
+            modified=self.is_modified,
+        )
 
     def _offer_last_board(self, home: Home, recent: Sequence[str]) -> None:
         """Hand Home the first of ``recent`` that opens, with where it stands, or nothing:

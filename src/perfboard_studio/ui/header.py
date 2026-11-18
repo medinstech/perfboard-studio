@@ -44,6 +44,8 @@ class HeaderBar(QWidget):
     #: The update pill was clicked: the window opens the release's notes, with the one
     #: action that is possible right now (download, or install and restart).
     updateRequested = Signal()
+    #: The house left of the board's name: Home, with the board left open behind it.
+    homeRequested = Signal()
 
     def __init__(
         self,
@@ -85,6 +87,28 @@ class HeaderBar(QWidget):
         self.menu_button.setToolTip(t("Menus: File, Edit, View and the rest. Alt opens them too."))
         self.menu_button.clicked.connect(lambda: self.open_menu())
         layout.addWidget(self.menu_button)
+
+        # The way back to Home once a board is open, as the first step of a path to the
+        # board's name: "Home › ATmega328 Relay Board". Home came up at a start and never
+        # again -- the dev3 sitting opened a board and found no way back to the page with
+        # the others on it short of closing the window. In words, not a house alone: the
+        # same sitting looked past an icon for something it wanted (the far side's copper).
+        self.home_button = QToolButton()
+        self.home_button.setObjectName("headerHome")
+        self.home_button.setIcon(icons.icon("home"))
+        self.home_button.setIconSize(QSize(icons.SIZE - 2, icons.SIZE - 2))
+        self.home_button.setText(t("Home"))
+        self.home_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.home_button.setAutoRaise(True)
+        self.home_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.home_button.setToolTip(
+            t("Home: your boards and the examples. This board stays open (Alt+Home).")
+        )
+        self.home_button.clicked.connect(self.homeRequested)
+        layout.addWidget(self.home_button)
+        self.crumb = QLabel("›")
+        self.crumb.setObjectName("headerPlace")
+        layout.addWidget(self.crumb)
 
         self.title = QLabel()
         self.title.setObjectName("headerTitle")
@@ -192,8 +216,8 @@ class HeaderBar(QWidget):
         Home used to take the whole header away, and with it every menu: Check for Updates
         could only be reached by opening an example first (the release-candidate sitting)."""
         self._on_home = on
-        for widget in (self.title, self.steps, self.undo_button, self.redo_button,
-                       self.steps.next_button):
+        for widget in (self.home_button, self.crumb, self.title, self.steps,
+                       self.undo_button, self.redo_button, self.steps.next_button):
             widget.setVisible(not on)
         self.gap.setVisible(on)
         self.place.setVisible(bool(self.place.text()) and not on)
