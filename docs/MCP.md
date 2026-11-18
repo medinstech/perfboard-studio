@@ -138,7 +138,7 @@ conductor at a time.
 | **The design** | `add_part` · `update_part` · `delete_part` · `place_parts` · `unplace_component` |
 | **Seeing** | `render_2d_view` · `render_3d_view` · `render_schematic` |
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
-| **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
+| **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `merge_nets` · `update_net` · `delete_net` |
 | **The board** | `set_board` · `use_stock_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `update_board_feature` · `remove_board_feature` |
 | **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_side` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `add_rail` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
@@ -147,7 +147,7 @@ conductor at a time.
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 | **Several boards** | `select_board` · `add_board` · `rename_board` · `remove_board` · `move_to_board` · `add_cable` · `remove_cable` · `get_system_info` |
 
-69 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+70 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -407,6 +407,15 @@ to exactly one net, so `connect_pins` refuses one that another net already holds
 than moving it, and naming a part that is not on the board yet is allowed and reported
 back as `unplaced_pins` — declaring the circuit first and placing it afterwards is a
 real order of work.
+
+**`merge_nets` joins one net into another**, as drawing a wire or a label between two nets
+on the sheet does in the window. The net named `into` keeps its name and class and takes
+the other's pins. It also takes any current, voltage or face it does not declare itself.
+Copper laid for the net that went now claims the one that stayed, but none of it is moved,
+so `run_lvs` reports that net split until the two pieces are wired. A supply and its ground
+are refused (`two-supplies`). It is not `disconnect_pins` and `connect_pins` in a row:
+`connect_pins` refuses a pin another net holds, and doing it that way took several undo
+steps, left the circuit wrong in between and lost what the net declared.
 
 **`restore` clears the undo stack.** It replaces the session's bus, because there is no
 command meaning "become this other document" and inventing one would put a
