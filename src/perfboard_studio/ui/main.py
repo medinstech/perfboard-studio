@@ -899,6 +899,7 @@ RULERS_KEY = "session/showRulers"
 #: Not the old ``session/hatchFarSide``: that switched hatching off to see the far side
 #: plainly, and read as this it would hide the far side from exactly those people.
 FAR_SIDE_KEY = "session/showFarSide"
+NET_NAMES_KEY = "session/showNetNames"
 VALUES_KEY = "session/showValues"
 #: Whether the canvas wheel pans rather than zooms (View > Mouse Wheel).
 WHEEL_SCROLLS_KEY = "session/wheelScrolls"
@@ -6447,6 +6448,21 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_far_side.toggled.connect(self.scene.set_show_far_side)
+        # ON by default: which wire is GND and which is OUT is the question a board full of
+        # wires is read with. N, beside the M of Measure, takes them off and back on in one
+        # key for a crowded corner; the names go by themselves zoomed out, and come back on
+        # every run zoomed in (``view2d.NET_NAME_EVERY_RUN_SCALE``).
+        self.act_net_names = shown_menu.addAction(t("&Net Names on Wires"))
+        self.act_net_names.setCheckable(True)
+        self.act_net_names.setShortcut(QKeySequence("N"))
+        self.act_net_names.setToolTip(
+            t(
+                "Write each net's name on its wires and solder runs: once per net with the "
+                "board in view, on every long run zoomed in. Never on the far face's copper."
+            )
+        )
+        self.act_net_names.toggled.connect(self.scene.set_show_net_names)
+        self.act_net_names.setChecked(True)
 
         # Perfboard work is full of distances that have to be right before anything is
         # soldered -- how far apart to bend a resistor's legs, whether a TO-220 clears
@@ -16971,6 +16987,7 @@ class MainWindow(QMainWindow):
         settings.setValue(RATSNEST_KEY, self.act_ratsnest.isChecked())
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
         settings.setValue(FAR_SIDE_KEY, self.act_far_side.isChecked())
+        settings.setValue(NET_NAMES_KEY, self.act_net_names.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
@@ -17024,6 +17041,7 @@ class MainWindow(QMainWindow):
         self.act_ratsnest.setChecked(_stored_bool(settings, RATSNEST_KEY, True))
         self.act_rulers.setChecked(_stored_bool(settings, RULERS_KEY, True))
         self.act_far_side.setChecked(_stored_bool(settings, FAR_SIDE_KEY, True))
+        self.act_net_names.setChecked(_stored_bool(settings, NET_NAMES_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
         self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
 

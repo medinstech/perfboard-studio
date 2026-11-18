@@ -6861,6 +6861,7 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
     first.act_ratsnest.setChecked(False)
     first.act_far_side.setChecked(False)
     first.act_values.setChecked(True)
+    first.act_net_names.setChecked(False)
     first.on_board_colour("blue")
     first.on_routing_style("solder")
     _close(first)
@@ -6879,6 +6880,8 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
     assert second.scene.show_far_side is False
     assert second.act_values.isChecked() is True
     assert second.scene.show_values is True
+    assert second.act_net_names.isChecked() is False
+    assert second.scene.show_net_names is False
     assert chosen_key() == "blue"
     assert second._routing_style == "solder"
     assert second.act_style["solder"].isChecked() is True
@@ -15571,6 +15574,62 @@ def test_part_values_are_printed_after_their_references() -> None:
         assert all(item.shown_value() == "" for item in items)
     finally:
         _close(window)
+
+
+def test_net_names_are_written_on_the_wires_of_the_face_in_view() -> None:
+    """Show on the Board > Net Names on Wires, on by default and on N: one name per net with
+    the board in view, one on every long run zoomed in, none zoomed out -- and never on the
+    far face's copper, which the component side of a board wired underneath is all of."""
+    from PySide6.QtGui import QTransform
+
+    from perfboard_studio.ui.view2d import (
+        NET_NAME_EVERY_RUN_SCALE,
+        NET_NAME_MIN_RUN_PITCHES,
+        NET_NAME_MIN_SCALE,
+    )
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        assert window.act_net_names.isChecked() and window.scene.show_net_names
+        assert window.act_net_names in window.menu_show.actions()
+        assert window.act_net_names.shortcut().toString() == "N"
+
+        assert window.side == "top"
+        assert window.scene.net_name_layer is not None
+        assert window.scene.net_name_layer.runs == []
+        window._flip_board()
+        layer = window.scene.net_name_layer
+        assert layer is not None and layer.runs
+        pitch = window.bus.document.board.pitch
+        assert all(run.length >= NET_NAME_MIN_RUN_PITCHES * pitch - 1e-6 for run in layer.runs)
+        nets = {net.id: net.name for net in window.bus.document.nets}
+        assert all(nets[run.net_id] == run.text for run in layer.runs)
+
+        def named(scale: float) -> list[str]:
+            return [run.net_id for run, _box in layer.placed(QTransform.fromScale(scale, scale))]
+
+        assert named(NET_NAME_MIN_SCALE - 0.5) == []
+        at_fit = named(NET_NAME_MIN_SCALE + 1)
+        assert at_fit and len(at_fit) == len(set(at_fit))
+        zoomed = named(NET_NAME_EVERY_RUN_SCALE * 3)
+        assert len(zoomed) > len(set(zoomed)) and len(zoomed) > len(at_fit)
+        # No two flags on top of one another, however many runs there are.
+        boxes = [box for _run, box in layer.placed(QTransform.fromScale(40, 40))]
+        assert not any(a.intersects(b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
+
+        window.act_net_names.setChecked(False)
+        assert not window.scene.show_net_names
+    finally:
+        _close(window)
+
+
+def test_net_names_stay_off_a_print_and_a_picture() -> None:
+    """A view setting of the window: the 1:1 sheet is soldered from, and names nothing a
+    soldering iron does not need."""
+    from perfboard_studio.ui.view2d import print_scene
+
+    doc = _example_document("atmega328-relay")
+    assert print_scene(doc, lambda _f: None, "bottom").show_net_names is False  # type: ignore[arg-type]
 
 
 def test_a_value_shares_its_references_plate() -> None:

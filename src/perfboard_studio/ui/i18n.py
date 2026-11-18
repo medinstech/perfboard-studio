@@ -373,6 +373,13 @@ TURKISH: Mapping[str, str] = {
     "Show &Missing Connections": "Eksik &Bağlantıları Göster",
     "Show Hole &Addresses": "Delik &Adreslerini Göster",
     "&Copper on the Far Side": "Karşı &Yüzdeki Bakır",
+    "&Net Names on Wires": "Kablolarda &Net Adları",
+    "Write each net's name on its wires and solder runs: once per net with the board in "
+    "view, on every long run zoomed in. Never on the far face's copper.": (
+        "Her netin adını kablolarının ve lehim yollarının üzerine yazar: kart ekrana "
+        "sığarken her nete bir kez, yakınlaştırınca her uzun düz parçaya. Karşı yüzdeki "
+        "bakırın üzerine hiç yazmaz."
+    ),
     "Both Faces": "İki Yüz",
     "This Face": "Bu Yüz",
     "The copper on the far face is drawn through the board, dimmed.": (

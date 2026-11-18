@@ -253,6 +253,7 @@ from .moduleart import (
 )
 from .partnames import footprint_label
 from .scenetext import (
+    draw_flag_label,
     draw_label,
     draw_outlined_reference,
     draw_physical_label,
@@ -548,6 +549,25 @@ REF_LABEL_ALIGN = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
 REF_LABEL_OFFSET = QPointF(0, -2)
 #: Below this many pixels per millimetre the references are not printed at all.
 REF_LABEL_MIN_SCALE = 3.0
+
+#: The nets' names on the wires (Show on the Board > Net Names on Wires), on a flag like the
+#: sheet's net labels and held at a pixel size like every label here. Below
+#: ``NET_NAME_MIN_SCALE`` pixels per millimetre none is drawn: zoomed out the board is a
+#: picture, and names on it are noise. Up to ``NET_NAME_EVERY_RUN_SCALE`` each net is named
+#: once, on its longest straight run; past it, on every straight run of
+#: ``NET_NAME_MIN_RUN_PITCHES`` holes or more. Chosen 2026-11-18 from rendered candidates:
+#: one flag per net at fit and one per run zoomed in, over a flag on every run at every zoom
+#: (crowded at fit) and over plain text beside the run (lost against the copper).
+NET_NAME_PX = 11
+NET_NAME_MIN_SCALE = 4.5
+NET_NAME_EVERY_RUN_SCALE = 9.0
+NET_NAME_MIN_RUN_PITCHES = 3
+#: The flag's ground, the sheet's dark plate: a name in its net's colour on its own ground
+#: reads over solder, over a wire of any colour and over a part's body alike.
+NET_NAME_FILL = QColor("#1c2026")
+#: A black wire's black is the one colour that does not read on that ground, so its name is
+#: written a step lighter: still the darkest name on the board.
+NET_NAME_BLACK = QColor("#8b93a0")
 #: A part's value, after its reference on the same plate (View > Show Part Values): a step
 #: dimmer than the reference, so the name still reads first.
 VALUE_LABEL = QColor("#aeb6c8")
@@ -5144,6 +5164,134 @@ def print_scene(
     )
 
 
+def straight_runs(points: Sequence[QPointF]) -> list[tuple[QPointF, QPointF]]:
+    """A polyline as its longest straight stretches, (start, end) each: a wire laid from A1
+    to A9 by way of A5 is one run, and a bend starts the next."""
+    out: list[tuple[QPointF, QPointF]] = []
+    if len(points) < 2:
+        return out
+    start = previous = points[0]
+    heading: tuple[float, float] | None = None
+    for point in points[1:]:
+        dx, dy = point.x() - previous.x(), point.y() - previous.y()
+        length = math.hypot(dx, dy)
+        if length < 1e-6:
+            continue
+        unit = (round(dx / length, 3), round(dy / length, 3))
+        if heading is not None and unit != heading:
+            out.append((start, previous))
+            start = previous
+        heading = unit
+        previous = point
+    out.append((start, previous))
+    return out
+
+
+class NetNameRun(NamedTuple):
+    """One straight stretch of copper a net's name may be written on, in scene mm."""
+
+    net_id: str
+    text: str
+    ink: QColor
+    start: QPointF
+    end: QPointF
+    length: float
+
+    def middle(self) -> QPointF:
+        return QPointF((self.start.x() + self.end.x()) / 2, (self.start.y() + self.end.y()) / 2)
+
+
+class NetNameLayerItem(QGraphicsItem):
+    """The nets' names, on the wires and the solder runs that carry them.
+
+    One item for the whole board, as ``ReferenceLayerItem`` is, because which run is named
+    depends on every other run: they are tried longest first, a name goes only on a run
+    longer on screen than the name, and one that would overlap a name already written is
+    left off -- so a crowded corner keeps its clearest name instead of a pile of them, and
+    zooming in brings the rest out. How many is in ``NET_NAME_EVERY_RUN_SCALE``.
+
+    Only the copper on the face in view: a name on the far face would be read as being on
+    this one. Never on paper, which is soldered from, and takes no clicks: what is under a
+    name is the wire, and that is what a click means.
+    """
+
+    def __init__(self, scene: BoardScene) -> None:
+        super().__init__()
+        self._board_scene = scene
+        # Over the copper, the parts and the board's own labels; under the references.
+        self.setZValue(65)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.runs = self._collect()
+
+    def _collect(self) -> list[NetNameRun]:
+        scene = self._board_scene
+        document = scene.document
+        names = {net.id: net.name for net in document.nets}
+        colours = net_colours(document)
+        shortest = NET_NAME_MIN_RUN_PITCHES * document.board.pitch - 1e-6
+        found: list[NetNameRun] = []
+        for item in scene.conductor_items.values():
+            net_id = item.conductor.net_id
+            if item.is_far_side() or net_id is None or net_id not in names:
+                continue
+            colour = colours.get(net_id, "grey")
+            ink = NET_NAME_BLACK if colour == "black" else named_insulation(colour)
+            for start, end in straight_runs(item._points()):
+                length = math.hypot(end.x() - start.x(), end.y() - start.y())
+                if length >= shortest:
+                    found.append(NetNameRun(net_id, names[net_id], ink, start, end, length))
+        found.sort(key=lambda run: (-run.length, run.text, run.start.x(), run.start.y()))
+        return found
+
+    def placed(self, transform: QTransform) -> list[tuple[NetNameRun, QRectF]]:
+        """The runs named at this zoom, each with the flag's box in device pixels."""
+        scale = abs(transform.m11()) or abs(transform.m12()) or 1.0
+        if scale < NET_NAME_MIN_SCALE:
+            return []
+        every_run = scale >= NET_NAME_EVERY_RUN_SCALE
+        metrics = QFontMetricsF(label_font(NET_NAME_PX, True))
+        height = metrics.height()
+        named: set[str] = set()
+        taken: list[QRectF] = []
+        out: list[tuple[NetNameRun, QRectF]] = []
+        for run in self.runs:
+            if not every_run and run.net_id in named:
+                continue
+            width = metrics.horizontalAdvance(run.text)
+            across = abs(run.end.x() - run.start.x()) >= abs(run.end.y() - run.start.y())
+            # Room either side of the name along a run, or two names' height down one.
+            need = width + 16 if across else height * 2.2
+            if run.length * scale < need:
+                continue
+            centre = transform.map(run.middle())
+            box = QRectF(
+                centre.x() - (width + 14) / 2, centre.y() - (height + 6) / 2, width + 14, height + 6
+            )
+            if any(box.intersects(other) for other in taken):
+                continue
+            taken.append(box.adjusted(-4, -4, 4, 4))
+            named.add(run.net_id)
+            out.append((run, box))
+        return out
+
+    def boundingRect(self) -> QRectF:
+        scene = self.scene()
+        return scene.sceneRect() if scene is not None else QRectF()
+
+    def shape(self) -> QPainterPath:
+        return QPainterPath()  # Never what the pointer is over.
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        if not self._board_scene.show_net_names or isinstance(painter.device(), QPagedPaintDevice):
+            return
+        centred = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+        for run, _box in self.placed(painter.transform()):
+            draw_flag_label(
+                painter, run.middle(), run.text, NET_NAME_PX, centred,
+                colour=run.ink, fill=NET_NAME_FILL,
+            )
+
+
 class BoardScene(QGraphicsScene):
     """The 2D board, rebuilt from a ``PerfDocument`` snapshot each time it changes.
 
@@ -5214,9 +5362,14 @@ class BoardScene(QGraphicsScene):
         show_references: bool = True,
         show_values: bool = False,
         show_vias: bool = True,
+        show_net_names: bool = False,
     ) -> None:
         super().__init__()
         self.lookup = lookup
+        #: The nets' names on the wires (``NetNameLayerItem``): the window's view setting,
+        #: on there by default; off in every picture, print and export made from a scene.
+        self.show_net_names = show_net_names
+        self.net_name_layer: NetNameLayerItem | None = None
         #: Mark each via (``ViaMarkItem``). On screen always; off on the 1:1 sheet.
         self.show_vias = show_vias
         self.via_items: list[ViaMarkItem] = []
@@ -5463,6 +5616,15 @@ class BoardScene(QGraphicsScene):
             self.reference_layer.update()
         self.update()
 
+    def set_show_net_names(self, show: bool) -> None:
+        """Write the nets' names on the wires, or not. Nothing to rebuild: the layer reads
+        the setting as it paints."""
+        if show == self.show_net_names:
+            return
+        self.show_net_names = show
+        if self.net_name_layer is not None:
+            self.net_name_layer.update()
+
     def set_show_rulers(self, show: bool) -> None:
         if show != self.show_rulers:
             self.show_rulers = show
@@ -5564,6 +5726,7 @@ class BoardScene(QGraphicsScene):
         # tells the layer to repaint, and the layer is one of the items being destroyed.
         self.reference_layer = None
         self.lead_ends_layer = None
+        self.net_name_layer = None
         previously_selected_notes = {
             note_id for note_id, note_item in self.board_note_items.items() if note_item.isSelected()
         }
@@ -5733,6 +5896,8 @@ class BoardScene(QGraphicsScene):
                 mark = ViaMarkItem(hole, board, self.side, self.finger_cells)
                 self.addItem(mark)
                 self.via_items.append(mark)
+        self.net_name_layer = NetNameLayerItem(self)
+        self.addItem(self.net_name_layer)
 
         # Laid out for the whole board at once: where one part's names go depends on what
         # stands beside it. See bodies.lay_out_pin_names.
