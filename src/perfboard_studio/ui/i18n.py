@@ -2405,6 +2405,14 @@ TURKISH: Mapping[str, str] = {
     "Fuse or PTC": "Sigorta ya da PTC",
     "Battery (names + and -)": "Pil (adlar + ve -)",
     "DC jack (names + and -)": "DC jak (adlar + ve -)",
+    "Voltage regulator (names IN and OUT)": "Voltaj regülatörü (adlar IN ve OUT)",
+    "Relay (names COIL, COIL, COM, NO, NC)": "Röle (adlar COIL, COIL, COM, NO, NC)",
+    "Switch (two leads, or three with a COM)": "Anahtar (iki bacak, ya da COM'lu üç)",
+    "Pushbutton": "Basmalı düğme",
+    "Buzzer (names + and -)": "Buzzer (adlar + ve -)",
+    "Inductor": "Bobin",
+    "Motor (two leads)": "Motor (iki bacak)",
+    "Optocoupler (names A, K, C, E)": "Optokuplör (adlar A, K, C, E)",
     "CR2032 coin cell holder, Keystone 1067 (vertical)": (
         "CR2032 düğme pil yuvası, Keystone 1067 (dikey)"
     ),

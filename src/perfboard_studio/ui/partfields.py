@@ -109,6 +109,14 @@ class PinoutEditor(QWidget):
             ("led", t("LED (names A, K)")),
             ("battery", t("Battery (names + and -)")),
             ("jack", t("DC jack (names + and -)")),
+            ("regulator", t("Voltage regulator (names IN and OUT)")),
+            ("relay", t("Relay (names COIL, COIL, COM, NO, NC)")),
+            ("switch", t("Switch (two leads, or three with a COM)")),
+            ("button", t("Pushbutton")),
+            ("buzzer", t("Buzzer (names + and -)")),
+            ("inductor", t("Inductor")),
+            ("motor", t("Motor (two leads)")),
+            ("optocoupler", t("Optocoupler (names A, K, C, E)")),
         )
         for value, label in choices:
             self.symbol.addItem(label, value)

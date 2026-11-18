@@ -27,7 +27,7 @@ from perfboard_studio.catalog import (
 from perfboard_studio.footprints import body_extent, get_footprint
 from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
 from perfboard_studio.model import STANDARD_PITCH_MM
-from perfboard_studio.schematic import DECLARED_SYMBOL_PINS
+from perfboard_studio.schematic import PinSpec, declared_symbol_kind
 
 
 @pytest.mark.parametrize("part", CATALOG, ids=lambda part: part.id)
@@ -43,11 +43,11 @@ def test_every_entry_is_a_part_that_can_be_placed(part) -> None:
         # package does not have is a pinout copied from some other package.
         assert [number for number, _ in part.pin_names] == [pin.number for pin in footprint.pins]
     if part.symbol is not None:
-        names = {name for _, name in part.pin_names}
-        assert DECLARED_SYMBOL_PINS[part.symbol] <= names, (
-            f"{part.id} is a {part.symbol} whose legs are not named "
-            f"{sorted(DECLARED_SYMBOL_PINS[part.symbol])}, so it would be drawn as a box"
-        )
+        # The sheet's own question, asked of the entry: would it draw as what it declares?
+        named = dict(part.pin_names)
+        specs = tuple(PinSpec(pin.number, named.get(pin.number)) for pin in footprint.pins)
+        kind, why_not = declared_symbol_kind(part.symbol, specs, footprint)
+        assert kind == part.symbol, f"{part.id} would be drawn as a box: {why_not}"
 
 
 def test_ids_are_unique() -> None:

@@ -98,6 +98,7 @@ from .schsymbols import (
 
 # Re-exported: the window, the exporter and the tests have always read these from here.
 from .schsymbols import DECLARED_SYMBOL_PINS as DECLARED_SYMBOL_PINS
+from .schsymbols import DECLARED_SYMBOL_RULES as DECLARED_SYMBOL_RULES
 from .schsymbols import GRID_MM as GRID_MM
 from .schsymbols import LEAD_MM as LEAD_MM
 from .schsymbols import NET_LABEL_ADVANCE as NET_LABEL_ADVANCE
@@ -1044,6 +1045,7 @@ def _orient_body(body: SymbolBody, rotation: Rotation, mirrored: bool) -> Symbol
         pins=pins,
         width=height if turned_quarter else width,
         height=width if turned_quarter else height,
+        names_inside=body.names_inside,
     )
 
 
@@ -2791,7 +2793,10 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
         # be, and its number on the lead outside -- the arrangement every schematic uses,
         # and the only one where both fit. A box none of whose pins is named draws exactly
         # what it always did.
-        if placed.kind in ("ic", "connector", "box", "relay"):
+        #
+        # A body that leaves room for its names says so (``SymbolBody.names_inside``), and the
+        # kinds that always did are listed because their bodies are unchanged.
+        if placed.kind in ("ic", "connector", "box", "relay") or placed.body.names_inside:
             for pin in placed.body.pins:
                 inside = _inside_text(pin, options)
                 if inside is None:

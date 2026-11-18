@@ -104,6 +104,13 @@ SymbolKind: TypeAlias = Literal[  # noqa: UP040
     "pnp",
     "nmos",
     "pmos",
+    # The same claim, for parts whose leads the part's own NAMES settle.
+    "regulator",
+    "button",
+    "buzzer",
+    "inductor",
+    "motor",
+    "optocoupler",
 ]
 
 
@@ -164,6 +171,10 @@ class SymbolBody:
     pins: tuple[SymbolPin, ...]
     width: Mm
     height: Mm
+    #: The sheet prints each pin's name just inside the body, at its lead, and the number
+    #: on the lead outside. Only a body that leaves room for the names says so: the leads
+    #: stop at the box and nothing is drawn through the text.
+    names_inside: bool = False
 
 
 def _p(x: Mm, y: Mm) -> Point2:
@@ -862,7 +873,85 @@ DECLARED_SYMBOL_PINS: dict[PartSymbol, frozenset[str]] = {
     "battery": frozenset({"+", "-"}),
     # The centre pin is the plus and the sleeve the minus, so the leads must say which.
     "jack": frozenset({"+", "-"}),
+    # The lead named + is the one the symbol marks, so the leads must say which.
+    "buzzer": frozenset({"+", "-"}),
 }
+
+#: Declared symbols whose leads are found by NAME in a way a set of exact names cannot say:
+#: a relay has COIL twice, a regulator's third lead is GND or ADJ or anything. Each rule gives
+#: the reason a part cannot be drawn as that kind, or ``None`` when it can. A kind is in this
+#: table or in ``DECLARED_SYMBOL_PINS``, never both, so no declaration is checked twice
+#: (``test_part_pinout`` holds the two to that).
+DECLARED_SYMBOL_RULES: dict[PartSymbol, Callable[[tuple[PinSpec, ...]], str | None]] = {}
+
+
+def _rule(symbol: PartSymbol) -> Callable[
+    [Callable[[tuple[PinSpec, ...]], str | None]], Callable[[tuple[PinSpec, ...]], str | None]
+]:
+    def register(
+        check: Callable[[tuple[PinSpec, ...]], str | None],
+    ) -> Callable[[tuple[PinSpec, ...]], str | None]:
+        DECLARED_SYMBOL_RULES[symbol] = check
+        return check
+
+    return register
+
+
+@_rule("regulator")
+def _regulator_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    inp = _first_called(pins, *_REGULATOR_IN)
+    out = _first_called(pins, *_REGULATOR_OUT)
+    if len(pins) != 3 or inp is None or out is None or inp is out:
+        return (
+            "declared regulator, but a regulator symbol needs three pins, one named IN (or VIN) "
+            "and one named OUT (or VOUT)"
+        )
+    return None
+
+
+@_rule("relay")
+def _relay_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    parsed = _relay_poles(pins)
+    if isinstance(parsed, str):
+        return f"declared relay, but a relay symbol {parsed}"
+    return None
+
+
+@_rule("switch")
+def _switch_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    if len(pins) == 2:
+        return None
+    if len(pins) == 3 and _first_called(pins, "COM", "C") is not None:
+        return None
+    return "declared switch, but a switch has two leads, or three with the common one named COM"
+
+
+@_rule("button")
+def _button_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    return None if len(pins) == 2 else "declared button, but a button has two leads"
+
+
+@_rule("inductor")
+def _inductor_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    return None if len(pins) == 2 else "declared inductor, but an inductor has two leads"
+
+
+@_rule("motor")
+def _motor_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    return None if len(pins) == 2 else "declared motor, but a motor has two leads"
+
+
+@_rule("optocoupler")
+def _optocoupler_rule(pins: tuple[PinSpec, ...]) -> str | None:
+    leads = {"A", "K", "C", "E"}
+    names = {(p.name or "").upper() for p in pins}
+    if not leads <= names or not names <= leads | {"B", "NC"} or len(names) != len(pins):
+        return (
+            "declared optocoupler, but an optocoupler symbol needs pins named A, K, C and E "
+            "(and B or NC, if the part has them)"
+        )
+    return None
+
 
 #: How many leads a declared symbol with no names to check must have.
 _DECLARED_LEADS: dict[PartSymbol, int] = {"potentiometer": 3}
@@ -881,6 +970,10 @@ def declared_symbol_kind(
     The caller finishes the sentence with what it drew instead, which is not always a box:
     a declared zener on an unpolarised axial falls back to the resistor it looks like.
     """
+    rule = DECLARED_SYMBOL_RULES.get(symbol)
+    if rule is not None:
+        why_not = rule(pins)
+        return (symbol, None) if why_not is None else (None, why_not)
     needed = DECLARED_SYMBOL_PINS[symbol]
     if needed:
         names = [pin.name for pin in pins]
@@ -1264,6 +1357,352 @@ def _pmos_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> Symbol
     return _mosfet_body(pins, p_channel=True)
 
 
+# -- bodies that find their leads by NAME ---------------------------------------------------
+#
+# A regulator, a relay, a buzzer, an optocoupler: the package says nothing about which lead is
+# which (a 7805 is IN GND OUT, an LM317 ADJ OUT IN and an LD1117 GND OUT IN in one TO-220), so
+# every body below reads the NAME the part gives a lead and never its number. They are drawn
+# in whole grid steps, which is why they are written in steps (``_g``) and not millimetres.
+
+
+def _g(x: float, y: float) -> Point2:
+    return Point2(x=x * GRID_MM, y=y * GRID_MM)
+
+
+def _line(*coords: float) -> SymbolShape:
+    """A polyline through (x0, y0, x1, y1, ...) in grid steps."""
+    return SymbolShape(
+        kind="polyline", points=tuple(_g(coords[i], coords[i + 1]) for i in range(0, len(coords), 2))
+    )
+
+
+def _poly(*coords: float, filled: bool = False) -> SymbolShape:
+    return SymbolShape(
+        kind="polygon",
+        points=tuple(_g(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)),
+        filled=filled,
+    )
+
+
+def _ring(x: float, y: float, radius: float) -> SymbolShape:
+    return SymbolShape(kind="circle", points=(_g(x, y),), radius=radius * GRID_MM)
+
+
+def _rect(x0: float, y0: float, x1: float, y1: float) -> SymbolShape:
+    return _poly(x0, y0, x1, y0, x1, y1, x0, y1)
+
+
+def _arrowhead_at(tip: tuple[float, float], toward: tuple[float, float]) -> SymbolShape:
+    """A filled head at ``tip`` (grid steps) pointing along ``toward``."""
+    length = math.hypot(*toward)
+    ux, uy = toward[0] / length, toward[1] / length
+    bx, by = tip[0] - ux * 0.5, tip[1] - uy * 0.5
+    return _poly(
+        tip[0], tip[1], bx - uy * 0.25, by + ux * 0.25, bx + uy * 0.25, by - ux * 0.25, filled=True
+    )
+
+
+def _lead(spec: PinSpec, x: float, y: float, side: PinSide) -> SymbolPin:
+    return SymbolPin(number=spec.number, name=spec.name, at=_g(x, y), side=side)
+
+
+def _called(name: str | None, *words: str) -> bool:
+    """Whether a pin's name is one of ``words``, any case."""
+    return name is not None and name.upper() in words
+
+
+def _first_called(pins: Sequence[PinSpec], *words: str) -> PinSpec | None:
+    return next((p for p in pins if _called(p.name, *words)), None)
+
+
+def _starts(name: str | None, prefix: str) -> bool:
+    return name is not None and name.upper().startswith(prefix)
+
+
+_REGULATOR_IN = ("IN", "VIN", "VI")
+_REGULATOR_OUT = ("OUT", "VOUT", "VO")
+
+
+def _regulator_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """Three terminals in a box: input left, output right, ground or adjust underneath.
+
+    78xx reads IN, GND, OUT and the LM317 ADJ, OUT, IN; both draw the same -- the input and
+    the output face their loads and the third lead goes where the return goes. Each lead is
+    found by its NAME, never its number.
+    """
+    inp = _first_called(pins, *_REGULATOR_IN)
+    out = _first_called(pins, *_REGULATOR_OUT)
+    assert inp is not None and out is not None, "declared_symbol_kind only asks for a regulator it can read"
+    ref = next(p for p in pins if p is not inp and p is not out)
+    shapes = (_rect(2, 1, 8, 5), _line(0, 3, 2, 3), _line(8, 3, 10, 3), _line(5, 5, 5, 7))
+    drawn = (_lead(inp, 0, 3, "left"), _lead(out, 10, 3, "right"), _lead(ref, 5, 7, "bottom"))
+    return SymbolBody(shapes, drawn, 10 * GRID_MM, 8 * GRID_MM, names_inside=True)
+
+
+def _relay_poles(
+    pins: Sequence[PinSpec],
+) -> tuple[list[PinSpec], list[tuple[PinSpec, PinSpec | None, PinSpec | None]]] | str:
+    """The winding's two pins and each contact set as (COM, NO, NC), or why they cannot be read.
+
+    A set starts at a COM and takes the NO and the NC named after it; a NO or NC named before
+    any COM belongs to the first. Names only: Songle and Omron number the same outline
+    differently, so a number says nothing about which contact is the common one.
+    """
+    coil = [p for p in pins if _starts(p.name, "COIL")]
+    if len(coil) != 2:
+        return "needs two pins named COIL"
+    coms = [p for p in pins if _starts(p.name, "COM")]
+    if not coms:
+        return "needs a pin named COM"
+    normally_open: dict[str, PinSpec] = {}
+    normally_closed: dict[str, PinSpec] = {}
+    current = coms[0]
+    for p in pins:
+        if p in coil:
+            continue
+        if _starts(p.name, "COM"):
+            current = p
+            continue
+        if _starts(p.name, "NO"):
+            held = normally_open
+        elif _starts(p.name, "NC"):
+            held = normally_closed
+        else:
+            return (
+                f"does not know what pin {p.number} ({p.name or 'unnamed'}) is: "
+                "name it COIL, COM, NO or NC"
+            )
+        if current.number in held:
+            return "has two NO or two NC contacts under one COM"
+        held[current.number] = p
+    return coil, [(c, normally_open.get(c.number), normally_closed.get(c.number)) for c in coms]
+
+
+def _relay_by_names(pins: tuple[PinSpec, ...]) -> SymbolBody:
+    """A box with the coil on its left, the contacts on its right and a dashed link between.
+
+    As many contact sets are stacked as there are COMs, one armature link running through all
+    of them. The leads stop at the box and the sheet prints each pin's NAME just inside it, so
+    the coil's strokes start after the names and the contacts end before them.
+    """
+    parsed = _relay_poles(pins)
+    assert not isinstance(parsed, str), "declared_symbol_kind only asks for a relay it can read"
+    coil, poles = parsed
+    rows_per_pole = 6
+    height = rows_per_pole * len(poles)
+    body_r = 12
+    mid = height / 2
+    top, bottom = mid - 2, mid + 2
+    shapes: list[SymbolShape] = [
+        _rect(2, 0, body_r, height),
+        _line(0, top, 2, top),
+        _line(0, bottom, 2, bottom),
+        # the coil: leads in from the names, a winding between them
+        _line(3.9, top, 5, top, 5, mid - 1.1),
+        _line(5, mid + 1.1, 5, bottom, 3.9, bottom),
+        _rect(4.4, mid - 1.1, 5.6, mid + 1.1),
+        _line(4.4, mid + 0.4, 5.6, mid - 0.4),
+    ]
+    drawn = [_lead(coil[0], 0, top, "left"), _lead(coil[1], 0, bottom, "left")]
+    # the mechanical link, from the winding through every set: separate strokes, because a
+    # line between a coil and a contact is what a WIRE looks like
+    x = 5.9
+    while x + 0.4 <= 9.1:
+        shapes.append(_line(x, mid, x + 0.4, mid))
+        x += 0.8
+    pivot = 10.2
+    for index, (com, no, nc) in enumerate(poles):
+        y0 = index * rows_per_pole
+        com_y = y0 + 3
+        shapes += [_ring(pivot, com_y, 0.2), _line(body_r, com_y, body_r + 2, com_y)]
+        if nc is not None:
+            shapes += [
+                _line(8, y0 + 1, pivot, y0 + 1),
+                _ring(8, y0 + 1, 0.2),
+                _line(body_r, y0 + 1, body_r + 2, y0 + 1),
+            ]
+            drawn.append(_lead(nc, body_r + 2, y0 + 1, "right"))
+            blade_tip = (8.3, y0 + 1.3)
+        else:
+            blade_tip = (8.5, y0 + 1.7)
+        if no is not None:
+            shapes += [
+                _line(8, y0 + 5, pivot, y0 + 5),
+                _ring(8, y0 + 5, 0.2),
+                _line(body_r, y0 + 5, body_r + 2, y0 + 5),
+            ]
+            drawn.append(_lead(no, body_r + 2, y0 + 5, "right"))
+        shapes.append(_line(pivot, com_y, *blade_tip))
+        drawn.append(_lead(com, body_r + 2, com_y, "right"))
+    return SymbolBody(
+        tuple(shapes), tuple(drawn), (body_r + 2) * GRID_MM, height * GRID_MM, names_inside=True
+    )
+
+
+def _relay_dispatch(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """Names first, the package second, as for a diode's cathode: a relay whose pins say COIL
+    and COM is drawn from them; one that names nothing keeps the numbered contact block."""
+    if not isinstance(_relay_poles(pins), str):
+        return _relay_by_names(pins)
+    return _relay_body(pins, footprint)
+
+
+def _switch_spst(a: PinSpec, b: PinSpec) -> SymbolBody:
+    """A toggle or slide switch with one throw: a raised blade between two contacts."""
+    shapes = (
+        _line(0, 2, 2.5, 2),
+        _ring(2.5, 2, 0.2),
+        _line(2.5, 2, 5.2, 0.9),
+        _ring(5.5, 2, 0.2),
+        _line(5.5, 2, 8, 2),
+    )
+    return SymbolBody(
+        shapes, (_lead(a, 0, 2, "left"), _lead(b, 8, 2, "right")), 8 * GRID_MM, 4 * GRID_MM
+    )
+
+
+def _switch_spdt(com: PinSpec, up: PinSpec, down: PinSpec) -> SymbolBody:
+    """A changeover switch: the common lead on the left, the blade resting on ``up``."""
+    shapes = (
+        _line(0, 3, 2.5, 3),
+        _ring(2.5, 3, 0.2),
+        _line(2.5, 3, 5.3, 1.3),
+        _ring(5.5, 1, 0.2),
+        _line(5.5, 1, 8, 1),
+        _ring(5.5, 5, 0.2),
+        _line(5.5, 5, 8, 5),
+    )
+    drawn = (_lead(com, 0, 3, "left"), _lead(up, 8, 1, "right"), _lead(down, 8, 5, "right"))
+    return SymbolBody(shapes, drawn, 8 * GRID_MM, 6 * GRID_MM)
+
+
+def _switch_dispatch(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """A four-legged tactile package keeps the bonded-pair pushbutton it always drew; two leads
+    are a switch with one throw and three a changeover, the COM named and the blade resting on
+    the contact named NC (or the first one when nothing is)."""
+    if len(pins) == 4 and _switch_poles(footprint) is not None:
+        return _switch_body(pins, footprint)
+    if len(pins) == 2:
+        return _switch_spst(pins[0], pins[1])
+    com = _first_called(pins, "COM", "C") or pins[0]
+    throws = [p for p in pins if p is not com]
+    rested = _first_called(throws, "NC") or throws[0]
+    other = next(p for p in throws if p is not rested)
+    return _switch_spdt(com, rested, other)
+
+
+def _button_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """A pushbutton: two contacts, a bridge held above them by a plunger."""
+    shapes = (
+        _line(0, 2, 2.5, 2),
+        _ring(2.5, 2, 0.2),
+        _ring(5.5, 2, 0.2),
+        _line(5.5, 2, 8, 2),
+        _line(2.2, 1, 5.8, 1),
+        _line(4, 1, 4, 0.1),
+        _line(3.4, 0.1, 4.6, 0.1),
+    )
+    return SymbolBody(
+        shapes, (_lead(pins[0], 0, 2, "left"), _lead(pins[1], 8, 2, "right")), 8 * GRID_MM, 4 * GRID_MM
+    )
+
+
+def _buzzer_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """A loudspeaker: a magnet block and a cone, the lead named + on the top with its mark."""
+    plus = _first_called(pins, "+") or pins[0]
+    minus = next(p for p in pins if p is not plus)
+    shapes = (
+        _line(0, 1, 2.8, 1),
+        _line(0, 3, 2.8, 3),
+        _rect(2.8, 0.8, 4.1, 3.2),
+        _poly(4.1, 1, 5.7, 0.2, 5.7, 3.8, 4.1, 3),
+        _line(6.4, 1.2, 6.8, 2, 6.4, 2.8),
+        _line(7.1, 0.8, 7.7, 2, 7.1, 3.2),
+        _line(1.5, 0.15, 1.5, 0.75),
+        _line(1.2, 0.45, 1.8, 0.45),
+    )
+    return SymbolBody(
+        shapes, (_lead(plus, 0, 1, "left"), _lead(minus, 0, 3, "left")), 8 * GRID_MM, 4 * GRID_MM
+    )
+
+
+def _inductor_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """Four humps in a row: the coil."""
+    shapes: list[SymbolShape] = [_line(0, 2, 2, 2), _line(6, 2, 8, 2)]
+    for turn in range(4):
+        cx = 2.5 + turn
+        humps: list[float] = []
+        for i in range(11):
+            humps += [
+                cx + 0.5 * math.cos(math.pi - math.pi * i / 10),
+                2 - 0.6 * math.sin(math.pi * i / 10),
+            ]
+        shapes.append(_line(*humps))
+    return SymbolBody(
+        tuple(shapes),
+        (_lead(pins[0], 0, 2, "left"), _lead(pins[1], 8, 2, "right")),
+        8 * GRID_MM,
+        4 * GRID_MM,
+    )
+
+
+def _motor_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """A circle with an M in it, the letter drawn as strokes so no text is needed."""
+    shapes = (
+        _line(0, 2, 2.4, 2),
+        _line(5.6, 2, 8, 2),
+        _ring(4, 2, 1.6),
+        _line(3.3, 2.7, 3.3, 1.3, 4, 2.1, 4.7, 1.3, 4.7, 2.7),
+    )
+    return SymbolBody(
+        shapes, (_lead(pins[0], 0, 2, "left"), _lead(pins[1], 8, 2, "right")), 8 * GRID_MM, 4 * GRID_MM
+    )
+
+
+def _optocoupler_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    """An LED looking at a phototransistor inside one box.
+
+    A and K on the left, C and E on the right, the base (6-pin parts) between them. A pin the
+    symbol has no use for (NC) is not drawn, like an unused lead on any other part. The leads
+    stop at the box and the strokes inside start after the names the sheet prints there.
+    """
+    a, k, c, e = (_first_called(pins, name) for name in ("A", "K", "C", "E"))
+    assert a and k and c and e, "declared_symbol_kind only asks for an optocoupler it can read"
+    base = _first_called(pins, "B")
+    shapes: list[SymbolShape] = [
+        _rect(2, 0, 10, 6),
+        _line(0, 1, 2, 1),
+        _line(0, 5, 2, 5),
+        _line(10, 1, 12, 1),
+        _line(10, 5, 12, 5),
+        # the LED, anode on top
+        _line(3.2, 1, 3.5, 1, 3.5, 2),
+        _poly(3.1, 2, 3.9, 2, 3.5, 3),
+        _line(3.1, 3, 3.9, 3),
+        _line(3.5, 3, 3.5, 5, 3.2, 5),
+        # the light: two arrows from the LED to the transistor
+        _line(4.3, 2.1, 5.6, 2.5),
+        _arrowhead_at((5.8, 2.55), (1.3, 0.4)),
+        _line(4.3, 3.0, 5.6, 3.4),
+        _arrowhead_at((5.8, 3.45), (1.3, 0.4)),
+        # the transistor: base bar, collector up, emitter down with its arrow
+        _line(7, 2, 7, 4),
+        _line(7, 2.6, 8.3, 1.7, 8.3, 1, 8.9, 1),
+        _line(7, 3.4, 8.3, 4.3, 8.3, 5, 8.9, 5),
+        _arrowhead_at((8.0, 4.1), (1.0, 0.7)),
+    ]
+    drawn = [
+        _lead(a, 0, 1, "left"),
+        _lead(k, 0, 5, "left"),
+        _lead(c, 12, 1, "right"),
+        _lead(e, 12, 5, "right"),
+    ]
+    if base is not None:
+        shapes += [_line(7, 3, 8.9, 3), _line(10, 3, 12, 3)]
+        drawn.append(_lead(base, 12, 3, "right"))
+    return SymbolBody(tuple(shapes), tuple(drawn), 12 * GRID_MM, 6 * GRID_MM, names_inside=True)
+
+
 BUILDERS: dict[
     SymbolKind, Callable[[tuple[PinSpec, ...], Footprint | None], SymbolBody]
 ] = {
@@ -1274,8 +1713,8 @@ BUILDERS: dict[
     "led": _led_body,
     "crystal": _crystal_body,
     "potentiometer": _potentiometer_body,
-    "switch": _switch_body,
-    "relay": _relay_body,
+    "switch": _switch_dispatch,
+    "relay": _relay_dispatch,
     "ic": _ic_body,
     "connector": _connector_body,
     "box": _box_body,
@@ -1287,6 +1726,12 @@ BUILDERS: dict[
     "pnp": _pnp_body,
     "nmos": _nmos_body,
     "pmos": _pmos_body,
+    "regulator": _regulator_body,
+    "button": _button_body,
+    "buzzer": _buzzer_body,
+    "inductor": _inductor_body,
+    "motor": _motor_body,
+    "optocoupler": _optocoupler_body,
 }
 
 #: Which symbol an archetype asks for. ``test_schematic`` asserts this covers every member

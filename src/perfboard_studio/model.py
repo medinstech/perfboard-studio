@@ -569,6 +569,12 @@ type ComponentId = str
 #: declaring itself a potentiometer -- or an LED, once its leads are named A and K -- is
 #: what keeps its symbol on the sheet.
 #:
+#: The last eight are claims whose leads the part's own NAMES settle, never a package's pin
+#: numbers: a 7805 is IN GND OUT, an LM317 ADJ OUT IN and an LD1117 GND OUT IN, all in the
+#: same TO-220; a relay's coil is the two pins called COIL wherever the footprint puts them;
+#: a buzzer's plus is the lead named +. The sheet draws one only when the names it needs are
+#: there (``schsymbols.DECLARED_SYMBOL_RULES``).
+#:
 #: Spelled with ``TypeAlias`` because persist and the MCP server read it at run time with
 #: ``get_args`` -- the trap this file documents above ``BodyArchetype``.
 PartSymbol: TypeAlias = Literal[  # noqa: UP040
@@ -582,6 +588,14 @@ PartSymbol: TypeAlias = Literal[  # noqa: UP040
     "led",
     "battery",
     "jack",
+    "regulator",
+    "relay",
+    "switch",
+    "button",
+    "buzzer",
+    "inductor",
+    "motor",
+    "optocoupler",
 ]
 
 #: Pin number -> the name the part's datasheet gives that lead, in pin order.

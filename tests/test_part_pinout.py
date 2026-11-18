@@ -48,6 +48,7 @@ from perfboard_studio.model import (
 from perfboard_studio.persist import PART_SYMBOLS, serialize_document
 from perfboard_studio.schematic import (
     DECLARED_SYMBOL_PINS,
+    DECLARED_SYMBOL_RULES,
     GRID_MM,
     LEAD_MM,
     Symbol,
@@ -128,7 +129,9 @@ def test_the_part_name_wins_over_the_footprint_name() -> None:
 def test_every_declarable_symbol_says_what_it_needs() -> None:
     """A symbol a part can declare but the sheet has no rule for would draw -- or crash --
     on the first part that declared it. Both lists are read from the one ``PartSymbol``."""
-    assert set(DECLARED_SYMBOL_PINS) == set(get_args(PartSymbol))
+    # Each kind is checked by exactly one table: exact names, or a rule over the names.
+    assert set(DECLARED_SYMBOL_PINS) | set(DECLARED_SYMBOL_RULES) == set(get_args(PartSymbol))
+    assert not set(DECLARED_SYMBOL_PINS) & set(DECLARED_SYMBOL_RULES)
     assert set(PART_SYMBOLS) == set(get_args(PartSymbol))
 
 

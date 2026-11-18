@@ -1183,6 +1183,7 @@ CONDUCTOR_KINDS: tuple[str, ...] = (
 NET_CLASSES: tuple[NetClass, ...] = ("power", "ground", "signal")
 PART_SYMBOLS: tuple[PartSymbol, ...] = (
     "npn", "pnp", "nmos", "pmos", "zener", "fuse", "potentiometer", "led", "battery", "jack",
+    "regulator", "relay", "switch", "button", "buzzer", "inductor", "motor", "optocoupler",
 )
 
 
