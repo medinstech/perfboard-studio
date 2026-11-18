@@ -3915,6 +3915,28 @@ PIN_ROLES: dict[str, str] = {
     "nodemcu-devkit-1.0": ("in io nc io nc io io io io io io pwr-out io gnd io io io io gnd io pwr-out io in io "
                            "in io gnd gnd pwr pwr-out"),
     "esp-01": ("gnd io io io io in in pwr"),
+    # -- breakouts and drivers, from the chip's maker sheet where the board's pins are the chip's.
+    # TI ADS1115 pin functions (KY-053 carries its pins under the chip's names): AIN0-3 analog
+    # inputs, ADDR a digital input, ALERT/RDY an open-drain output, SCL an input, SDA I/O.
+    "ky-053-ads1115": "pwr gnd in io in out in in in in",
+    # Microchip MCP4725 sheet: A0 the address input, VOUT the DAC's analog output.
+    "adafruit-mcp4725": "pwr gnd in io in out",
+    # Sensirion SHT3x-DIS sheet: SDA "input / output", ADDR "input", ALERT "output", nRESET input.
+    "adafruit-sht31": "pwr gnd in io in in out",
+    # NXP MPR121 pin table: IRQ "Open Collector Interrupt Output", ADDR "I2C Address Select Input",
+    # SDA an input and open-drain output. 3Vo is the 3.3 V the board's regulator gives.
+    "adafruit-mpr121": "pwr pwr-out gnd in io in out",
+    # Toshiba TB6612FNG sheet (its table is in a font the PDF text layer scrambles; read decoded):
+    # IN1/IN2/PWM/STBY are inputs with pull-downs, O1/O2 the bridges' outputs, VM the motor supply,
+    # VCC the logic supply, PGND and GND grounds.
+    "sparkfun-tb6612fng": "pwr in pwr in gnd in out in out in out in out in gnd gnd",
+    # TI DRV8871 pin functions: IN1 and IN2 are the logic inputs; ILIM and the outputs are not on
+    # Adafruit's four-pin header.
+    "adafruit-drv8871": "in in pwr gnd",
+    # TI DRV8833 pin functions: AIN/BIN inputs, nSLEEP input, nFAULT open-drain output, AISEN and
+    # BISEN the bridges' current-sense connections ("passive"), A/BOUT outputs. TODO before landing:
+    # Pololu's carrier text for VIN and VMM (read only as the supply pins by name).
+    "pololu-drv8833": "gnd gnd pwr pwr in out in out in out in out in pas out pas",
     # No KiCad symbol: a generic one-channel relay board, its three pins as its maker prints
     # them (VCC, GND, IN).
     "relay-module-1ch": "pwr gnd in",
