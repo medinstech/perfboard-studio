@@ -158,3 +158,24 @@ jobs:
       # rewrites 41 of 60 files in one commit; the number is worth watching, and it is not
       # worth watching from behind a red tick that means something else.
       - run: ruff format --check src tests || echo "::warning::$(ruff format --check src tests 2>&1 | tail -1)"
+
+  examples:
+    name: examples are what build_examples builds
+    runs-on: ubuntu-latest
+    # Linux only, and only the engine: the script imports nothing from ui/, so neither Qt's
+    # system libraries nor xvfb are needed. Every example is imported, placed and wired
+    # again and compared with the committed file byte for byte. A change to the placer or
+    # the router that moves an example goes red here, with the files named; rebuild them
+    # (`python tools/build_examples.py`), read the diff and commit it with the change. Five
+    # of the eight had gone stale over two router changes before this ran, because every
+    # test reads the files and none asked how they were made.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e .
+      - run: python tools/build_examples.py --check

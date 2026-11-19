@@ -514,8 +514,8 @@ def _finish(example: Example, bus: CommandBus, lookup, board_name: str, *, write
         if routing.links_unrouted:
             print(f"      {routing.links_unrouted} connection(s) not routed")
 
-    if write and ok:
-        _write(example.stem, document)
+    if ok:
+        ok = _emit(EXAMPLES / f"{example.stem}.perf", document, write=write)
 
     return ok
 
@@ -546,16 +546,34 @@ def _route_and_label(example: Example, bus: CommandBus, lookup):  # type: ignore
     return plan
 
 
-def _write(stem: str, document: PerfDocument) -> None:
+def _emit(path: Path, document: PerfDocument, *, write: bool) -> bool:
+    """Write ``document`` to ``path`` -- or, with ``--check``, say whether the file there
+    already is exactly it. False when it is not.
+
+    The comparison is the point of ``--check``. It used to ask only whether every example
+    still routed cleanly, so a file stayed whatever the router of its last build had laid:
+    on 2026-11-19 five of the eight were what an engine two router changes old had built,
+    and nothing noticed, because every test reads the files and none asks how they were
+    made. Compared byte for byte, a change to the placer or the router says so the day it
+    moves an example, the way the goldens do for the engine's own output. CI runs it."""
     # The modified stamp is the host's job, and this host is deterministic on
     # purpose -- see STAMP.
     document = replace(document, meta=replace(document.meta, modified=STAMP))
-    # newline="\n" explicitly: .gitattributes stores every text file as LF, and the
-    # default on Windows would write CRLF, so the file on disk would differ from the
-    # file in the repository the moment it was committed.
-    (EXAMPLES / f"{stem}.perf").write_text(
-        persist.serialize_document(document), encoding="utf-8", newline="\n"
-    )
+    text = persist.serialize_document(document)
+    if write:
+        # newline="\n" explicitly: .gitattributes stores every text file as LF, and the
+        # default on Windows would write CRLF, so the file on disk would differ from the
+        # file in the repository the moment it was committed.
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return True
+    # newline="" reads the bytes as they are: a CRLF checkout is a stale file too.
+    on_disk = path.read_text(encoding="utf-8", newline="") if path.exists() else None
+    if on_disk == text:
+        return True
+    shown = path.relative_to(REPO_ROOT).as_posix()
+    print(f"      {shown} is not what this script builds: run python tools/build_examples.py")
+    return False
 
 
 def _free_spot_beside(
@@ -748,12 +766,8 @@ def build_project(lookup, *, write: bool) -> bool:
     if not ok and best is None:
         print("      no stock board suits this circuit")
 
-    if write and ok:
-        document = replace(document, meta=replace(document.meta, modified=STAMP))
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / f"{PROJECT_STEM}.perf").write_text(
-            persist.serialize_document(document), encoding="utf-8", newline="\n"
-        )
+    if ok:
+        ok = _emit(folder / f"{PROJECT_STEM}.perf", document, write=write)
 
     return ok
 
@@ -971,8 +985,8 @@ def build_system(system: SystemExample, lookup, *, write: bool) -> bool:
             print(f"      {routing.links_unrouted} connection(s) not routed")
         ok = ok and not errors and routing.links_unrouted == 0
 
-    if write and ok:
-        _write(system.stem, whole)
+    if ok:
+        ok = _emit(EXAMPLES / f"{system.stem}.perf", whole, write=write)
     return ok
 
 
@@ -990,6 +1004,8 @@ def main(argv: list[str]) -> int:
         print(f"{failed} of {len(results)} examples did NOT come out clean")
         return 1
     print(f"all {len(results)} examples route cleanly")
+    if not write:
+        print("and every file is what this script builds")
     return 0
 
 
