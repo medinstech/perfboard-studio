@@ -1,7 +1,9 @@
 """What copper drawn by hand would do, asked before it is laid (``ui/drawcheck.py``).
 
 On ne555-astable, whose copper is all on the solder side: the audit's own cases, each the
-answer DRC gives once the copper is in, asked before it is.
+answer DRC gives once the copper is in, asked before it is. The board is the example as it
+shipped up to 0.25, frozen in ``board_fixtures``, because every case names its holes: the
+example itself was placed again once its 555's RESET was tied to VCC.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from perfboard_studio.lvs import run_lvs
 from perfboard_studio.model import ConductorKind, HoleCoord, PerfDocument
 from perfboard_studio.ui.drawcheck import check_drawn
 
-NE555 = Path(__file__).resolve().parents[1] / "examples" / "ne555-astable.perf"
+NE555 = Path(__file__).resolve().parent / "board_fixtures" / "ne555-astable-0.25.perf"
 
 
 @pytest.fixture(scope="module")

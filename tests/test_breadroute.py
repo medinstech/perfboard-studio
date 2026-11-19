@@ -378,18 +378,20 @@ def test_the_arrangement_lays_out_a_breadboard_as_one_is_built(example: str) -> 
 #: (``breadroute.under_price``). At one price for every part, a jumper from a pin to its rail
 #: went round every resistor in its column: 28 columns along on nano-relay, 21 on
 #: arduino-io-shield, 11 on the README's 555. Nano-relay's 18 is a jumper going round an
-#: electrolytic rather than under it, which is the rule doing its job.
+#: electrolytic rather than under it, which is the rule doing its job. The 555's 6 is R1's
+#: VCC end, g11 to T+17, at seeds 0 and 1 and on the half board: tying the 555's RESET to
+#: VCC in 0.26 changed the netlist the arrangement is made from, and with it the parts.
 RAIL_JUMPER_COLUMNS_AT_MOST: dict[tuple[str, str], int] = {
     ("830", "arduino-io-shield"): 8,
     ("830", "atmega328-relay"): 11,
     ("830", "lm317-supply"): 7,
     ("830", "lpb1-booster"): 3,
     ("830", "nano-relay"): 18,
-    ("830", "ne555-astable"): 1,
+    ("830", "ne555-astable"): 6,
     ("400", "arduino-io-shield"): 1,
     ("400", "lm317-supply"): 2,
     ("400", "lpb1-booster"): 7,
-    ("400", "ne555-astable"): 0,
+    ("400", "ne555-astable"): 6,
 }
 
 #: The most jumpers under a SEATED part (``model.SEATED_ARCHETYPES``: a chip, a relay, a
@@ -403,7 +405,7 @@ SEATED_JUMPERS_AT_MOST: dict[tuple[str, str], int] = {
     ("830", "lm317-supply"): 0,
     ("830", "lpb1-booster"): 4,
     ("830", "nano-relay"): 4,
-    ("830", "ne555-astable"): 1,
+    ("830", "ne555-astable"): 2,
     ("400", "arduino-io-shield"): 0,
     ("400", "lm317-supply"): 1,
     ("400", "lpb1-booster"): 0,

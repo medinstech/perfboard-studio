@@ -82,10 +82,16 @@ also the end-to-end check of that reading. Its
 terminals' pin names and its two labels are the only things the script adds, because a
 KiCad screw terminal calls its pins `Pin_1` and `Pin_2`.
 
-None of them names a seed. They used to, picked from a sweep as the cheapest of several
-anneals — which made them a little better than what a user pressing the same buttons would
-get. Every one is now placed exactly as the window places it after the Board step: the
-placement the board was judged by, at seed 0.
+Every one but one is placed exactly as the window places it after the Board step: the
+placement the board was judged by, at seed 0. They used to name seeds picked from a sweep as
+the cheapest of several anneals, which made them a little better than what a user pressing
+the same buttons would get. The one is `ne555-astable`, placed by the same placer from
+another seed, and the script says so beside it (`seed=5`), with the reason. The 555's RESET
+used to be left unconnected, which a real 555 does not tolerate. Tied to VCC, the seed-0
+arrangement wired with a solder run past two other nets' pads, and this is the first board
+most people open; seed 5 wires with no warning and one step fewer. Placing the design again
+in the window gives a different arrangement, but the board is still exactly what the script
+builds with the application's own placer and router, not one drawn by hand.
 
 ## Adding one
 

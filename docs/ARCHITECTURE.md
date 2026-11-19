@@ -2501,7 +2501,9 @@ Eight things follow, and each has a test:
   in the drawer's dim colour and under the parts, over the copper they are about, and come
   up over the parts in red only while the finding is picked or its row is under the pointer
   (`BoardScene.set_focused_holes`). Drawn red over everything, ne555-astable's two sat under
-  LED1's dome and read as an "8"; `tests/test_bench_rings.py` holds the dome clear.
+  LED1's dome and read as an "8"; `tests/test_bench_rings.py` holds the dome clear, on
+  that board as it shipped up to 0.25 (`tests/board_fixtures/`), since the example has wired
+  with no gap to check since its 555's RESET was tied to VCC.
 - **`_apply_default_sizes` caps and lets go**, from `showEvent` and through two turns of the
   event loop, because `resizeDocks` does nothing useful here — it divides the room the
   window HAS, and a window that is not on screen yet has none. A maximum is honoured at any
