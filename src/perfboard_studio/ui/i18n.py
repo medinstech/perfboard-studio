@@ -2563,6 +2563,7 @@ TURKISH: Mapping[str, str] = {
     "PNP, 45 V, 100 mA, general purpose": "PNP, 45 V, 100 mA, genel amaçlı",
     "PNP, 30 V, 100 mA, general purpose": "PNP, 30 V, 100 mA, genel amaçlı",
     "NPN, 40 V, 200 mA, general purpose": "NPN, 40 V, 200 mA, genel amaçlı",
+    "NPN, 30 V, 50 mA, low noise, high gain": "NPN, 30 V, 50 mA, düşük gürültülü, yüksek kazançlı",
     "PNP, 40 V, 200 mA, general purpose": "PNP, 40 V, 200 mA, genel amaçlı",
     "NPN, 40 V, 600 mA, switching (plastic TO-92, sold as PN2222A)": (
         "NPN, 40 V, 600 mA, anahtarlama (plastik TO-92, PN2222A adıyla satılır)"
