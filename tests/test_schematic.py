@@ -838,13 +838,18 @@ def test_a_rail_stands_at_its_pin_upright(path: Path) -> None:
             down = rail.net_class != "power"
             assert rail.direction == ("down" if down else "up")
             assert rail.at == rail.path[-1]
-            assert side in ("left", "right")
-            anchor, bend, end = rail.path
-            out = bend.x - anchor.x if side == "right" else anchor.x - bend.x
-            assert bend.y == anchor.y and out >= RAIL_STUB_MM - 1e-9
-            assert out / GRID_MM == pytest.approx(round(out / GRID_MM))
-            assert end.x == bend.x
-            assert end.y - anchor.y == pytest.approx(RAIL_TURN_MM if down else -RAIL_TURN_MM)
+            if side in ("left", "right"):
+                anchor, bend, end = rail.path
+                out = bend.x - anchor.x if side == "right" else anchor.x - bend.x
+                assert bend.y == anchor.y and out >= RAIL_STUB_MM - 1e-9
+                assert out / GRID_MM == pytest.approx(round(out / GRID_MM))
+                assert end.x == bend.x
+                assert end.y - anchor.y == pytest.approx(RAIL_TURN_MM if down else -RAIL_TURN_MM)
+            else:
+                assert (side == "bottom") == down
+                anchor, end = rail.path
+                assert end.x == anchor.x
+                assert end.y - anchor.y == pytest.approx(RAIL_STUB_MM if down else -RAIL_STUB_MM)
 
 
 @pytest.mark.parametrize("side", ["left", "right", "top", "bottom"])

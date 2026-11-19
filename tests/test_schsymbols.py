@@ -50,6 +50,13 @@ def assert_on_grid(body: SymbolBody, label: str, *, strokes: bool = True) -> Non
         assert math.isclose(y, round(y), abs_tol=1e-9), f"{label}: pin {pin.number} off the grid in y"
         assert -1e-9 <= pin.at.x <= body.width + 1e-9, label
         assert -1e-9 <= pin.at.y <= body.height + 1e-9, label
+        edge_ok = (
+            (pin.side == "left" and math.isclose(pin.at.x, 0.0, abs_tol=1e-9))
+            or (pin.side == "right" and math.isclose(pin.at.x, body.width, abs_tol=1e-9))
+            or (pin.side == "top" and math.isclose(pin.at.y, 0.0, abs_tol=1e-9))
+            or (pin.side == "bottom" and math.isclose(pin.at.y, body.height, abs_tol=1e-9))
+        )
+        assert edge_ok, f"{label}: pin {pin.number} ({pin.side}) is not on its box edge"
         point = (round(x), round(y))
         assert point not in seen, f"{label}: two pins on {point}"
         seen.add(point)

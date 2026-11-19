@@ -1436,7 +1436,7 @@ def _regulator_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> S
     ref = next(p for p in pins if p is not inp and p is not out)
     shapes = (_rect(2, 1, 8, 5), _line(0, 3, 2, 3), _line(8, 3, 10, 3), _line(5, 5, 5, 7))
     drawn = (_lead(inp, 0, 3, "left"), _lead(out, 10, 3, "right"), _lead(ref, 5, 7, "bottom"))
-    return SymbolBody(shapes, drawn, 10 * GRID_MM, 8 * GRID_MM, names_inside=True)
+    return SymbolBody(shapes, drawn, 10 * GRID_MM, 7 * GRID_MM, names_inside=True)
 
 
 def _relay_poles(

@@ -407,7 +407,8 @@
         "1": "IN",
         "2": "GND",
         "3": "OUT"
-      }
+      },
+      "symbol": "regulator"
     },
     {
       "id": "c-y1",

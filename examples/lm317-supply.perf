@@ -181,7 +181,8 @@
         "1": "ADJ",
         "2": "OUT",
         "3": "IN"
-      }
+      },
+      "symbol": "regulator"
     }
   ],
   "conductors": [
