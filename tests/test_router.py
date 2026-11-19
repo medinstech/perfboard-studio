@@ -68,9 +68,11 @@ from perfboard_studio.router import (
     RouteRequest,
     RouterOptions,
     _dead_hole_keys,
+    _fold_end_steps,
     _grid_path_cost,
     _loop_holes,
     _route_context,
+    _Step,
     relay_grid_wire,
     route_connection,
 )
@@ -757,6 +759,39 @@ def test_the_hop_beats_a_whole_wire_on_a_short_run() -> None:
     # Cheaper than running wire the whole way, which is the claim.
     whole_wire = next(a for a in result.alternatives if a.strategy == "insulated-wire")
     assert result.best.cost < whole_wire.cost
+
+
+def test_a_hop_beside_a_pin_goes_on_into_it() -> None:
+    """A wall one hole short of the far pin. The search lands the hop beside the pin and
+    solders the last hole -- a jumper and a one-hole trace, two conductors where one wire
+    does, which is what split the tour board's +9V link. The hop now goes on into the pin."""
+    wall = crossing_wire("t-wall", 8)
+    board = doc((comp("c1", "A", h(2, 4)), comp("c2", "B", h(10, 4))), (wall,))
+
+    result = route_connection(board, _FOOTPRINT_LOOKUP, RouteRequest(from_=h(2, 4), to=h(10, 4)))
+
+    hopped = next(a for a in result.alternatives if a.strategy == "solder-trace-hopped")
+    assert [c.kind for c in hopped.conductors] == ["solder-trace", "insulated-wire"]
+    assert hopped.conductors[-1].path == (h(7, 4), h(10, 4))
+
+
+def test_a_hop_is_carried_on_only_in_line_and_only_as_far_as_a_hop_goes() -> None:
+    """A step and a hop to the far end fold into one hop end to end -- the tour board's
+    +9V link, a jumper over a wire beside the pin. A hop that would fly over more than
+    ``max_hop_holes`` is not carried on, and neither is one that turns a corner on its way
+    in."""
+    step_then_hop = [_Step(h(2, 4), False), _Step(h(3, 4), False), _Step(h(5, 4), True)]
+    assert _fold_end_steps(step_then_hop, 3) == [_Step(h(2, 4), False), _Step(h(5, 4), True)]
+
+    long_hop = [_Step(h(0, 4), False), _Step(h(1, 4), False), _Step(h(5, 4), True), _Step(h(6, 4), False)]
+    assert _fold_end_steps(long_hop, 3) == long_hop
+    assert _fold_end_steps(long_hop, 4)[-1] == _Step(h(6, 4), True)
+
+    corner = [
+        _Step(h(0, 4), False), _Step(h(1, 4), False), _Step(h(2, 4), False),
+        _Step(h(4, 4), True), _Step(h(4, 5), False),
+    ]
+    assert _fold_end_steps(corner, 3) == corner
 
 
 # ---------------------------------------------------------------------------

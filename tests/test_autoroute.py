@@ -1702,7 +1702,9 @@ def test_a_score_counts_the_scoreboards_columns() -> None:
 def test_the_ne555_example_is_not_wired_with_fifteen_warnings_to_save_nine_wires() -> None:
     """What the sweep used to pick on the NE555 example: lead-bend, 15 DRC warnings and 17
     holes to measure for a bridge, over balanced's none, because a risky gap cost a third of
-    a wire. Wired as the window wires it, from bare, along the grid."""
+    a wire. Wired as the window wires it, from bare, along the grid. Which clean style wins
+    depends on the board the example is on (balanced on 2 x 8, wire on 3 x 7); that the
+    sweep takes one with no hole to measure over a risky one is the point."""
     path = Path(__file__).resolve().parents[1] / "examples" / "ne555-astable.perf"
     doc = persist.deserialize_document(path.read_text(encoding="utf-8")).document
     bare = dataclasses.replace(doc, conductors=())
@@ -1713,8 +1715,8 @@ def test_the_ne555_example_is_not_wired_with_fifteen_warnings_to_save_nine_wires
 
     by_style = {variant.style: variant.score for variant in best.variants}
     assert by_style["lead-bend"].risk_holes > 10
-    assert best.style == "balanced"
-    assert by_style["balanced"].risk_holes == 0
+    assert best.style not in ("lead-bend", "solder")
+    assert by_style[best.style].risk_holes == 0
 
 
 # ---------------------------------------------------------------------------

@@ -187,6 +187,18 @@ closed without a bump.
   made by the project's publisher; an unsigned installer, one changed after signing, or one
   signed by anybody else is deleted and nothing is installed. Releases from 0.26.0 on are
   signed, so the publisher shown at Windows' permission prompt is no longer "Unknown".
+- **A hop one hole short of an end goes on into the end.** Auto-wire used to land an
+  insulated hop beside a pin and solder the last hole: a jumper to cut, strip and solder,
+  then one more pad to bridge. The hop now carries on to the end when it is in line and
+  still within `max_hop_holes`, so the link is one jumper; on the tour's board that is what
+  sent the supply round the long way. It makes roomy boards a little cheaper to route than
+  tight ones, and the board chooser compares the two at a 1.20 cost cut, so two examples
+  move up a size: `ne555-astable`'s suggested board goes from 2 x 8 to 3 x 7 cm (its 2 x 8
+  routes at 1.22 times the 5 x 7 reference at seed 0, where it was 1.18), and
+  `relay-and-supply`'s Supply board from 6 x 8 to 7 x 9 cm (1.21, was 1.16).
+  `arduino-io-shield` loses a conductor and its one warning. The cut was re-measured and
+  left where it is: there is no clean gap around 1.22 to move it into (see "Which board to
+  buy is tried, not estimated" in `docs/ARCHITECTURE.md`).
 - **Over Home the top row says what the application is.** The icon and "Perfboard Studio"
   at the left, the search in the middle of the window, and Home's own doors at the right:
   New Circuit, Open, Tour, and a sun or a moon that switches the theme through the View

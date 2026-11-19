@@ -600,10 +600,10 @@ def test_the_boards_stand_in_a_row_level_at_the_top_with_bench_between() -> None
     from perfboard_studio.geometry import board_outline_mm
 
     main = _example("ne555-astable")
-    other = _example("lm317-supply")
+    other = _example("lpb1-booster")
     first, second = board_outline_mm(main.board), board_outline_mm(other.board)
     assert (first.width, first.height) != (second.width, second.height)
-    doc = dataclasses.replace(main, boards=(_as_extra(other, "b2", "Supply"),))
+    doc = dataclasses.replace(main, boards=(_as_extra(other, "b2", "Booster"),))
     row = system.board_row(doc)
     assert list(row) == ["main", "b2"]
     assert (row["main"][0] + first.x, row["main"][1] + first.y) == pytest.approx((0.0, 0.0))

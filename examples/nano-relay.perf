@@ -518,23 +518,6 @@
     },
     {
       "id": "cond-18",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 16,
-          "row": 16
-        },
-        {
-          "col": 13,
-          "row": 16
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-8",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-19",
       "kind": "insulated-wire",
       "path": [
         {
@@ -563,28 +546,7 @@
       "layerZ": 1
     },
     {
-      "id": "cond-2",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 20,
-          "row": 8
-        },
-        {
-          "col": 16,
-          "row": 8
-        },
-        {
-          "col": 16,
-          "row": 6
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-2",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-20",
+      "id": "cond-19",
       "kind": "solder-trace",
       "path": [
         {
@@ -610,7 +572,28 @@
       "buildup": "normal"
     },
     {
-      "id": "cond-21",
+      "id": "cond-2",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 20,
+          "row": 8
+        },
+        {
+          "col": 16,
+          "row": 8
+        },
+        {
+          "col": 16,
+          "row": 6
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-20",
       "kind": "bare-wire",
       "path": [
         {
@@ -627,7 +610,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-22",
+      "id": "cond-21",
       "kind": "bare-wire",
       "path": [
         {
@@ -668,7 +651,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-23",
+      "id": "cond-22",
       "kind": "bare-wire",
       "path": [
         {
@@ -690,6 +673,23 @@
       ],
       "side": "bottom",
       "netId": "net-11",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-23",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 16,
+          "row": 16
+        },
+        {
+          "col": 13,
+          "row": 16
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-8",
       "layerZ": 0
     },
     {

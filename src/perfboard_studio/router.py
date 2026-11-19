@@ -1342,6 +1342,7 @@ def _hopping_trace_candidate(
         return None
     if not any(step.hopped for step in steps):
         return None  # No obstacle: the plain solder-trace candidate already covers this.
+    steps = _fold_end_steps(steps, ctx.opts.max_hop_holes)
 
     costs = ctx.opts.costs
     conductors: list[NewConductor] = []
@@ -1381,9 +1382,12 @@ def _hopping_trace_candidate(
         return None
 
     trace_count = sum(1 for c in conductors if c.kind in ("solder-trace", "solder-trace-wired"))
+    ends = f"from {format_hole(from_, ctx.doc.board)} to {format_hole(to, ctx.doc.board)}"
     parts = [
-        f"solder trace from {format_hole(from_, ctx.doc.board)} to {format_hole(to, ctx.doc.board)} in {trace_count} run(s), "
+        f"solder trace {ends} in {trace_count} run(s), "
         f"with {hops} insulated hop(s) over conductors it may not cross"
+        if trace_count
+        else f"one insulated hop {ends} over conductors a solder trace may not cross"
     ]
     if risk_holes:
         holes_text = ", ".join(format_hole(hole, ctx.doc.board) for hole in risk_holes)
@@ -1398,6 +1402,43 @@ def _hopping_trace_candidate(
         explanation=f"Hopped solder trace: {'; '.join(parts)}.",
         risk_holes=tuple(risk_holes),
     )
+
+
+def _fold_end_steps(steps: list[_Step], max_hop_holes: int) -> list[_Step]:
+    """A hop that lands one hole short of an end, in line with it, goes on to the end.
+
+    The search prices a hop and a solder step separately, so it would land a hop beside the
+    pin and solder the last hole -- two conductors where one wire does: the builder cuts,
+    strips and solders a jumper, then bridges one more pad. On the tour's board that split
+    the +9V link into a hop and a one-hole trace and sent the supply round the long way.
+    Carrying the hop the one hole further is the same wire a hole longer. Only at the two
+    ends, only in a straight line, and only while the hop still flies over no more than
+    ``max_hop_holes``. A link that folds into one hop end to end is a short jumper over
+    what is in the way, and is priced as the hop it is.
+    """
+
+    def reaches(a: HoleCoord, b: HoleCoord, via: HoleCoord) -> bool:
+        in_line = (a.col == via.col == b.col) or (a.row == via.row == b.row)
+        return in_line and manhattan(a, b) - 1 <= max_hop_holes
+
+    folded = list(steps)
+    # ..., X, (hop) H, (step) E  ->  ..., X, (hop) E
+    if (
+        len(folded) >= 3
+        and folded[-2].hopped
+        and not folded[-1].hopped
+        and reaches(folded[-3].hole, folded[-1].hole, folded[-2].hole)
+    ):
+        folded = [*folded[:-2], _Step(folded[-1].hole, True)]
+    # S, (step) A, (hop) H, ...  ->  S, (hop) H, ...
+    if (
+        len(folded) >= 3
+        and not folded[1].hopped
+        and folded[2].hopped
+        and reaches(folded[0].hole, folded[2].hole, folded[1].hole)
+    ):
+        folded = [folded[0], _Step(folded[2].hole, True), *folded[3:]]
+    return folded
 
 
 def _emit_trace_run(

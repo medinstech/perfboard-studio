@@ -733,6 +733,17 @@ Four things about it are load-bearing:
   at 1.03). ne555-astable's 4 x 6 at seed 1 is the same, at 1.23. Seed 0, which the window
   asks, is unaffected: 6 x 8 and 2 x 8. Going on past one dearer board would settle it and is a
   change to the question, to be measured on its own -- not done.
+- **The cut was re-measured after the router's hop fold (2026-11-25) and left at 1.20.**
+  Folding a hop that lands one hole short of an end into the end makes the 5 x 7 reference of
+  ne555-astable cheaper (175.8 to 167.8) while its 2 x 8 stays where it was (206.6, 205.2), so
+  the ratio goes from 1.18 to 1.22 and seed 0 now stops at 3 x 7; main's own 2 x 8 placement
+  under the new router is 1.23, so no placement brings it back. At seeds 0-3 the highest
+  accepted ratios are 1.17 (nano-relay 7 x 9, s0) and 1.16; the lowest dearer are 1.21
+  (nano-relay 7 x 9 at s1 and s2, and the Supply board's 6 x 8 in its example), 1.22
+  (ne555-astable 2 x 8, s0), 1.24 and 1.25. A cut that keeps 2 x 8 would sit 0.01 from a
+  measured board on either side and accept nano-relay's 7 x 9 at s1 and s2 too, so the
+  examples moved up a size instead (2 x 8 to 3 x 7, and the Supply's 6 x 8 to 7 x 9). The
+  same 2 x 8 is accepted at 1.10 on seeds 1-3: one anneal is the edge, again.
 
 `placer.placement_inputs(doc)` is the key a placement worked out earlier is reused by — blind to
 the sheet and to what a save changes, and to nothing else, so a field added later counts until

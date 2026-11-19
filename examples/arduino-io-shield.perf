@@ -203,23 +203,6 @@
     },
     {
       "id": "cond-10",
-      "kind": "insulated-wire",
-      "path": [
-        {
-          "col": 11,
-          "row": 5
-        },
-        {
-          "col": 11,
-          "row": 2
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-9",
-      "layerZ": 1
-    },
-    {
-      "id": "cond-11",
       "kind": "solder-trace",
       "path": [
         {
@@ -241,7 +224,7 @@
       "buildup": "normal"
     },
     {
-      "id": "cond-12",
+      "id": "cond-11",
       "kind": "bare-wire",
       "path": [
         {
@@ -266,28 +249,11 @@
       "layerZ": 0
     },
     {
-      "id": "cond-13",
+      "id": "cond-12",
       "kind": "insulated-wire",
       "path": [
         {
           "col": 13,
-          "row": 0
-        },
-        {
-          "col": 16,
-          "row": 0
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-3",
-      "layerZ": 1
-    },
-    {
-      "id": "cond-14",
-      "kind": "solder-trace",
-      "path": [
-        {
-          "col": 16,
           "row": 0
         },
         {
@@ -297,11 +263,10 @@
       ],
       "side": "bottom",
       "netId": "net-3",
-      "layerZ": 0,
-      "buildup": "normal"
+      "layerZ": 1
     },
     {
-      "id": "cond-15",
+      "id": "cond-13",
       "kind": "bare-wire",
       "path": [
         {
@@ -322,7 +287,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-16",
+      "id": "cond-14",
       "kind": "bare-wire",
       "path": [
         {
@@ -337,6 +302,23 @@
       "side": "bottom",
       "netId": "net-8",
       "layerZ": 0
+    },
+    {
+      "id": "cond-15",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 11,
+          "row": 5
+        },
+        {
+          "col": 11,
+          "row": 2
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-9",
+      "layerZ": 1
     },
     {
       "id": "cond-2",

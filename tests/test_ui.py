@@ -16436,8 +16436,21 @@ def test_change_part_says_where_the_last_pin_lands_for_the_package_picked(monkey
 
     window = _window_on(_example_document("ne555-astable"))
     try:
-        resistor = next(c for c in window.bus.document.components if c.ref.startswith("R"))
         board = window.bus.document.board
+        longer = get_footprint("r-axial-4")
+        assert longer is not None
+
+        def lands_on_the_board(component) -> bool:
+            hole = pin_hole(component, longer, longer.pins[-1].number)
+            return hole is not None and 0 <= hole.col < board.cols and 0 <= hole.row < board.rows
+
+        # A resistor whose longer leg still lands on the board: one at the edge is told
+        # "would land off the board" instead, which is another test's sentence.
+        resistor = next(
+            c
+            for c in window.bus.document.components
+            if c.ref.startswith("R") and lands_on_the_board(c)
+        )
         said: list[str] = []
 
         def look(dialog):
@@ -16448,7 +16461,6 @@ def test_change_part_says_where_the_last_pin_lands_for_the_package_picked(monkey
 
         monkeypatch.setattr(main_module.PackagePicker, "exec", look)
         window.on_change_part(resistor.id)
-        longer = get_footprint("r-axial-4")
         lands = format_hole(pin_hole(resistor, longer, longer.pins[-1].number), board)
         assert said[1] != said[0], "the note follows the package picked"
         assert f"Pin {longer.pins[-1].number} lands in {lands}." in said[1], said[1]
@@ -18601,7 +18613,13 @@ def test_the_wiring_step_offers_auto_wire_and_does_nothing_by_itself(monkeypatch
         assert routed == []
         offer = window._wire_offer
         [wire] = offer.actions()
-        assert wire.text() == "Auto-wire 1 Connection"
+        # How many the move left depends on where the example's first part sits; the
+        # label counts them, in the singular for one.
+        import re
+
+        assert re.fullmatch(r"Auto-wire (1 Connection|([2-9]|\d\d+) Connections)", wire.text()), (
+            wire.text()
+        )
         wire.trigger()
         assert routed == [None]
         offer.close()
@@ -22438,7 +22456,8 @@ def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_
     what Balanced found -- so the card offers it where it can matter: under the counts of
     what is worth a look. Taken, the best of them replaces the nets' copper as one undo
     step, asked first; taken again, it says the wiring is already the best and asks
-    nothing."""
+    nothing. It needs a board where Balanced is not the best style: ne555-astable on its
+    3 x 7 board, where Wire lays no hole to measure and Balanced lays one."""
     from perfboard_studio.commands import DeleteConductorsPayload
 
     asked: list[str] = []
@@ -22447,7 +22466,7 @@ def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_
         asked.append(title)
         return True
 
-    window = _window_on(_example_document("arduino-io-shield"))
+    window = _window_on(_example_document("ne555-astable"))
     monkeypatch.setattr(type(window), "_confirm", answer)
     try:
         ids = tuple(c.id for c in window.bus.document.conductors)
