@@ -235,6 +235,26 @@ def test_placements_are_the_same_through_a_mapper(
     assert plan_placements(doc, LOOKUP, QUICK, mapper=_serial) == alternatives
 
 
+def test_a_real_pool_gives_the_serial_answers(
+    wired_board: tuple[PerfDocument, PlacementAlternatives], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Worker processes, not a mapper in this process: every job and every answer crosses
+    a pickle and a spawn, which is the seam a serial mapper cannot test."""
+    from perfboard_studio.ui import planner_pool
+
+    doc, alternatives = wired_board
+    serial = wire_alternatives(alternatives, LOOKUP, wired_options())
+    monkeypatch.setenv(planner_pool.WORKERS_VARIABLE, "2")
+    try:
+        mapper = planner_pool.mapper_for(lambda: False)
+        assert mapper is not None
+        assert plan_placements(doc, LOOKUP, QUICK, mapper=mapper) == alternatives
+        assert wire_alternatives(alternatives, LOOKUP, wired_options(), mapper=mapper) == serial
+        assert planner_pool.describe() == "2 worker processes", "it ran in the pool"
+    finally:
+        planner_pool.shutdown()
+
+
 def wired_options() -> Any:
     from perfboard_studio.autoroute import AutorouteOptions
     from perfboard_studio.router import RouterOptions
