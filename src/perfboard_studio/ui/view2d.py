@@ -174,6 +174,7 @@ from perfboard_studio.model import (
     PartSymbol,
     PerfDocument,
     PinNames,
+    PinRoles,
     Point2,
     Rotation,
     TrackCut,
@@ -5528,6 +5529,11 @@ class BoardScene(QGraphicsScene):
         #: not quietly a BC547.
         self.placement_pin_names: PinNames = ()
         self.placement_symbol: PartSymbol | None = None
+        #: What each pin of the catalog part being placed does, and the package they
+        #: were read for: a part placed in any other package gets none, and keeps the
+        #: numbered box.
+        self.placement_pin_roles: PinRoles = ()
+        self.placement_roles_footprint_id: str | None = None
         self.placement_prefix: str | None = None
         self._build()
         self.selectionChanged.connect(self._on_selection_changed)
@@ -7694,6 +7700,13 @@ class BoardScene(QGraphicsScene):
             return "bottom"
         return "top"
 
+    def placement_roles_for(self, footprint_id: str | None) -> PinRoles:
+        """The roles a part placed from here in ``footprint_id`` takes: the catalog
+        part's, in the package they were read for, and none in any other."""
+        if footprint_id is None or footprint_id != self.placement_roles_footprint_id:
+            return ()
+        return self.placement_pin_roles
+
     def place_armed(self, anchor: HoleCoord) -> DispatchResult | None:
         """Dispatch ``component.place`` for the armed footprint. Also the seam tests drive.
 
@@ -7727,6 +7740,7 @@ class BoardScene(QGraphicsScene):
                 # on the solder side, turned over, which is what mirrors it.
                 mirrored=None if self.placing_face() == "bottom" else self._armed_mirrored,
                 pin_names=self.placement_pin_names,
+                pin_roles=self.placement_roles_for(self._armed_id),
                 symbol=self.placement_symbol,
                 side=self.placing_face(),
             ),

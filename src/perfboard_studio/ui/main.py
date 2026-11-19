@@ -327,6 +327,7 @@ from perfboard_studio.model import (
     PartSymbol,
     PerfDocument,
     PinNames,
+    PinRoles,
     Point2,
     PortLink,
     Rotation,
@@ -7257,6 +7258,8 @@ class MainWindow(QMainWindow):
         if part is not None:
             scene.placement_pin_names = part.pin_names
             scene.placement_symbol = part.symbol
+            scene.placement_pin_roles = part.pin_roles
+            scene.placement_roles_footprint_id = part.footprint_id
             scene.placement_prefix = part.reference_prefix
             # A part with a value of its own (a 1N4007, a 3V3 zener) keeps it; one without
             # takes the value typed to find it.
@@ -7268,6 +7271,8 @@ class MainWindow(QMainWindow):
             self._described_names.get(footprint_id, ()) if isinstance(footprint_id, str) else ()
         )
         scene.placement_symbol = None
+        scene.placement_pin_roles = ()
+        scene.placement_roles_footprint_id = None
         scene.placement_prefix = None
         # A value the catalog filled in belongs to the catalog part: a TO-92 picked after a
         # BC547 is not a BC547. A value the user typed stays, as it always has.
@@ -9061,14 +9066,14 @@ class MainWindow(QMainWindow):
         if chosen is None:
             return
         footprint_id, catalog = chosen
-        value, names, symbol = self._what_a_package_brings(
+        value, names, symbol, roles = self._what_a_package_brings(
             footprint_id, catalog, part.value, part.pin_names, part.symbol
         )
         result = self.bus.dispatch(
             "part.update",
             UpdatePartPayload(
                 id=part_id, value=value, footprint_id=footprint_id, pin_names=names,
-                symbol=symbol,
+                symbol=symbol, pin_roles=roles,
             ),
         )
         if not result.ok:
@@ -9169,6 +9174,7 @@ class MainWindow(QMainWindow):
                 footprint_id=footprint_id,
                 value=self.placing_value.text().strip(),
                 pin_names=self.scene.placement_pin_names if template else (),
+                pin_roles=self.scene.placement_roles_for(footprint_id) if template else (),
                 symbol=self.scene.placement_symbol if template else None,
             ),
         )
@@ -15627,14 +15633,20 @@ class MainWindow(QMainWindow):
         value: str,
         names: PinNames,
         symbol: PartSymbol | None,
-    ) -> tuple[str, PinNames, PartSymbol | None]:
+    ) -> tuple[str, PinNames, PartSymbol | None, PinRoles | None]:
         """The value and pinout a part has after its package changes: a catalog part's own,
-        or, for a bare package, the names of the pins the new package still has."""
+        or, for a bare package, the names of the pins the new package still has.
+
+        And the pin roles to send: a catalog part's, but only in the package they were
+        read for -- in another one it is a numbered box (``()``). A bare package sends
+        None, which keeps the roles the part has, as its names are kept; ones that no
+        longer fit are said by the sheet and the circuit check."""
         if part is not None:
-            return (part.placed_value or value), part.pin_names, part.symbol
+            roles = part.pin_roles if footprint_id == part.footprint_id else ()
+            return (part.placed_value or value), part.pin_names, part.symbol, roles
         footprint = get_footprint(footprint_id)
         numbers = {pin.number for pin in footprint.pins} if footprint is not None else set()
-        return value, tuple((n, name) for n, name in names if n in numbers), symbol
+        return value, tuple((n, name) for n, name in names if n in numbers), symbol, None
 
     def on_change_part(self, component_id: str = "") -> bool:
         """Put another package, or another part, on a placed part's holes. True if it did.
@@ -15697,7 +15709,7 @@ class MainWindow(QMainWindow):
         if chosen is None:
             return False
         footprint_id, part = chosen
-        value, names, symbol = self._what_a_package_brings(
+        value, names, symbol, roles = self._what_a_package_brings(
             footprint_id, part, component.value, component.pin_names, component.symbol
         )
         result = self.bus.dispatch(
@@ -15706,6 +15718,7 @@ class MainWindow(QMainWindow):
                 id=component.id,
                 value=value,
                 pin_names=names,
+                pin_roles=roles,
                 symbol=symbol,
                 footprint_id=footprint_id,
             ),

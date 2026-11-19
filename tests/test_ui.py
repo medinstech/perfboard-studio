@@ -11899,13 +11899,13 @@ def test_adding_a_555_from_the_dialog_brings_its_pin_names() -> None:
     assert item is not None and item.data(0, ROLE_CATALOG_ID) == "ne555"
     assert picker.chosen_footprint_id() == "dip-8"
     part = picker.chosen_catalog_part()
-    value, names, _symbol = MainWindow._what_a_package_brings("dip-8", part, "", (), None)
+    value, names, _symbol, _roles = MainWindow._what_a_package_brings("dip-8", part, "", (), None)
     assert value == "NE555" and dict(names)["3"] == "OUT"
     # A bare package: the value stays, and only the names of pins it still has.
     kept = MainWindow._what_a_package_brings(
         "r-axial-4", None, "10k", (("1", "A"), ("2", "B"), ("3", "C")), None
     )
-    assert kept == ("10k", (("1", "A"), ("2", "B")), None)
+    assert kept == ("10k", (("1", "A"), ("2", "B")), None, None)
     picker.deleteLater()
 
 
@@ -14549,6 +14549,72 @@ def _choose_in_change_part(monkeypatch, footprint_id: str, seen: list | None = N
         return main_module.QDialog.DialogCode.Accepted
 
     monkeypatch.setattr(main_module.PackagePicker, "exec", pick)
+
+
+def test_a_catalog_part_brings_its_pin_roles_in_its_own_package_only(monkeypatch) -> None:
+    """A part chosen in the Library says what each of its pins does, placed on the board or
+    added to the sheet, as it says what they are called. Renaming a pin in Properties keeps
+    the roles; another bare package keeps them for the sheet and the circuit check to judge;
+    the catalog part in a package not its own brings none -- the numbered box."""
+    from perfboard_studio.catalog import catalog_part
+    from perfboard_studio.ui.main import MainWindow
+
+    ne555 = catalog_part("ne555")
+    assert ne555 is not None and ne555.pin_roles
+
+    # On the board, as somebody picking it in the Library and clicking a hole.
+    window = _blank_window()
+    try:
+        window.show_board()
+        leaf = _catalog_leaf(window, "ne555")
+        assert leaf is not None
+        window.library_tree.setCurrentItem(leaf)
+        result = window.scene.place_armed(HoleCoord(2, 2))
+        assert result is not None and result.ok, result
+        (placed,) = window.bus.document.components
+        assert placed.pin_roles == ne555.pin_roles
+
+        # A pin renamed in Properties leaves the roles where they were.
+        window.scene.arm_placement(None)
+        editor = _inspect(window, placed.id)
+        names = editor.pinout.names_dict()
+        names["3"] = "Q"
+        editor.pinout.set_footprint(window.lookup(placed.footprint_id), names)
+        editor._commit_pinout()
+        renamed = window.bus.document.components[0]
+        assert dict(renamed.pin_names)["3"] == "Q"
+        assert renamed.pin_roles == ne555.pin_roles
+
+        # Another bare package keeps them, as it keeps the names its pins still have.
+        _choose_in_change_part(monkeypatch, "dip-8-wide")
+        assert window.on_change_part(placed.id)
+        changed = window.bus.document.components[0]
+        assert changed.footprint_id == "dip-8-wide"
+        assert changed.pin_roles == ne555.pin_roles
+    finally:
+        _close(window)
+
+    # The catalog part in a package not its own: its names, and no roles.
+    _value, names, _symbol, roles = MainWindow._what_a_package_brings(
+        "dip-8-wide", ne555, "", (), None
+    )
+    assert names == ne555.pin_names and roles == ()
+    assert MainWindow._what_a_package_brings(
+        ne555.footprint_id, ne555, "", (), None
+    )[3] == ne555.pin_roles
+
+    # On the sheet, the same row added to the design.
+    window = _blank_window()
+    try:
+        window.show_schematic()
+        leaf = _catalog_leaf(window, "ne555")
+        assert leaf is not None
+        window.library_tree.setCurrentItem(leaf)
+        window._on_library_item_activated(leaf)
+        (part,) = window.bus.document.parts
+        assert part.pin_roles == ne555.pin_roles
+    finally:
+        _close(window)
 
 
 def test_change_part_puts_another_package_on_the_same_holes(monkeypatch) -> None:
