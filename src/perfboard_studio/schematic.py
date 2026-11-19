@@ -1149,6 +1149,50 @@ def _assign_tracks(intervals: Sequence[tuple[str, float, float]]) -> tuple[dict[
     return tracks, len(last_end)
 
 
+
+def _facing_apart(
+    tracks: dict[str, int],
+    count: int,
+    runs: Sequence[tuple[str, float, float]],
+    stub_of: Mapping[str, tuple[bool, float]],
+) -> tuple[dict[str, int], int]:
+    """The lanes of one vertical channel, with no two pins facing across it on one line.
+
+    TWO PINS AT ONE HEIGHT ACROSS A CHANNEL ARE ONE STRAIGHT LINE if the left one's lane is
+    right of the right one's: each pin's stub runs out to its own lane, and the two stubs
+    lie along each other between the lanes. On the NE555 that drew R1's DISCH and R3's OUT
+    as one wire from pin to pin, with nothing to say they were two nets -- and five of the
+    seven examples had a pair. ``_assign_tracks`` sees only the vertical runs, so the pair
+    is put right here: a run coming in from the right that lies left of a run facing it is
+    moved to a lane past every lane the channel has, where nothing from the left reaches.
+    Lanes past the end are shared by the left-edge rule like any others.
+    """
+    out = dict(tracks)
+    span = {key: (low, high) for key, low, high in runs}
+    moved: list[str] = []
+    for key, (from_right, y) in stub_of.items():
+        if not from_right or key not in out:
+            continue
+        net = key.split("", 1)[0]
+        for other, (other_from_right, other_y) in stub_of.items():
+            if (
+                not other_from_right
+                and other in out
+                and abs(other_y - y) < _EPS
+                and other.split("", 1)[0] != net
+                and out[other] > out[key]
+            ):
+                moved.append(key)
+                break
+    if not moved:
+        return out, count
+    extra, extra_count = _assign_tracks(
+        [(key, *span[key]) for key in sorted(moved, key=lambda key: (span[key], key))]
+    )
+    for key in moved:
+        out[key] = count + extra[key]
+    return out, count + extra_count
+
 def _named_stub(name: str, side: PinSide) -> Mm:
     """How far a pin's stub runs when its net is said by name: under the whole name, when
     the name runs along the stub; a plain stub when the pin points up or down."""
@@ -3273,6 +3317,9 @@ def _derived_sheet(
         return f"{net_id}\x1f{ref}\x1f{number}"
 
     vertical_runs: dict[int, list[tuple[str, float, float]]] = defaultdict(list)
+    #: Which way each run's stub comes into its channel -- from the symbol on the channel's
+    #: right (True) or its left -- and at what height: see ``_facing_apart``.
+    stub_of: dict[str, tuple[bool, float]] = {}
     for item in resolved:
         for ref, pin in item.pins:
             anchor_y = symbols[ref].anchor_of(pin).y
@@ -3287,11 +3334,12 @@ def _derived_sheet(
             vertical_runs[pin_channel[(item.net.id, ref, pin.number)]].append(
                 (run_key, low, high)
             )
+            stub_of[run_key] = (pin.side == "left", anchor_y)
 
     vertical_track: dict[str, int] = {}
     vertical_tracks = [0] * (ncols + 1)
     for channel, runs in vertical_runs.items():
-        assigned, count = _assign_tracks(runs)
+        assigned, count = _facing_apart(*_assign_tracks(runs), runs, stub_of)
         vertical_track.update(assigned)
         vertical_tracks[channel] = count
 

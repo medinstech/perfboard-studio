@@ -1619,6 +1619,17 @@ drew, because freezing turns one into the other and a name that sat differently 
 each would move on the first nudge -- `test_freezing_a_sheet_keeps_every_wire_and_every_name`
 holds both. Chosen on 2026-10-28 from atmega328-relay and nano-relay rendered both ways.
 
+**Two pins facing across a channel are kept off one line** (`_facing_apart`). The derived
+sheet gives each pin's vertical run a lane by the left-edge sweep over the vertical
+intervals alone, and the stub from the pin out to its lane was never in that question: two
+pins at one height on either side of a channel, of two nets, each ran out to its own lane,
+and where the left pin's lane was right of the right pin's the stubs lay along each other.
+That is the one thing a sheet must not draw, two nets as one wire, and the NE555 drew R1's
+DISCH and R3's OUT so, five of the seven examples with a pair like it. A run from the right
+that lies left of one facing it now takes a lane past every lane the channel has; three
+example sheets came out one grid step wider.
+`test_no_two_nets_are_drawn_along_one_line` holds every fixture and example.
+
 **A drawn wire carries no net id** (`model.SheetWire`). Which net it belongs to is whichever
 net holds both of its ends, looked up every time (`_wire_net_of`). Three things follow, and
 all three are the point:

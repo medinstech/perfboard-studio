@@ -116,6 +116,12 @@ closed without a bump.
 
 ### Fixed
 
+- **Two nets are no longer drawn as one wire on the sheet drawn for you.** Two pins of
+  different nets facing each other across a gap between parts at the same height each ran
+  out to a line of their own, and where the left pin's line was the further one the two runs
+  lay along each other: the NE555 example drew DISCH and OUT as one wire from R1 to R3. Five
+  of the seven example sheets had such a pair. Now the right pin's run takes a line past the
+  other's, which widened three of them by one grid step.
 - **A part's value is no longer printed over its own lead.** A symbol turned on the sheet,
   like a resistor stood upright, has a lead leaving the bottom of its body, and its value
   was printed across it. Now the value moves to the right of the lead.

@@ -30,8 +30,8 @@ symbol U1 ic dip-8 at 33.02,48.26 size 30.48x25.40 value='NE555'
     pin 6 name='THR' right 30.48,15.24
     pin 5 name='CTRL' right 30.48,20.32
 wire OUT [signal] 33.02,63.50 -> 12.70,63.50 -> 12.70,78.74
-wire OUT [signal] 149.86,60.96 -> 132.08,60.96 -> 132.08,78.74
-wire OUT [signal] 12.70,78.74 -> 132.08,78.74
+wire OUT [signal] 149.86,60.96 -> 137.16,60.96 -> 137.16,78.74
+wire OUT [signal] 12.70,78.74 -> 137.16,78.74
 wire LED_A [signal] 170.18,60.96 -> 172.72,60.96 -> 172.72,78.74
 wire LED_A [signal] 170.18,93.98 -> 175.26,93.98 -> 175.26,78.74
 wire LED_A [signal] 172.72,78.74 -> 175.26,78.74

@@ -179,6 +179,31 @@ def test_no_wire_ever_crosses_a_symbol(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
+def test_no_two_nets_are_drawn_along_one_line(path: Path) -> None:
+    """Two nets' wires may cross, and never lie along each other: a run shared by two nets
+    reads as one wire. Two pins facing across a channel at one height each ran out to a
+    lane of its own, the left pin's lane right of the right pin's, and the two stubs drew
+    R1's DISCH and R3's OUT on the NE555 as one line from pin to pin -- on five of the seven
+    examples (``schematic._facing_apart``)."""
+    drawing = drawing_for(path)
+    runs = [
+        (wire.net_id, start, end)
+        for wire in drawing.wires
+        for start, end in itertools.pairwise(wire.path)
+    ]
+    for (net, a, b), (other, c, d) in itertools.combinations(runs, 2):
+        if net == other:
+            continue
+        if abs(a.y - b.y) < 1e-9 and abs(c.y - d.y) < 1e-9 and abs(a.y - c.y) < 1e-9:
+            shared = min(max(a.x, b.x), max(c.x, d.x)) - max(min(a.x, b.x), min(c.x, d.x))
+        elif abs(a.x - b.x) < 1e-9 and abs(c.x - d.x) < 1e-9 and abs(a.x - c.x) < 1e-9:
+            shared = min(max(a.y, b.y), max(c.y, d.y)) - max(min(a.y, b.y), min(c.y, d.y))
+        else:
+            continue
+        assert shared <= 1e-9, f"{net} and {other} lie along one line from {a} to {b}"
+
+
+@pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
 def test_no_two_symbols_share_space(path: Path) -> None:
     """One symbol per grid cell, and cells do not overlap -- so this can only fail if the
     cell assignment gave two parts the same (column, row)."""
