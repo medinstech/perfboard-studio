@@ -39,9 +39,56 @@ closed without a bump.
   always comes into a ground or supply from the side away from its bars, so one dragged
   below its pin is never drawn upside down. They are saved in the file as `sheetPorts`,
   left out when there are none.
+- **Every net's name is written on its wires on the board.** Like a net label on the sheet:
+  once per net, on its longest straight run, while the whole board is in view, and on every
+  long run once you zoom in. A name goes only on a straight run three holes long or more,
+  and is never written over another one, on a run shorter than itself, or on the copper of
+  the far face. View ▸ Show on the Board ▸ Net Names on Wires (N) turns them off, and the
+  window remembers it. The 1:1 print, the exports and the pictures are unchanged.
+- **Eight more symbols on the sheet**: a voltage regulator, a relay, a switch, a push
+  button, a buzzer, an inductor, a motor and an optocoupler, picked in a part's Symbol
+  field. Each is checked against the part's pins: a push button, an inductor or a motor
+  needs exactly two leads, and the others are found by the pins' NAMES, never their
+  numbers, because a 7805, an LM317 and an LD1117 put IN, GND and OUT on three different
+  legs of one TO-220, and a relay names COIL twice. Where a symbol leaves room, the names
+  are printed inside it. A relay or switch whose pins are not named keeps the symbol its
+  package gave it, and a declaration the names do not fit is a numbered box, with
+  Properties saying why. No catalog part is switched over yet: a 7805 from the catalog is
+  drawn as before until somebody picks Voltage regulator for it.
+- **Rearrange shows what it found as cards above the board.** Each card is wired the way
+  Auto-wire would wire it, so the cards compare what you would build: connections made,
+  solder runs, insulated and bare wires, parts that move, parts hard to build. The board as
+  it is is the first card. Click a card (or press 1–9) to see it on the board, framed and
+  read-only, before Apply. On a wired board, Apply asks first and replaces the wiring in one
+  undo step. Try Other Arrangements adds cards instead of replacing them, and Rearrange on an
+  unchanged board brings the same cards back at once. With every part placed, clicking the
+  Placement step opens them too.
+- **MCP: `merge_nets`** joins one net into another in one undo step, the way a wire or a
+  label between two nets does on the sheet. The net named `into` keeps its name and class
+  and takes the other net's pins, and any current, voltage or face it does not declare
+  itself. Copper laid for the net that went now belongs to the one that stayed, but none of
+  it moves, so the board check reports the net split until the two pieces are wired. Before
+  it, an agent had to take every pin off one net and put each on the other, in several
+  undo steps, with the circuit wrong in between. A supply and its ground are refused. 70
+  tools.
+- **MCP: pin roles.** `add_part`, `place_component` and `update_part` take `pin_roles`,
+  and a catalog part brings the roles read from its maker's pin table, only on its own
+  footprint under its own pin names. `get_component`, `list_parts` and `list_catalog` show
+  them. `add_part`'s description names every symbol and pin role the model has, written
+  from the model's own types: it had listed 6 of the 18 symbols.
 
 ### Changed
 
+- **Parts put straight on the board are a circuit still being drawn.** Placed from the
+  Library onto the holes with no sheet ever opened, the first part without a value turned
+  the bar amber with a Problems count, and the Circuit step's hint and Next sent you to the
+  sheet. Until copper goes down, a missing value and a part on no net are now still to do.
+  Once every part is on the board, the hint says to press C and click a pin and the pin it
+  connects to, Next arms the board's Connect, and Set the Values keeps the board in front.
+- **Of two wires that cost Auto-wire the same, it lays the one lying across fewer joints.**
+  A tie used to go to whichever path the search happened to try first. Over the
+  scoreboard's 23 boards, each wired from bare: wires lying across a pin 22 → 17, wire
+  5372 → 5309 mm, bends 332 → 336, the tallest stack still 4. The costs are unchanged.
 - **The sheet names a wire only where its name tells you something.** Every wired net's
   name was printed over its longest run, so the relay example printed 39 names, most of
   them saying nothing the wire did not. A net drawn as a wire is now named where it
@@ -76,6 +123,12 @@ closed without a bump.
   ended "1 warning" on a guide with nothing left out: the stock board's edge fingers, which
   the exported guide already listed as information. The summary now counts what the guide
   left out as warnings and everything else as notes, by the rule the export uses.
+- **A short made through a plated hole is said at that hole.** Copper of one net on one
+  face and of another on the other face, soldered into the same hole with no pin in it, are
+  one piece of copper through the hole's plating. The board-against-circuit check called
+  that a solder bridge and named the net's first hole, which could be nowhere near it. Now
+  it names the hole or holes whose plating joins the nets, and says to take one of the two
+  out of that hole and measure again before applying power.
 
 ## [0.25.0] - 2026-11-18
 

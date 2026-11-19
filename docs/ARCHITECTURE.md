@@ -3379,6 +3379,16 @@ a path's box, whether two paths meet -- after which the sweep was no slower than
 Which way the trade goes is the judgement this section leaves to the commit: a wire six
 deep is soldered in a fixed order nobody can rework, and 12 cm of wire is cut once.
 
+**Of two ways that cost the same, the one across fewer joints is laid.** The grid wire's
+search (`router._find_grid_wire_path`) kept its heap keyed on cost and insertion order, so a
+tie went to whichever way was pushed first, which is no reason at all. It now keys on cost,
+then the number of pins and wire ends the way so far lies across, then insertion order, and
+keeps that pair as a state's best too. It only breaks ties: no cost moved, and no golden
+route was ever laid along the grid, so nothing recorded moved either. The obvious other fix,
+raising `wire_over_joint`, stacked atmega328-relay's wires a level higher. Over the
+scoreboard's 23 boards wired from bare, wires across a pin went 22 -> 17 and wire 5372 ->
+5309 mm, for 4 more bends (332 -> 336), with the tallest stack still 4.
+
 **A wire is laid against the plan, then against the finished plan.** Routing is in order,
 and a wire laid early never saw the wires after it; the later ones paid for every crossing
 from their side. `autoroute._relay_wires` lays each grid wire once more with all the others

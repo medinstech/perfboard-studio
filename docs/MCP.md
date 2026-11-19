@@ -381,12 +381,19 @@ round, and the guide says which end is up. KiCad's `R_Axial_..._Vertical` and
 
 **A part can say what its package cannot.** `add_part`, `update_part` and `place_component`
 take `pin_names` — `{"1": "G", "2": "D", "3": "S"}`, or a module's `{"1": "3V3", "2": "EN",
-…}` — and `symbol`: `npn`, `pnp`, `nmos`, `pmos`, `zener`, `fuse`, `battery` or `jack`. The names come back
+…}` — `symbol`, any of the `PartSymbol` values (the tool description lists them all, written
+from the model), and `pin_roles` — `{"1": "ground", "8": "power", …}`, one `PinRole` per pin
+for every pin or none, which draws an IC or a module as a block instead of a numbered box.
+The names come back
 from `get_component`, are printed on the sheet and in the guide's probes, and a declared
 transistor is drawn as one only once its three leads are named B/C/E or G/D/S; until then
 `render_schematic`'s notes say what is missing. `update_part` reaches a part already on the
 board (all but its footprint); `pin_names` replaces the names whole and `symbol=""` clears
-the declaration. `potentiometer` and `led` are declarable too, for a part that is not on the
+the declaration. `pin_roles` replaces the roles whole and `{}` clears them. A catalog `part=`
+brings its roles only on its own footprint under its own pin names: on another package, or
+under names the agent gave, it stays a numbered box unless `pin_roles` is given too. A role
+that is not one comes back as `invalid-pin-roles`. `get_component`, `list_parts` and
+`list_catalog` show `pin_roles` where a part has them. `potentiometer` and `led` are declarable too, for a part that is not on the
 board at all.
 
 **A part on the panel is wired, not placed.** A pot, a jack or a footswitch in the
