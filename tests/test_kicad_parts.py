@@ -149,7 +149,7 @@ NETLIST = """(export (version "E")
     (comp (ref "Q1") (value "BC547")
       (footprint "Package_TO_SOT_THT:TO-92_Inline")
       (libsource (lib "Device") (part "Q_NPN_EBC")))
-    (comp (ref "Q2") (value "2N5088")
+    (comp (ref "Q2") (value "2N4401")
       (footprint "Package_TO_SOT_THT:TO-92_Inline")
       (libsource (lib "Device") (part "Q_NPN_EBC")))
     (comp (ref "D1") (value "RED")
@@ -234,7 +234,7 @@ def test_each_part_is_read_for_what_it_is() -> None:
     plan = _plan()
     got = {ref: (s.footprint_id, s.source, s.part_id, s.value) for ref, s in plan.suggestions.items()}
     assert got["Q1"] == ("to92", "catalog", "bc547", "BC547")
-    assert got["Q2"] == ("to92", "kicad", None, "2N5088")
+    assert got["Q2"] == ("to92", "kicad", None, "2N4401")
     assert got["D1"] == ("led-5mm", "kicad", None, "RED")
     assert got["U1"] == ("dip-8", "catalog", "ne555", "NE555P")
     assert got["U2"] == ("to220", "catalog", "7805", "L7805")
@@ -257,7 +257,7 @@ def test_a_generic_ebc_symbol_given_a_bc547s_value_is_wired_for_the_real_bc547()
     assert ("Q1", "3") in _pins(plan, "GND") and ("Q1", "1") in _pins(plan, "COLL")
     assert ("Q1", "2") in _pins(plan, "BASE")
     assert any("renumbered" in line for line in plan.notes["Q1"])
-    # A 2N5088 is not in the catalog: nothing to renumber against, and its names printed.
+    # A 2N4401 is not in the catalog: nothing to renumber against, and its names printed.
     assert ("Q2", "1") in _pins(plan, "GND")
     assert dict(plan.suggestions["Q2"].pin_names) == {"1": "E", "2": "B", "3": "C"}
 
