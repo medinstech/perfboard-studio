@@ -787,20 +787,6 @@ TURKISH: Mapping[str, str] = {
     "Code: Apache-2.0 · 3D part models: CC-BY-SA 4.0, from KiCad": (
         "Kod: Apache-2.0 · 3D parça modelleri: CC-BY-SA 4.0, KiCad'den"
     ),
-    "Parts that move: {moved} of {movable}": (
-        "Yer değiştiren parçalar: {movable} taneden {moved}"
-    ),
-    "locked, and left where they are: {locked}.": "kilitli olduğu için yerinde kalan: {locked}.",
-    "Estimated connection length: {before} mm → {after} mm.": (
-        "Tahmini bağlantı uzunluğu: {before} mm → {after} mm."
-    ),
-    "Each arrangement found was wired, and this is the one cheapest to build (cost {cost}; "
-    "seed {seed}).": (
-        "Bulunan her yerleşim kablolandı; bu, kurulması en ucuz olanı (maliyet {cost}; "
-        "tohum {seed})."
-    ),
-    "Overlapping bodies: {before} → {after}.": "Çakışan gövdeler: {before} → {after}.",
-    "Pins sharing a hole: {before} → {after}.": "Aynı deliği paylaşan pinler: {before} → {after}.",
     "{ref} is in the design, not on the board yet.": "{ref} tasarımda var, ama henüz kartta değil.",
     "{ref} is on another board: {board}.": "{ref} başka bir kartta: {board}.",
     # The board strip and the System view (reach's words).
@@ -1023,7 +1009,6 @@ TURKISH: Mapping[str, str] = {
     "without its pictures": "görselleri olmadan",
     "Cancel": "İptal",
     "Delete parts": "Parçaları sil",
-    "Apply this placement?": "Bu yerleşim uygulansın mı?",
     "Redo the wiring?": "Kablolama yeniden yapılsın mı?",
     "Redo Wiring": "Kablolamayı Yeniden Yap",
     # Hand copper: what the step being drawn would do, what was drawn, what went.
@@ -2334,9 +2319,6 @@ TURKISH: Mapping[str, str] = {
         "Bu makine 3D'yi ekran dışında çizemiyor, o yüzden PNG yazılmadı."
     ),
     # -- the progress dialog --------------------------------------------------------------
-    "Trying arrangements, and wiring each one to compare them…": (
-        "Yerleşimler deneniyor, karşılaştırmak için her biri kablolanıyor…"
-    ),
     "Removing the wiring and laying it again…": "Kablolama sökülüp yeniden döşeniyor…",
     "Wiring with every style…": "Her tarzla kablolanıyor…",
     "Wiring…": "Kablolanıyor…",
@@ -5511,7 +5493,6 @@ TURKISH: Mapping[str, str] = {
     "Use This Board": "Bu Kartı Kullan",
     "Use This Part": "Bu Parçayı Kullan",
     "Create Project": "Projeyi Oluştur",
-    "Move the Parts": "Parçaları Taşı",
     "Redo Their Wiring…": "Kablolamalarını Yeniden Yap…",
     "Wire Beside It": "Eskisinin Yanına Kablola",
     "3D": "3D",
@@ -6290,6 +6271,10 @@ TURKISH: Mapping[str, str] = {
     "Auto-place {count} component": "{count} parçayı otomatik yerleştir",
     "Auto-place {count} components": "{count} parçayı otomatik yerleştir",
     "Auto-place (no change)": "Otomatik yerleşim (değişiklik yok)",
+    "Rearrange {count} part": "{count} parçayı yeniden diz",
+    "Rearrange {count} parts": "{count} parçayı yeniden diz",
+    "Rearrange {count} part and rewire": "{count} parçayı yeniden diz ve yeniden kablola",
+    "Rearrange {count} parts and rewire": "{count} parçayı yeniden diz ve yeniden kablola",
     "Add {count} imported part": "İçe aktarılan {count} parçayı ekle",
     "Add {count} imported parts": "İçe aktarılan {count} parçayı ekle",
     "Place {count} imported part": "İçe aktarılan {count} parçayı yerleştir",
@@ -6851,6 +6836,91 @@ TURKISH: Mapping[str, str] = {
     "bottom": "alt",
     "paste": "yapıştırın",
     "duplicate": "çoğaltın",
+    # -- Rearrange's cards (ui/arrangements.py) ------------------------------------------
+    # The strip's cards are "seçenek": "kart" is the board.
+    "Arrangements": "Yerleşimler",
+    "Try Other Arrangements": "Başka Yerleşimler Dene",
+    "Search again from another starting point and add what it finds to these cards. "
+    "Nothing found before is lost.": (
+        "Başka bir başlangıç noktasından yeniden arayın; bulunanlar bu seçeneklere eklenir. "
+        "Önceden bulunanların hiçbiri kaybolmaz."
+    ),
+    "Put the cards away and keep the board as it is. Rearrange brings them back.": (
+        "Seçenekleri kapatın, kart olduğu gibi kalsın. Yeniden Diz onları geri getirir."
+    ),
+    "Back to Your Board": "Kartınıza Dön",
+    "Show the board as it is again (Esc).": "Kartı yeniden olduğu gibi gösterin (Esc).",
+    "Apply This Arrangement": "Bu Yerleşimi Uygula",
+    "Recommended": "Önerilen",
+    "Your board": "Kartınız",
+    "Arrangement {number}": "Yerleşim {number}",
+    "No wiring": "Kablolama yok",
+    "{count} solder run": "{count} lehim yolu",
+    "{count} solder runs": "{count} lehim yolu",
+    "{count} insulated wire": "{count} izoleli tel",
+    "{count} insulated wires": "{count} izoleli tel",
+    "{count} bare wire": "{count} çıplak tel",
+    "{count} bare wires": "{count} çıplak tel",
+    "Not wired: the search was stopped first": "Kablolanmadı: arama daha önce durduruldu",
+    "Wired after you choose it": "Seçtiğinizde kablolanır",
+    "Every connection made": "Bütün bağlantılar kuruldu",
+    "{count} connection not made": "{count} bağlantı kurulamadı",
+    "{count} connections not made": "{count} bağlantı kurulamadı",
+    "Parts stay where they are": "Parçalar yerinde kalır",
+    "{count} part moves": "{count} parça yer değiştirir",
+    "{count} parts move": "{count} parça yer değiştirir",
+    "{count} part hard to build": "{count} parçanın yapımı zor",
+    "{count} parts hard to build": "{count} parçanın yapımı zor",
+    "Each one was wired and compared. Click one to see it on the board (1–{last}).": (
+        "Her biri kablolanıp karşılaştırıldı. Kartta görmek için birine tıklayın (1–{last})."
+    ),
+    "Show it on the board ({key}).": "Kartta gösterin ({key}).",
+    "Trying arrangements…": "Yerleşimler deneniyor…",
+    "Wiring each arrangement the way Auto-wire would, to compare them…": (
+        "Karşılaştırmak için her yerleşim Otomatik Kablola'nın yapacağı gibi kablolanıyor…"
+    ),
+    "That search found nothing the cards do not already show.": (
+        "Bu arama, seçeneklerde olmayan yeni bir şey bulamadı."
+    ),
+    "Nothing found is cheaper to build than the board as it is. Click an arrangement to "
+    "see it here anyway.": (
+        "Bulunanların hiçbiri kartın şu anki hâlinden daha kolay yapılmıyor. Yine de burada "
+        "görmek için bir yerleşime tıklayın."
+    ),
+    "This is the board as it is. Click an arrangement to see it here.": (
+        "Bu, kartın şu anki hâli. Burada görmek için bir yerleşime tıklayın."
+    ),
+    "{name} is on the board below; nothing has changed yet.": (
+        "{name} aşağıdaki kartta gösteriliyor; henüz hiçbir şey değişmedi."
+    ),
+    "{name} is on the board below; nothing has changed yet. Apply moves the parts and "
+    "replaces the wiring with this.": (
+        "{name} aşağıdaki kartta gösteriliyor; henüz hiçbir şey değişmedi. Uygula, "
+        "parçaları taşır ve kablolamayı bununla değiştirir."
+    ),
+    "{name} is on the board below; nothing has changed yet. It was not wired before the "
+    "search stopped, so it cannot replace the board's wiring.": (
+        "{name} aşağıdaki kartta gösteriliyor; henüz hiçbir şey değişmedi. Arama durmadan "
+        "önce kablolanmadığı için kartın kablolamasının yerini alamaz."
+    ),
+    "{name} is on the board below; nothing has changed yet. Only the parts move: "
+    "Auto-wire lays the wiring the card counts.": (
+        "{name} aşağıdaki kartta gösteriliyor; henüz hiçbir şey değişmedi. Yalnızca "
+        "parçalar taşınır: seçenekte sayılan kablolamayı Otomatik Kablola döşer."
+    ),
+    "Replace the wiring?": "Kablolama değiştirilsin mi?",
+    "Replace the Wiring": "Kablolamayı Değiştir",
+    "The {count} conductor on the board, hand-laid or not, is replaced by the {laid} this "
+    "arrangement was wired with. Undo brings it back.": (
+        "Karttaki {count} iletken, elle döşenmiş olsa bile, bu yerleşimin kablolandığı "
+        "{laid} ile değiştirilir. Geri Al onu geri getirir."
+    ),
+    "All {count} conductors on the board, hand-laid ones included, are replaced by the "
+    "{laid} this arrangement was wired with. Undo brings them back.": (
+        "Karttaki {count} iletkenin tümü, elle döşenenler de dahil, bu yerleşimin "
+        "kablolandığı {laid} ile değiştirilir. Geri Al onları geri getirir."
+    ),
+    "wired again: {wiring}": "yeniden kablolandı: {wiring}",
     # A finding on one board of a system, the board said before it.
     "On {board}: {finding}": "{board} üzerinde: {finding}",
 }

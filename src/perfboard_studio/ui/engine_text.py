@@ -115,6 +115,10 @@ TEMPLATES: tuple[str, ...] = (
     "Auto-place {count} component",
     "Auto-place {count} components",
     "Auto-place (no change)",
+    "Rearrange {count} part",
+    "Rearrange {count} parts",
+    "Rearrange {count} part and rewire",
+    "Rearrange {count} parts and rewire",
     # -- the design ----------------------------------------------------------------------
     "Add {count} imported part",
     "Add {count} imported parts",

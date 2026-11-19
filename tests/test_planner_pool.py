@@ -414,9 +414,9 @@ def test_the_window_reads_ended_workers_as_a_cancel_and_stays_usable(window) -> 
 
 
 def test_a_worker_killed_mid_placement_leaves_a_placed_board_and_a_usable_window(window, monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Auto-place with a worker that dies under it: the placement is made all the same,
-    applied as any other is, and the window is back in the user's hands -- with the next
-    placement on a new pool."""
+    """Rearrange with a worker that dies under it -- a restart, a judging route or a card's
+    wiring: the cards come back finished all the same, one applies as any other does, and
+    the window is back in the user's hands -- with the next search on a new pool."""
     from perfboard_studio.ui import main as main_module
 
     marker = tmp_path / "died"
@@ -430,24 +430,33 @@ def test_a_worker_killed_mid_placement_leaves_a_placed_board_and_a_usable_window
 
     monkeypatch.setattr(planner_pool, "mapper_for", dying_mapper_for)
     plans: list[object] = []
-    real = main_module.plan_placement
+    real = main_module.plan_placements
 
     def recorded(*args, **kwargs):  # type: ignore[no-untyped-def]
         plans.append(real(*args, **kwargs))
         return plans[-1]
 
-    monkeypatch.setattr(main_module, "plan_placement", recorded)
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan: True)
+    monkeypatch.setattr(main_module, "plan_placements", recorded)
+    monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
     before = window.bus.document
     window.on_autoplace()
     assert marker.exists(), "a worker did die under the placement"
     assert len(plans) == 1 and plans[0] is not None
-    placed = plans[0]
-    if not placed.is_empty:  # type: ignore[attr-defined]
-        assert window.bus.document is not before, "and it was applied"
+    found = plans[0]
+    if found.candidates:  # type: ignore[attr-defined]
+        offer = window._arrangements
+        assert offer is not None
+        assert all(
+            wired is not None for alternative, wired in offer.entries if not alternative.is_baseline
+        ), "a dead worker still leaves every card wired"
+        window._on_arrangement_picked(1)
+        window.on_apply_arrangement()
+        assert window.bus.document is not before, "and one applies"
+    else:
+        assert window.bus.document is before, "nothing found is nothing to apply"
     assert window.isEnabled() and not window._planner_running
     monkeypatch.setattr(planner_pool, "mapper_for", real_mapper_for)
-    window.on_autoplace()
+    window.on_try_another_arrangement()
     assert planner_pool.describe() == "2 worker processes", "the next one on a pool of its own"
 
 
@@ -456,14 +465,13 @@ def test_the_window_still_places_when_its_workers_will_not_start(window, monkeyp
 
     monkeypatch.setattr(planner_pool, "_new_pool", _refuse)
     plans: list[object] = []
-    real = main_module.plan_placement
+    real = main_module.plan_placements
 
     def recorded(*args, **kwargs):  # type: ignore[no-untyped-def]
         plans.append(real(*args, **kwargs))
         return plans[-1]
 
-    monkeypatch.setattr(main_module, "plan_placement", recorded)
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan: False)
+    monkeypatch.setattr(main_module, "plan_placements", recorded)
     window.on_autoplace()
     assert len(plans) == 1 and plans[0] is not None
     assert planner_pool.describe().startswith("in this process: the workers would not start")

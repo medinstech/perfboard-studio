@@ -1752,57 +1752,199 @@ def test_a_planner_that_raises_still_turns_the_collector_back_on() -> None:
     _close(window)
 
 
-def test_autoplace_asks_before_moving_the_users_board(monkeypatch) -> None:
-    """Routing adds copper to a board the user arranged; placement MOVES it. So the
-    confirmation is not a formality, and cancelling has to leave the document alone."""
-    window = _window_on(_load_dense())
-    before = window.bus.document
+def _rearranging_window(monkeypatch):  # type: ignore[no-untyped-def]
+    """nano-relay, wired, with anneals short enough for a test: what is tested here is the
+    window around the search, not how good the search is (``test_placement_alternatives``)."""
+    import functools
 
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan: False)
-    window.on_autoplace()
-
-    assert window.bus.document is before
-    window.close()
-
-
-def test_autoplace_commits_through_the_bus_as_one_undo_step(monkeypatch) -> None:
-    window = _window_on(_load_dense())
-    before = window.bus.document
-
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan: True)
-    window.on_autoplace()
-
-    assert window.bus.document is not before
-    assert window.bus.document.components != before.components
-    window.bus.undo()
-    assert window.bus.document.components == before.components
-    window.close()
-
-
-def test_every_press_of_auto_place_searches_from_a_new_seed(monkeypatch) -> None:
-    """Annealing is a random walk, so pressing it again has to actually try something else.
-    It did not: the same seed on the same board is the same answer, so a second press ran
-    for seconds and reported the placement the first had -- which reads as a button that
-    has stopped working."""
+    from perfboard_studio.placer import PlacementOptions
     from perfboard_studio.ui import main as main_module
 
-    window = _window_on(_load_dense())
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan: False)
-    seeds: list[int] = []
-    real = main_module.plan_placement
     monkeypatch.setattr(
-        main_module,
-        "plan_placement",
-        lambda doc, lookup, options, should_stop=None, mapper=None: (
-            seeds.append(options.seed)
-            or real(doc, lookup, options, should_stop=should_stop, mapper=mapper)
-        ),
+        main_module, "PlacementOptions", functools.partial(PlacementOptions, iterations=400)
     )
+    examples = pathlib.Path(__file__).resolve().parents[1] / "examples"
+    doc = persist.parse_document_or_throw(
+        (examples / "nano-relay.perf").read_text(encoding="utf-8")
+    )
+    return _window_on(doc)
 
-    window.on_autoplace()
-    window.on_autoplace()
-    assert seeds == [0, 1]
-    window.close()
+
+def _count_searches(monkeypatch) -> list[int]:  # type: ignore[no-untyped-def]
+    """The seed of every search Rearrange runs, in order."""
+    from perfboard_studio.ui import main as main_module
+
+    seeds: list[int] = []
+    real = main_module.plan_placements
+
+    def recorded(doc, lookup, options, **kwargs):  # type: ignore[no-untyped-def]
+        seeds.append(options.seed)
+        return real(doc, lookup, options, **kwargs)
+
+    monkeypatch.setattr(main_module, "plan_placements", recorded)
+    return seeds
+
+
+def test_rearrange_lays_out_the_arrangements_and_changes_nothing(monkeypatch) -> None:
+    """Routing adds copper to a board the user arranged; Rearrange MOVES it. So it shows
+    what it found, as cards over the board, the board as it is first -- and the document
+    is the one it was until a card is applied."""
+    window = _rearranging_window(monkeypatch)
+    try:
+        before = window.bus.document
+        window.on_autoplace()
+
+        offer = window._arrangements
+        assert offer is not None and offer.candidates, "nano-relay has somewhere to go"
+        strip = window.arrangement_strip
+        assert not strip.isHidden()
+        assert len(strip.cards) == len(offer.entries)
+        assert strip.cards[0].title.text() == "Your board"
+        assert offer.entries[0][0].is_baseline
+        assert window.bus.document is before
+    finally:
+        _close(window)
+
+
+def test_a_card_is_shown_on_the_board_and_the_board_takes_no_edit_meanwhile(monkeypatch) -> None:
+    window = _rearranging_window(monkeypatch)
+    try:
+        before = window.bus.document
+        window.on_autoplace()
+        offer = window._arrangements
+        assert offer is not None
+        alternative, wired = offer.entries[1]
+
+        window.arrangement_strip.picked.emit(1)
+
+        assert window._arrangement_previewing
+        assert window.scene.document is window._shown_for(alternative, wired)
+        assert not window.view.isInteractive(), "a click would edit a board that is not there"
+        assert window.arrangement_strip.apply.isEnabled()
+        assert window.bus.document is before, "looking is not doing"
+
+        window.arrangement_strip.picked.emit(0)
+        assert not window._arrangement_previewing
+        assert window.scene.document is before and window.view.isInteractive()
+    finally:
+        _close(window)
+
+
+def test_applying_a_card_on_a_wired_board_asks_then_is_one_undo_step(monkeypatch) -> None:
+    """On a wired board the card's wiring replaces the board's, hand-laid copper with it:
+    asked first through ``_confirm``, and then ONE command whose result is exactly the
+    board the card showed."""
+    from perfboard_studio.commands import RearrangePayload
+
+    window = _rearranging_window(monkeypatch)
+    try:
+        before = window.bus.document
+        assert before.conductors, "the case is a wired board"
+        window.on_autoplace()
+        offer = window._arrangements
+        assert offer is not None
+        _alternative, wired = offer.entries[1]
+        assert wired is not None and isinstance(wired.commit, RearrangePayload)
+        window.arrangement_strip.picked.emit(1)
+
+        asked: list[str] = []
+        answer = [False]
+        monkeypatch.setattr(
+            type(window),
+            "_confirm",
+            lambda self, title, body, verb: asked.append(verb) or answer[0],
+        )
+        window.on_apply_arrangement()
+        assert asked == ["Replace the Wiring"]
+        assert window.bus.document is before, "cancelled is cancelled"
+
+        answer[0] = True
+        window.on_apply_arrangement()
+        after = window.bus.document
+        assert after.components == wired.document.components
+        assert after.conductors == wired.document.conductors
+        assert window.arrangement_strip.isHidden() and not window._arrangement_previewing
+
+        window.bus.undo()
+        assert window.bus.document.components == before.components
+        assert window.bus.document.conductors == before.conductors
+    finally:
+        _close(window)
+
+
+def test_escape_goes_back_to_the_board_then_puts_the_cards_away_and_rearrange_brings_them_back(
+    monkeypatch,
+) -> None:
+    """The cards are kept with the board they were found for: put away and asked for again
+    on the same board they come back at once, without seconds of searching."""
+    window = _rearranging_window(monkeypatch)
+    try:
+        seeds = _count_searches(monkeypatch)
+        window.on_autoplace()
+        offer = window._arrangements
+        window.arrangement_strip.picked.emit(1)
+
+        window.on_stop_tool()
+        assert not window._arrangement_previewing
+        assert not window.arrangement_strip.isHidden()
+        assert window.arrangement_strip.current == 0
+
+        window.on_stop_tool()
+        assert window.arrangement_strip.isHidden()
+
+        window.on_autoplace()
+        assert seeds == [0], "the same board is not searched again"
+        assert window._arrangements is offer
+        assert not window.arrangement_strip.isHidden()
+    finally:
+        _close(window)
+
+
+def test_try_other_arrangements_searches_from_a_new_seed_and_adds_to_the_cards(monkeypatch) -> None:
+    """Annealing is a random walk, and the same seed on the same board is the same answer:
+    the second search starts past every restart the first one ran, and what it finds is
+    added to the cards rather than put in place of them."""
+    from perfboard_studio.placer import PlacementOptions
+
+    window = _rearranging_window(monkeypatch)
+    try:
+        seeds = _count_searches(monkeypatch)
+        window.on_autoplace()
+        first = window._arrangements
+        assert first is not None
+
+        window.on_try_another_arrangement()
+        second = window._arrangements
+        assert second is not None
+        assert seeds == [0, PlacementOptions().restarts]
+        assert len(second.entries) >= len(first.entries)
+        assert len(window.arrangement_strip.cards) == len(second.entries)
+        assert all(
+            wired is not None for alternative, wired in second.entries if not alternative.is_baseline
+        ), "every card is wired, the ones kept from the first search too"
+    finally:
+        _close(window)
+
+
+def test_an_edit_to_the_board_puts_the_cards_away(monkeypatch) -> None:
+    window = _rearranging_window(monkeypatch)
+    try:
+        window.on_autoplace()
+        window.arrangement_strip.picked.emit(1)
+        part = window.bus.document.components[0]
+
+        moved = window.bus.dispatch(
+            "component.move",
+            MoveComponentPayload(id=part.id, anchor=HoleCoord(part.anchor.col, part.anchor.row + 1)),
+        )
+        assert moved.ok
+
+        assert not window._arrangement_previewing
+        assert window.view.isInteractive()
+        assert window.scene.document is window.bus.document
+        assert window.arrangement_strip.isHidden(), "the cards were for the board before it"
+    finally:
+        _close(window)
 
 
 def test_autoroute_on_a_finished_board_routes_it_again(monkeypatch) -> None:
@@ -1852,12 +1994,12 @@ def test_autoplace_on_an_empty_board_says_so_rather_than_running(monkeypatch) ->
             DocumentMeta(name="t", created="2024-01-01T00:00:00.000Z", modified="2024-01-01T00:00:00.000Z")
         )
     )
-    called = []
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan: called.append(1) or True)
+    seeds = _count_searches(monkeypatch)
 
     window.on_autoplace()
 
-    assert called == []
+    assert seeds == []
+    assert window.arrangement_strip.isHidden()
     assert "empty" in window.statusBar().currentMessage()
     window.close()
 

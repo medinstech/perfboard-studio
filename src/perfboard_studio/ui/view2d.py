@@ -60,6 +60,7 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
     QPainterPathStroker,
+    QPaintEvent,
     QPen,
     QPixmap,
     QPolygonF,
@@ -8288,6 +8289,9 @@ class BoardView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
         self.setFrameShape(QGraphicsView.Shape.NoFrame)
+        #: A dashed frame round the viewport in this colour while the board shows
+        #: something it does not have yet (Rearrange's cards); None otherwise.
+        self._preview_frame: QColor | None = None
         self.scale(6, 6)  # ~6 px per mm to start
         self._panning = False
         self._pan_origin = QPointF()
@@ -8315,6 +8319,30 @@ class BoardView(QGraphicsView):
         #: The board turning over, while it does (``turn_over``).
         self._curtain: FlipCurtain | None = None
         self.viewport().installEventFilter(self)
+
+    def set_preview_frame(self, colour: QColor | None) -> None:
+        """Frame the viewport in ``colour``, dashed, or take the frame away (None).
+
+        Painted here rather than by a stylesheet border: the view has no frame, and a
+        border would also shrink the viewport and move the board under the pointer.
+        Every repaint is a whole one while it shows, because a scroll moves the
+        viewport's pixels and would carry the frame's edges along with the board."""
+        self._preview_frame = colour
+        self.setViewportUpdateMode(
+            QGraphicsView.ViewportUpdateMode.FullViewportUpdate
+            if colour is not None
+            else QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
+        )
+        self.viewport().update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        if self._preview_frame is None:
+            return
+        painter = QPainter(self.viewport())
+        painter.setPen(QPen(self._preview_frame, 2, Qt.PenStyle.DashLine))
+        painter.drawRect(self.viewport().rect().adjusted(1, 1, -2, -2))
+        painter.end()
 
     # -- turning the board over -----------------------------------------------
 

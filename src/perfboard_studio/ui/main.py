@@ -215,6 +215,7 @@ from perfboard_studio.commands import (
     OnBoardPayload,
     PartPlacement,
     PlacePartsPayload,
+    RearrangePayload,
     ReconnectSheetWirePayload,
     RenameDocumentPayload,
     ReplaceConductorsPayload,
@@ -349,15 +350,19 @@ from perfboard_studio.phrasebook import GuideLanguage, guide_language, phraseboo
 from perfboard_studio.placer import (
     BoardSuggestion,
     DesignPlacement,
+    PlacementAlternative,
+    PlacementAlternatives,
     PlacementOptions,
-    PlacementPlan,
+    WiredAlternative,
     arrange,
     design_entries,
+    merge_alternatives,
     place_design,
     placement_inputs,
-    plan_placement,
+    plan_placements,
     recommended_board,
     suggest_boards,
+    wire_alternatives,
 )
 from perfboard_studio.placer import (
     describe as describe_placement,
@@ -399,6 +404,15 @@ from perfboard_studio.version import describe as describe_version
 from perfboard_studio.wiringstats import WiringStats, wiring_stats
 
 from . import icons, planner_pool, theme, updater, whatsnew
+from .arrangements import (
+    MAX_ARRANGEMENTS,
+    PICTURE_SIZE,
+    ArrangementStrip,
+    Card,
+    Offer,
+    card_lines,
+    wiring_line,
+)
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .benchguide import BenchItem, BenchView, bench_items, bench_phases, crop_around
@@ -3093,6 +3107,12 @@ class MainWindow(QMainWindow):
         #: in, so pressing it repeatedly keeps exploring instead of re-running the same
         #: search and reporting the same answer.
         self._place_seed = 0
+        #: What the last Rearrange found, for as long as the board is the one it was found
+        #: for (``arrangements.Offer``): pressing Rearrange again on that board shows the
+        #: same cards at once rather than searching again.
+        self._arrangements: Offer | None = None
+        #: True while the board shows an arrangement it does not have yet.
+        self._arrangement_previewing = False
         #: Nets whose copper was laid out for a position a part has since left. See
         #: _track_moved_nets for why this is remembered rather than detected.
         self._nets_from_old_layout: set[NetId] = set()
@@ -3452,8 +3472,11 @@ class MainWindow(QMainWindow):
         given -- see ``commands.create_document_id_generator``.
         """
         # Another document: the wiring before a route on the last one is nothing to
-        # compare this one with.
+        # compare this one with, and Rearrange's cards are of another board.
         self._wiring_before = None
+        if hasattr(self, "arrangement_strip"):
+            self.close_arrangements()
+            self._arrangements = None
         if hasattr(self, "act_compare_before"):
             self.act_compare_before.setChecked(False)
             self.act_compare_before.setEnabled(False)
@@ -4433,6 +4456,16 @@ class MainWindow(QMainWindow):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
         column.addWidget(self.board_strip)
+        # Rearrange's cards: in the column, over the view, so they push the board down
+        # rather than cover it, and the floating tools stay where they are.
+        self.arrangement_strip = ArrangementStrip()
+        self.arrangement_strip.hide()
+        self.arrangement_strip.picked.connect(self._on_arrangement_picked)
+        self.arrangement_strip.apply_requested.connect(self.on_apply_arrangement)
+        self.arrangement_strip.more_requested.connect(self.on_try_another_arrangement)
+        self.arrangement_strip.close_requested.connect(self.close_arrangements)
+        self.arrangement_strip.install_keys(holder)
+        column.addWidget(self.arrangement_strip)
         column.addWidget(self.board_stack)
         dock.setWidget(holder)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -6023,7 +6056,7 @@ class MainWindow(QMainWindow):
                 "a real second answer rather than the same one twice."
             )
         )
-        act_reroll.triggered.connect(self.on_autoplace)
+        act_reroll.triggered.connect(self.on_try_another_arrangement)
 
         # A net could only ever arrive from a KiCad netlist, which quietly made a
         # schematic capture package a prerequisite for the ratsnest -- and so for
@@ -11825,6 +11858,7 @@ class MainWindow(QMainWindow):
     # -- the one repaint path: every successful command, undo and redo funnels here --
 
     def on_bus_changed(self, document: PerfDocument, entry: HistoryEntry | None) -> None:
+        self._arrangements_follow_the_board()
         self._bus_changing = True
         try:
             self._redraw_for(document, entry)
@@ -13236,18 +13270,25 @@ class MainWindow(QMainWindow):
     # -- placement ----------------------------------------------------------
 
     def on_autoplace(self) -> None:
-        """Anneal the placement, show what it found, and commit only if the user accepts.
+        """Find arrangements, wire each one, and lay them out as cards over the board.
 
-        Asked rather than applied, unlike autoroute. Routing adds copper to a board the
+        Shown rather than applied, unlike autoroute. Routing adds copper to a board the
         user arranged; this MOVES the board they arranged, which is not a thing to do to
-        someone without showing them the result first and what it bought.
+        someone without showing them the result first and what it bought -- and since
+        0.26 it shows several, side by side, each looked at on the board itself before
+        anything changes (``ui/arrangements.py``).
 
-        EVERY PRESS SEARCHES FROM A NEW SEED. Annealing is a random walk and the outcome
+        THE SAME BOARD GETS THE SAME CARDS BACK AT ONCE. They are kept with the board they
+        were found for (``placer.placement_inputs``), so cards put away -- Close, Escape, an
+        Undo after Apply -- come back on the next press without seconds of searching for
+        what was already found. Any edit to the board makes them miss, and the press then
+        searches again.
+
+        EVERY SEARCH STARTS FROM A NEW SEED. Annealing is a random walk and the outcome
         genuinely varies -- on the NE555 fixture the spread across seeds was 3 to 7
         insulated wires for the same circuit -- and the same seed on the same board is the
-        same answer. So pressing it again used to run for seconds and report the placement
-        it had just reported, which reads as a button that has stopped working. The seed
-        is still printed with the result, so any answer can be had again.
+        same answer. Try Other Arrangements is the press that searches again on purpose,
+        and adds what it finds to the cards.
         """
         if not self.bus.document.components:
             # Auto-place rearranges what is ON the board; a design waiting to go on it is
@@ -13269,110 +13310,296 @@ class MainWindow(QMainWindow):
                 8000,
             )
             return
+        held = self._arrangements
+        if held is not None and held.key == placement_inputs(self.bus.document):
+            self._show_arrangements(held)
+            return
+        found = self._find_arrangements(None)
+        if found is not None:
+            self._offer_arrangements(found)
 
+    def on_try_another_arrangement(self) -> None:
+        """Search again from the next seed and ADD what is found to the cards: a good
+        arrangement from the first search is never lost to a worse second one. With no
+        cards for this board yet, it is Rearrange."""
+        held = self._arrangements
+        if held is None or held.key != placement_inputs(self.bus.document):
+            self._arrangements = None
+            self.on_autoplace()
+            return
+        found = self._find_arrangements(held)
+        if found is None:
+            return
+        if {id(a.plan) for a in found.alternatives.alternatives} == {
+            id(a.plan) for a in held.alternatives.alternatives
+        }:
+            self.statusBar().showMessage(
+                t("That search found nothing the cards do not already show."), 8000
+            )
+        self._offer_arrangements(found)
+
+    def _find_arrangements(self, held: Offer | None) -> Offer | None:
+        """One search, and every arrangement it offers wired as Auto-wire would wire it, so
+        the cards compare what would be built; merged into ``held`` when there are cards
+        already (``placer.merge_alternatives``), wiring only what they do not have. None
+        when it was cancelled before anything was found. On a board whose copper is cut
+        rather than laid -- stripboard, a breadboard -- the cards are compared by the placer
+        alone, as Rearrange always was.
+
+        The seed moves on by the search's restarts, not by one: each restart anneals from
+        its own seed, so seed + 1 repeated three of the four anneals the last search ran."""
         document = self.bus.document
         options = PlacementOptions(seed=self._place_seed)
-        self._place_seed += 1
-        plan = self._run_planner(
-            t("Trying arrangements, and wiring each one to compare them…"),
-            lambda should_stop: plan_placement(
-                document,
-                self.lookup,
-                options,
-                should_stop=should_stop,
-                mapper=planner_pool.mapper_for(should_stop),
-            ),
+        self._place_seed += options.restarts
+        wires_cards = not board_joins_holes(document.board)
+        route_options = self._autoroute_options()
+        styles = (
+            ALL_ROUTING_STYLES
+            if self._routing_style == "best"
+            else (self._routing_style,)
         )
-        if plan is None:
-            return
+        # Both said here, on this thread; the worker only picks which one by assignment.
+        searching = t("Trying arrangements…")
+        stage = {"label": searching}
 
-        if plan.is_empty:
+        def work(should_stop: Callable[[], bool]) -> Offer:
+            mapper = planner_pool.mapper_for(should_stop)
+            found = plan_placements(
+                document, self.lookup, options, should_stop=should_stop, mapper=mapper
+            )
+            if held is not None:
+                found = merge_alternatives(
+                    held.alternatives, found, self.lookup, limit=MAX_ARRANGEMENTS
+                )
+            offer = Offer(
+                placement_inputs(document),
+                found,
+                {} if held is None else dict(held.wiring),
+            )
+            todo = offer.unwired()
+            if not wires_cards or not found.candidates or not todo:
+                return offer
+            stage["label"] = wiring
+            wired = wire_alternatives(
+                PlacementAlternatives(todo),
+                self.lookup,
+                route_options,
+                styles,
+                should_stop=should_stop,
+                mapper=mapper,
+            )
+            wiring_of = dict(offer.wiring)
+            wiring_of.update((id(a.plan), w) for a, w in zip(todo, wired, strict=True))
+            return Offer(offer.key, found, wiring_of)
+
+        wiring = t("Wiring each arrangement the way Auto-wire would, to compare them…")
+        offer: Offer | None = self._run_planner(lambda: stage["label"], work)
+        return offer
+
+    def _offer_arrangements(self, offer: Offer) -> None:
+        """Cards when there is something to choose between; when the board as it is is all
+        the search found, a sentence saying so -- a strip with one card is not a choice."""
+        if not offer.candidates:
             # Kept on the status line rather than timed out: it is the whole answer to seconds
             # of work, and one that vanished while somebody looked back at the board read
             # exactly like the button doing nothing.
             self.statusBar().showMessage(
-                f"{say(describe_placement(plan))}  "
+                f"{say(describe_placement(offer.baseline[0].plan))}  "
                 + t("Pressing Rearrange again tries another arrangement."),
                 0,
             )
             return
+        self._arrangements = offer
+        self._show_arrangements(offer)
 
-        if not self._confirm_placement(plan):
+    def _shown_for(
+        self, alternative: PlacementAlternative, wired: WiredAlternative | None
+    ) -> PerfDocument:
+        """The board a card shows: with the copper it would get where Apply lays that
+        copper, and the parts alone where Apply only moves them -- so the preview is never
+        of wiring the board will not have."""
+        if wired is not None and isinstance(wired.commit, RearrangePayload):
+            return wired.document
+        return alternative.plan.document
+
+    def _show_arrangements(self, offer: Offer) -> None:
+        wires_cards = not board_joins_holes(self.bus.document.board)
+        cards = []
+        number = 0
+        for alternative, wired in offer.entries:
+            if alternative.is_baseline:
+                title = t("Your board")
+                detail = ""
+            else:
+                number += 1
+                title = t("Arrangement {number}").format(number=number)
+                detail = "\n".join(
+                    say(line)
+                    for line in summarize_placement(
+                        alternative.plan, limit=10, board=self.bus.document.board
+                    )
+                )
+            shown = (
+                self.bus.document
+                if alternative.is_baseline
+                else self._shown_for(alternative, wired)
+            )
+            cards.append(
+                Card(
+                    title=title,
+                    recommended=alternative.rank == 1,
+                    is_baseline=alternative.is_baseline,
+                    picture=render_board(shown, self.lookup, PICTURE_SIZE),
+                    lines=card_lines(alternative, wired, wires_cards=wires_cards),
+                    detail=detail,
+                )
+            )
+        self.arrangement_strip.set_cards(cards)
+        self.arrangement_strip.show()
+        self.show_board()
+        # The recommended card in front: the board as it is when nothing found beats it,
+        # and then the banner says exactly that.
+        best = next(
+            (index for index, (alt, _wired) in enumerate(offer.entries) if alt.rank == 1), 0
+        )
+        self._on_arrangement_picked(best)
+
+    def _on_arrangement_picked(self, index: int) -> None:
+        """Show card ``index`` on the board, and say in the banner what is on it."""
+        offer = self._arrangements
+        if offer is None or not 0 <= index < len(offer.entries):
             return
+        alternative, wired = offer.entries[index]
+        if alternative.is_baseline:
+            self._leave_arrangement_preview()
+            banner = (
+                t("Nothing found is cheaper to build than the board as it is. Click an "
+                  "arrangement to see it here anyway.")
+                if alternative.rank == 1
+                else t("This is the board as it is. Click an arrangement to see it here.")
+            )
+            self.arrangement_strip.set_current(index, banner, can_apply=False)
+            return
+        self._preview_arrangement(self._shown_for(alternative, wired))
+        title = self.arrangement_strip.cards[index].title.text()
+        copper = bool(self.bus.document.conductors)
+        rewires = wired is not None and isinstance(wired.commit, RearrangePayload)
+        can_apply = rewires or not copper or board_joins_holes(self.bus.document.board)
+        if rewires:
+            banner = t(
+                "{name} is on the board below; nothing has changed yet. Apply moves the "
+                "parts and replaces the wiring with this."
+            )
+        elif not can_apply:
+            banner = t(
+                "{name} is on the board below; nothing has changed yet. It was not wired "
+                "before the search stopped, so it cannot replace the board's wiring."
+            )
+        elif wired is not None:
+            banner = t(
+                "{name} is on the board below; nothing has changed yet. Only the parts "
+                "move: Auto-wire lays the wiring the card counts."
+            )
+        else:
+            banner = t("{name} is on the board below; nothing has changed yet.")
+        self.arrangement_strip.set_current(
+            index, banner.format(name=title), can_apply=can_apply
+        )
 
-        result = self.bus.dispatch("component.moveMany", plan.payload())
+    def _preview_arrangement(self, document: PerfDocument) -> None:
+        """The board shows ``document`` and takes no edits until it is put back: a click on
+        an arrangement the board does not have would be an edit to a board that is not
+        there. Nothing is dispatched, so nothing is on the undo stack."""
+        if self.scene.in_a_mode:
+            self.scene.leave_mode()
+        self.scene.clearSelection()
+        self.scene.set_document(document)
+        self.scene.set_violations(())
+        self.scene.set_finding_notes({}, {})
+        self.view.setInteractive(False)
+        self.view.set_preview_frame(QColor(theme.ACTIVE.accent))
+        self._arrangement_previewing = True
+
+    def _leave_arrangement_preview(self, redraw: bool = True) -> None:
+        """The board as it is, back on the board. ``redraw`` False when the caller is about
+        to draw it anyway (a change on the bus)."""
+        if not self._arrangement_previewing:
+            return
+        self._arrangement_previewing = False
+        self.view.setInteractive(True)
+        self.view.set_preview_frame(None)
+        if redraw:
+            self.scene.set_document(self.bus.document)
+            self.scene.set_violations(self._last_violations)
+            self.scene.set_finding_notes(*self._finding_notes(self._last_violations))
+
+    def close_arrangements(self) -> None:
+        """Put the cards away, keeping them: Rearrange on the same board brings them back."""
+        self._leave_arrangement_preview()
+        self.arrangement_strip.hide()
+
+    def _arrangements_follow_the_board(self) -> None:
+        """A change on the bus: the board below is the bus's again, and the cards go away
+        when the board is no longer the one they were found for."""
+        if self._arrangement_previewing:
+            self._leave_arrangement_preview(redraw=False)
+        held = self._arrangements
+        if held is not None and held.key != placement_inputs(self.bus.document):
+            self.arrangement_strip.hide()
+        elif not self.arrangement_strip.isHidden() and held is not None:
+            self._on_arrangement_picked(0)
+
+    def on_apply_arrangement(self) -> None:
+        """Make the arrangement on the board the board: one command, one undo step. On a
+        wired board that replaces every conductor, hand-laid ones too, so it asks first."""
+        offer = self._arrangements
+        index = self.arrangement_strip.current
+        if offer is None or not 0 <= index < len(offer.entries):
+            return
+        alternative, wired = offer.entries[index]
+        commit = wired.commit if wired is not None else alternative.move_payload()
+        if commit is None:
+            return
+        rewires = isinstance(commit, RearrangePayload)
+        if rewires:
+            assert wired is not None
+            laid = wiring_line(wired)
+            if not self._confirm(
+                t("Replace the wiring?"),
+                counted(
+                    len(self.bus.document.conductors),
+                    t(
+                        "The {count} conductor on the board, hand-laid or not, is replaced by "
+                        "the {laid} this arrangement was wired with. Undo brings it back."
+                    ),
+                    t(
+                        "All {count} conductors on the board, hand-laid ones included, are "
+                        "replaced by the {laid} this arrangement was wired with. Undo brings "
+                        "them back."
+                    ),
+                    laid=laid,
+                ),
+                t("Replace the Wiring"),
+            ):
+                return
+        self.close_arrangements()
+        result = self.bus.dispatch(
+            "component.rearrange" if rewires else "component.moveMany", commit
+        )
         if not result.ok:
-            QMessageBox.warning(
-                self,
-                t("Placement refused"), refused(result))
+            QMessageBox.warning(self, t("Placement refused"), refused(result))
             return
-
+        said = say(describe_placement(alternative.plan))
+        if rewires and wired is not None:
+            said += "  ·  " + t("wired again: {wiring}").format(wiring=wiring_line(wired))
         stale = len(stale_conductor_ids(self.bus.document, self.lookup))
-        note = (
-            "  ·  "
-            + counted(
+        if stale:
+            said += "  ·  " + counted(
                 stale,
                 t("{count} conductor is now out of date; Ctrl+R clears and rewires it"),
                 t("{count} conductors are now out of date; Ctrl+R clears and rewires them"),
             )
-            if stale
-            else ""
-        )
-        self.statusBar().showMessage(f"{say(describe_placement(plan))}{note}", 0)
-
-    def _confirm_placement(self, plan: PlacementPlan) -> bool:
-        moving = t("Parts that move: {moved} of {movable}").format(
-            moved=len(plan.changes), movable=plan.movable
-        )
-        if plan.locked:
-            moving += "; " + t("locked, and left where they are: {locked}.").format(
-                locked=plan.locked
-            )
-        else:
-            moving += "."
-        detail = [
-            moving,
-            t("Estimated connection length: {before} mm → {after} mm.").format(
-                before=f"{plan.before.hpwl_mm:.0f}", after=f"{plan.after.hpwl_mm:.0f}"
-            ),
-        ]
-        if plan.route_cost is not None:
-            # Said as what was done and why, not as the planner's internals: "router cost
-            # 812 (seed 0)" told nobody anything. The seed stays, last, because passing it
-            # back reproduces this exact plan.
-            detail.append(
-                t(
-                    "Each arrangement found was wired, and this is the one cheapest to "
-                    "build (cost {cost}; seed {seed})."
-                ).format(cost=f"{plan.route_cost:.0f}", seed=plan.seed)
-            )
-        if plan.before.overlap_pairs:
-            detail.append(
-                t("Overlapping bodies: {before} → {after}.").format(
-                    before=plan.before.overlap_pairs, after=plan.after.overlap_pairs
-                )
-            )
-        if plan.before.collisions:
-            detail.append(
-                t("Pins sharing a hole: {before} → {after}.").format(
-                    before=plan.before.collisions, after=plan.after.collisions
-                )
-            )
-        detail.append("")
-        detail.extend(
-            say(line) for line in summarize_placement(plan, limit=10, board=self.bus.document.board)
-        )
-
-        box = QMessageBox(self)
-        box.setWindowTitle(t("Apply this placement?"))
-        box.setText(f"<b>{say(describe_placement(plan))}</b>")
-        box.setInformativeText("\n".join(detail))
-        box.setStandardButtons(QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(QMessageBox.StandardButton.Apply)
-        move = box.button(QMessageBox.StandardButton.Apply)
-        if move is not None:
-            move.setText(t("Move the Parts"))
-        return box.exec() == QMessageBox.StandardButton.Apply
+        self.statusBar().showMessage(said, 0)
 
     # -- routing ------------------------------------------------------------
 
@@ -14662,6 +14889,7 @@ class MainWindow(QMainWindow):
 
     def _on_board_picked(self, entry: str) -> None:
         """The strip's pick, or a double-click on System: that board in front, or System."""
+        self.close_arrangements()
         if entry == SYSTEM_ENTRY:
             self.board_stack.setCurrentWidget(self.system_view)
             self.system_view.set_document(self.bus.system_document, current_language())
@@ -14970,6 +15198,11 @@ class MainWindow(QMainWindow):
         if not self.command_palette.isHidden():
             self.command_palette.close_palette()
             return
+        if self._arrangement_previewing:
+            # An arrangement on the board first: Escape is Back to Your Board, as the
+            # banner's button says, and a second one puts the cards away.
+            self._on_arrangement_picked(0)
+            return
         left_something = False
         if self.scene.in_a_mode:
             self.scene.leave_mode()
@@ -14977,6 +15210,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, "act_sheet_tool") and self.schematic_view.tool != "select":
             self.on_sheet_tool("select")
             left_something = True
+        if not left_something and not self.arrangement_strip.isHidden():
+            self.close_arrangements()
+            return
         if left_something:
             self.statusBar().clearMessage()
 

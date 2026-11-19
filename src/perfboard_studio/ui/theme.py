@@ -725,6 +725,40 @@ QWidget[variant="card"] {{
     border-radius: {RADIUS_LG}px;
 }}
 
+/* Rearrange's cards over the board (ui/arrangements.py). The one on the board below is
+   the accent's, as a current step is; the banner is the accent's edge while it shows an
+   arrangement the board does not have yet, and quiet on the board as it is. */
+QFrame#arrangements {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
+QLabel#arrangementsHeading {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QScrollArea#arrangementsScroll {{ background: transparent; border: none; }}
+QFrame#arrangementCard {{
+    background: {k.bg_raised};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_LG}px;
+}}
+QFrame#arrangementCard:hover {{ border-color: {k.border_strong}; }}
+QFrame#arrangementCard[current="true"] {{
+    background: {k.accent_subtle};
+    border: 2px solid {k.accent};
+}}
+QFrame#arrangementCard QLabel {{ background: transparent; border: none; }}
+QLabel#arrangementTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QLabel#arrangementBadge {{
+    background: {k.accent};
+    color: {k.text_on_accent};
+    border-radius: {RADIUS_SM}px;
+    padding: 0px {s["xs"]}px;
+    font-size: {CAPTION_PX}px;
+}}
+QFrame#arrangementBanner {{
+    background: {k.bg_subtle};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_LG}px;
+}}
+QFrame#arrangementBanner[preview="true"] {{ background: {k.bg_raised}; border-color: {k.accent}; }}
+QFrame#arrangementBanner QLabel {{ background: transparent; border: none; color: {k.text}; }}
+/* The board while it shows an arrangement it does not have yet. */
+
 /* The update strip above the board: news, not a question. */
 QFrame#updateBar {{ background: {k.bg_subtle}; border-bottom: 1px solid {k.border}; }}
 QFrame#updateBar QLabel#updateHeadline {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
