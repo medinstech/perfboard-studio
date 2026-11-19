@@ -1,8 +1,8 @@
 """Placing the parts a netlist names but the board does not have yet.
 
 Shared by the window's import and the MCP ``import_netlist``, so that a part an agent imports
-arrives as the one a person imports does: with the footprint, value, pin names and symbol that
-``parsers.kicad_parts`` worked out, laid out by ``placer.arrange`` -- best-connected first,
+arrives as the one a person imports does: with the footprint, value, pin names, symbol and pin
+roles that ``parsers.kicad_parts`` worked out, laid out by ``placer.arrange`` -- best-connected first,
 connectors on an edge, the rest in lanes beside what they connect to -- around whatever is on
 the board already. A first pass, stated as one: the placer or a person refines it.
 
@@ -44,6 +44,7 @@ def import_placements(
             rotation=placed.rotation,
             pin_names=by_ref[placed.ref].pin_names,
             symbol=by_ref[placed.ref].symbol,
+            pin_roles=by_ref[placed.ref].pin_roles,
         )
         for placed in arrangement.placements
     ]

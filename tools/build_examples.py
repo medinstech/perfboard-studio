@@ -424,6 +424,7 @@ def _the_design(
                     else suggestion.pin_names
                 ),
                 symbol=suggestion.symbol,
+                pin_roles=suggestion.pin_roles,
                 id=f"c-{suggestion.ref.lower()}",
             )
             for suggestion in sorted(plan.suggestions.values(), key=lambda s: s.ref)
@@ -450,8 +451,8 @@ def _told(
     values: dict[str, str] | None = None,
 ) -> AddPartPayload:
     """A part an example names the footprint of -- and, where its value or its symbol's
-    name is a part the catalog knows IN THAT PACKAGE, the pin names and symbol an import
-    would have given it. Without them the NE555 on the front page was a numbered box on the
+    name is a part the catalog knows IN THAT PACKAGE, the pin names, symbol and pin roles
+    an import would have given it. Without them the NE555 on the front page was a numbered box on the
     sheet, and ERC had nothing to check it by."""
     component = next((c for c in parsed.components if c.ref == ref), None)
     value = (component.value or "") if component is not None else ""
@@ -470,6 +471,7 @@ def _told(
         value=(values or {}).get(ref, value),
         pin_names=names,
         symbol=part.symbol if part is not None else None,
+        pin_roles=part.pin_roles if part is not None else (),
         id=id,
     )
 

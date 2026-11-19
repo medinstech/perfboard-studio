@@ -16853,6 +16853,7 @@ class MainWindow(QMainWindow):
                         value=suggestion.value,
                         pin_names=suggestion.pin_names,
                         symbol=suggestion.symbol,
+                        pin_roles=suggestion.pin_roles,
                     )
                     for suggestion in wanted
                 ),

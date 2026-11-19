@@ -47,6 +47,7 @@ from ..model import (
     PartSymbol,
     PerfDocument,
     PinNames,
+    PinRoles,
     SchematicPart,
     pin_name_of,
     pin_number_sort_key,
@@ -71,6 +72,10 @@ class PartSuggestion:
     #: does not already call its pins.
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    #: The catalog part's, in its own numbering -- which is the numbering the nets are moved
+    #: to -- so an imported NE555 is drawn by what its pins do, as one picked from the
+    #: catalog is. Empty for a part the catalog does not know.
+    pin_roles: PinRoles = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -652,6 +657,7 @@ def _suggest(
                 part_id=part.id,
                 pin_names=part.pin_names,
                 symbol=part.symbol,
+                pin_roles=part.pin_roles,
             ),
             notes,
         )
