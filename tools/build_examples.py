@@ -567,9 +567,10 @@ def _emit(path: Path, document: PerfDocument, *, write: bool) -> bool:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8", newline="\n")
         return True
-    # newline="" reads the bytes as they are: a CRLF checkout is a stale file too.
-    on_disk = path.read_text(encoding="utf-8", newline="") if path.exists() else None
-    if on_disk == text:
+    # The bytes as they are, so a CRLF checkout is a stale file too. (Not read_text with
+    # newline="": that keyword is Python 3.13's, and CI runs this on 3.12.)
+    on_disk = path.read_bytes() if path.exists() else None
+    if on_disk == text.encode("utf-8"):
         return True
     shown = path.relative_to(REPO_ROOT).as_posix()
     print(f"      {shown} is not what this script builds: run python tools/build_examples.py")
