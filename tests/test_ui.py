@@ -21874,6 +21874,11 @@ def test_a_wires_net_is_wired_again_without_it(monkeypatch: pytest.MonkeyPatch) 
         )
         menu = window.board_menu(window.view.mapFromScene(on_wire))
         assert "Redo Wiring Without This Wire" in [a.text() for a in menu.actions()]
+        # The menu picks what is under the pointer, and on atmega328-relay that point is a
+        # pixel from cond-28 too: the wire is picked again for the Properties button.
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
 
         bodies: list[str] = []
 
