@@ -1528,7 +1528,10 @@ a wire or a name wins, else the first rail -- and a note says what was left out,
 two glyphs on one point read as one. `test_a_rail_stands_at_its_pin_upright` holds the
 shape on both sheets of every example, `test_a_rail_on_any_pin_points_the_conventional_way`
 on every side of a symbol, and `test_a_freeze_moves_no_rail` holds every rail, its name
-and every symbol through a freeze.
+and every symbol through a freeze. A turned symbol's rails start at its pins as turned: the
+netlist is resolved against the bodies before the hand-drawn sheet turns them, so
+`_hand_drawn_sheet` reads each pin again by number off the turned body;
+`test_a_turned_symbol_has_its_rails_and_names_at_its_turned_pins` holds it at every turn.
 
 **A net is named by one rule on both kinds of sheet** (`schematic._name_nets`): over its
 longest level run, every level piece of its wires at one height that touch merged into one

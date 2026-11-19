@@ -116,6 +116,9 @@ closed without a bump.
 
 ### Fixed
 
+- **A turned symbol's ground and supply symbols sit on its pins.** On a sheet drawn by hand,
+  a part turned with R had each ground, supply and net name at its pins drawn where the pin
+  would be unturned, beside the body. They now start at the pin as it is drawn.
 - **Renaming a part no longer takes its wires off the sheet.** On a sheet drawn by hand,
   giving R1 another reference left every wire drawn to it naming R1, so the wires stopped
   being drawn and the pins were labelled with their net's name instead. The wires now follow

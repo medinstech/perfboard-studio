@@ -1798,6 +1798,36 @@ def test_freezing_a_sheet_keeps_every_wire_and_every_name(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+def test_a_turned_symbol_has_its_rails_and_names_at_its_turned_pins(path: Path) -> None:
+    """Every rail and every name said at a pin starts at a pin as the symbol is DRAWN. The
+    hand-drawn sheet turned each body and then read the pins the netlist was resolved
+    against, which were the unturned ones: on the NE555 with R1 stood upright, VCC's rail
+    started where R1's pin 1 would be lying down, beside the body (``_hand_drawn_sheet``)."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    frozen = _frozen(doc, build_schematic(doc, REGISTRY))
+    for turn in (90, 180, 270):
+        turned = dataclasses.replace(
+            frozen,
+            sheet=tuple(
+                dataclasses.replace(p, rotation=turn, mirrored=index % 2 == 1)
+                for index, p in enumerate(frozen.sheet)
+            ),
+        )
+        drawing = build_schematic(turned, REGISTRY)
+        pins = {
+            (round(s.at.x + pin.at.x, 6), round(s.at.y + pin.at.y, 6))
+            for s in drawing.symbols
+            for pin in s.pins
+        }
+        for rail in drawing.rails:
+            start = (round(rail.path[0].x, 6), round(rail.path[0].y, 6))
+            assert start in pins, f"{rail.net_name}'s rail starts off every pin, turned {turn}"
+        for wire in drawing.wires:
+            start = (round(wire.path[0].x, 6), round(wire.path[0].y, 6))
+            assert start in pins, f"{wire.net_name} starts off every pin, turned {turn}"
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
 def test_a_freeze_moves_no_rail(path: Path) -> None:
     """The sheet drawn for you ran every rail to a lane of its own between two rows, and
     the first edit froze it into the hand-drawn kind, which draws a rail at its pin: every

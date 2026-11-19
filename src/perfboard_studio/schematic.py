@@ -2469,6 +2469,18 @@ def _hand_drawn_sheet(
             continue
         placed.body = _orient_body(placed.body, placement.rotation, placement.mirrored)
         placed.x, placed.y = placement.at.x, placement.at.y
+    # The netlist was resolved against the bodies as they were made, unturned, and a rail or
+    # a name said at a pin is put where ``resolved`` says the pin is: so each pin is read
+    # again, by number, off the body as it is now turned. Without it a symbol stood upright
+    # had VCC's rail start where its pin would be lying down, beside the body.
+    turned = {ref: {pin.number: pin for pin in placed.body.pins} for ref, placed in symbols.items()}
+    resolved = [
+        dataclasses.replace(
+            item,
+            pins=tuple((ref, turned[ref].get(pin.number, pin)) for ref, pin in item.pins),
+        )
+        for item in resolved
+    ]
 
     # A part added after the sheet was arranged has nowhere to be, so it is PARKED in a
     # column past the right-hand edge rather than dropped at the origin on top of whatever
