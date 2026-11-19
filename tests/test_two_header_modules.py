@@ -188,3 +188,22 @@ def test_the_3d_module_stands_on_one_strip_per_header(rotation: int) -> None:
     assert lengths == [6, 10]
     pins = next(p for p in pieces if p.instances)
     assert len(pins.instances) == 16
+
+
+# --------------------------------------------------------------------- the catalog board
+def test_the_pcf8574_qt_is_pinned_as_adafruits_board_is() -> None:
+    """Adafruit's Eagle board: JP3 is the ten pads along one edge, '+' P7 to P0 '-' left to
+    right, and JP1 the six VIN GND SCL SDA INT A0 along the other, centred on the ten."""
+    from perfboard_studio.catalog import catalog_part
+
+    part = catalog_part("adafruit-pcf8574-qt")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    at = {pin.number: (pin.d_col, pin.d_row) for pin in footprint.pins}
+    names = dict(part.pin_names)
+    assert len(part.pin_roles) == len(footprint.pins) == len(names) == 16
+    ends = {names[number]: at[number] for number in ("2", "9", "11", "16")}
+    assert ends == {"P7": (1, 0), "P0": (8, 0), "VIN": (2, 5), "A0": (7, 5)}
+    assert (at["1"], at["10"]) == ((0, 0), (9, 0))
+    assert dict(part.pin_roles)["16"] == "in" and dict(part.pin_roles)["15"] == "out"

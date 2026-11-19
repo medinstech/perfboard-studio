@@ -3967,6 +3967,29 @@ TURKISH: Mapping[str, str] = {
         "vardır: bu, STEMMA QT olanıdır. Kartın üstündekilerin yüksekliği tahmindir, "
         "rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
     ),
+    "Eight I/O pins on I2C, address 0x20 to 0x27: ten pins along one edge, six along the "
+    "other": (
+        "I2C üzerinde sekiz G/Ç pini, adres 0x20 ile 0x27: bir kenarda on, öbüründe altı pin"
+    ),
+    "The long row is the expander's eight I/O pins, P7 first and P0 last, with the board's "
+    "supply on one end and its ground on the other: the '+' is the same net as VIN and the "
+    "'-' the same as GND, so the I/O pins can be fed from there. VIN takes the logic level "
+    "of your controller, 3 to 5 V. SCL and SDA are level shifted, each with a 10k pull-up. "
+    "INT is the IRQ output: it alerts you when an input pin changes. The address is 0x20; "
+    "A0, A1 and A2 add 1, 2 and 4, A0 as a pin that goes to VIN and the three as solder "
+    "jumpers on the back. The two STEMMA QT sockets carry the same I2C as the header. The "
+    "height of what is on the board is an estimate, and so is its colour; the pins, the "
+    "rows and the board outline are measured.": (
+        "Uzun sıra genişleticinin sekiz G/Ç pinidir, P7 ilk, P0 son; kartın beslemesi bir "
+        "uçta, toprağı öbür uçta durur: '+' VIN ile, '-' GND ile aynı net'tir, yani G/Ç "
+        "pinleri oradan da beslenebilir. VIN, denetleyicinizin mantık seviyesini alır, 3 ile "
+        "5 V. SCL ve SDA seviye kaydırılmıştır, her birinin 10k yukarı çekme direnci vardır. "
+        "INT kesme (IRQ) çıkışıdır: bir giriş pini değişince sizi uyarır. Adres 0x20'dir; "
+        "A0, A1 ve A2 sırasıyla 1, 2 ve 4 ekler, A0 VIN'e bağlanan bir pin olarak, öbür "
+        "ikisi arkadaki lehim köprüleri olarak. İki STEMMA QT soketi de header'la aynı "
+        "I2C'yi taşır. Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, "
+        "sıralar ve kart çevresi ölçülmüştür."
+    ),
     "Adafruit CCS811 air quality sensor (on a header)": (
         "Adafruit CCS811 hava kalitesi sensörü (header üzerinde)"
     ),

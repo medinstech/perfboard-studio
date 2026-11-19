@@ -3369,6 +3369,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "STEMMA QT one. " + _MODULE_TOP
                 ),
                 aliases=("ADS1115", "ADS1015", "16 bit ADC", "ADC", "STEMMA QT", "Qwiic")),
+    CatalogPart("adafruit-pcf8574-qt", "Adafruit PCF8574 GPIO Expander (STEMMA QT)", "module",
+                "mod2-10x6-r5-25.4x17.78x2.9-s8.5",
+                "Eight I/O pins on I2C, address 0x20 to 0x27: ten pins along one edge, six along "
+                "the other",
+                _legs("VIN", "P7", "P6", "P5", "P4", "P3", "P2", "P1", "P0", "GND",
+                      "VIN", "GND", "SCL", "SDA", "INT", "A0"),
+                ref_prefix="U", value="Adafruit PCF8574",
+                source=(
+                    "Adafruit's own Eagle board for its PCF8574 breakout "
+                    "(github.com/adafruit/Adafruit-PCF8574-PCB, 'Adafruit PCF8574 QT'): the "
+                    "25.4 x 17.78 mm board, its 1 x 10 and 1 x 6 headers 12.7 mm apart (the six "
+                    "centred on the ten) and each pad's net read off the board's nets, and "
+                    "Adafruit's pinouts page for it (learn.adafruit.com/adafruit-pcf8574/pinouts, "
+                    "edited 2024-03-08): the I/O row is '+' P7 to P0 '-' left to right, the "
+                    "other VIN GND SCL SDA INT A0; the tallest thing is the STEMMA QT sockets, "
+                    "2.9 mm up as on Adafruit's ADS1115 board"
+                ),
+                check=(
+                    "The long row is the expander's eight I/O pins, P7 first and P0 last, with the "
+                    "board's supply on one end and its ground on the other: the '+' is the same "
+                    "net as VIN and the '-' the same as GND, so the I/O pins can be fed from "
+                    "there. VIN takes the logic level of your controller, 3 to 5 V. SCL and SDA "
+                    "are level shifted, each with a 10k pull-up. INT is the IRQ output: it "
+                    "alerts you when an input pin changes. The address is 0x20; A0, A1 and A2 add "
+                    "1, 2 and 4, A0 as a pin that goes to VIN and the three as solder jumpers on "
+                    "the back. The two STEMMA QT sockets carry the same I2C as the header. "
+                    + _MODULE_TOP
+                ),
+                aliases=("PCF8574", "I2C GPIO expander", "GPIO expander", "I/O expander",
+                         "STEMMA QT", "Qwiic")),
     CatalogPart("sparkfun-logic-level-converter",
                 "SparkFun Logic Level Converter - Bi-Directional", "module",
                 "mod-6x2-p1-r4-15.24x12.7x1.6-s8.5",
@@ -4100,6 +4130,11 @@ PIN_ROLES: dict[str, str] = {
     # current passes through: "passive" here, as the shunt is a conductor between them.
     "adafruit-ina219": "pwr gnd in io pas pas",
     "adafruit-ina219-stemma-qt": "pwr gnd in io pas pas",
+    # Adafruit PCF8574 QT pinouts page and its Eagle board: VIN powers the board and the '+' at
+    # the end of the I/O row is the same net, GND likewise; SCL and SDA the I2C pair (the board is
+    # the slave: the clock is an input), INT "the IRQ output", A0 the address pin you tie to VIN;
+    # TI/NXP PCF8574 pin table: P0 to P7 quasi-bidirectional I/O.
+    "adafruit-pcf8574-qt": "pwr io io io io io io io io gnd pwr gnd in io out in",
     # Nordic nRF24L01+ product spec pin table: CE, CSN, SCK and MOSI are digital inputs, MISO and
     # IRQ digital outputs.
     "nrf24l01": "gnd pwr in in in in out out",

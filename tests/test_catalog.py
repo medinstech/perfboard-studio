@@ -122,6 +122,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "adafruit-tca9548a": 15.24,
         # Adafruit's ADS1115 Eagle board: its headers at y = 2.54 and 15.24 mm, 0.5 inch apart.
         "adafruit-ads1115": 12.7,
+        # Adafruit's PCF8574 Eagle board: its 1 x 10 and 1 x 6 headers at y = 2.54 and 15.24 mm.
+        "adafruit-pcf8574-qt": 12.7,
         # SparkFun's Eagle board: its rows at y = 1.27 and 11.43 mm, 0.4 inch apart.
         "sparkfun-logic-level-converter": 10.16,
         # NodeMCU's Gerbers: its rows at x = +-11.43 mm, 0.9 inch apart.
