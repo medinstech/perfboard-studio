@@ -2005,3 +2005,101 @@ def test_wiring_one_net_again_says_when_it_is_off_the_face_it_prefers() -> None:
 
     assert again["ok"] and again["committed"]
     assert again["face_notes"] == first["face_notes"]
+
+
+# ---------------------------------------------------------------------------
+# Pin roles through the part tools
+# ---------------------------------------------------------------------------
+
+
+def test_a_catalog_part_placed_by_an_agent_carries_its_pin_roles(session: BoardSession) -> None:
+    """The roles read from the maker's table reach the part, as its names do, by either door
+    into the document; and an agent reading the part back is told them."""
+    from perfboard_studio.catalog import catalog_part
+
+    entry = catalog_part("ne555")
+    assert entry is not None and entry.pin_roles
+    assert session.place_component("U1", "", "C5", part="ne555")["ok"]
+    (component,) = session.document.components
+    assert component.pin_roles == entry.pin_roles
+    assert session.get_component("U1")["pin_roles"] == dict(entry.pin_roles)
+
+    assert session.add_part("U2", "", part="ne555")["ok"]
+    (part,) = session.document.parts
+    assert part.pin_roles == entry.pin_roles
+    assert session.list_parts()["parts"][0]["pin_roles"] == dict(entry.pin_roles)
+    (row,) = [r for r in session.list_catalog("ne555") if r["id"] == "ne555"]
+    assert row["pin_roles"] == dict(entry.pin_roles)
+
+
+@pytest.mark.parametrize(
+    ("footprint_id", "pin_names"),
+    [("hdr-1x8", None), ("", {"1": "A", "2": "B"}), ("dip-8", {})],
+    ids=["another-package", "names-given", "names-cleared"],
+)
+def test_catalog_roles_stay_behind_off_their_own_package_and_names(
+    session: BoardSession, footprint_id: str, pin_names: dict[str, str] | None
+) -> None:
+    """Roles are read for THOSE pins under THOSE names: on another package, or under names
+    the agent gave, they would describe leads the part may not have, so it is a numbered
+    box -- exactly what it is with no roles at all. Naming the package it already has
+    keeps them."""
+    assert session.add_part("U1", footprint_id, part="ne555", pin_names=pin_names)["ok"]
+    (part,) = session.document.parts
+    assert part.pin_roles == ()
+    assert "pin_roles" not in session.list_parts()["parts"][0]
+
+    assert session.add_part("U2", "dip-8", part="ne555")["ok"]
+    assert session.document.parts[1].pin_roles
+
+
+def test_roles_an_agent_gives_win_and_are_judged_by_the_command(session: BoardSession) -> None:
+    roles = {str(n): "passive" for n in range(1, 9)}
+    assert session.add_part("U1", "hdr-1x8", part="ne555", pin_roles=roles)["ok"]
+    assert dict(session.document.parts[0].pin_roles) == roles
+
+    refused = session.place_component("U2", "dip-8", "C5", pin_roles={"1": "supply"})
+    assert refused["ok"] is False and refused["code"] == "invalid-pin-roles"
+    assert "U2" in refused["message"] and "'supply'" in refused["message"]
+    with pytest.raises(SessionError, match="pin_roles is a mapping"):
+        session.add_part("U3", "dip-8", pin_roles=["ground"])  # type: ignore[arg-type]
+
+    # An explicit {} is "none", even where the catalog has some.
+    assert session.place_component("U4", "", "C5", part="ne555", pin_roles={})["ok"]
+    assert session.document.components[0].pin_roles == ()
+
+
+def test_update_part_replaces_or_clears_the_roles_on_and_off_the_board(
+    session: BoardSession,
+) -> None:
+    assert session.add_part("U1", "", part="ne555")["ok"]
+    assert session.place_component("U2", "", "C5", part="ne555")["ok"]
+    for ref in ("U1", "U2"):
+        assert session.update_part(ref, pin_roles={"1": "ground"})["ok"]
+        assert session.update_part(ref, value="NE555P")["ok"]  # omitted: left alone
+    assert session.document.parts[0].pin_roles == (("1", "ground"),)
+    assert session.document.components[0].pin_roles == (("1", "ground"),)
+    for ref in ("U1", "U2"):
+        assert session.update_part(ref, pin_roles={})["ok"]
+    assert session.document.parts[0].pin_roles == ()
+    assert session.document.components[0].pin_roles == ()
+
+
+def test_the_part_tools_name_every_symbol_and_role_the_model_has() -> None:
+    """add_part once listed six symbols of eighteen: the lists are written from the model's
+    own types now, and this is what notices a tool that stopped saying them."""
+    import asyncio
+    from typing import get_args
+
+    from perfboard_studio.mcp import server
+    from perfboard_studio.model import PartSymbol, PinRole
+
+    tools = {t.name: t for t in asyncio.run(server.mcp.list_tools())}
+    description = tools["add_part"].description or ""
+    for word in (*get_args(PartSymbol), *get_args(PinRole)):
+        assert f" {word}," in description or f" {word}." in description, word
+    for tool in tools.values():
+        assert "<symbols>" not in (tool.description or "")
+        assert "<roles>" not in (tool.description or "")
+    for name in ("add_part", "place_component", "update_part"):
+        assert "pin_roles" in tools[name].inputSchema["properties"], name

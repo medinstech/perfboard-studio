@@ -80,11 +80,13 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
+from collections.abc import Callable
+from typing import Any, get_args
 
 from mcp.server.fastmcp import FastMCP, Image
 
 from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
+from perfboard_studio.model import PartSymbol, PinRole
 from perfboard_studio.version import __version__
 
 # Before anything else, and to stderr. See the module docstring.
@@ -453,6 +455,25 @@ def import_netlist(path: str, place_missing: bool = False) -> dict[str, Any]:
     return session.import_netlist(path, place_missing)
 
 
+#: What a description says in place of ``<symbols>`` and ``<roles>``: every value the
+#: model takes, read from the model, so a symbol or a role added there is in the text an
+#: agent reads without anybody remembering to add it (``add_part`` once listed six of
+#: eighteen symbols).
+_FILLED = {
+    "<symbols>": ", ".join(get_args(PartSymbol)),
+    "<roles>": ", ".join(get_args(PinRole)),
+}
+
+
+def _filled[F: Callable[..., Any]](tool: F) -> F:
+    """The tool with ``<symbols>`` and ``<roles>`` in its description written out."""
+    doc = tool.__doc__ or ""
+    for mark, words in _FILLED.items():
+        doc = doc.replace(mark, words)
+    tool.__doc__ = doc
+    return tool
+
+
 # ---------------------------------------------------------------------------
 # The design, before the board
 #
@@ -463,6 +484,7 @@ def import_netlist(path: str, place_missing: bool = False) -> dict[str, Any]:
 
 
 @mcp.tool()
+@_filled
 def add_part(
     ref: str,
     footprint_id: str,
@@ -470,6 +492,7 @@ def add_part(
     pin_names: dict[str, str] | None = None,
     symbol: str | None = None,
     part: str = "",
+    pin_roles: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Put a part in the DESIGN without saying where on the board it goes. Draw the whole
     circuit this way, wire it with create_net / connect_pins, then place_parts and
@@ -479,10 +502,17 @@ def add_part(
     pin_names says what the PART calls its leads, which no package can: {"1": "G", "2":
     "D", "3": "S"} for a TO-220 MOSFET, {"1": "3V3", "2": "EN", ...} for a module. They are
     printed on the sheet and in the soldering guide. symbol says what the part IS when its
-    package cannot: npn, pnp, nmos, pmos (drawn only once B/C/E or G/D/S are named), zener,
-    or fuse. part="bc547" (see list_catalog) fills the footprint, value, names and symbol
-    in, under anything given; with it, ref and footprint_id may be left empty."""
-    return session.add_part(ref, footprint_id, value, pin_names, symbol, part)
+    package cannot, one of: <symbols>. A transistor, a regulator or a relay is drawn as
+    one only once the leads it needs are named (B/C/E, G/D/S, IN/GND/OUT, COIL).
+    pin_roles says what each lead DOES, for every pin or for none, each one of: <roles>.
+    With them an IC or a module is drawn as a block -- supplies on top, grounds at the
+    bottom, inputs left, outputs right -- and without them as a numbered box. Read them from
+    the maker's pin table; never guess one from a name.
+    part="bc547" (see list_catalog) fills the footprint, value, names, symbol and roles in,
+    under anything given; with it, ref and footprint_id may be left empty. Its roles come
+    only with its own footprint and its own pin names: on another package, or under names
+    you give, the part is a numbered box unless you give pin_roles too."""
+    return session.add_part(ref, footprint_id, value, pin_names, symbol, part, pin_roles)
 
 
 @mcp.tool()
@@ -495,18 +525,20 @@ def update_part(
     symbol: str | None = None,
     off_board: bool = False,
     note: str | None = None,
+    pin_roles: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Rename a part or change what it is; omitted fields are left alone. A rename CARRIES
     ITS WIRING, because a reference is the only name a net has for a part — and is refused
     if that would put one pin on two nets. Reaches parts on the board too, except for their
     footprint: update_part("R1", value="4k7") is how a placed part's value is set.
-    pin_names replaces the names whole ({} clears them); symbol "" clears it.
+    pin_names replaces the names whole ({} clears them), and pin_roles the roles (as on
+    add_part); symbol "" clears it.
     off_board=true takes a pot, jack or switch off the board and wires it to it instead:
     its footprint becomes the pads its wires land in (wire-<n>), on the board or not, and
     it keeps the pin names and symbol its package gave it. note is the builder's reason for
     the part, shown on hover and in the build guide; "" clears it."""
     return session.update_part(
-        ref, new_ref, value, footprint_id, pin_names, symbol, off_board, note
+        ref, new_ref, value, footprint_id, pin_names, symbol, off_board, note, pin_roles
     )
 
 
@@ -645,14 +677,15 @@ def place_component(
     part: str = "",
     mirrored: bool = False,
     side: str = "top",
+    pin_roles: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Put a part on the board. `hole` is where pin 1 goes ("C7"); rotation is 0, 90,
     180 or 270; side="bottom" puts it on the solder side, turned over, which mirrors its
     pins (mirrored=true alone reflects them and leaves the body on top). Use
     list_footprints to find a
-    footprint_id. pin_names and symbol are as on add_part. part="irf9540n" (see
-    list_catalog) fills the footprint, value, names and symbol in, under anything given;
-    with it, ref and footprint_id may be left empty."""
+    footprint_id. pin_names, symbol and pin_roles are as on add_part. part="irf9540n"
+    (see list_catalog) fills the footprint, value, names, symbol and roles in, under
+    anything given; with it, ref and footprint_id may be left empty."""
     return session.place_component(
         ref=ref,
         footprint_id=footprint_id,
@@ -664,6 +697,7 @@ def place_component(
         part=part,
         mirrored=mirrored,
         side=side,
+        pin_roles=pin_roles,
     )
 
 

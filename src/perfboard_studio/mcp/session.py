@@ -169,6 +169,7 @@ from perfboard_studio.model import (
     PartSymbol,
     PerfDocument,
     PinNames,
+    PinRoles,
     Rotation,
     SchematicPart,
     SpineSpec,
@@ -658,6 +659,7 @@ class BoardSession:
             # Only when declared, like the file: a summary of forty parts that said
             # "symbol: null" forty times would bury the one that says "pmos".
             **({"symbol": component.symbol} if component.symbol is not None else {}),
+            **({"pin_roles": dict(component.pin_roles)} if component.pin_roles else {}),
             **({"note": component.note} if component.note else {}),
         }
 
@@ -759,25 +761,36 @@ class BoardSession:
         value: str,
         pin_names: dict[str, str] | None,
         symbol: str | None,
-    ) -> tuple[str, str, str, PinNames, str | None]:
+        pin_roles: dict[str, str] | None = None,
+    ) -> tuple[str, str, str, PinNames, str | None, PinRoles]:
         """A catalog part's description, under anything the caller said explicitly.
 
         Explicit wins, field by field: ``part="bc547", value="BC547B"`` is a BC547 with a
         more exact value on the bill. An empty ``ref`` takes the part's letter and the next
         free number.
+
+        The catalog's pin roles come along only with ITS package and ITS names: a role is
+        read from the maker's table for those pins, so on another footprint, or under names
+        the caller gave, they describe leads the part may not have, and the part keeps the
+        numbered box rather than a symbol drawn from roles nobody read for it.
         """
         names = _pin_names_arg(pin_names)
+        roles = _pin_roles_arg(pin_roles)
         if not part:
-            return ref, footprint_id, value, names or (), symbol
+            return ref, footprint_id, value, names or (), symbol, roles or ()
         entry: CatalogPart | None = catalog_part(part)
         if entry is None:
             raise SessionError(f"{part!r} is not in the catalog. list_catalog lists what is.")
+        own_package = not footprint_id or footprint_id == entry.footprint_id
+        if roles is None:
+            roles = entry.pin_roles if names is None and own_package else ()
         return (
             ref.strip() or free_reference(self.document, entry.reference_prefix),
             footprint_id or entry.footprint_id,
             value or entry.placed_value,
             names if names is not None else entry.pin_names,
             symbol or entry.symbol,
+            roles,
         )
 
     def list_footprints(self, search: str = "") -> list[dict[str, Any]]:
@@ -1065,6 +1078,7 @@ class BoardSession:
         pin_names: dict[str, str] | None = None,
         symbol: str | None = None,
         part: str = "",
+        pin_roles: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Put a part in the DESIGN without deciding where on the board it goes.
 
@@ -1072,13 +1086,15 @@ class BoardSession:
         needs it: the symbol this part is drawn as is derived from it, and so are its pins,
         its 3D body and its line in the bill of materials.
 
-        ``pin_names`` and ``symbol`` are what the part says about itself that its package
-        cannot -- see ``model.PartSymbol``. Both are optional and both travel with the part
-        when it is placed. ``part`` is a catalog id (``list_catalog``) that fills in the
-        footprint, value, names and symbol, under anything given explicitly.
+        ``pin_names``, ``symbol`` and ``pin_roles`` are what the part says about itself that
+        its package cannot -- see ``model.PartSymbol`` and ``model.PinRole``. All are
+        optional and all travel with the part when it is placed. ``part`` is a catalog id
+        (``list_catalog``) that fills in the footprint, value, names, symbol and roles,
+        under anything given explicitly -- see :meth:`_from_catalog` for when the roles
+        stay behind.
         """
-        ref, footprint_id, value, names, symbol = self._from_catalog(
-            part, ref, footprint_id, value, pin_names, symbol
+        ref, footprint_id, value, names, symbol, roles = self._from_catalog(
+            part, ref, footprint_id, value, pin_names, symbol, pin_roles
         )
         if self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
@@ -1090,6 +1106,7 @@ class BoardSession:
                 value=value,
                 pin_names=names,
                 symbol=cast(PartSymbol | None, symbol or None),
+                pin_roles=roles,
             ),
         )
 
@@ -1103,6 +1120,7 @@ class BoardSession:
         symbol: str | None = None,
         off_board: bool = False,
         note: str | None = None,
+        pin_roles: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Rename a part, or change what it is. Omitted fields are left alone.
 
@@ -1110,7 +1128,8 @@ class BoardSession:
         renaming the part renames what the net points at. It is refused if that would put
         one pin on two nets.
 
-        ``pin_names`` REPLACES the part's names whole (``{}`` clears them); ``symbol`` of
+        ``pin_names`` REPLACES the part's names whole (``{}`` clears them), and so does
+        ``pin_roles`` its roles; ``symbol`` of
         ``""`` clears a declaration, since an omitted argument already means "leave it".
         ``note`` is the builder's own reason for the part, on the board or not; ``""``
         clears it. A locked part takes one: the lock is about where it is.
@@ -1133,6 +1152,7 @@ class BoardSession:
             raise _no_such_footprint(footprint_id)
         symbol_arg = KEEP if symbol is None else cast(PartSymbol | None, symbol or None)
         names_arg = _pin_names_arg(pin_names)
+        roles_arg = _pin_roles_arg(pin_roles)
         placed = next((c for c in self.document.components if c.ref == ref), None)
         if off_board:
             if footprint_id is not None:
@@ -1165,6 +1185,7 @@ class BoardSession:
                     value=value,
                     pin_names=names_arg,
                     symbol=symbol_arg,
+                    pin_roles=roles_arg,
                     note=note,
                     footprint_id=footprint_id,
                 ),
@@ -1178,6 +1199,7 @@ class BoardSession:
                 footprint_id=footprint_id,
                 pin_names=names_arg,
                 symbol=symbol_arg,
+                pin_roles=roles_arg,
                 note=note,
             ),
         )
@@ -1246,6 +1268,7 @@ class BoardSession:
                     # ``_component_summary`` for why they are not printed empty.
                     **({"pin_names": dict(part.pin_names)} if part.pin_names else {}),
                     **({"symbol": part.symbol} if part.symbol is not None else {}),
+                    **({"pin_roles": dict(part.pin_roles)} if part.pin_roles else {}),
                     **({"note": part.note} if part.note else {}),
                 }
                 for part in self.document.parts
@@ -1610,9 +1633,10 @@ class BoardSession:
         part: str = "",
         mirrored: bool = False,
         side: str = "top",
+        pin_roles: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        ref, footprint_id, value, names, symbol = self._from_catalog(
-            part, ref, footprint_id, value, pin_names, symbol
+        ref, footprint_id, value, names, symbol, roles = self._from_catalog(
+            part, ref, footprint_id, value, pin_names, symbol, pin_roles
         )
         if self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
@@ -1628,6 +1652,7 @@ class BoardSession:
                 pin_names=names,
                 symbol=cast(PartSymbol | None, symbol or None),
                 side=_side(side),
+                pin_roles=roles,
             ),
         )
 
@@ -2939,6 +2964,7 @@ def _catalog_summary(part: CatalogPart) -> dict[str, Any]:
         "ref_prefix": part.reference_prefix,
         **({"pin_names": dict(part.pin_names)} if part.pin_names else {}),
         **({"symbol": part.symbol} if part.symbol is not None else {}),
+        **({"pin_roles": dict(part.pin_roles)} if part.pin_roles else {}),
         "source": part.source,
         **({"check": part.check} if part.check else {}),
     }
@@ -2956,6 +2982,19 @@ def _pin_names_arg(names: dict[str, str] | None) -> PinNames | None:
     if not isinstance(names, dict):
         raise SessionError('pin_names is a mapping of pin number to name, e.g. {"1": "G"}.')
     return cast(PinNames, tuple(names.items()))
+
+
+def _pin_roles_arg(roles: dict[str, str] | None) -> PinRoles | None:
+    """An agent's ``{"1": "ground"}`` as the pairs a payload carries, or ``None`` for "not
+    given". Unchecked, like :func:`_pin_names_arg` and for the same reason:
+    ``commands.checked_pin_roles`` judges them, and its ``invalid-pin-roles`` comes back as
+    data.
+    """
+    if roles is None:
+        return None
+    if not isinstance(roles, dict):
+        raise SessionError('pin_roles is a mapping of pin number to role, e.g. {"1": "ground"}.')
+    return cast(PinRoles, tuple(roles.items()))
 
 
 def _mirrored(value: object) -> bool | None:
