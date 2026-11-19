@@ -32,6 +32,7 @@ from perfboard_studio.placer import (
     PlacementOptions,
     _layout_key,
     _WireJob,
+    merge_alternatives,
     plan_placement,
     plan_placements,
     rearrange_label,
@@ -147,6 +148,59 @@ def test_a_layout_shifted_turned_or_mirrored_is_the_same_layout() -> None:
         ),
     )
     assert _layout_key(one_part_moved, LOOKUP) != _layout_key(doc, LOOKUP)
+
+
+# -- another run, merged -------------------------------------------------------------
+
+
+def test_the_ranking_is_the_order_of_the_keys(
+    wired_board: tuple[PerfDocument, PlacementAlternatives],
+) -> None:
+    _doc, alternatives = wired_board
+    keys = [a.rank_key for a in alternatives.alternatives]
+    assert keys == sorted(keys)
+
+
+def test_a_run_merged_with_itself_is_itself_object_for_object(
+    wired_board: tuple[PerfDocument, PlacementAlternatives],
+) -> None:
+    _doc, alternatives = wired_board
+    merged = merge_alternatives(alternatives, alternatives, LOOKUP)
+    assert merged == alternatives
+    assert all(
+        a is b for a, b in zip(merged.alternatives, alternatives.alternatives, strict=True)
+    )
+
+
+def test_another_run_adds_its_arrangements_once_in_rank_order(
+    wired_board: tuple[PerfDocument, PlacementAlternatives],
+) -> None:
+    doc, first = wired_board
+    second = plan_placements(doc, LOOKUP, dataclasses.replace(QUICK, seed=QUICK.seed + 4))
+    merged = merge_alternatives(first, second, LOOKUP)
+
+    offered = merged.alternatives
+    assert [a.rank for a in offered] == list(range(1, len(offered) + 1))
+    assert [a.rank_key for a in offered] == sorted(a.rank_key for a in offered)
+    assert merged.baseline.plan is first.baseline.plan
+    assert sum(a.is_baseline for a in offered) == 1
+    keys = [_layout_key(a.plan.document, LOOKUP) for a in offered]
+    assert len(set(keys)) == len(keys)
+    mine = {id(a.plan) for a in (*first.alternatives, *second.alternatives)}
+    assert all(id(a.plan) in mine for a in offered), "every plan is one a run made"
+    # With no limit, a card already on screen goes only for the same layout ranked higher.
+    kept = {id(a.plan) for a in offered}
+    for card in first.alternatives:
+        if id(card.plan) not in kept:
+            layout = _layout_key(card.plan.document, LOOKUP)
+            assert any(
+                _layout_key(a.plan.document, LOOKUP) == layout and a.rank_key < card.rank_key
+                for a in second.alternatives
+            ), card
+
+    capped = merge_alternatives(first, second, LOOKUP, limit=2)
+    assert len(capped.candidates) <= 2
+    assert [a.plan for a in capped.candidates] == [a.plan for a in merged.candidates][:2]
 
 
 # -- wiring a card -------------------------------------------------------------------

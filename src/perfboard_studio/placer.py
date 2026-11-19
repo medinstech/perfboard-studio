@@ -3601,7 +3601,7 @@ def plan_placement(
     search = _search(doc, lookup, options, should_stop, mapper)
     if isinstance(search, PlacementPlan):
         return search
-    winner, _is_baseline = search.ranked[0]
+    winner, _is_baseline, _key = search.ranked[0]
     # AFTER the winner is chosen, and only to the winner. Settling every candidate before
     # the choice changes what the router is shown and therefore which candidate wins --
     # measured on the dense fixture, where doing it that way left the mean routed cost
@@ -3615,7 +3615,7 @@ class _Search:
     """The restarts and the board as it is, ranked as :func:`_pick_best` ranks them, and
     what settling one of them needs. Each ranked entry says whether it is the baseline."""
 
-    ranked: list[tuple[PlacementPlan, bool]]
+    ranked: list[tuple[PlacementPlan, bool, RankKey]]
     parts: list[_Part]
     scorer: _Scorer
     movable: list[int]
@@ -3740,6 +3740,15 @@ def _search(
 # Alternatives: the ranking kept whole, for a person to choose from
 # ---------------------------------------------------------------------------
 
+#: How an arrangement ranks, comparable across runs of the same options: routed or not
+#: (0 first), then :func:`_pick_best`'s own key -- shorted clips, illegal, connections
+#: not made, physical warnings, routed cost, internal cost -- with zeros where an
+#: arrangement was not routed.
+type RankKey = tuple[int, int, int, int, int, float, float]
+
+#: The key of the board as it is when nothing can move, so nothing was ranked.
+_UNRANKED: RankKey = (0, 0, 0, 0, 0, 0.0, 0.0)
+
 #: How many arrangements besides the board as it is :func:`plan_placements` offers.
 DEFAULT_ALTERNATIVES = 3
 
@@ -3759,6 +3768,8 @@ class PlacementAlternative:
     plan: PlacementPlan
     rank: int
     is_baseline: bool
+    #: What it was ranked by, for :func:`merge_alternatives`; not for display.
+    rank_key: RankKey = _UNRANKED
 
     @property
     def moved(self) -> int:
@@ -3820,15 +3831,15 @@ def plan_placements(
     if isinstance(search, PlacementPlan):
         return PlacementAlternatives((PlacementAlternative(search, 1, True),))
 
-    kept: list[tuple[PlacementPlan, bool]] = []
+    kept: list[tuple[PlacementPlan, bool, RankKey]] = []
     keys: list[tuple[tuple[str, str, int, int], ...]] = []
     taken = 0
     have_baseline = False
     as_it_is = _layout_key(doc, lookup)
-    for position, (plan, is_baseline) in enumerate(search.ranked):
+    for position, (plan, is_baseline, rank_key) in enumerate(search.ranked):
         if is_baseline and position > 0:
             if not have_baseline:
-                kept.append((plan, True))
+                kept.append((plan, True, rank_key))
                 have_baseline = True
             continue
         if position > 0 and (taken >= count or (should_stop is not None and should_stop())):
@@ -3839,24 +3850,72 @@ def plan_placements(
             # returns, so it is kept as settled; further down, the baseline's own entry
             # stands for it.
             if position == 0:
-                kept.append((settled, True))
+                kept.append((settled, True, rank_key))
                 have_baseline = True
             continue
         key = _layout_key(settled.document, lookup)
         if position > 0 and (key == as_it_is or key in keys):
             continue
         keys.append(key)
-        kept.append((settled, False))
+        kept.append((settled, False, rank_key))
         taken += 1
         if is_baseline:
             # The baseline won and settling moved something: that is an arrangement in
             # its own right, and the board as it is follows it.
-            kept.append((plan, True))
+            kept.append((plan, True, rank_key))
             have_baseline = True
     return PlacementAlternatives(
         tuple(
-            PlacementAlternative(plan, rank, is_baseline)
-            for rank, (plan, is_baseline) in enumerate(kept, 1)
+            PlacementAlternative(plan, rank, is_baseline, rank_key)
+            for rank, (plan, is_baseline, rank_key) in enumerate(kept, 1)
+        )
+    )
+
+
+def merge_alternatives(
+    first: PlacementAlternatives,
+    second: PlacementAlternatives,
+    lookup: FootprintLookup,
+    limit: int | None = None,
+) -> PlacementAlternatives:
+    """Two runs' arrangements as one offer: "Try Another Arrangement" adding to the
+    cards already on screen rather than replacing them.
+
+    Ranked by the key each was ranked by in its own run (``rank_key``), ``first`` ahead
+    of ``second`` on a tie, so each run keeps its own order and the first run's best
+    stays first unless the second found one that ranks above it. One board as it is,
+    ``first``'s. An arrangement offered twice -- the same layout shifted, turned or
+    mirrored -- is kept where it ranks better, and one that is the board as it is is
+    dropped. At most ``limit`` arrangements besides the board as it is, the lowest ranked
+    going first. Ranks are counted again from 1; every plan is the same object it was,
+    and so is an alternative whose rank did not change, so a caller can keep what it
+    worked out for one (its wiring) by identity. Both runs must be of the same document
+    with the same options, or their keys do not compare."""
+    baseline = first.baseline
+    pool = sorted(
+        [*first.alternatives, *(a for a in second.alternatives if not a.is_baseline)],
+        key=lambda alternative: alternative.rank_key,
+    )
+    as_it_is = _layout_key(baseline.plan.document, lookup)
+    keys: set[tuple[tuple[str, str, int, int], ...]] = set()
+    kept: list[PlacementAlternative] = []
+    taken = 0
+    for alternative in pool:
+        if alternative is baseline:
+            kept.append(alternative)
+            continue
+        key = _layout_key(alternative.plan.document, lookup)
+        if key in keys or (key == as_it_is and alternative is not first.best):
+            continue
+        if limit is not None and taken >= limit:
+            continue
+        keys.add(key)
+        kept.append(alternative)
+        taken += 1
+    return PlacementAlternatives(
+        tuple(
+            alternative if alternative.rank == rank else replace(alternative, rank=rank)
+            for rank, alternative in enumerate(kept, 1)
         )
     )
 
@@ -4388,18 +4447,31 @@ def _rank(
     lookup: FootprintLookup,
     options: PlacementOptions,
     mapper: Mapper | None = None,
-) -> list[tuple[PlacementPlan, bool]]:
+) -> list[tuple[PlacementPlan, bool, RankKey]]:
     """Every candidate and the baseline, best first, each with whether it IS the
-    baseline: :func:`_pick_best`'s ranking kept whole, so the first is its answer and the
-    rest are the alternatives a person may prefer (:func:`plan_placements`). The routed
-    ones carry their route; only the first carries the runner-up's cost."""
+    baseline and the key it was ranked by: :func:`_pick_best`'s ranking kept whole, so the
+    first is its answer and the rest are the alternatives a person may prefer
+    (:func:`plan_placements`). The routed ones carry their route; only the first carries
+    the runner-up's cost. Sorting the entries on their keys gives this order again,
+    which is what lets two runs be merged (:func:`merge_alternatives`)."""
     legal_first = sorted(
         [*candidates, baseline],
         key=lambda plan: (
             _shorted_clips(plan, doc), not plan.after.is_legal, plan.after.total(options.weights)
         ),
     )
-    unrouted_order = [(plan, plan is baseline) for plan in legal_first]
+    # Never routed: ranked below everything that was, in the cheap cost's order.
+    unrouted_order = [
+        (
+            plan,
+            plan is baseline,
+            (
+                1, _shorted_clips(plan, doc), 0 if plan.after.is_legal else 1, 0, 0, 0.0,
+                plan.after.total(options.weights),
+            ),
+        )
+        for plan in legal_first
+    ]
     routable = options.score_with_router and bool(doc.nets)
     if not routable or options.route_scored_restarts <= 0:
         return unrouted_order
@@ -4454,17 +4526,13 @@ def _rank(
                 route_runner_up=runner_up if position == 0 else None,
             ),
             plan is baseline,
+            (0, *key),
         )
         for position, (key, plan, routed) in enumerate(scored)
     ]
-    # What the shortlist left out follows, in the cheap cost's order: never routed, so
-    # ranked below everything that was.
+    # What the shortlist left out follows.
     judged_plans = {id(plan) for _key, plan, _routed in scored}
-    return ranked + [
-        (plan, is_baseline)
-        for plan, is_baseline in unrouted_order
-        if id(plan) not in judged_plans
-    ]
+    return ranked + [entry for entry in unrouted_order if id(entry[0]) not in judged_plans]
 
 
 def _shorted_clips(plan: PlacementPlan, doc: PerfDocument) -> int:
