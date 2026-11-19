@@ -4039,9 +4039,6 @@ PIN_ROLES: dict[str, str] = {
     # Allegro A3141-A3144 sheet (27621.6A), pinning from the branded side: 1 SUPPLY (VCC), 2 GROUND,
     # 3 OUTPUT, which "switches low when the magnetic field" passes the operate point.
     "a3144": "pwr gnd out",
-    # SS49E datasheet V2.00 (28 Mar 2008), pin description: 1 Vdd "P", 2 Gnd "P, IC Ground", 3 Output
-    # "O". That copy names no maker; Honeywell's own sheet did not load from here.
-    "ss49e": "pwr gnd out",
     # Aosong DHT11 sheet (the Chinese edition, section 9): 1 VDD, 2 DATA "serial data, single bus", 3 NC
     # "empty pin, leave floating", 4 GND. The DHT22 sheet says the same of its pins 2 and 3.
     "dht11": "pwr io nc gnd",
@@ -4076,7 +4073,7 @@ PIN_ROLES: dict[str, str] = {
     # and SDA "I/O, serial data line". The header's names (GND, VCC, SDA, SCL) are from ShillehTek's
     # manual, as the part's source says.
     "lcd-1602-i2c": "gnd pwr io in",
-    # Titan Micro TM1637 sheet (V2.4, copy at akizukidenshi.com): DIO "data input/output ... used for serial
+    # Titan Micro TM1637 sheet (V2.4): DIO "data input/output ... used for serial
     # data input and output", CLK "clock input", VDD the logic supply. The four module pins as the part's
     # source says (ProtoSupplies' DSP-6).
     "tm1637-display": "in io pwr gnd",
@@ -4136,6 +4133,9 @@ _ROLES_WAITING: dict[str, str] = {
     # input only, which is all the "in" on VP, VN, D34 and D35 rests on.
     "esp32-devkit-v1": ("in io in io in io in io in io io io io io io io io io io io io io io io io io gnd "
                         "gnd pwr pwr-out"),
+    # SS49E: the one sheet read ("SS49E V2.00, 28 Mar 2008": 1 Vdd P, 2 Gnd P, 3 Output O) names no
+    # maker, so it is not a maker's document; Honeywell's own sheet did not load from here.
+    "ss49e": "pwr gnd out",
     # Analog Devices TMP35/36/37: analog.com is out of reach from here, and the copy at umn.edu
     # that gave the pins is a university's, not the maker's.
     "tmp36": "pwr out gnd",
