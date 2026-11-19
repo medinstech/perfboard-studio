@@ -1926,6 +1926,28 @@ def test_try_other_arrangements_searches_from_a_new_seed_and_adds_to_the_cards(m
         _close(window)
 
 
+def test_the_placement_step_with_every_part_placed_opens_the_cards(monkeypatch) -> None:
+    """Once every part is on the board, Next has moved on to Wiring; what is left of the
+    Placement step is trying it another way, so pressing it opens Rearrange's cards --
+    searched the first time, and the same cards at once after that."""
+    window = _rearranging_window(monkeypatch)
+    try:
+        before = window.bus.document
+        seeds = _count_searches(monkeypatch)
+
+        window.on_workflow_step("place")
+        assert window.board_is_showing()
+        assert not window.arrangement_strip.isHidden() and seeds == [0]
+        assert window.workflow_bar.next_key != "place", "Next stays where it was"
+
+        window.close_arrangements()
+        window.on_workflow_step("place")
+        assert not window.arrangement_strip.isHidden() and seeds == [0]
+        assert window.bus.document is before
+    finally:
+        _close(window)
+
+
 def test_an_edit_to_the_board_puts_the_cards_away(monkeypatch) -> None:
     window = _rearranging_window(monkeypatch)
     try:
@@ -9931,6 +9953,7 @@ def test_each_step_goes_where_it_is_done() -> None:
         assert window.schematic_is_showing()
         window.on_workflow_step("place")
         assert window.board_is_showing()
+        assert window.arrangement_strip.isHidden(), "nothing on the board to rearrange"
         window.on_workflow_step("check")
         assert window.problems_bar.expanded
     finally:

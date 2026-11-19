@@ -6105,8 +6105,10 @@ TURKISH: Mapping[str, str] = {
         "Devrenin hangi delikli karta gideceği. Parçalar yerleşmeden, boyut hâlâ serbestken "
         "seçilir: satılan her boy, devreniz üzerine gerçekten yerleştirilerek denenir."
     ),
-    "Where each part goes. Arranged for you, then yours to move.": (
-        "Her parçanın nereye gideceği. Sizin için dizilir, sonra istediğiniz gibi taşırsınız."
+    "Where each part goes. Arranged for you, then yours to move. Once every part is on the "
+    "board, click here to compare other arrangements.": (
+        "Her parçanın nereye gideceği. Sizin için dizilir, sonra istediğiniz gibi taşırsınız. "
+        "Bütün parçalar karttayken başka yerleşimleri karşılaştırmak için buraya tıklayın."
     ),
     "What joins the pins on the board: solder traces, wires and jumpers. Auto-wire lays "
     "them; the board's tools lay them by hand.": (

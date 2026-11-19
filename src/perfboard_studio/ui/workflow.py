@@ -245,7 +245,10 @@ def step_tooltip(key: StepKey) -> str:
             "Which perfboard it goes on. Chosen before the parts go down, while the size is "
             "still free: every stock size is tried with your circuit laid out on it."
         ),
-        "place": t("Where each part goes. Arranged for you, then yours to move."),
+        "place": t(
+            "Where each part goes. Arranged for you, then yours to move. Once every part "
+            "is on the board, click here to compare other arrangements."
+        ),
         "route": t(
             "What joins the pins on the board: solder traces, wires and jumpers. Auto-wire "
             "lays them; the board's tools lay them by hand."

@@ -3960,6 +3960,13 @@ class MainWindow(QMainWindow):
             self.on_choose_board()
         elif step == "place":
             self.show_board()
+            facts = self.workflow_facts()
+            if facts.parts_on_board and not facts.parts_off_board:
+                # Every part is on a board, so what is left of this step is trying it
+                # another way: Rearrange's cards for the board shown, which are looked at
+                # before anything moves -- going there still changes nothing. Next stays
+                # on Wiring. Measured as Next measures it, over the whole system.
+                self.on_autoplace()
         elif step == "route":
             self.show_board()
             self._offer_to_wire()
