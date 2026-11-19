@@ -430,6 +430,24 @@ def _label(p: QPainter) -> None:
     p.drawPath(path)
 
 
+def _ground(p: QPainter) -> None:
+    """A ground: a stem down from a pin, and three shrinking bars under it -- the glyph the
+    sheet itself draws, so the button that puts one down shows what it puts down."""
+    p.drawLine(QPointF(50, 10), QPointF(50, 46))
+    p.drawLine(QPointF(18, 46), QPointF(82, 46))
+    p.drawLine(QPointF(30, 64), QPointF(70, 64))
+    p.drawLine(QPointF(42, 82), QPointF(58, 82))
+
+
+def _supply(p: QPainter) -> None:
+    """A supply: a stem up from a pin to one bar across it, the glyph the sheet draws."""
+    p.drawLine(QPointF(50, 90), QPointF(50, 30))
+    p.drawLine(QPointF(20, 30), QPointF(80, 30))
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(38, 14), QPointF(62, 14))
+    p.drawLine(QPointF(50, 4), QPointF(50, 24))
+
+
 def _text(p: QPainter) -> None:
     """A capital A, which is what every drawing tool marks its text tool with."""
     path = QPainterPath(QPointF(20, 84))
@@ -618,6 +636,8 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "float": _float,
     "export": _export,
     "label": _label,
+    "ground": _ground,
+    "supply": _supply,
     "text": _text,
     "shape": _shape,
     "arrow": _arrow,

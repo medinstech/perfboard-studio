@@ -2683,7 +2683,10 @@ def _ports_drawn(
             start = _pin_of(symbols, link.pin)
             if start is None:
                 continue
-            paths.append(_reanchored(link.path, start, port.at))
+            path = _reanchored(link.path, start, port.at)
+            if port.kind != "label":
+                path = _into_glyph(path, port.at, "up" if port.kind == "supply" else "down")
+            paths.append(path)
             drawn_pins.add((link.pin.component_ref, link.pin.pin))
         glyph = port.kind != "label"
         stem = paths[0] if glyph and len(paths) == 1 else (port.at,)
@@ -2709,6 +2712,102 @@ def _ports_drawn(
             box = _net_name_box(label)
         placed.append(PlacedPort(id=port.id, kind=port.kind, name=port.name, at=port.at, box=box))
     return rails, labels, wires, tuple(placed)
+
+
+def port_stub(
+    drawing: SchematicDrawing, kind: SheetPortKind, name: str, ref: str, number: str
+) -> tuple[Point2, ...] | None:
+    """The wire a port of ``kind`` put down on a pin is drawn with, from the pin to the
+    port's point (the last one), or None for a pin not on the drawing.
+
+    THE SHAPE THE SHEET ALREADY DRAWS THERE: a supply or a ground hangs off the pin as the
+    glyph the sheet draws for a rail pin nothing is wired at (``_rail_at_pin``), and a name
+    sits on the stub a net said at a pin has (``_said_at_pin``). Putting GND on a pin the
+    sheet already showed on ground therefore changes nothing on screen but who owns it.
+    """
+    for symbol in drawing.symbols:
+        if symbol.ref != ref:
+            continue
+        pin = next((pin for pin in symbol.pins if pin.number == number), None)
+        if pin is None:
+            return None
+        anchor = _p(symbol.at.x + pin.at.x, symbol.at.y + pin.at.y)
+        if kind == "label":
+            dx, dy = PIN_DIRECTION[pin.side]
+            stub = _named_stub(name, pin.side)
+            return (anchor, _p(anchor.x + dx * stub, anchor.y + dy * stub))
+        net = Net(
+            id="",
+            name=name,
+            nodes=(),
+            net_class="power" if kind == "supply" else "ground",
+        )
+        return _rail_at_pin(net, anchor, pin.side).path
+    return None
+
+
+def port_glyph(kind: SheetPortKind, name: str, at: Point2) -> Rail:
+    """A supply or a ground glyph standing at ``at`` on no wire: what the port tool shows
+    under the pointer before the click, drawn by the code that draws a placed one."""
+    return Rail(
+        net_id="",
+        net_name=name,
+        net_class="power" if kind == "supply" else "ground",
+        path=(at,),
+        at=at,
+        direction="up" if kind == "supply" else "down",
+    )
+
+
+def _into_glyph(
+    path: tuple[Point2, ...], at: Point2, direction: Literal["down", "up"]
+) -> tuple[Point2, ...]:
+    """A wire to a supply or a ground, ending as the glyph's stem: into ``at`` from the side
+    away from the bars, below a supply's and above a ground's.
+
+    A GLYPH IS NEVER WIRED THROUGH ITS BARS. A supply dragged under the pin it hangs from
+    kept the wire it had, now arriving from above, and read as an upside-down T -- the
+    glyph a ground is drawn with, on the wrong net. So the last run comes up (or down) into
+    ``at`` from ``RAIL_TURN_MM`` out, the stem a glyph put on a pin is drawn with, and a
+    wire in line with the bars goes round them one grid step to the side it came from.
+    A wire already ending that way is left exactly as drawn.
+    """
+    away = 1.0 if direction == "up" else -1.0
+    if len(path) < 2:
+        return path
+    before = path[-2]
+    if abs(before.x - at.x) < _EPS and (before.y - at.y) * away > _EPS:
+        return path
+    foot = _p(at.x, at.y + away * RAIL_TURN_MM)
+    body = list(path[:-1])
+    last = body[-1]
+    if (last.y - at.y) * away > _EPS:
+        # Already on the open side: across under (or over) the glyph, then into it.
+        tail = [_p(at.x, last.y), at]
+    elif abs(last.x - at.x) >= GRID_MM - _EPS:
+        # Clear of the bars: out to the stem's foot, then into it.
+        tail = [_p(last.x, foot.y), foot, at]
+    else:
+        came = body[-2].x - at.x if len(body) > 1 else 0.0
+        side = -1.0 if came < -_EPS else 1.0
+        aside = at.x + side * GRID_MM
+        tail = [_p(aside, last.y), _p(aside, foot.y), foot, at]
+    return _unfolded([*body, *tail])
+
+
+def _unfolded(points: Sequence[Point2]) -> tuple[Point2, ...]:
+    """An orthogonal chain with every point that turns nowhere taken out, a run that doubles
+    back on itself included: the corner it doubled back from is the one point dropped."""
+    out: list[Point2] = []
+    for point in _tidy(points):
+        while len(out) >= 2 and (
+            (abs(out[-2].x - out[-1].x) < _EPS and abs(out[-1].x - point.x) < _EPS)
+            or (abs(out[-2].y - out[-1].y) < _EPS and abs(out[-1].y - point.y) < _EPS)
+        ):
+            out.pop()
+        if not out or abs(out[-1].x - point.x) > _EPS or abs(out[-1].y - point.y) > _EPS:
+            out.append(point)
+    return tuple(out)
 
 
 def _port_label(port: SheetPort, paths: Sequence[tuple[Point2, ...]]) -> Label:

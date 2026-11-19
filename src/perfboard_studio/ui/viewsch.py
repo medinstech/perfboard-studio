@@ -77,7 +77,7 @@ from PySide6.QtWidgets import (
 )
 
 from perfboard_studio.erc import ErcFinding, ErcSeverity
-from perfboard_studio.model import NetNode, Point2, SheetWire
+from perfboard_studio.model import NetNode, Point2, SheetPortKind, SheetWire
 from perfboard_studio.schematic import (
     GRID_MM,
     LEAD_MM,
@@ -92,6 +92,7 @@ from perfboard_studio.schematic import (
     Annotation,
     Label,
     NoConnect,
+    PlacedPort,
     Rail,
     SchematicDrawing,
     Symbol,
@@ -100,6 +101,8 @@ from perfboard_studio.schematic import (
     moved_end,
     moved_run,
     no_connect_arms,
+    port_glyph,
+    port_stub,
     rail_glyph_bars,
     route_sheet_wire,
     snap_to_grid,
@@ -119,7 +122,9 @@ from .view2d import FOOTPRINT_MIME, PART_MIME, overlay_room, picture_beside_the_
 #: SELECT IS A TOOL AND NOT THE ABSENCE OF ONE, which is what makes Escape mean the same
 #: thing everywhere: whatever you are in the middle of, one press puts you back to picking
 #: things up. An editor whose "no tool" state is unreachable is an editor you get stuck in.
-type SheetTool = Literal["select", "wire", "label", "text", "line", "rectangle", "circle"]
+type SheetTool = Literal[
+    "select", "wire", "label", "port", "text", "line", "rectangle", "circle"
+]
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -367,6 +372,13 @@ class SheetItem(QGraphicsItem):
         #: what the board or the Nets dock is pointing at.
         self.selected_refs: frozenset[str] = frozenset()
         self.selected_notes: frozenset[str] = frozenset()
+        #: The ports (``drawing.ports``) the next key press acts on, by id.
+        self.selected_ports: frozenset[str] = frozenset()
+        #: The port the port tool would put down if the button went down now: its kind,
+        #: name and point, and the wire from the pin it would hang off (empty on bare sheet).
+        self.port_ghost: tuple[SheetPortKind, str, Point2, tuple[Point2, ...]] | None = None
+        #: A port being dragged, and how far from where the document has it.
+        self.port_drag: tuple[str, QPointF] | None = None
         #: The pin waiting for its partner while a wire is being drawn.
         self.pending_pin: tuple[str, str] | None = None
         #: The pin the wire tool would take if the button went down now -- ringed, so the
@@ -406,6 +418,21 @@ class SheetItem(QGraphicsItem):
         if refs_set == self.selected_refs and notes_set == self.selected_notes:
             return
         self.selected_refs, self.selected_notes = refs_set, notes_set
+        self.update()
+
+    def set_port_selection(self, ids: Iterable[str]) -> None:
+        ids_set = frozenset(ids)
+        if ids_set == self.selected_ports:
+            return
+        self.selected_ports = ids_set
+        self.update()
+
+    def set_port_ghost(
+        self, ghost: tuple[SheetPortKind, str, Point2, tuple[Point2, ...]] | None
+    ) -> None:
+        if ghost == self.port_ghost:
+            return
+        self.port_ghost = ghost
         self.update()
 
     def set_highlight(self, refs: Iterable[str], net_ids: Iterable[str]) -> None:
@@ -660,13 +687,25 @@ class SheetItem(QGraphicsItem):
         selected symbol and a highlighted one have to be tellable apart, and they routinely
         are both at once.
         """
-        if not self.selected_refs:
+        if not self.selected_refs and not self.selected_ports:
             return
         pen = QPen(QColor(SELECTED))
         pen.setWidthF(SELECTION_BOX_MM)
         pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        for port in self.drawing.ports:
+            if port.id not in self.selected_ports:
+                continue
+            x0, y0, x1, y1 = port.box
+            if self.port_drag is not None and self.port_drag[0] == port.id:
+                shift = self.port_drag[1]
+                x0, x1, y0, y1 = x0 + shift.x(), x1 + shift.x(), y0 + shift.y(), y1 + shift.y()
+            painter.drawRect(
+                QRectF(QPointF(x0, y0), QPointF(x1, y1)).adjusted(
+                    -SELECTION_PAD_MM, -SELECTION_PAD_MM, SELECTION_PAD_MM, SELECTION_PAD_MM
+                )
+            )
         offset = self.drag_offset or QPointF(0.0, 0.0)
         for symbol in self.drawing.symbols:
             if symbol.ref not in self.selected_refs:
@@ -717,6 +756,16 @@ class SheetItem(QGraphicsItem):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPolyline(QPolygonF(list(self.ghost_path)))
 
+        if self.port_ghost is not None:
+            self._port_picture(painter, *self.port_ghost)
+
+        if self.port_drag is not None:
+            id_, shift = self.port_drag
+            port = next((port for port in self.drawing.ports if port.id == id_), None)
+            if port is not None:
+                at = Point2(x=port.at.x + shift.x(), y=port.at.y + shift.y())
+                self._port_picture(painter, port.kind, port.name, at, ())
+
         if self.ghost_shape is not None:
             kind, start, end = self.ghost_shape
             pen = QPen(QColor(SELECTED))
@@ -731,6 +780,57 @@ class SheetItem(QGraphicsItem):
                 painter.drawEllipse(box)
             else:
                 painter.drawRect(box)
+
+    def _port_picture(
+        self,
+        painter: QPainter,
+        kind: SheetPortKind,
+        name: str,
+        at: Point2,
+        stub: Sequence[Point2],
+    ) -> None:
+        """A port that is not there yet, in the ghost's ink: the wire it would hang on, and
+        the glyph or the name. The glyph's bars come from ``schematic.rail_glyph_bars``, so
+        what the pointer carries is the shape the click puts down."""
+        pen = QPen(QColor(HIGHLIGHT))
+        pen.setWidthF(GHOST_MM)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if len(stub) >= 2:
+            painter.drawPolyline(QPolygonF([_point(point) for point in stub]))
+        if kind == "label":
+            scale = math.hypot(painter.transform().m11(), painter.transform().m12())
+            # Starting at the point and running right, above it: where ``_port_label``
+            # writes the name of a label port with no wire coming in from the right.
+            draw_flag_label(
+                painter,
+                QPointF(at.x, at.y - NET_LABEL_CLEARANCE_MM),
+                name,
+                label_px(NET_LABEL_MM, NET_PX, scale),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
+                colour=QColor(HIGHLIGHT),
+                fill=QColor(BODY_FILL),
+            )
+            return
+        pen.setWidthF(BODY_MM)
+        painter.setPen(pen)
+        bars = rail_glyph_bars(port_glyph(kind, name, at))
+        for start, end in bars:
+            painter.drawLine(_point(start), _point(end))
+        # The name beside the first bar, so the pointer says WHICH supply it carries: two
+        # supplies are one glyph, and orange alone says power, not +5V or +3V3.
+        scale = math.hypot(painter.transform().m11(), painter.transform().m12())
+        (_, right), *_ = bars
+        draw_flag_label(
+            painter,
+            QPointF(right.x + NET_LABEL_CLEARANCE_MM, right.y),
+            name,
+            label_px(NET_LABEL_MM, NET_PX, scale),
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            colour=QColor(HIGHLIGHT),
+            fill=QColor(BODY_FILL),
+        )
 
     def _labels(self, painter: QPainter) -> None:
         # Pixels per millimetre of sheet, from the painter rather than the view: the same
@@ -1120,6 +1220,18 @@ class SchematicView(QGraphicsView):
     #: starts from: join it to a net by NAME, or name the net it is on. The window asks
     #: which name, because that is a question with a dialog behind it.
     labelRequested = Signal(str, str)
+    #: The port tool put a supply, a ground or a name down: (kind, name, x, y, ref, pin,
+    #: the wire from the pin to the port as (x, y) pairs). On bare sheet the ref and pin are
+    #: empty and so is the wire. What it does to the circuit is ``sheet.port.add``'s.
+    portPlaced = Signal(str, str, float, float, str, str, list)
+    #: A wire was drawn from a pin to a port already on the sheet: (port id, ref, pin, the
+    #: wire from the pin to the port as (x, y) pairs). ``sheet.port.link``.
+    portLinked = Signal(str, str, str, list)
+    #: A port was dragged: (port id, x, y), moved by whole grid squares, so a glyph that
+    #: hangs half a pin pitch off the grid stays where its stub put it. ``sheet.port.move``.
+    portMoved = Signal(str, float, float)
+    #: Delete was pressed with ports selected. Carries their ids.
+    portDeleteRequested = Signal(list)
     #: A row was dragged out of the Parts panel and dropped on the sheet. Carries the
     #: footprint id and where it landed. It is ``part.add`` and not ``component.place``:
     #: the board is not involved, which is the whole point of drawing the circuit first.
@@ -1170,6 +1282,16 @@ class SchematicView(QGraphicsView):
         self._pointer: QPointF | None = None
         self.selected_refs: list[str] = []
         self.selected_notes: list[int] = []
+        #: The ports selected, by id (``drawing.ports``).
+        self.selected_ports: list[str] = []
+        #: What the port tool puts down (``arm_port``): a kind and the net it names.
+        self.port_kind: SheetPortKind = "ground"
+        self.port_name = "GND"
+        #: The wire tool's first click, when it was on a port: the port's id.
+        self.pending_port: str | None = None
+        #: A port pressed in Select, by id; a drag past the start distance moves it.
+        self._press_port: str | None = None
+        self._port_dragging = False
         #: The drawn wire that is selected, by its two pins, and the wires of a sheet still
         #: being arranged as they WOULD be drawn once it is frozen
         #: (``schematic.wires_as_drawn``, handed over by the window): on that sheet a wire is
@@ -1309,6 +1431,14 @@ class SchematicView(QGraphicsView):
             [ref for ref in self.selected_refs if any(s.ref == ref for s in drawing.symbols)],
             {f"n{index}" for index in self.selected_notes},
         )
+        self.selected_ports = [
+            id_ for id_ in self.selected_ports if any(p.id == id_ for p in drawing.ports)
+        ]
+        self.item.set_port_selection(self.selected_ports)
+        if self.pending_port is not None and not any(
+            p.id == self.pending_port for p in drawing.ports
+        ):
+            self.pending_port = None
         self.item.pending_pin = self.pending_pin
         self.item.set_findings(self.findings)
         self._show_wire_selection()
@@ -1366,8 +1496,11 @@ class SchematicView(QGraphicsView):
         self.wiring = tool == "wire"
         self.set_pending_pin(None)
         self.pending_tee = None
+        self.pending_port = None
         self.corners = []
         self._clear_ghosts()
+        if self.item is not None:
+            self.item.set_port_ghost(None)
         if self.item is not None and self.item.hover_pin is not None:
             # A ring under the pointer means "the wire tool would take this"; with another
             # tool armed it would be a promise nothing keeps.
@@ -1379,13 +1512,94 @@ class SchematicView(QGraphicsView):
         """The wire tool, by the name the window's Wire button has always used."""
         self.set_tool("wire" if on else "select")
 
+    def arm_port(self, kind: SheetPortKind, name: str) -> None:
+        """The port tool, carrying a supply, a ground or a net's name to put down.
+
+        WHICH ONE IS THE WINDOW'S QUESTION: it knows the document's supplies and asks for a
+        name with a dialog. The tool stays armed after a click, as the wire tool does, so a
+        ground goes on every pin that wants one without going back to the palette.
+        """
+        self.port_kind, self.port_name = kind, name
+        self.set_tool("port")
+
     def set_selection(self, refs: Sequence[str], notes: Sequence[int] = ()) -> None:
         self.selected_refs = list(refs)
         self.selected_notes = list(notes)
         self.selected_wire = None
+        self.selected_ports = []
         if self.item is not None:
             self.item.set_selection(refs, {f"n{index}" for index in notes})
+            self.item.set_port_selection(())
             self._show_wire_selection()
+
+    def select_ports(self, ids: Sequence[str]) -> None:
+        """Ports, and nothing else: a port is not a part, so the Properties panel and the
+        board have nothing to show for it, and the window is told the parts went."""
+        self.set_selection([], [])
+        self.selected_ports = list(ids)
+        if self.item is not None:
+            self.item.set_port_selection(self.selected_ports)
+
+    def port_at(self, scene_pos: QPointF) -> PlacedPort | None:
+        """The port whose glyph or name is under a point, padded to ``PICK_MM``; the
+        nearest when two boxes take it."""
+        if self.item is None:
+            return None
+        best: tuple[float, PlacedPort] | None = None
+        for port in self.item.drawing.ports:
+            x0, y0, x1, y1 = port.box
+            box = QRectF(QPointF(x0, y0), QPointF(x1, y1)).adjusted(
+                -PICK_MM, -PICK_MM, PICK_MM, PICK_MM
+            )
+            if not box.contains(scene_pos):
+                continue
+            distance = math.hypot(scene_pos.x() - port.at.x, scene_pos.y() - port.at.y)
+            if best is None or distance < best[0]:
+                best = (distance, port)
+        return best[1] if best is not None else None
+
+    def _port_ghost_at(
+        self, where: QPointF
+    ) -> tuple[SheetPortKind, str, Point2, tuple[Point2, ...]]:
+        """What a click of the port tool would put down: on the pin under the pointer, the
+        port at the end of the stub the sheet draws there (``schematic.port_stub``); on
+        bare sheet, at the grid point under the pointer with no wire."""
+        pin = self.pin_at(where)
+        if pin is not None and self.item is not None:
+            stub = port_stub(self.item.drawing, self.port_kind, self.port_name, *pin)
+            if stub is not None:
+                return self.port_kind, self.port_name, stub[-1], stub
+        point = snap_to_grid(Point2(x=where.x(), y=where.y()))
+        return self.port_kind, self.port_name, point, ()
+
+    def _port_click(self, where: QPointF) -> None:
+        kind, name, at, stub = self._port_ghost_at(where)
+        pin = self.pin_at(where) if stub else None
+        ref, number = pin if pin is not None else ("", "")
+        self.portPlaced.emit(
+            kind, name, at.x, at.y, ref, number, [(point.x, point.y) for point in stub]
+        )
+
+    def _link_port(self, port_id: str, pin: tuple[str, str]) -> None:
+        """A wire from ``pin`` to the port: through the corners clicked on the way, else
+        square from the pin to the port's point."""
+        drawn: tuple[QPointF, ...] = ()
+        if self.item is not None:
+            port = next((p for p in self.item.drawing.ports if p.id == port_id), None)
+            start = pin_anchor(self.item.drawing, *pin)
+            if port is not None and start is not None:
+                end = QPointF(port.at.x, port.at.y)
+                cornered = self._cornered(pin, end) if self.corners else ()
+                # Corners clicked from the port were clicked in the other order.
+                if cornered and self.pending_port is not None:
+                    cornered = ()
+                drawn = cornered or _elbow(start, end)
+        self.set_pending_pin(None)
+        self.pending_port = None
+        self.corners = []
+        self._clear_ghosts()
+        if drawn:
+            self.portLinked.emit(port_id, pin[0], pin[1], [(p.x(), p.y()) for p in drawn])
 
     def set_unfrozen_wires(self, wires: Sequence[SheetWire]) -> None:
         """The wires a sheet still being arranged would draw if it were frozen now."""
@@ -1449,13 +1663,18 @@ class SchematicView(QGraphicsView):
     def wire_in_progress(self) -> bool:
         """Whether the wire tool has its first click -- a pin or a wire -- and is waiting
         for corners or the end."""
-        return self.pending_pin is not None or self.pending_tee is not None
+        return (
+            self.pending_pin is not None
+            or self.pending_tee is not None
+            or self.pending_port is not None
+        )
 
     def _drop_wire(self) -> None:
         """Let go of the wire being drawn, corners and all; the tool stays armed. The
         window is told as a miss always told it (``pinClicked`` with no pin)."""
         self.set_pending_pin(None)
         self.pending_tee = None
+        self.pending_port = None
         self.corners = []
         self._clear_ghosts()
         self.pinClicked.emit("", "")
@@ -1532,6 +1751,7 @@ class SchematicView(QGraphicsView):
             self._dragging
             or self._reshaping
             or self._moving_end
+            or self._port_dragging
             or self._band_from is not None
             or self._shape_from is not None
         )
@@ -1556,7 +1776,10 @@ class SchematicView(QGraphicsView):
         self._reshaping = False
         self._press_end = None
         self._moving_end = False
+        self._press_port = None
+        self._port_dragging = False
         if self.item is not None:
+            self.item.port_drag = None
             self.item.drag_offset = None
             self.item.live_wires = None
             self.item.ghost_path = ()
@@ -1839,14 +2062,32 @@ class SchematicView(QGraphicsView):
         self._press_at = event.position().toPoint()
         self._press_scene = where
 
+        if self.tool == "port":
+            self._port_click(where)
+            event.accept()
+            return
+
         if self.tool == "wire":
             pin = self.pin_at(where)
             # A pin wins over the wire running into it: at a pin the two are one point, and
             # a wire drawn to a pin is the ordinary case.
-            tee = self.tee_at(where) if pin is None else None
-            if tee is not None:
+            port = self.port_at(where) if pin is None else None
+            tee = self.tee_at(where) if pin is None and port is None else None
+            if port is not None:
+                # A PORT IS WIRED AS A PIN IS, from either end: a pin taken first is linked
+                # to it now, and a port taken first waits for its pin.
+                if self.pending_pin is not None:
+                    self._link_port(port.id, self.pending_pin)
+                else:
+                    self.pending_tee = None
+                    self.corners = []
+                    self.pending_port = port.id
+                    self.teeStarted.emit(port.name)
+            elif pin is not None and self.pending_port is not None:
+                self._link_port(self.pending_port, pin)
+            elif tee is not None:
                 self._tee_click(tee)
-            elif pin is None and self.wire_in_progress():
+            elif pin is None and (self.pending_pin is not None or self.pending_tee is not None):
                 # BARE SHEET IS A CORNER while a wire is being drawn; it used to call the
                 # wire off, so a wire could only ever go where the route put it. Inside a
                 # symbol's box it is neither: a corner there would draw the wire through
@@ -1896,6 +2137,21 @@ class SchematicView(QGraphicsView):
         if grabbed is not None:
             # An end of the wire that is selected: held, so a drag takes it to another pin.
             self._press_end = grabbed
+            event.accept()
+            return
+        # A PORT BEFORE THE SYMBOL: its glyph hangs off a pin, so its box and the pin's
+        # pick radius meet, and a glyph that could not be taken hold of could not be moved.
+        port = self.port_at(where) if self.pin_at(where) is None else None
+        if port is not None:
+            if additive:
+                ids = [i for i in self.selected_ports if i != port.id]
+                if port.id not in self.selected_ports:
+                    ids.append(port.id)
+                self.select_ports(ids)
+            elif port.id not in self.selected_ports:
+                self.select_ports([port.id])
+            self.selectionChanged.emit([])
+            self._press_port = port.id
             event.accept()
             return
         symbol = self.symbol_at(where)
@@ -1977,6 +2233,7 @@ class SchematicView(QGraphicsView):
             # gestures later.
             self.set_pending_pin(None)
             self.pending_tee = None
+            self.pending_port = None
             self.pinClicked.emit("", "")
             return
         if self.pending_tee is not None:
@@ -2072,6 +2329,33 @@ class SchematicView(QGraphicsView):
             return
 
         where = self.mapToScene(event.position().toPoint())
+
+        if self.item is not None and self.tool == "port":
+            self.item.set_port_ghost(self._port_ghost_at(where))
+            self.setToolTip(self.describe(where))
+            event.accept()
+            return
+
+        if self._press_port is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._drag_port(event, where)
+            event.accept()
+            return
+
+        if self.item is not None and self.tool == "wire" and self.pending_port is not None:
+            port = next(
+                (p for p in self.item.drawing.ports if p.id == self.pending_port), None
+            )
+            if port is not None:
+                pin = self.pin_at(where)
+                target = pin_anchor(self.item.drawing, *pin) if pin is not None else None
+                self.item.hover_pin = pin
+                self.item.ghost_path = _elbow(
+                    QPointF(port.at.x, port.at.y),
+                    target if target is not None else _snapped(where),
+                )
+                self.item.update()
+            event.accept()
+            return
 
         if self.item is not None and self._shape_from is not None:
             self.item.ghost_shape = (self.tool, self._shape_from, _snapped(where))
@@ -2196,6 +2480,19 @@ class SchematicView(QGraphicsView):
                 ]
             )
         self.item.drag_offset = offset
+        self.item.update()
+
+    def _drag_port(self, event: QMouseEvent, where: QPointF) -> None:
+        """Show the pressed port where the pointer has taken it, on the grid. Its wires
+        follow it when it is let go, as a symbol's do (``schematic._reanchored``)."""
+        if self._press_at is None or self.item is None or self._press_port is None:
+            return
+        moved = event.position().toPoint() - self._press_at
+        if not self._port_dragging and moved.manhattanLength() < QApplication.startDragDistance():
+            return
+        self._port_dragging = True
+        start = self._press_scene or where
+        self.item.port_drag = (self._press_port, _snapped(where - start))
         self.item.update()
 
     def _end_at(
@@ -2351,6 +2648,18 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        if self._press_port is not None:
+            drag = self.item.port_drag if self.item is not None else None
+            ports = self.item.drawing.ports if self.item is not None else ()
+            self._clear_ghosts()
+            if drag is not None and (drag[1].x() or drag[1].y()):
+                id_, shift = drag
+                port = next((p for p in ports if p.id == id_), None)
+                if port is not None:
+                    self.portMoved.emit(id_, port.at.x + shift.x(), port.at.y + shift.y())
+            event.accept()
+            return
+
         if self._press_note is not None:
             self._clear_ghosts()
             event.accept()
@@ -2498,6 +2807,10 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         deleting = event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+        if deleting and self.selected_ports:
+            self.portDeleteRequested.emit(list(self.selected_ports))
+            event.accept()
+            return
         if deleting and self.selected_wire is not None:
             a, b = self.selected_wire
             self.wireDeleteRequested.emit([(a.component_ref, a.pin, b.component_ref, b.pin)])

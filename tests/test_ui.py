@@ -16498,7 +16498,7 @@ def test_the_sheets_tools_float_on_the_sheet() -> None:
         assert "schematicToolbar" not in {b.objectName() for b in window.findChildren(QToolBar)}
         assert window.sheet_tools.parent() is window.schematic_view
         tools = [button.defaultAction() for button in window.sheet_tools.buttons]
-        assert tools == [window.act_sheet_tool[n] for n in ("select", "wire", "label", "text", "rectangle")]
+        assert tools == [window.act_sheet_tool[n] for n in ("select", "wire", "label", "port", "text", "rectangle")]
         shapes = window.act_sheet_tool["rectangle"].menu()
         assert shapes is not None and len(shapes.actions()) == 3
         corner = [button.defaultAction() for button in window.sheet_view_tools.buttons]

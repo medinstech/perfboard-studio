@@ -1452,6 +1452,24 @@ TURKISH: Mapping[str, str] = {
         "Metnin geleceği yere tıklayın. Esc iptal eder."
     ),
     "Drag out the shape. Esc cancels.": "Şekli sürükleyerek çizin. Esc iptal eder.",
+    "Put a ground, a supply or a net's name on the sheet. Click a pin to hang "
+    "it there, or empty sheet to put it down and wire pins to it after. The "
+    "menu on the button picks which.": (
+        "Şemaya bir toprak, bir besleme ya da bir netin adını koyar. Bir pine tıklayın, "
+        "ona asılsın; ya da boş şemaya tıklayın, orada dursun ve pinleri sonra ona "
+        "bağlayın. Hangisi olacağını düğmenin menüsü seçer."
+    ),
+    "Click a pin to put {name} on it, or empty sheet to put it down and wire "
+    "pins to it with Connect. Esc puts the tool down.": (
+        "{name} koymak için bir pine tıklayın, ya da boş şemaya tıklayıp bırakın ve "
+        "pinleri Bağla ile ona bağlayın. Esc aracı bırakır."
+    ),
+    "Other Supply…": "Başka Besleme…",
+    "Other Supply": "Başka Besleme",
+    "Name of the supply, as +3V3 or VBAT:": "Beslemenin adı (+3V3 ya da VBAT gibi):",
+    "Net Name…": "Net Adı…",
+    "Net Name": "Net Adı",
+    "Name of the net:": "Netin adı:",
     "Connect by Name": "Ada Göre Bağla",
     "Net for {pin}:": "{pin} için net:",
     "No package called {id}.": "{id} adında bir kılıf yok.",
@@ -1543,6 +1561,7 @@ TURKISH: Mapping[str, str] = {
     "{net} split in two: {pins} is now {new}": "{net} ikiye bölündü: {pins} artık {new}",
     "{net} split in two: {pins} are now {new}": "{net} ikiye bölündü: {pins} artık {new}",
     "{said}. Ctrl+Z brings the wire back.": "{said}. Ctrl+Z teli geri getirir.",
+    "{said}. Ctrl+Z brings the port back.": "{said}. Ctrl+Z sembolü geri getirir.",
     "The sheet is drawn by hand from now on.": "Şema bundan sonra elle çiziliyor.",
     "The sheet is drawn by hand from now on; Ctrl+Z takes it back.": (
         "Şema bundan sonra elle çiziliyor; Ctrl+Z bunu geri alır."

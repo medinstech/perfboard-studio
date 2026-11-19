@@ -8,6 +8,7 @@ Every command that takes a pin off a net takes its links with it, in the same st
 from __future__ import annotations
 
 import dataclasses
+import itertools
 from collections.abc import Callable
 
 import pytest
@@ -236,6 +237,62 @@ def test_a_moved_port_takes_its_wires_with_it() -> None:
     assert bus.dispatch("sheet.port.move", MoveSheetPortPayload(id=port, at=there)).ok
     (rail,) = [rail for rail in _drawing(bus).rails if rail.port == port]
     assert rail.at == there and rail.path[-1] == there
+
+
+def _enters_from_its_open_side(path: tuple[Point2, ...], at: Point2, away: float) -> bool:
+    before = path[-2]
+    return path[-1] == at and abs(before.x - at.x) < 1e-6 and (before.y - at.y) * away > 0
+
+
+@pytest.mark.parametrize(
+    ("kind", "name", "pin", "start", "there"),
+    [
+        # A supply put above R2 and dragged below it: the wire used to arrive from above
+        # and the glyph read as an upside-down T.
+        ("supply", "+5V", "1", SUPPLY_AT, Point2(x=SUPPLY_AT.x, y=30.48)),
+        ("supply", "+5V", "1", SUPPLY_AT, Point2(x=SUPPLY_AT.x - 10.16, y=30.48)),
+        # A ground put below R1 and dragged above it, in line and off to the side.
+        ("ground", "GND", "2", GROUND_AT, Point2(x=GROUND_AT.x, y=10.16)),
+        ("ground", "GND", "2", GROUND_AT, Point2(x=GROUND_AT.x + 12.7, y=10.16)),
+        # Level with the pin: a wire straight across would run into the bars side-on.
+        ("ground", "GND", "2", GROUND_AT, Point2(x=GROUND_AT.x - 12.7, y=20.32)),
+    ],
+)
+def test_a_glyph_is_never_wired_through_its_bars(
+    kind: SheetPortKind, name: str, pin: str, start: Point2, there: Point2
+) -> None:
+    bus = _bus()
+    ref = "R2" if kind == "supply" else "R1"
+    port = _put(bus, kind, name, (_pin(ref, pin),), start)
+    assert bus.dispatch("sheet.port.move", MoveSheetPortPayload(id=port, at=there)).ok
+    drawing = _drawing(bus)
+    (rail,) = [rail for rail in drawing.rails if rail.port == port]
+    away = 1.0 if kind == "supply" else -1.0
+    assert rail.at == there
+    assert _enters_from_its_open_side(rail.path, there, away), rail.path
+    assert rail.path[0] == pin_position(drawing, ref, pin)
+    for a, b in itertools.pairwise(rail.path):
+        assert a.x == b.x or a.y == b.y, rail.path
+    # ...and every run but the last, which ends at the bars, stays clear of them.
+    x0, y0, x1, y1 = next(p.box for p in drawing.ports if p.id == port)
+    for a, b in itertools.pairwise(rail.path[:-1]):
+        lo_x, hi_x = sorted((a.x, b.x))
+        lo_y, hi_y = sorted((a.y, b.y))
+        assert hi_x < x0 or lo_x > x1 or hi_y < y0 or lo_y > y1, (a, b, rail.path)
+
+
+def test_a_wire_already_into_its_glyph_is_left_as_drawn() -> None:
+    bus = _bus()
+    start = pin_position(_drawing(bus), "R1", "2")
+    assert start is not None and start.y < GROUND_AT.y
+    # Across, then down into the ground: the way the tool draws a stem.
+    path = (start, Point2(x=GROUND_AT.x, y=start.y), GROUND_AT)
+    payload = AddSheetPortPayload(
+        kind="ground", name="GND", at=GROUND_AT, links=(PortLink(pin=_pin("R1", "2"), path=path),)
+    )
+    assert bus.dispatch("sheet.port.add", payload).ok
+    (rail,) = [rail for rail in _drawing(bus).rails if rail.net_name == "GND"]
+    assert rail.path == path
 
 
 def test_a_label_names_its_net_where_it_was_put_and_nowhere_else() -> None:

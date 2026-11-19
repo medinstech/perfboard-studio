@@ -30,6 +30,15 @@ closed without a bump.
   on top, ground below, inputs left, outputs right. Roles that do not cover the package's
   pins exactly leave the part a numbered box, and the circuit check says why
   (`pin-roles-incomplete`).
+- **Grounds, supplies and net names are put on the sheet by hand.** A new tool on the
+  sheet's tool bar puts down a ground, a supply or a net's name; its menu offers the
+  design's own grounds and supplies, another supply, or any name. Click a pin and the
+  symbol hangs from it, the pin joining that net. Click bare sheet and it stands there, and
+  Connect wires pins to it. A placed one is selected, dragged and deleted like a wire:
+  Delete takes off the net any pin only it held, and one Ctrl+Z brings both back. A wire
+  always comes into a ground or supply from the side away from its bars, so one dragged
+  below its pin is never drawn upside down. They are saved in the file as `sheetPorts`,
+  left out when there are none.
 
 ### Changed
 

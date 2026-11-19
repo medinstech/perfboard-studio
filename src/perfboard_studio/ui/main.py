@@ -186,6 +186,7 @@ from perfboard_studio.commands import (
     AddPartPayload,
     AddPartsPayload,
     AddSheetNotePayload,
+    AddSheetPortPayload,
     ApplyBoardPresetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
@@ -197,15 +198,18 @@ from perfboard_studio.commands import (
     DeleteNetPayload,
     DeletePartPayload,
     DeleteSheetNotesPayload,
+    DeleteSheetPortsPayload,
     DeleteSheetWiresPayload,
     DisconnectPinsPayload,
     DrawSheetWirePayload,
     ImportNetlistPayload,
+    LinkSheetPortPayload,
     LockComponentsPayload,
     MergeNetsPayload,
     MirrorComponentPayload,
     MirrorComponentsPayload,
     MoveComponentPayload,
+    MoveSheetPortPayload,
     MoveSymbolsPayload,
     MoveToBoardPayload,
     OnBoardPayload,
@@ -323,9 +327,11 @@ from perfboard_studio.model import (
     PerfDocument,
     PinNames,
     Point2,
+    PortLink,
     Rotation,
     SchematicPart,
     SheetNoteKind,
+    SheetPortKind,
     SheetWire,
     SymbolPlacement,
     contacts_every_path_hole,
@@ -636,6 +642,11 @@ def face_note_said(
         )
         said = f"{prefers.format(net=note.net_name)} {said}"
     return said
+
+
+def _port_icon(kind: str) -> QIcon:
+    """The port tool's icon for a kind of port: its glyph, or a name's flag."""
+    return icons.icon({"ground": "ground", "supply": "supply"}.get(kind, "label"))
 
 
 def did(description: str) -> str:
@@ -6098,7 +6109,7 @@ class MainWindow(QMainWindow):
         schematic_menu.addSeparator()
         sheet_tools = schematic_menu.addMenu(t("Drawing &Tools"))
         sheet_tools.setToolTipsVisible(True)
-        for name in ("select", "wire", "label", "text", "rectangle"):
+        for name in ("select", "wire", "label", "port", "text", "rectangle"):
             sheet_tools.addAction(self.act_sheet_tool[name])
         schematic_menu.addSeparator()
         schematic_menu.addAction(self.act_sch_rotate)
@@ -6908,7 +6919,7 @@ class MainWindow(QMainWindow):
         tools = FloatingBar(
             sheet, Qt.Corner.TopLeftCorner, vertical=True, name="sheetTools", names=True
         )
-        for name in ("select", "wire", "label", "text", "rectangle"):
+        for name in ("select", "wire", "label", "port", "text", "rectangle"):
             tools.add_action(
                 self.act_sheet_tool[name], key={"select": "Esc", "wire": "C"}.get(name, "")
             )
@@ -7781,6 +7792,10 @@ class MainWindow(QMainWindow):
         self.schematic_view.noteDrawn.connect(self.on_sheet_note_drawn)
         self.schematic_view.deleteRequested.connect(self.on_sheet_delete)
         self.schematic_view.wireDeleteRequested.connect(self._on_sheet_wires_delete)
+        self.schematic_view.portPlaced.connect(self._on_sheet_port_placed)
+        self.schematic_view.portLinked.connect(self._on_sheet_port_linked)
+        self.schematic_view.portMoved.connect(self._on_sheet_port_moved)
+        self.schematic_view.portDeleteRequested.connect(self._on_sheet_ports_delete)
         self.schematic_view.live_wires_for = self._live_wires
         self.schematic_view.wireReshaped.connect(self._on_sheet_wire_reshaped)
         self.schematic_view.wireEndMoved.connect(self._on_sheet_wire_end_moved)
@@ -7808,6 +7823,8 @@ class MainWindow(QMainWindow):
         self.act_sheet_tool: dict[str, QAction] = {}
         #: The shape the Box button holds: the last one picked from its menu.
         self._sheet_shape = "rectangle"
+        #: What the port button puts down: the last one picked from its menu.
+        self._sheet_port: tuple[SheetPortKind, str] = ("ground", "GND")
         tools = QActionGroup(self)
         tools.setExclusive(True)
         for name, icon_name, label, tip in (
@@ -7842,6 +7859,16 @@ class MainWindow(QMainWindow):
                 ),
             ),
             (
+                "port",
+                "ground",
+                "GND",
+                t(
+                    "Put a ground, a supply or a net's name on the sheet. Click a pin to hang "
+                    "it there, or empty sheet to put it down and wire pins to it after. The "
+                    "menu on the button picks which."
+                ),
+            ),
+            (
                 "text",
                 "text",
                 t("Text"),
@@ -7861,6 +7888,11 @@ class MainWindow(QMainWindow):
                 # The shape button arms the shape it SHOWS, which is whichever was picked
                 # from its menu last: it said Line and armed a box.
                 action.triggered.connect(lambda _checked=False: self.on_sheet_tool(self._sheet_shape))
+            elif name == "port":
+                # The port button, likewise: it puts down the one it says.
+                action.triggered.connect(
+                    lambda _checked=False: self.on_sheet_port(*self._sheet_port)
+                )
             else:
                 action.triggered.connect(
                     lambda _checked=False, which=name: self.on_sheet_tool(which)
@@ -7879,6 +7911,12 @@ class MainWindow(QMainWindow):
                 lambda _checked=False, which=name: self.on_sheet_tool(which)
             )
         self.act_sheet_tool["rectangle"].setMenu(shapes)
+
+        # The port button's menu is made as it opens, from the nets the document has then:
+        # its grounds and its supplies, then a supply or a name typed in.
+        ports = QMenu(self)
+        ports.aboutToShow.connect(lambda: self._fill_port_menu(ports))
+        self.act_sheet_tool["port"].setMenu(ports)
 
 
         self.act_sch_rotate = QAction(icons.icon("rotate"), t("R&otate"), self)
@@ -8632,6 +8670,137 @@ class MainWindow(QMainWindow):
             self._refresh_properties()
             self.inspector.focus_field("text")
 
+    def on_sheet_port(self, kind: SheetPortKind, name: str) -> None:
+        """Arm the port tool with a ground, a supply or a net's name, and say on its button
+        which one it is holding, as the shape button does."""
+        self._sheet_port = (kind, name)
+        button = self.act_sheet_tool["port"]
+        button.setText(name)
+        button.setIcon(_port_icon(kind))
+        self.schematic_view.arm_port(kind, name)
+        self.on_sheet_tool("port")
+
+    def _fill_port_menu(self, menu: QMenu) -> None:
+        """The grounds and supplies the document has, each one click away, then the two
+        that need a name typed. GND and +5V are offered on a design that has neither, which
+        is how most first circuits start."""
+        menu.clear()
+        nets = self.bus.system_document.nets
+        grounds = sorted({net.name for net in nets if net.net_class == "ground"}) or ["GND"]
+        supplies = sorted({net.name for net in nets if net.net_class == "power"}) or ["+5V"]
+        for kind, names in (("ground", grounds), ("supply", supplies)):
+            for name in names:
+                entry = menu.addAction(_port_icon(kind), name)
+                entry.triggered.connect(
+                    lambda _checked=False, k=kind, n=name: self.on_sheet_port(
+                        cast("SheetPortKind", k), n
+                    )
+                )
+        menu.addSeparator()
+        other = menu.addAction(t("Other Supply…"))
+        other.triggered.connect(lambda: self._ask_port_name("supply"))
+        named = menu.addAction(t("Net Name…"))
+        named.triggered.connect(lambda: self._ask_port_name("label"))
+
+    def _ask_port_name(self, kind: SheetPortKind) -> None:
+        """A supply or a name typed in, for the port tool to put down."""
+        nets = self.bus.system_document.nets
+        if kind == "supply":
+            name, ok = QInputDialog.getText(
+                self, t("Other Supply"), t("Name of the supply, as +3V3 or VBAT:")
+            )
+        else:
+            names = sorted({net.name for net in nets if net.net_class == "signal"})
+            name, ok = QInputDialog.getItem(
+                self, t("Net Name"), t("Name of the net:"), names, 0, True
+            )
+        if ok and name.strip():
+            self.on_sheet_port(kind, name.strip())
+
+    def _on_sheet_port_placed(
+        self, kind: str, name: str, x: float, y: float, ref: str, pin: str, path: object
+    ) -> None:
+        """The port tool put a supply, a ground or a name down: ``sheet.port.add``, with
+        the pin it was put on as its first link and the freeze riding along, as a wire's
+        does (``_sheet_freeze``). The tool stays armed for the next pin."""
+        links: tuple[PortLink, ...] = ()
+        if ref and isinstance(path, list) and len(path) >= 2:
+            links = (
+                PortLink(
+                    pin=NetNode(component_ref=ref, pin=pin),
+                    path=tuple(Point2(x=float(px), y=float(py)) for px, py in path),
+                ),
+            )
+        freeze = self._sheet_freeze()
+        result = self.bus.dispatch(
+            "sheet.port.add",
+            AddSheetPortPayload(
+                kind=cast("SheetPortKind", kind),
+                name=name,
+                at=Point2(x=x, y=y),
+                links=links,
+                freeze=freeze,
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_port_linked(self, id_: str, ref: str, pin: str, path: object) -> None:
+        """A wire drawn from a pin to a port already on the sheet: ``sheet.port.link``."""
+        if not isinstance(path, list) or len(path) < 2:
+            return
+        freeze = self._sheet_freeze()
+        link = PortLink(
+            pin=NetNode(component_ref=ref, pin=pin),
+            path=tuple(Point2(x=float(px), y=float(py)) for px, py in path),
+        )
+        result = self.bus.dispatch(
+            "sheet.port.link", LinkSheetPortPayload(id=id_, link=link, freeze=freeze)
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_port_moved(self, id_: str, x: float, y: float) -> None:
+        freeze = self._sheet_freeze()
+        result = self.bus.dispatch(
+            "sheet.port.move",
+            MoveSheetPortPayload(id=id_, at=Point2(x=x, y=y), freeze=freeze),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_ports_delete(self, ids: object) -> None:
+        """Delete with ports selected does what it does to a wire (``viewsch.WIRE_DELETE``):
+        DISCONNECT, as deleting a power symbol does in KiCad -- a pin only the port held
+        leaves the net, and the status line names each one -- or, set to rub out, the port
+        goes and every pin stays on its net, the sheet drawing its own glyph there."""
+        if not isinstance(ids, list) or not ids:
+            return
+        freeze = self._sheet_freeze()
+        cut = WIRE_DELETE == "disconnect"
+        before = {net.id: net for net in self.bus.system_document.nets}
+        result = self.bus.dispatch(
+            "sheet.port.delete",
+            DeleteSheetPortsPayload(ids=tuple(str(i) for i in ids), cut=cut, freeze=freeze),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self.schematic_view.select_ports([])
+        if not cut:
+            self._say_on_sheet(did(result.description), freeze, 6000)
+            return
+        said = self._say_what_left(before) or t("The pins stay joined by other wires")
+        self._say_on_sheet(
+            t("{said}. Ctrl+Z brings the port back.").format(said=said), freeze, 8000
+        )
+
     def on_sheet_delete(self) -> None:
         """Delete key on the sheet: whichever of the two things is selected.
 
@@ -8903,6 +9072,10 @@ class MainWindow(QMainWindow):
                 "Click a pin or a wire and name its net. Two pins with one name are one "
                 "net. Esc cancels."
             ),
+            "port": t(
+                "Click a pin to put {name} on it, or empty sheet to put it down and wire "
+                "pins to it with Connect. Esc puts the tool down."
+            ).format(name=self.schematic_view.port_name),
             "text": t("Click where the text goes. Esc cancels."),
             "line": t("Drag out the shape. Esc cancels."),
             "rectangle": t("Drag out the shape. Esc cancels."),
