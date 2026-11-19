@@ -62,6 +62,10 @@ DRAWN_AS_THE_BLOCK: dict[str, str] = {
     # DFRobot's dimension drawing (DFR0299) gives the pads and the micro SD socket's outline and
     # no chip or part positions, and there is no art kind for the socket.
     "dfplayer-mini": "no measured layout of what stands on its board",
+    # Adafruit's Eagle board has the position of every part on it (the VQFN20 chip, the two
+    # resistor packs, the JST-SH sockets), but no layout has been drawn from it yet, and a
+    # layout is never invented ahead of the measuring.
+    "adafruit-pcf8574-qt": "Adafruit's Eagle board is not yet drawn as a layout",
     "esp32-cam": (
         "AI-Thinker publishes no drawing of the board, and the only pictures of it are renders "
         "and the community's footprints: the headers are measured, the camera, the FPC "
