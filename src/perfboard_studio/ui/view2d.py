@@ -4898,7 +4898,53 @@ class ComponentItem(QGraphicsItem):
 
     def reference_placement(self, transform: QTransform) -> tuple[QPointF, QPointF] | None:
         """Where this part's reference goes on screen at this zoom, as (scene anchor, device
-        offset): over its body, as ``reference_anchor`` says -- or under it, where over it
+        offset): where its own board puts it (``_own_reference_placement``), unless
+        another part's reference or pin names are already there -- then the scene moves
+        it to another side of its body (``BoardScene.reference_placements``).
+
+        The layer that prints it, the legend that gives way under it and the part's hit
+        area all ask here."""
+        scene = self.scene()
+        if isinstance(scene, BoardScene):
+            settled = scene.reference_placements(transform)
+            if self.comp.id in settled:
+                return settled[self.comp.id]
+        return self._own_reference_placement(transform)
+
+    def reference_sides(
+        self, transform: QTransform
+    ) -> list[tuple[QPointF, QPointF]]:
+        """Every place this part's reference may go, in the order it is tried when the
+        place its own board gives it is taken: over the body, under it, left of it,
+        right of it. As (scene anchor, device offset), like ``reference_placement``.
+
+        Left and right are measured on the body as it is SEEN, whichever way the part is
+        turned, and the label stands centred on the body's middle row, clear of it."""
+        body = self._local_body_rect()
+        height = QFontMetricsF(label_font(REF_LABEL_PX, True)).height()
+        sides = [
+            (self.reference_anchor(), REF_LABEL_OFFSET),
+            (
+                self.mapToScene(QPointF(body.center().x(), body.bottom())),
+                QPointF(0.0, height - REF_LABEL_OFFSET.y()),
+            ),
+        ]
+        centre = self.mapToScene(body.center())
+        seen = transform.mapRect(self.mapRectToScene(body))
+        middle = transform.map(centre)
+        width = self.reference_rect(middle, QPointF(0.0, 0.0)).width()
+        bottom = seen.center().y() + height / 2 - middle.y()
+        gap = 2.0
+        sides.append((centre, QPointF(seen.left() - gap - width / 2 - middle.x(), bottom)))
+        sides.append((centre, QPointF(seen.right() + gap + width / 2 - middle.x(), bottom)))
+        return sides
+
+    def _own_reference_placement(
+        self, transform: QTransform
+    ) -> tuple[QPointF, QPointF] | None:
+        """Where this part's reference goes on screen at this zoom, as (scene anchor, device
+        offset), looking at the board and not at the other references: over its body, as
+        ``reference_anchor`` says -- or under it, where over it
         would print on a board note, or nowhere when both would.
 
         A reference is held at a pixel size and a note is written in millimetres, so zoomed
@@ -4913,9 +4959,7 @@ class ComponentItem(QGraphicsItem):
         ne555-astable LED1's hid the "F" its own pins are counted from. Where neither place
         is clear of the legend, the reference prints all the same, over its part if no note
         is there, and the letter under it gives way (``BoardLegendItem.covered_labels``): a
-        letter is one of a run, and U1 is the only name the board's chip has.
-
-        The layer that prints it and the part's hit area both ask here."""
+        letter is one of a run, and U1 is the only name the board's chip has."""
         over = (self.reference_anchor(), REF_LABEL_OFFSET)
         notes = self._note_rects(transform)
         legend = self._legend_rects(transform)
@@ -4942,6 +4986,12 @@ class ComponentItem(QGraphicsItem):
         if under_clear:
             return under
         return None
+
+    def _pin_name_rects_on_screen_of_own(self, transform: QTransform) -> list[QRectF]:
+        """This part's printed pin names, in device pixels."""
+        if not self.isVisible():
+            return []
+        return [transform.mapRect(self.mapRectToScene(rect)) for rect in self.pin_name_rects()]
 
     def _pin_name_rects_on_screen(self, transform: QTransform) -> list[QRectF]:
         """Every part's printed pin names in this scene, in device pixels."""
@@ -5006,6 +5056,76 @@ class ComponentItem(QGraphicsItem):
 
 
 # ------------------------------------------------------------------------- scene
+
+
+def _reference_order(ref: str) -> tuple[str, int, str]:
+    """R2 before R10: the order references are settled in, after where they stand."""
+    letters = ref.rstrip("0123456789")
+    digits = ref[len(letters):]
+    return letters, int(digits) if digits else 0, ref
+
+
+def settle_reference_placements(
+    items: list[ComponentItem], transform: QTransform
+) -> dict[str, tuple[QPointF, QPointF] | None]:
+    """Where every part's reference is printed at this zoom, none on another's.
+
+    Each reference first takes the place its own board gives it
+    (``ComponentItem._own_reference_placement``): over its body, or under it where over is
+    a note or the legend. Two of those could be one place -- on ne555-astable "R1", moved
+    under its resistor off the column letters, landed on "U1" over the chip under it, and
+    "J1" under the header on "C1" -- because each part looked only at the board.
+
+    So they are settled one at a time, the ones over their bodies first and then by
+    reference, and a reference whose place is already another's tries the other sides of
+    its body in turn (``reference_sides``): the first one clear of the references settled,
+    every pin name, the notes and the legend, or, if none is, the first clear of all but
+    the legend. Where no side is clear it stays where its board put it. Nothing is moved
+    where no two names share a place, so such a board prints as it always did -- and the
+    order is the references', so the same board prints the same way every time.
+
+    A pin name keeps a moved reference off it but does not move one: its tag is measured
+    over the room the name may take, wider than the name, and asked of every reference it
+    moved R2 on ne555-astable off a place nothing was printed on."""
+    if not items:
+        return {}
+    own = {item.comp.id: item._own_reference_placement(transform) for item in items}
+    pins = {item.comp.id: item._pin_name_rects_on_screen_of_own(transform) for item in items}
+    notes = items[0]._note_rects(transform)
+    legend = items[0]._legend_rects(transform)
+
+    def plate(item: ComponentItem, where: tuple[QPointF, QPointF]) -> QRectF:
+        return item.reference_rect(transform.map(where[0]), where[1])
+
+    def hits(rect: QRectF, rects: list[QRectF]) -> bool:
+        return any(rect.intersects(other) for other in rects)
+
+    def rank(item: ComponentItem) -> tuple[int, tuple[str, int, str]]:
+        where = own[item.comp.id]
+        first = 0 if where is not None and where[1] == REF_LABEL_OFFSET else 1
+        return first, _reference_order(item.comp.ref)
+
+    every_pin = [rect for rects in pins.values() for rect in rects]
+    settled: list[QRectF] = []
+    placed: dict[str, tuple[QPointF, QPointF] | None] = {}
+    for item in sorted(items, key=rank):
+        where = own[item.comp.id]
+        if where is None:
+            placed[item.comp.id] = None
+            continue
+        here = plate(item, where)
+        if not hits(here, settled):
+            placed[item.comp.id] = where
+            settled.append(here)
+            continue
+        taken = settled + every_pin + notes
+        sides = [side for side in item.reference_sides(transform) if side != where]
+        choice = next(
+            (side for side in sides if not hits(plate(item, side), taken + legend)), None
+        ) or next((side for side in sides if not hits(plate(item, side), taken)), None)
+        placed[item.comp.id] = choice or where
+        settled.append(plate(item, choice or where))
+    return placed
 
 
 class ReferenceLayerItem(QGraphicsItem):
@@ -5390,6 +5510,8 @@ class BoardScene(QGraphicsScene):
         self._finding_holes: dict[tuple[int, int], str] = {}
         self._finding_parts: dict[str, str] = {}
         self.component_items: dict[str, ComponentItem] = {}
+        #: ``reference_placements``' last answer and what it was worked out from.
+        self._reference_cache: tuple[object, dict[str, tuple[QPointF, QPointF] | None]] | None = None
         self.mount_items: dict[str, MountingHoleItem] = {}
         self.connector_items: dict[str, EdgeConnectorItem] = {}
         #: The face the hand tools draw on: the face being looked at, which every flip
@@ -7692,6 +7814,45 @@ class BoardScene(QGraphicsScene):
                 event.accept()
                 return
         super().mousePressEvent(event)
+
+    def reference_placements(
+        self, transform: QTransform
+    ) -> dict[str, tuple[QPointF, QPointF] | None]:
+        """Every printed reference's place at this zoom (``settle_reference_placements``),
+        worked out once for the layer, the legend and every part's hit area.
+
+        Kept until something that could move one changes: the zoom (a reference holds a
+        pixel size, so the board it covers changes with it -- panning does not, since the
+        places are an anchor on the board and an offset in pixels), a part's place, turn,
+        value or pin names, the notes, or the legend."""
+        items = [
+            item
+            for item in self.component_items.values()
+            if item.show_reference and item.isVisible()
+        ]
+        notes = getattr(self, "board_note_items", {})
+        legend = getattr(self, "legend_item", None)
+        key = (
+            round(transform.m11(), 6), round(transform.m12(), 6),
+            round(transform.m21(), 6), round(transform.m22(), 6),
+            self.side,
+            getattr(self, "show_board_notes", False),
+            tuple(
+                (id(note), note.pos().x(), note.pos().y(), note.isVisible())
+                for note in notes.values()
+            ),
+            (id(legend), legend.isVisible()) if legend is not None else None,
+            tuple(
+                (
+                    id(item), item.pos().x(), item.pos().y(), item.rotation(),
+                    item.shown_value(), item.show_pin_names, item.isSelected(),
+                )
+                for item in items
+            ),
+        )
+        if self._reference_cache is None or self._reference_cache[0] != key:
+            self._reference_cache = (key, settle_reference_placements(items, transform))
+        return self._reference_cache[1]
 
     def placing_face(self) -> BoardSide:
         """The face a part placed now goes on: the one in view, except on a solderless

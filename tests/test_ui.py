@@ -15855,6 +15855,106 @@ def test_only_the_board_question_offers_a_way_aside(monkeypatch) -> None:
         _close(window)
 
 
+def _reference_plates(window) -> dict[str, tuple[object, object]]:
+    """Each printed reference's (plate on screen, place) at the view's zoom, by reference."""
+    transform = window.view.viewportTransform()
+    plates = {}
+    for item in window.scene.component_items.values():
+        if not item.show_reference or not item.isVisible():
+            continue
+        where = item.reference_placement(transform)
+        if where is not None:
+            plates[item.comp.ref] = (item.reference_rect(transform.map(where[0]), where[1]), where)
+    return plates
+
+
+#: ne555-astable as the RESET fix laid it out (seed 5), the README's first picture: "R1",
+#: moved under its resistor off the column letters, printed on "U1" over the chip, and
+#: "J1", under the header, on "C1".
+_NE555_CROWDED = {
+    "C1": (17, 4, 270), "C2": (13, 2, 0), "J1": (17, 0, 90), "LED1": (6, 2, 0),
+    "R1": (19, 0, 0), "R2": (23, 3, 0), "R3": (12, 2, 180), "U1": (19, 2, 0),
+}
+
+
+def test_no_two_references_are_printed_in_one_place() -> None:
+    """Two parts that do not touch could still print their names on one another, each
+    reference placed looking only at the board. A reference whose place is another's moves
+    to another side of its own body; every other one stays exactly where it was."""
+    document = _example_document("ne555-astable")
+    document = dataclasses.replace(
+        document,
+        components=tuple(
+            dataclasses.replace(
+                c,
+                anchor=HoleCoord(*_NE555_CROWDED[c.ref][:2]),
+                rotation=_NE555_CROWDED[c.ref][2],
+            )
+            for c in document.components
+        ),
+        conductors=(),
+    )
+    window = _window_on(document)
+    try:
+        window.resize(1600, 1000)
+        window.show()
+        window.show_board()
+        window.view.fit_board()
+        QApplication.processEvents()
+        transform = window.view.viewportTransform()
+        items = {item.comp.ref: item for item in window.scene.component_items.values()}
+        own = {ref: item._own_reference_placement(transform) for ref, item in items.items()}
+        own_plates = {
+            ref: items[ref].reference_rect(transform.map(where[0]), where[1])
+            for ref, where in own.items()
+            if where is not None
+        }
+        # The board does crowd them, as it did in the picture.
+        assert own_plates["R1"].intersects(own_plates["U1"])
+        assert own_plates["J1"].intersects(own_plates["C1"])
+
+        plates = _reference_plates(window)
+        assert set(plates) == set(items)
+        names = sorted(plates)
+        assert not [
+            (a, b)
+            for i, a in enumerate(names)
+            for b in names[i + 1:]
+            if plates[a][0].intersects(plates[b][0])
+        ]
+        moved = {ref for ref in names if plates[ref][1] != own[ref]}
+        assert moved == {"R1", "J1"}, moved
+        # Asked twice, the same answer: the order is the references', not the scene's.
+        window.scene._reference_cache = None
+        assert {ref: where for ref, (_plate, where) in _reference_plates(window).items()} == {
+            ref: where for ref, (_plate, where) in plates.items()
+        }
+    finally:
+        _close(window)
+
+
+@pytest.mark.parametrize("stem", ["ne555-astable", "nano-relay", "atmega328-relay", "arduino-io-shield"])
+def test_a_shipped_example_prints_no_reference_on_another(stem: str) -> None:
+    """Opened as a reader opens it, no example prints two names in one place."""
+    window = _window_on(_example_document(stem))
+    try:
+        window.resize(1600, 1000)
+        window.show()
+        window.show_board()
+        window.view.fit_board()
+        QApplication.processEvents()
+        plates = _reference_plates(window)
+        names = sorted(plates)
+        assert not [
+            (a, b)
+            for i, a in enumerate(names)
+            for b in names[i + 1:]
+            if plates[a][0].intersects(plates[b][0])
+        ]
+    finally:
+        _close(window)
+
+
 def test_part_values_are_printed_after_their_references() -> None:
     """#11: View > Show Part Values prints each part's value after its reference, on the
     reference's own plate -- "R1 10k" -- where the reference already is: over the body,
