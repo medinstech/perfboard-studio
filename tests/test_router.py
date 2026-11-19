@@ -871,6 +871,32 @@ def test_an_insulated_wire_on_the_grid_goes_round_a_row_of_joints() -> None:
     assert not lies_on & {h(4, 4), h(5, 4), h(6, 4)}, wire_.path
 
 
+@pytest.mark.parametrize("pin", [h(4, 2), h(2, 4)], ids=["on-the-row-first", "on-the-column-first"])
+def test_of_two_wires_that_cost_the_same_the_one_over_fewer_joints_is_laid(pin: HoleCoord) -> None:
+    """A to B is an L either way round, the same length and one bend each. X's pin is on one
+    of them, and lying across it is priced at nothing here, so the two cost exactly the same:
+    the wire still takes the other. X is put on each L in turn, so whichever the search
+    happens to push first is not what passes this."""
+    board = doc((comp("a", "A", h(2, 2)), comp("b", "B", h(6, 4)), comp("x", "X", pin)))
+    free_of_price = dataclasses.replace(
+        GRID, costs=dataclasses.replace(GRID.costs, wire_over_joint=0, wire_over_stack=0)
+    )
+    request = RouteRequest(from_=h(2, 2), to=h(6, 4))
+    ctx = _route_context(board, _lookup, request, free_of_price, _dead_hole_keys(board))
+    per_mm = DEFAULT_ROUTER_COSTS.insulated_wire_per_mm
+    row_first = (h(2, 2), h(6, 2), h(6, 4))
+    column_first = (h(2, 2), h(2, 4), h(6, 4))
+    assert _grid_path_cost(ctx, row_first, bare=False, per_mm=per_mm) == pytest.approx(
+        _grid_path_cost(ctx, column_first, bare=False, per_mm=per_mm)
+    )
+
+    result = route_connection(board, _lookup, request, free_of_price)
+
+    wire_ = _wire(result, "insulated-wire")
+    lies_on = {hole for a, b in itertools.pairwise(wire_.path) for hole in holes_under_line(a, b)}
+    assert pin not in lies_on, wire_.path
+
+
 def test_a_wire_on_the_grid_does_not_lie_across_the_end_of_one_lying_across_its_own() -> None:
     """W lies across A, where the new wire starts, so W has to be stacked above it. W comes
     round and ends at (5, 7), straight down the new wire's way: lying across that would put

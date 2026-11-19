@@ -2556,9 +2556,14 @@ def _find_grid_wire_path(
     """A* over (hole, heading), so a bend can be priced: the holes the wire lies over, in
     order, and what laying it costs.
 
-    A heap keyed on (f, insertion order), like the trace searches' ``_OpenList``, over a
-    state that also carries a heading. No golden route was ever laid along the grid, so
-    there is nothing here for the tie-breaking to agree with -- only to be deterministic.
+    A heap keyed on (f, joints, insertion order), over a state that also carries a
+    heading. ``joints`` is how many pins and wire ends the way to a state lies across, so of
+    two ways that cost the same the one over fewer joints wins, on the heap and at one state
+    alike: insertion order alone took whichever was pushed first, which is no reason at
+    all. It only breaks ties; raising ``wire_over_joint`` instead stacked atmega328-relay's
+    wires a level higher (docs/ARCHITECTURE.md, "Auto-wire is held to a scoreboard"). No
+    golden route was ever laid along the grid, so there is nothing here for the order to
+    agree with.
     """
     board = ctx.doc.board
     step = board.pitch * per_mm
@@ -2579,17 +2584,18 @@ def _find_grid_wire_path(
         return (d_col + d_row) * step + (bend if d_col and d_row else 0.0)
 
     # A state is (col, row, heading), heading -1 at the start where there is none yet.
-    best: dict[tuple[int, int, int], float] = {(start[0], start[1], -1): 0.0}
+    # A state's best is (cost, joints lain across), compared as a pair.
+    best: dict[tuple[int, int, int], tuple[float, int]] = {(start[0], start[1], -1): (0.0, 0)}
     came_from: dict[tuple[int, int, int], tuple[int, int, int]] = {}
-    heap: list[tuple[float, int, float, int, int, int]] = [
-        (estimate(*start), 0, 0.0, start[0], start[1], -1)
+    heap: list[tuple[float, int, int, float, int, int, int]] = [
+        (estimate(*start), 0, 0, 0.0, start[0], start[1], -1)
     ]
     order = 0
     expanded = 0
     while heap:
-        _f, _order, g, col, row, heading = heapq.heappop(heap)
+        _f, joints, _order, g, col, row, heading = heapq.heappop(heap)
         state = (col, row, heading)
-        if g > best.get(state, math.inf):
+        if (g, joints) > best.get(state, (math.inf, 0)):
             continue
         if (col, row) == goal:
             holes = [HoleCoord(col=col, row=row)]
@@ -2613,22 +2619,26 @@ def _find_grid_wire_path(
             if bare and _step_crosses_copper(ctx, (col, row), nxt):
                 continue
             cost = g + step + (bend if heading not in (-1, turn) else 0.0)
+            next_joints = joints
             if nxt != goal:
                 if nxt in ctx.covered_holes:
                     cost += over
                 if nxt in ctx.joint_holes:
                     cost += over_joint + over_stack * end_levels.get(nxt, 0)
+                    next_joints += 1
                 if nxt in ctx.loop_holes:
                     cost += into_loop
             if (min((col, row), nxt), max((col, row), nxt)) in ctx.covered_steps:
                 cost += along
             next_state = (nxt[0], nxt[1], turn)
-            if cost >= best.get(next_state, math.inf):
+            if (cost, next_joints) >= best.get(next_state, (math.inf, 0)):
                 continue
-            best[next_state] = cost
+            best[next_state] = (cost, next_joints)
             came_from[next_state] = state
             order += 1
-            heapq.heappush(heap, (cost + estimate(*nxt), order, cost, nxt[0], nxt[1], turn))
+            heapq.heappush(
+                heap, (cost + estimate(*nxt), next_joints, order, cost, nxt[0], nxt[1], turn)
+            )
     return None
 
 
