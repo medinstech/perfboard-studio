@@ -90,9 +90,16 @@ import math
 import random
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, get_args
 
-from .autoroute import AutoroutePlan, plan_autoroute
+from .autoroute import (
+    ALL_ROUTING_STYLES,
+    DEFAULT_AUTOROUTE_OPTIONS,
+    AutorouteOptions,
+    AutoroutePlan,
+    plan_autoroute,
+    plan_best_autoroute,
+)
 from .boardfamily import STANDARD_PRESETS, BoardPreset, board_from_preset
 from .breadboard import clip_of, has_breadboard_pattern, has_hole, rail_of, rail_takes
 from .breadroute import plan_joined_board
@@ -102,16 +109,20 @@ from .commands import (
     MoveComponentsPayload,
     PartPlacement,
     PlacePartsPayload,
+    RearrangePayload,
+    ReplaceConductorsPayload,
     count_noun,
     create_document_id_generator,
     move_components,
     place_parts,
     preset_payload,
+    replace_conductors,
 )
 from .connectivity import FootprintLookup
 from .footprints import body_extent, body_is_round, entry_corridor, raised_board, wire_entry
 from .geometry import (
     SubstrateEdges,
+    all_pin_holes,
     bodies_clash,
     box_centre_distance_mm,
     convex_polygons_overlap,
@@ -144,6 +155,7 @@ from .model import (
     BodyArchetype,
     ComponentId,
     ComponentInstance,
+    ConductorKind,
     DocumentMeta,
     Footprint,
     HoleCoord,
@@ -153,9 +165,10 @@ from .model import (
     Point2,
     Rotation,
 )
-from .router import DEFAULT_ROUTER_COSTS
+from .router import DEFAULT_ROUTER_COSTS, RoutingStyle
 from .stripboard import MIN_SEPARABLE_GAP, board_joins_holes, is_stripboard, strip_axis
 from .striproute import StripboardPlan
+from .wiringstats import WiringStats, wiring_stats
 
 # ---------------------------------------------------------------------------
 # Domain knowledge: which parts care about where they are
@@ -3585,6 +3598,48 @@ def plan_placement(
     either way, which ``tests/test_planner_pool.py`` holds. A stop then reaches the
     restarts through whatever predicate the mapper hands them.
     """
+    search = _search(doc, lookup, options, should_stop, mapper)
+    if isinstance(search, PlacementPlan):
+        return search
+    winner, _is_baseline = search.ranked[0]
+    # AFTER the winner is chosen, and only to the winner. Settling every candidate before
+    # the choice changes what the router is shown and therefore which candidate wins --
+    # measured on the dense fixture, where doing it that way left the mean routed cost
+    # 31.5 -> 35.9 while the best was identical. Tidying the one board that won cannot do
+    # that, and is checked against the router besides.
+    return search.settle(winner, doc, lookup, options)
+
+
+@dataclass(slots=True)
+class _Search:
+    """The restarts and the board as it is, ranked as :func:`_pick_best` ranks them, and
+    what settling one of them needs. Each ranked entry says whether it is the baseline."""
+
+    ranked: list[tuple[PlacementPlan, bool]]
+    parts: list[_Part]
+    scorer: _Scorer
+    movable: list[int]
+    original_rotations: tuple[int, ...]
+
+    def settle(
+        self, plan: PlacementPlan, doc: PerfDocument, lookup: FootprintLookup,
+        options: PlacementOptions,
+    ) -> PlacementPlan:
+        return _settle_winner(
+            plan, doc, lookup, self.parts, self.scorer, self.movable,
+            self.original_rotations, options,
+        )
+
+
+def _search(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    options: PlacementOptions,
+    should_stop: Callable[[], bool] | None,
+    mapper: Mapper | None,
+) -> _Search | PlacementPlan:
+    """Everything :func:`plan_placement` does short of settling the winner; the plan
+    itself when nothing can move."""
     parts = _build_parts(doc, lookup)
     nets, nets_of, pin_nets = _build_nets(doc, parts)
     strips = _build_strips(doc, parts, pin_nets)
@@ -3672,13 +3727,287 @@ def plan_placement(
     # while still being worse than doing nothing, and a placer that can hand back a worse
     # board than it was given is one nobody presses twice.
     baseline = _plan_from(doc, (), before, before, options, iterations, 0, len(movable), locked, None)
-    winner = _pick_best(candidates, baseline, doc, lookup, options, mapper)
-    # AFTER the winner is chosen, and only to the winner. Settling every candidate before
-    # the choice changes what the router is shown and therefore which candidate wins --
-    # measured on the dense fixture, where doing it that way left the mean routed cost
-    # 31.5 -> 35.9 while the best was identical. Tidying the one board that won cannot do
-    # that, and is checked against the router besides.
-    return _settle_winner(winner, doc, lookup, parts, scorer, movable, original_rotations, options)
+    return _Search(
+        ranked=_rank(candidates, baseline, doc, lookup, options, mapper),
+        parts=parts,
+        scorer=scorer,
+        movable=movable,
+        original_rotations=original_rotations,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Alternatives: the ranking kept whole, for a person to choose from
+# ---------------------------------------------------------------------------
+
+#: How many arrangements besides the board as it is :func:`plan_placements` offers.
+DEFAULT_ALTERNATIVES = 3
+
+
+def rearrange_label(moved: int, *, rewired: bool) -> str:
+    """The undo label of a chosen alternative: ``component.moveMany`` on a board with no
+    copper, ``component.rearrange`` on one whose copper is laid again."""
+    said = f"Rearrange {count_noun(moved, 'part')}"
+    return f"{said} and rewire" if rewired else said
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementAlternative:
+    """One arrangement on offer: a plan, where it ranks, and whether it is the board as it
+    is. ``rank`` counts from 1, the arrangement :func:`plan_placement` would have chosen."""
+
+    plan: PlacementPlan
+    rank: int
+    is_baseline: bool
+
+    @property
+    def moved(self) -> int:
+        return len(self.plan.changes)
+
+    def move_payload(self) -> MoveComponentsPayload | None:
+        """The parts moved and nothing else -- what committing it is on a board with no
+        copper. None for the board as it is, which has nothing to commit."""
+        if self.is_baseline or not self.plan.changes:
+            return None
+        return replace(self.plan.payload(), label=rearrange_label(self.moved, rewired=False))
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementAlternatives:
+    """Arrangements best first, the board as it is among them wherever it ranks.
+
+    Distinct: an arrangement that is another one shifted, turned half round or mirrored --
+    every pin in the same hole relative to the rest -- is offered once, at its better rank.
+    So there can be fewer than were asked for, and when the board as it is is all there is,
+    there is nothing to choose between."""
+
+    alternatives: tuple[PlacementAlternative, ...]
+
+    @property
+    def best(self) -> PlacementAlternative:
+        return self.alternatives[0]
+
+    @property
+    def baseline(self) -> PlacementAlternative:
+        return next(a for a in self.alternatives if a.is_baseline)
+
+    @property
+    def candidates(self) -> tuple[PlacementAlternative, ...]:
+        return tuple(a for a in self.alternatives if not a.is_baseline)
+
+
+def plan_placements(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    options: PlacementOptions = DEFAULT_PLACEMENT_OPTIONS,
+    count: int = DEFAULT_ALTERNATIVES,
+    should_stop: Callable[[], bool] | None = None,
+    mapper: Mapper | None = None,
+) -> PlacementAlternatives:
+    """Up to ``count`` distinct arrangements and the board as it is, ranked.
+
+    The same search as :func:`plan_placement` -- the same restarts, the same routes judging
+    them, the same order -- with the ranking kept whole instead of cut to its first: the
+    first IS what :func:`plan_placement` returns, a test holds it so, and nothing here
+    costs a restart more. Each one offered is settled on its own, after the ranking, for
+    the reason the winner is: settling before the choice changes the choice.
+
+    An arrangement is dropped when it is one already offered, or the board as it is,
+    shifted, turned half round or mirrored (:func:`_layout_key`); one with nothing moved
+    is the board as it is. ``should_stop`` stops the settling of any after the first.
+    """
+    search = _search(doc, lookup, options, should_stop, mapper)
+    if isinstance(search, PlacementPlan):
+        return PlacementAlternatives((PlacementAlternative(search, 1, True),))
+
+    kept: list[tuple[PlacementPlan, bool]] = []
+    keys: list[tuple[tuple[str, str, int, int], ...]] = []
+    taken = 0
+    have_baseline = False
+    as_it_is = _layout_key(doc, lookup)
+    for position, (plan, is_baseline) in enumerate(search.ranked):
+        if is_baseline and position > 0:
+            if not have_baseline:
+                kept.append((plan, True))
+                have_baseline = True
+            continue
+        if position > 0 and (taken >= count or (should_stop is not None and should_stop())):
+            continue
+        settled = search.settle(plan, doc, lookup, options)
+        if not settled.changes:
+            # The board as it is, however it got here. First, it is what plan_placement
+            # returns, so it is kept as settled; further down, the baseline's own entry
+            # stands for it.
+            if position == 0:
+                kept.append((settled, True))
+                have_baseline = True
+            continue
+        key = _layout_key(settled.document, lookup)
+        if position > 0 and (key == as_it_is or key in keys):
+            continue
+        keys.append(key)
+        kept.append((settled, False))
+        taken += 1
+        if is_baseline:
+            # The baseline won and settling moved something: that is an arrangement in
+            # its own right, and the board as it is follows it.
+            kept.append((plan, True))
+            have_baseline = True
+    return PlacementAlternatives(
+        tuple(
+            PlacementAlternative(plan, rank, is_baseline)
+            for rank, (plan, is_baseline) in enumerate(kept, 1)
+        )
+    )
+
+
+def _layout_key(
+    doc: PerfDocument, lookup: FootprintLookup
+) -> tuple[tuple[str, str, int, int], ...]:
+    """Every pin's hole relative to the layout's corner, the same for a layout shifted,
+    turned half round or mirrored: the smallest of the four reflections' sorted pins.
+
+    A mirror matches only where the pins themselves land mirrored, so in practice it is a
+    layout of parts with two pins; a DIP mirrored is a different board."""
+    pins = [
+        (component.id, pin.number, hole.col, hole.row)
+        for component in doc.components
+        for footprint in (lookup(component.footprint_id),)
+        if footprint is not None
+        for pin, hole in all_pin_holes(component, footprint)
+    ]
+    keys: list[tuple[tuple[str, str, int, int], ...]] = []
+    for flip_col, flip_row in ((1, 1), (-1, -1), (-1, 1), (1, -1)):
+        turned = [(c, p, col * flip_col, row * flip_row) for c, p, col, row in pins]
+        low_col = min((col for _c, _p, col, _r in turned), default=0)
+        low_row = min((row for _c, _p, _col, row in turned), default=0)
+        keys.append(
+            tuple(sorted((c, p, col - low_col, row - low_row) for c, p, col, row in turned))
+        )
+    return min(keys)
+
+
+@dataclass(frozen=True, slots=True)
+class WiredAlternative:
+    """An arrangement wired as Auto-wire would wire it, counted as the window counts it.
+
+    ``document`` is the preview: the parts where the arrangement puts them and the copper
+    that goes with them -- the board's own copper for the board as it is, when it has any.
+    ``commit`` is the one command that makes it the board, or None for the board as it is:
+    ``component.moveMany`` where the board has no copper yet (the copper here is only
+    shown), ``component.rearrange`` where it has, every conductor replaced by these."""
+
+    document: PerfDocument
+    stats: WiringStats
+    #: Conductors by kind, every kind in ``ConductorKind``'s order, zeros included.
+    conductors_by_kind: tuple[tuple[ConductorKind, int], ...]
+    physical_warnings: int
+    #: The style the copper was laid in; None where it is the board's own copper.
+    style: RoutingStyle | None
+    commit: MoveComponentsPayload | RearrangePayload | None
+
+
+def wire_alternative(
+    alternative: PlacementAlternative,
+    lookup: FootprintLookup,
+    options: AutorouteOptions = DEFAULT_AUTOROUTE_OPTIONS,
+    styles: tuple[RoutingStyle, ...] = ALL_ROUTING_STYLES,
+    should_stop: Callable[[], bool] | None = None,
+) -> WiredAlternative:
+    """Wire one arrangement with Auto-wire's own call: its copper taken off, then
+    :func:`autoroute.plan_best_autoroute` with the options and styles the caller wires
+    with, so what a card shows is what Auto-wire would lay. The board as it is keeps its
+    own copper when it has some; with none, it is wired like the rest so they compare.
+
+    The new copper takes ids after every id the board already holds, and the preview is
+    built through ``conductor.replace`` with them, so committing ``commit`` on the board
+    the plan was made from gives exactly ``document``."""
+    plan = alternative.plan
+    source = plan.document
+    if alternative.is_baseline and source.conductors:
+        return _wired(source, lookup, plan, None, None)
+
+    best = plan_best_autoroute(
+        replace(source, conductors=()), lookup, options, styles=styles, should_stop=should_stop
+    )
+    laid = best.plan.conductors
+    if alternative.is_baseline or not plan.changes:
+        return _wired(best.plan.document, lookup, plan, best.style, None)
+    if not source.conductors:
+        return _wired(best.plan.document, lookup, plan, best.style, alternative.move_payload())
+
+    next_id = create_document_id_generator(source)
+    ids = tuple(next_id("cond") for _ in laid)
+    remove_ids = tuple(conductor.id for conductor in source.conductors)
+    commit = RearrangePayload(
+        placements=plan.payload().placements,
+        remove_ids=remove_ids,
+        conductors=laid,
+        ids=ids,
+        label=rearrange_label(alternative.moved, rewired=True),
+    )
+    preview = replace_conductors.apply(
+        source,
+        ReplaceConductorsPayload(remove_ids=remove_ids, conductors=laid, ids=ids),
+        CommandContext(next_id=next_id),
+    )
+    return _wired(preview, lookup, plan, best.style, commit)
+
+
+def _wired(
+    document: PerfDocument,
+    lookup: FootprintLookup,
+    plan: PlacementPlan,
+    style: RoutingStyle | None,
+    commit: MoveComponentsPayload | RearrangePayload | None,
+) -> WiredAlternative:
+    stats = wiring_stats(document, lookup)
+    return WiredAlternative(
+        document=document,
+        stats=stats,
+        conductors_by_kind=tuple(
+            (kind, sum(1 for c in stats.conductors if c.kind == kind))
+            for kind in get_args(ConductorKind)
+        ),
+        physical_warnings=plan.after.physical_warnings,
+        style=style,
+        commit=commit,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _WireJob:
+    """Everything wiring one arrangement needs, and nothing that cannot be pickled."""
+
+    alternative: PlacementAlternative
+    lookup: FootprintLookup
+    options: AutorouteOptions
+    styles: tuple[RoutingStyle, ...]
+
+
+def _run_wire(job: _WireJob, should_stop: Callable[[], bool] | None) -> WiredAlternative | None:
+    """:func:`wire_alternative` for a :data:`Mapper`: None when the stop came before it
+    began, so a cancel keeps the cards already wired and wires no more."""
+    if should_stop is not None and should_stop():
+        return None
+    return wire_alternative(job.alternative, job.lookup, job.options, job.styles, should_stop)
+
+
+def wire_alternatives(
+    alternatives: PlacementAlternatives,
+    lookup: FootprintLookup,
+    options: AutorouteOptions = DEFAULT_AUTOROUTE_OPTIONS,
+    styles: tuple[RoutingStyle, ...] = ALL_ROUTING_STYLES,
+    should_stop: Callable[[], bool] | None = None,
+    mapper: Mapper | None = None,
+) -> tuple[WiredAlternative | None, ...]:
+    """:func:`wire_alternative` for every one, in their order, side by side when a mapper
+    is given; None for each one a stop came before. The answers are the same however they
+    are run: each is a function of its arrangement alone."""
+    jobs = [_WireJob(a, lookup, options, styles) for a in alternatives.alternatives]
+    if mapper is None:
+        return tuple(_run_wire(job, should_stop) for job in jobs)
+    return tuple(mapper(_run_wire, jobs))
 
 
 def _apply_arrangement(state: _State, arrangement: Arrangement) -> None:
@@ -4048,15 +4377,32 @@ def _pick_best(
     let every legal candidate beat it however many clips it shorted: autoplace on a
     breadboard handed back a header standing in a chip's clips.
     """
+    ranked = _rank(candidates, baseline, doc, lookup, options, mapper)
+    return ranked[0][0]
+
+
+def _rank(
+    candidates: list[PlacementPlan],
+    baseline: PlacementPlan,
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    options: PlacementOptions,
+    mapper: Mapper | None = None,
+) -> list[tuple[PlacementPlan, bool]]:
+    """Every candidate and the baseline, best first, each with whether it IS the
+    baseline: :func:`_pick_best`'s ranking kept whole, so the first is its answer and the
+    rest are the alternatives a person may prefer (:func:`plan_placements`). The routed
+    ones carry their route; only the first carries the runner-up's cost."""
     legal_first = sorted(
         [*candidates, baseline],
         key=lambda plan: (
             _shorted_clips(plan, doc), not plan.after.is_legal, plan.after.total(options.weights)
         ),
     )
+    unrouted_order = [(plan, plan is baseline) for plan in legal_first]
     routable = options.score_with_router and bool(doc.nets)
     if not routable or options.route_scored_restarts <= 0:
-        return legal_first[0]
+        return unrouted_order
 
     # Only the most promising few are routed: routing is two orders of magnitude more
     # expensive than scoring, and a candidate the cheap cost already ranks last is not
@@ -4067,7 +4413,7 @@ def _pick_best(
         # answer is never worse than the board the user already has.
         shortlist = [*shortlist, baseline]
     if len(shortlist) < 2:
-        return legal_first[0]
+        return unrouted_order
 
     # Each route is independent of the others, so a caller's mapper may run them side by
     # side; the answers come back in the shortlist's order either way.
@@ -4097,15 +4443,28 @@ def _pick_best(
     # Sorted on the KEY alone, and stably, so two arrangements that cost the same to build
     # keep the shortlist's own order rather than being compared as objects.
     scored.sort(key=lambda item: item[0])
-    best_key, best, best_routed = scored[0]
     runner_up = scored[1][0][4] if len(scored) > 1 else None
-    return replace(
-        best,
-        routed=best_routed,
-        route_cost=best_key[4],
-        route_unrouted=best_key[2],
-        route_runner_up=runner_up,
-    )
+    ranked = [
+        (
+            replace(
+                plan,
+                routed=routed,
+                route_cost=key[4],
+                route_unrouted=key[2],
+                route_runner_up=runner_up if position == 0 else None,
+            ),
+            plan is baseline,
+        )
+        for position, (key, plan, routed) in enumerate(scored)
+    ]
+    # What the shortlist left out follows, in the cheap cost's order: never routed, so
+    # ranked below everything that was.
+    judged_plans = {id(plan) for _key, plan, _routed in scored}
+    return ranked + [
+        (plan, is_baseline)
+        for plan, is_baseline in unrouted_order
+        if id(plan) not in judged_plans
+    ]
 
 
 def _shorted_clips(plan: PlacementPlan, doc: PerfDocument) -> int:

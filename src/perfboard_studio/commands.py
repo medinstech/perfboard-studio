@@ -1467,6 +1467,28 @@ class ReplaceConductorsPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class RearrangePayload:
+    """Parts moved and the copper laid again for where they went, as ONE command.
+
+    What committing a placement on a board that is already wired needs: the copper fits
+    the parts where they were, so moving them and leaving it would hand back a board wired
+    to the wrong holes. ``component.moveMany`` and then ``conductor.replace``, each as it
+    is, in one undo step -- one Ctrl+Z after a rearrangement brings back the board as it
+    was, never the new parts under the old copper.
+
+    ``remove_ids`` names what goes, so the same shape holds whether every conductor is
+    replaced or only some are kept; ``ids`` gives the new copper the ids its preview had,
+    so the committed board is the one that was shown.
+    """
+
+    placements: tuple[ComponentPlacement, ...]
+    remove_ids: tuple[ConductorId, ...]
+    conductors: tuple[NewConductor, ...]
+    ids: tuple[ConductorId, ...] | None = None
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SetBoardPayload:
     board: Board
 
@@ -2773,6 +2795,30 @@ class _ReplaceConductors:
         if p.label:
             return p.label
         return f"Replace {count_noun(len(p.remove_ids), 'conductor')} with {len(p.conductors)}"
+
+
+class _Rearrange:
+    type = "component.rearrange"
+
+    def apply(self, doc: PerfDocument, p: RearrangePayload, ctx: CommandContext) -> PerfDocument:
+        # Each half through its own command, so a part moved here is refused for exactly
+        # what component.moveMany refuses it for -- a locked one refuses the whole group and
+        # names itself -- and the copper is checked against the board the parts were MOVED
+        # to, which is the board it will be soldered on. Either raising leaves the document
+        # untouched: nothing is returned until both have run.
+        moved = move_components.apply(doc, MoveComponentsPayload(placements=p.placements), ctx)
+        if not p.remove_ids and not p.conductors:
+            return moved
+        return replace_conductors.apply(
+            moved,
+            ReplaceConductorsPayload(remove_ids=p.remove_ids, conductors=p.conductors, ids=p.ids),
+            ctx,
+        )
+
+    def describe(self, p: RearrangePayload, doc: PerfDocument) -> str:
+        if p.label:
+            return p.label
+        return f"Rearrange {count_noun(len(p.placements), 'part')} and rewire"
 
 
 # ---------------------------------------------------------------------------
@@ -5615,6 +5661,7 @@ set_conductor_path: CommandDefinition[SetConductorPathPayload] = _SetConductorPa
 delete_conductor: CommandDefinition[DeleteConductorPayload] = _DeleteConductor()
 delete_conductors: CommandDefinition[DeleteConductorsPayload] = _DeleteConductors()
 replace_conductors: CommandDefinition[ReplaceConductorsPayload] = _ReplaceConductors()
+rearrange: CommandDefinition[RearrangePayload] = _Rearrange()
 set_board: CommandDefinition[SetBoardPayload] = _SetBoard()
 apply_board_preset: CommandDefinition[ApplyBoardPresetPayload] = _ApplyBoardPreset()
 import_netlist: CommandDefinition[ImportNetlistPayload] = _ImportNetlist()
@@ -5694,6 +5741,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     delete_conductor,
     delete_conductors,
     replace_conductors,
+    rearrange,
     set_board,
     apply_board_preset,
     import_netlist,
