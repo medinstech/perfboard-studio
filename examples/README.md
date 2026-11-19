@@ -49,8 +49,15 @@ and that placing what it tried there, routing and checking still comes out clean
 
 ```sh
 python tools/build_examples.py            # rebuild every .perf from its .net
-python tools/build_examples.py --check     # verify only, write nothing
+python tools/build_examples.py --check     # write nothing; fail on a file it would change
 ```
+
+`--check` builds every example again and compares it with the file in the repository byte
+for byte, and CI runs it on Linux. It used to ask only whether each one still routed cleanly,
+so a file stayed whatever the router of its last build had laid: five had drifted over two
+router changes before anything noticed. A change to the placer or the router that moves an
+example now fails there, naming the file; rebuild, read the diff and commit it with the
+change.
 
 The board each one goes on is the answer to the Board step's question
 (`boardfit.choose_board`), which the script prints board by board as it is tried, and the
