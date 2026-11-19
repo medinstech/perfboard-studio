@@ -94,6 +94,21 @@ def test_a_7805_and_an_lm317_put_the_same_numbers_on_different_sides() -> None:
     assert three == {"3": "left", "2": "right", "1": "bottom"}
 
 
+def test_every_three_pin_catalog_regulator_declares_the_regulator_symbol() -> None:
+    regulators = [part for part in CATALOG if part.category == "regulator"]
+    declared_ids = {part.id for part in regulators if part.symbol == "regulator"}
+    qualifying_ids = {
+        part.id
+        for part in regulators
+        if DECLARED_SYMBOL_RULES["regulator"](
+            tuple(PinSpec(number, name) for number, name in part.pin_names)
+        )
+        is None
+    }
+    assert declared_ids == qualifying_ids
+    assert {"7805", "lm317t", "78l05", "ld1117v33", "ams1117-33-module"} <= declared_ids
+
+
 # ---------------------------------------------------------------------------
 # The relay: COIL twice, and as many contact sets as there are COMs
 # ---------------------------------------------------------------------------

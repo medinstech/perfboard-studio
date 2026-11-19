@@ -533,7 +533,7 @@ def test_placing_a_catalog_part_fills_everything_in() -> None:
     assert (q1.ref, q1.value, q1.footprint_id, q1.symbol) == ("Q1", "BC547", "to92", "npn")
     assert dict(q1.pin_names) == {"1": "C", "2": "B", "3": "E"}
     # A 7805 is a TO-220 and it is not a transistor.
-    assert (u1.ref, u1.value, u1.symbol) == ("U1", "7805", None)
+    assert (u1.ref, u1.value, u1.symbol) == ("U1", "7805", "regulator")
 
 
 def test_anything_given_explicitly_wins_over_the_catalog() -> None:

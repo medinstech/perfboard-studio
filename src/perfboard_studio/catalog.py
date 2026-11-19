@@ -505,34 +505,35 @@ CATALOG: tuple[CatalogPart, ...] = (
                 check="The tab is the drain. A high-side switch: source to the supply."),
     # -- regulators and references ----------------------------------------------------
     CatalogPart("7805", "7805", "regulator", "to220", "Linear regulator, +5 V, 1.5 A",
-                _legs("IN", "GND", "OUT"), ref_prefix="U",
+                _legs("IN", "GND", "OUT"), ref_prefix="U", symbol="regulator",
                 source=f"ST L78 datasheet; {_TO220_ORDER}",
                 check="The tab is ground. Needs 0.33 uF on the input and 0.1 uF on the output."),
     CatalogPart("7809", "7809", "regulator", "to220", "Linear regulator, +9 V, 1.5 A",
-                _legs("IN", "GND", "OUT"), ref_prefix="U",
+                _legs("IN", "GND", "OUT"), ref_prefix="U", symbol="regulator",
                 source=f"ST L78 datasheet; {_TO220_ORDER}", check="The tab is ground."),
     CatalogPart("7812", "7812", "regulator", "to220", "Linear regulator, +12 V, 1.5 A",
-                _legs("IN", "GND", "OUT"), ref_prefix="U",
+                _legs("IN", "GND", "OUT"), ref_prefix="U", symbol="regulator",
                 source=f"ST L78 datasheet; {_TO220_ORDER}", check="The tab is ground."),
     CatalogPart("7905", "7905", "regulator", "to220", "Linear regulator, -5 V, 1.5 A",
-                _legs("GND", "IN", "OUT"), ref_prefix="U",
+                _legs("GND", "IN", "OUT"), ref_prefix="U", symbol="regulator",
                 source=f"ST L79 datasheet; {_TO220_ORDER}",
                 check="NOT pinned like a 7805: the tab is the INPUT."),
     CatalogPart("lm317t", "LM317T", "regulator", "to220",
                 "Adjustable regulator, +1.25 to +37 V, 1.5 A",
-                _legs("ADJ", "OUT", "IN"), ref_prefix="U",
+                _legs("ADJ", "OUT", "IN"), ref_prefix="U", symbol="regulator",
                 source=f"TI LM317 datasheet; {_TO220_ORDER}", check="The tab is the output."),
     CatalogPart("lm337t", "LM337T", "regulator", "to220",
                 "Adjustable regulator, -1.25 to -37 V, 1.5 A",
-                _legs("ADJ", "IN", "OUT"), ref_prefix="U",
+                _legs("ADJ", "IN", "OUT"), ref_prefix="U", symbol="regulator",
                 source=f"TI LM337 datasheet; {_TO220_ORDER}",
                 check="NOT pinned like an LM317: the tab is the INPUT."),
     CatalogPart("78l05", "78L05", "regulator", "to92", "Linear regulator, +5 V, 100 mA",
-                _legs("OUT", "GND", "IN"), ref_prefix="U",
+                _legs("OUT", "GND", "IN"), ref_prefix="U", symbol="regulator",
                 source=f"TI LM78L datasheet; {_TO92_ORDER}", check=_CHECK_LEGS),
     CatalogPart("mcp1700-3302", "MCP1700-3302E/TO", "regulator", "to92",
                 "Low-dropout regulator, +3.3 V, 250 mA, 1.6 uA quiescent",
                 _legs("GND", "IN", "OUT"), value="MCP1700-3.3", ref_prefix="U",
+                symbol="regulator",
                 source=f"Microchip MCP1700 datasheet, TO-92; {_TO92_ORDER}",
                 check=(
                     "NOT pinned like a 78L05: GND, IN, OUT. Its input is 6 V at most, and it "
@@ -541,7 +542,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 aliases=("3.3 V regulator",)),
     CatalogPart("ld1117v33", "LD1117V33", "regulator", "to220",
                 "Low-dropout regulator, +3.3 V, 800 mA",
-                _legs("GND", "OUT", "IN"), ref_prefix="U",
+                _legs("GND", "OUT", "IN"), ref_prefix="U", symbol="regulator",
                 source=f"ST LD1117 datasheet, TO-220; {_TO220_ORDER}",
                 check=(
                     "NOT pinned like a 7805: GND, OUT, IN, and the tab is the output. It needs "
@@ -3051,6 +3052,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "Fixed 3.3 V linear regulator on a small board: 4.75 to 12 V in, 800 mA at "
                 "most",
                 _legs("VIN", "GND", "OUT"), value="AMS1117-3.3", ref_prefix="U",
+                symbol="regulator",
                 source=(
                     "ANMBEST's AMS1117-3.3 module manual "
                     "(manuals.plus/asin/B07CP4P5XJ.pdf): the pins VIN, GND and OUT, input "
