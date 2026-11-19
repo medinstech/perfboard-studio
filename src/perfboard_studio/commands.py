@@ -312,6 +312,7 @@ def design_on_a_new_board(doc: PerfDocument, meta: DocumentMeta) -> PerfDocument
         nets=doc.nets,
         sheet=doc.sheet,
         sheet_wires=doc.sheet_wires,
+        sheet_ports=doc.sheet_ports,
         sheet_notes=doc.sheet_notes,
         height_limit_mm=doc.height_limit_mm,
         body_clearance_mm=doc.body_clearance_mm,

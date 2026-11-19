@@ -31,6 +31,7 @@ from perfboard_studio.commands import (
     UpdateNetPayload,
     create_empty_document,
     create_standard_registry,
+    design_on_a_new_board,
 )
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.model import (
@@ -415,6 +416,18 @@ def test_merging_a_net_carries_its_ports_to_the_name_it_keeps() -> None:
     assert {p.name for p in bus.document.sheet_ports} == {"A"}
     assert sum(len(p.links) for p in bus.document.sheet_ports) == 2
     _honest(bus)
+
+
+def test_the_design_taken_to_a_new_board_keeps_its_ports() -> None:
+    """The sheet goes with the design to a new board, its wires and notes did and its
+    supplies, grounds and names did not: the new document drew every pin they held with a
+    glyph of its own, and the one somebody put down was gone."""
+    bus = _grounded()
+    moved = design_on_a_new_board(bus.document, DocumentMeta(name="n", created="", modified=""))
+    assert moved.sheet_ports == bus.document.sheet_ports
+    assert {(p.kind, p.name) for p in _drawing(bus).ports} == {
+        (p.kind, p.name) for p in build_schematic(moved, LOOKUP).ports
+    }
 
 
 def test_a_drawing_put_back_by_the_layout_has_no_ports() -> None:
