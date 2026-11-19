@@ -15589,7 +15589,10 @@ def test_other_board_is_offered_while_the_boards_are_tried(monkeypatch) -> None:
 
 
 def test_only_the_board_question_offers_a_way_aside(monkeypatch) -> None:
-    """Any other planner's dialog is as it was: Cancel, and no link in its label."""
+    """Any other planner's dialog is as it was: Cancel, and no link in its label.
+
+    The run lasts until the dialog has been looked at, not for a fixed time: a look on a
+    clock missed the dialog on a slow macOS runner, where it came up after the look."""
     import time
 
     from PySide6.QtCore import QTimer
@@ -15602,12 +15605,14 @@ def test_only_the_board_question_offers_a_way_aside(monkeypatch) -> None:
         def look() -> None:
             for dialog in window.findChildren(QProgressDialog):
                 seen.extend(label.text() for label in dialog.findChildren(QLabel))
+            if not seen:
+                QTimer.singleShot(20, look)
 
-        QTimer.singleShot(700, look)
+        QTimer.singleShot(20, look)
 
         def work(should_stop):
-            deadline = time.monotonic() + 1.2
-            while not should_stop() and time.monotonic() < deadline:
+            deadline = time.monotonic() + 30
+            while not seen and not should_stop() and time.monotonic() < deadline:
                 time.sleep(0.01)
             return "done"
 
@@ -21619,7 +21624,11 @@ def test_a_planner_nobody_cancels_never_says_it_is_stopping(monkeypatch: pytest.
     """A finished run's dialog said "Stopping, and keeping the best found so far…" as it
     closed: ``QProgressDialog.close`` emits ``canceled``, and the window's Cancel handler
     took that for a press. A run nobody stopped says nothing about stopping; one that is
-    stopped still does."""
+    stopped still does.
+
+    The press goes to the second run's own dialog, found as the one the first run did not
+    leave behind, and that run lasts until it is pressed rather than for five seconds: on a
+    slow macOS runner the run ended unpressed, and that read as the dialog saying nothing."""
     import time
 
     from PySide6.QtWidgets import QProgressDialog
@@ -21646,18 +21655,19 @@ def test_a_planner_nobody_cancels_never_says_it_is_stopping(monkeypatch: pytest.
 
         # Pressed, it is said.
         said.clear()
+        earlier = set(window.findChildren(QProgressDialog))
 
         def stopped_work(should_stop):
-            deadline = time.perf_counter() + 5
+            deadline = time.perf_counter() + 30
             while not should_stop() and time.perf_counter() < deadline:
                 time.sleep(0.02)
-            return "kept"
+            return "kept" if should_stop() else "never pressed"
 
         from PySide6.QtCore import QTimer
 
         def press() -> None:
             dialog = next(
-                (d for d in window.findChildren(QProgressDialog) if d.isVisible()), None
+                (d for d in window.findChildren(QProgressDialog) if d not in earlier), None
             )
             if dialog is None:
                 QTimer.singleShot(20, press)
@@ -21665,7 +21675,7 @@ def test_a_planner_nobody_cancels_never_says_it_is_stopping(monkeypatch: pytest.
                 # What its Cancel button does: emit ``canceled`` (``cancel()`` does not).
                 dialog.canceled.emit()
 
-        QTimer.singleShot(50, press)
+        QTimer.singleShot(20, press)
         assert window._run_planner("Working on it…", stopped_work) == "kept"
         assert [text for text in said if "Stopping" in text], said
     finally:
