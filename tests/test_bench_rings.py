@@ -7,6 +7,9 @@ part, where they sit under LED1's dome: two red circles stacked into an "8", tel
 opposite story from the bar under them. What is pinned: nothing of a bench check's rings
 paints over LED1 unless the finding is picked in the drawer, picked it does, and a real
 problem's rings are where they always were.
+
+The board is the example as it shipped up to 0.25, frozen in ``board_fixtures``: tied to
+VCC, its 555's RESET moved the parts, and the example now wires with no gap to check.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ from perfboard_studio.ui.view2d import (
     hole_to_screen,
 )
 
-NE555 = Path(__file__).resolve().parents[1] / "examples" / "ne555-astable.perf"
+NE555 = Path(__file__).resolve().parent / "board_fixtures" / "ne555-astable-0.25.perf"
 PX_PER_MM = 20
 
 

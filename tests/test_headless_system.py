@@ -26,7 +26,9 @@ REPO = Path(__file__).resolve().parents[1]
 
 #: The first word of every line the run printed for examples/ne555-astable.perf before it
 #: knew about boards (0.24.0.dev0, c3591b4), the 3D section's skipped. A section added,
-#: dropped or moved for a single board shows here.
+#: dropped or moved for a single board shows here. Run on the board as it shipped up to 0.25
+#: (``board_fixtures``): what a dry-run placement says first depends on the parts, and tying
+#: the 555's RESET to VCC moved them.
 ONE_BOARD_SECTIONS = [
     "Perfboard", "document", "board", "substrate", "parts", "2D", "pads", "1:1", "PDF", "PDF",
     "schematic", "schematic.svg,", "STEP", "ERC", "DRC", "LVS", "ratsnest", "autoroute", "0",
@@ -71,7 +73,8 @@ def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, doc: PerfDocument) -> 
 
 
 def test_one_board_prints_what_it_always_printed(tmp_path, monkeypatch, capsys) -> None:  # type: ignore[no-untyped-def]
-    code, out = _run(tmp_path, monkeypatch, _example("ne555-astable"))
+    frozen = REPO / "tests" / "board_fixtures" / "ne555-astable-0.25.perf"
+    code, out = _run(tmp_path, monkeypatch, persist.parse_document_or_throw(frozen.read_text(encoding="utf-8")))
     printed = capsys.readouterr().out
     assert code == 0
     sections = [line.split()[0] for line in printed.splitlines() if line.strip()]

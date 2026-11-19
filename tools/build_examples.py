@@ -129,6 +129,7 @@ class Example:
         pin_names: dict[str, dict[str, str]] | None = None,
         labels: tuple[tuple[str, str], ...] = (),
         values: dict[str, str] | None = None,
+        seed: int = 0,
     ) -> None:
         self.stem = stem
         self.title = title
@@ -145,6 +146,12 @@ class Example:
         #: nobody typed a value, and the .net is kept exactly as one exports it; the board
         #: somebody opens says what the part is for.
         self.values = values or {}
+        #: The placement's seed. 0 is the arrangement Place on the Board makes, the one the
+        #: board was judged by. Any other is written here with the reason, because an
+        #: example is what somebody opens first and the arrangement it ships with is the one
+        #: they judge the tool by. The board is still chosen at seed 0, as the Board step
+        #: chooses it.
+        self.seed = seed
 
 
 CATALOGUE: tuple[Example, ...] = (
@@ -162,6 +169,11 @@ CATALOGUE: tuple[Example, ...] = (
             "J1": "hdr-1x2",
         },
         values={"J1": "DC IN"},
+        # With RESET tied to VCC, as a 555 has to be, seed 0 puts the chip where Ctrl+R
+        # lays a solder run between two other nets' pads: two solder-trace-proximity
+        # warnings on the first board most people open. Seeds 5 to 7 are one arrangement
+        # that wires with none, in fewer steps (24, not 25).
+        seed=5,
     ),
     Example(
         stem="lm317-supply",
@@ -354,13 +366,14 @@ def _placed(example: Example, parsed, lookup) -> _Placed | None:
     verdict = choice.verdict_for(chosen.preset)
     placed: DesignPlacement | None = None
     if (
-        verdict is not None
+        example.seed == 0
+        and verdict is not None
         and verdict.trial.document is not None
         and placement_inputs(verdict.trial.document) == placement_inputs(bus.document)
     ):
         placed = verdict.trial.placed
     if placed is None:
-        placed = place_design(bus.document, lookup, PlacementOptions(seed=0))
+        placed = place_design(bus.document, lookup, PlacementOptions(seed=example.seed))
     if placed.unplaced:
         print(f"  {example.stem}: no room on {chosen.preset.name} for {list(placed.unplaced)}")
         return None

@@ -2554,6 +2554,15 @@ def _example_document(stem: str) -> PerfDocument:
     return result.document
 
 
+def _ne555_as_shipped() -> PerfDocument:
+    """ne555-astable as it shipped up to 0.25, for the tests that name its holes and its
+    runs: tied to VCC, the 555's RESET moved the example's parts and copper."""
+    path = pathlib.Path(__file__).resolve().parent / "board_fixtures" / "ne555-astable-0.25.perf"
+    result = persist.deserialize_document(path.read_text(encoding="utf-8"))
+    assert result.ok
+    return result.document
+
+
 def _guide_leaf_for(window, index, role):
     tree = window.guide_tree
     for i in range(tree.topLevelItemCount()):
@@ -6534,7 +6543,7 @@ def test_a_click_on_a_ring_selects_what_a_click_on_its_row_selects() -> None:
 
     from perfboard_studio.ui.main import ROLE_HOLES
 
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         window.resize(1366, 768)
         window.show()
@@ -15406,7 +15415,8 @@ def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> 
         _close(window)
 
     # Routed, with one pin a net names and nothing touches: that is a finding about the board.
-    doc = _example_document("ne555-astable")
+    # The board as shipped up to 0.25, whose 555 left RESET in no net.
+    doc = _ne555_as_shipped()
     named = {(node.component_ref, node.pin) for net in doc.nets for node in net.nodes}
     lone = next(
         (component.ref, pin.number)
@@ -19037,14 +19047,11 @@ def test_the_older_package_finding_offers_the_current_one() -> None:
 def test_a_shipped_example_opens_with_no_problem_and_its_bench_check_listed() -> None:
     """ne555-astable opened on an orange "Problems 1": an R5' gap the router accepted and
     the guide checks at the bench. The badge is what is wrong; the gap is counted beside
-    "to wire", and listed in a group of its own with its go-to."""
+    "to wire", and listed in a group of its own with its go-to. lm317-supply is the
+    example with such a gap now: ne555-astable wires without one since its RESET was tied."""
     from perfboard_studio.ui.main import ROLE_FINDING_KEY, ROLE_HOLES
 
-    root = pathlib.Path(__file__).resolve().parents[1]
-    document = persist.parse_document_or_throw(
-        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
-    )
-    window = _window_on(document)
+    window = _window_on(_example_document("lm317-supply"))
     try:
         bar = window.problems_bar
         assert bar.badge.isHidden() and bar.errors == 0 and bar.warnings == 0
@@ -19075,11 +19082,7 @@ def test_a_bench_check_picked_in_the_drawer_rings_its_holes_over_the_parts() -> 
     row with no holes, puts them back under (``tests/test_bench_rings.py``)."""
     from perfboard_studio.ui.main import ROLE_FINDING_KEY, ROLE_HOLES
 
-    root = pathlib.Path(__file__).resolve().parents[1]
-    document = persist.parse_document_or_throw(
-        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
-    )
-    window = _window_on(document)
+    window = _window_on(_ne555_as_shipped())
     try:
         groups = [
             window.drc_tree.topLevelItem(i).child(j)
@@ -20371,8 +20374,8 @@ def test_an_example_of_several_boards_is_counted_drawn_and_opened_whole() -> Non
 
 
 def _ne555():
-    example = pathlib.Path(__file__).resolve().parent.parent / "examples" / "ne555-astable.perf"
-    return persist.deserialize_document(example.read_text(encoding="utf-8")).document
+    # The tests below name its holes and its runs, so they are on the board as it shipped.
+    return _ne555_as_shipped()
 
 
 def test_shift_m_turns_a_part_over_onto_the_solder_side_and_back() -> None:
@@ -20670,7 +20673,7 @@ def _hover_hole(window, ref: str) -> None:
 def test_a_run_through_another_nets_pad_turns_red_and_the_banner_says_why() -> None:
     """F1 → F3 on ne555 runs through F2, LED1's GND leg. It used to be a thin grey line to
     the click and "Done" after it; the short was the Problems count going up by one."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         window.on_draw_mode("solder-trace", True)
         window.scene.draw_click(_hole(window, "F1"))
@@ -20697,7 +20700,7 @@ def test_a_run_through_another_nets_pad_turns_red_and_the_banner_says_why() -> N
 def test_copper_drawn_on_from_a_wires_end_joins_that_wires_net_and_says_so() -> None:
     """G6 is the end of a GND wire, not a pin. The old rule claimed a net only between two
     pins of it, so this wire went in on no net -- skipped by Redo Wiring, and never said."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         window.on_draw_mode("bare-wire", True)
         window.scene.draw_click(_hole(window, "G6"))
@@ -20726,7 +20729,7 @@ def test_the_drawing_hint_goes_with_the_tool() -> None:
 
 
 def test_copper_is_deleted_without_a_question_and_the_status_offers_it_back() -> None:
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     asked: list[str] = []
     original = type(window)._confirm
     type(window)._confirm = lambda self, title, body, verb: asked.append(title) or False
@@ -20765,7 +20768,7 @@ def test_picking_a_net_in_the_panel_puts_the_boards_selection_down() -> None:
 
 
 def test_remove_wiring_takes_up_one_nets_copper_as_one_step() -> None:
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         document = window.bus.document
         thresh = next(net.id for net in document.nets if net.name == "THRESH")
@@ -20788,7 +20791,7 @@ def test_remove_wiring_takes_up_one_nets_copper_as_one_step() -> None:
 
 
 def test_redo_wiring_of_the_selection_takes_a_selected_conductors_net() -> None:
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     asked: list[tuple[str, ...] | None] = []
     try:
         window.on_reroute = lambda net_ids, *a, **k: asked.append(net_ids)
@@ -20830,7 +20833,7 @@ def test_a_dragged_end_reshapes_each_kind_by_its_own_rule() -> None:
 def test_a_run_drawn_on_from_its_end_is_the_same_run_longer() -> None:
     """THRESH's run ends at L6. Drawing on from there made a second, separate run on no
     net; now it is the same run longer, in one setPath, one undo step."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         before = len(window.bus.document.conductors)
         window.on_draw_mode("solder-trace", True)
@@ -20868,7 +20871,7 @@ def test_a_wire_is_never_carried_on_from_its_end() -> None:
 
 
 def test_a_selected_wire_has_a_handle_on_every_corner_and_a_run_on_its_ends() -> None:
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         _select_conductor(window, "cond-2")
         assert [h.index for h in window.scene._handles] == [0, 1, 2]
@@ -20883,7 +20886,7 @@ def test_a_selected_wire_has_a_handle_on_every_corner_and_a_run_on_its_ends() ->
 
 def test_a_handle_dragged_is_one_setpath_checked_as_it_moves() -> None:
     """Put down, a handle is one step Ctrl+Z takes back."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         _select_conductor(window, "cond-8")
         steps = len(window.bus.history())
@@ -20906,7 +20909,7 @@ def test_a_handle_dragged_is_one_setpath_checked_as_it_moves() -> None:
 def test_a_handle_over_a_short_says_so_in_the_drag_banner() -> None:
     """LED_A's run, F1 → I1, dragged down from F1 through F2 -- GND's wire end -- says what
     it would do where a part's drag says it, and Esc leaves the copper where it was."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         _select_conductor(window, "cond-13")
         assert window.scene.begin_reshape(0)
@@ -21023,7 +21026,7 @@ def test_copper_is_picked_up_where_it_is_pressed_without_being_selected_first() 
 def test_a_run_slid_onto_another_nets_pad_is_red_before_it_is_let_go() -> None:
     """LED_A's run, F1 → I1, slid down a row onto F2 -- GND's wire end -- says so as it is
     dragged, as drawing does, and Esc leaves it where it was."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         scene = window.scene
         run = next(c for c in window.bus.document.conductors if c.id == "cond-13")
@@ -21336,7 +21339,7 @@ def test_copper_drawn_exactly_over_copper_is_not_laid_and_says_what_is_there() -
     """F1 → I1 drawn again over LED_A's run gave two identical runs, and nothing was said.
     From its end, the tool now carries that run on; from its middle, G1 → H1 is a stretch
     of pads it already solders."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         before = window.bus.document.conductors
         steps = len(window.bus.history())
@@ -21469,7 +21472,7 @@ def test_one_nets_wiring_is_redone_in_a_style_of_its_own(monkeypatch: pytest.Mon
     another answer was to change the style for everything. Redo Wiring of {net} is a menu
     of the styles, the board's checked; another applies to that net alone, is said in the
     question and the status, and leaves the Wiring Style menu as it was."""
-    window = _window_on(_example_document("ne555-astable"))
+    window = _window_on(_ne555_as_shipped())
     try:
         document = window.bus.document
         thresh = next(net.id for net in document.nets if net.name == "THRESH")
