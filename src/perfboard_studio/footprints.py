@@ -1818,14 +1818,11 @@ def module_footprint(
         for row in range(rows)
         for col in range(cols)
     )
-    outline = _offset_rect_outline(
-        _to_mm(pins), width_mm, depth_mm, offset_x_mm, offset_y_mm, COURTYARD_MARGIN_MM
-    )
+    size = f"{_format_mm_token(width_mm)}x{_format_mm_token(depth_mm)}"
     offset = offset_x_mm != 0 or offset_y_mm != 0
     offset_token = (
         f"-o{_format_mm_token(offset_x_mm)}x{_format_mm_token(offset_y_mm)}" if offset else ""
     )
-    size = f"{_format_mm_token(width_mm)}x{_format_mm_token(depth_mm)}"
     fp_id = id if id is not None else (
         f"mod-{cols}x{rows}-p{col_step}-r{row_step}-{size}x{_format_mm_token(top_mm)}"
         f"-s{_format_mm_token(seat_mm)}{offset_token}"
@@ -1834,6 +1831,85 @@ def module_footprint(
         f"Module, {cols}x{rows} pins, {_format_mm_token(width_mm)} x "
         f"{_format_mm_token(depth_mm)} mm, seated {_format_mm_token(seat_mm)} mm up"
     )
+    return _module_from_pins(
+        pins, fp_id, fp_name, width_mm, depth_mm, top_mm, seat_mm, offset_x_mm, offset_y_mm
+    )
+
+
+def two_header_module_footprint(
+    *,
+    first: int,
+    second: int,
+    row_step: int,
+    width_mm: Mm,
+    depth_mm: Mm,
+    top_mm: Mm,
+    seat_mm: Mm,
+    offset_x_mm: Mm = 0.0,
+    offset_y_mm: Mm = 0.0,
+) -> Footprint:
+    """A module with two headers of different lengths on opposite edges.
+
+    The first header's ``first`` pins are row 0, the second's ``second`` pins row
+    ``row_step`` holes down, the shorter one centred along the longer one, which is how the
+    boards that have two (a QT-style I/O expander, an illuminated encoder) are made. They are
+    numbered row by row, 1..first then first+1..first+second, exactly as ``module_footprint``
+    numbers a grid, and no hole is made for a place on the lattice where the module has no
+    pin. The two lengths differ by an even number of pins -- that is what centred means on a
+    lattice -- and are not equal, because two equal rows are the grid ``mod-`` already
+    spells and one footprint gets one spelling.
+    """
+    if first < 1 or second < 1:
+        raise ValueError("a module needs at least one pin in each header")
+    if first == second:
+        raise ValueError("two headers of one length are a mod- grid")
+    if (first - second) % 2:
+        raise ValueError("the shorter header sits centred along the longer: the counts differ by an even number")
+    if first + second > _MAX_BOX_PINS:
+        raise ValueError(f"a module is limited to {_MAX_BOX_PINS} pins")
+    if row_step < 1:
+        raise ValueError("the headers are whole grid steps apart and start at 1")
+    if min(width_mm, depth_mm, top_mm, seat_mm) <= 0:
+        raise ValueError("a module needs a positive board size, top and seat")
+    if abs(offset_x_mm) > _MAX_BODY_MM or abs(offset_y_mm) > _MAX_BODY_MM:
+        raise ValueError(f"a body offset is limited to {_MAX_BODY_MM} mm either way")
+    span = max(first, second)
+    pins = tuple(
+        _make_pin(str(number), (span - count) // 2 + col, row * row_step)
+        for row, (count, start) in enumerate(((first, 1), (second, first + 1)))
+        for col, number in enumerate(range(start, start + count))
+    )
+    size = f"{_format_mm_token(width_mm)}x{_format_mm_token(depth_mm)}"
+    offset = offset_x_mm != 0 or offset_y_mm != 0
+    offset_token = (
+        f"-o{_format_mm_token(offset_x_mm)}x{_format_mm_token(offset_y_mm)}" if offset else ""
+    )
+    return _module_from_pins(
+        pins,
+        f"mod2-{first}x{second}-r{row_step}-{size}x{_format_mm_token(top_mm)}"
+        f"-s{_format_mm_token(seat_mm)}{offset_token}",
+        f"Module, {first}+{second} pins, {_format_mm_token(width_mm)} x "
+        f"{_format_mm_token(depth_mm)} mm, seated {_format_mm_token(seat_mm)} mm up",
+        width_mm, depth_mm, top_mm, seat_mm, offset_x_mm, offset_y_mm,
+    )
+
+
+def _module_from_pins(
+    pins: tuple[FootprintPin, ...],
+    fp_id: str,
+    fp_name: str,
+    width_mm: Mm,
+    depth_mm: Mm,
+    top_mm: Mm,
+    seat_mm: Mm,
+    offset_x_mm: Mm,
+    offset_y_mm: Mm,
+) -> Footprint:
+    """The body, courtyard and height of a module whose pins are already laid out."""
+    outline = _offset_rect_outline(
+        _to_mm(pins), width_mm, depth_mm, offset_x_mm, offset_y_mm, COURTYARD_MARGIN_MM
+    )
+    offset = offset_x_mm != 0 or offset_y_mm != 0
     dims: dict[str, Mm] = {
         "width": width_mm,
         "depth": depth_mm,
@@ -2276,6 +2352,12 @@ most two decimals and are written without units.
                                                         its tallest part T above that board,
                                                         and its board seated S mm up (8.5 in
                                                         a female header, 2.5 soldered in)
+  mod2-<first>x<second>-r<rowStep>-<W>x<D>x<T>-s<S>[-o<X>x<Y>]
+                                                        a module with two headers of different
+                                                        lengths on opposite edges, <rowStep>
+                                                        holes apart, the shorter centred along
+                                                        the longer (so the counts differ by an
+                                                        even number); numbered row by row
   idc-2x<n>                                             an IDC box header, 2 rows of n
   adp-<package>-<pins>[-r<rowStep>]                     a surface-mount chip on a DIP
                                                         adapter: soic, ssop, tssop or msop;
@@ -2318,7 +2400,8 @@ apart. box-6x1-p1-r1-16x14.5x7-o0x6 is a 16 x 14.5 mm breakout whose one row of 
 runs along an edge: its body sits 6 mm down the rows from the pins' centre. The offset is
 signed, left out when it is zero, and moves the body on the part as it is turned.
 mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3 is an ESP32-DevKitC in female headers: two
-columns of 19 pins ten holes apart, its 27.94 x 54.3 mm board 8.5 mm up. idc-2x8
+columns of 19 pins ten holes apart, its 27.94 x 54.3 mm board 8.5 mm up. mod2-6x10-r5-25.4x17.78x3-s8.5-o0x-2.5 is a board with a 6-pin and a 10-pin header 12.7 mm
+apart, the six standing at columns 2 to 7 of the ten. idc-2x8
 is a 16-pin box header, numbered like hdr-2x8 with the key slot on the pin-1 row.
 wire-3-l150 is a panel pot's three wires, 150 mm each, landing in three pads side by side;
 give the part its value and pin names, and declare it a potentiometer.
@@ -2401,6 +2484,23 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
             seat_mm=_mm(m[8]),
             offset_x_mm=_offset(m[9]),
             offset_y_mm=_offset(m[10]),
+        ),
+    ),
+    (
+        re.compile(
+            r"^mod2-(\d+)x(\d+)-r(\d+)-([\d.]+)x([\d.]+)x([\d.]+)-s([\d.]+)"
+            r"(?:-o(-?[\d.]+)x(-?[\d.]+))?$"
+        ),
+        lambda m: two_header_module_footprint(
+            first=_grid(m[1]),
+            second=_grid(m[2]),
+            row_step=_step(m[3]),
+            width_mm=_mm(m[4]),
+            depth_mm=_mm(m[5]),
+            top_mm=_mm(m[6]),
+            seat_mm=_mm(m[7]),
+            offset_x_mm=_offset(m[8]),
+            offset_y_mm=_offset(m[9]),
         ),
     ),
     (

@@ -147,6 +147,7 @@ NAME_TEMPLATES: tuple[str, ...] = (
     "Custom part, {0} pins, {1} mm, body offset {2} mm",
     "Custom part, {0} pins, {1} mm",
     "Module, {0} pins, {1} mm, seated {2} mm up",
+    "Module, {0}+{1} pins, {2} mm, seated {3} mm up",
     "Flying leads, {0} wires to a part off the board, {1} mm",
     "Flying leads, {0} wires to a part off the board",
     "Flying leads, 1 wire to a part off the board, {0} mm",
@@ -1224,6 +1225,9 @@ TURKISH: dict[str, str] = {
     ),
     "Custom part, {0} pins, {1} mm": "Özel parça, {0} pin, {1} mm",
     "Module, {0} pins, {1} mm, seated {2} mm up": "Modül, {0} pin, {1} mm, {2} mm yukarıda",
+    "Module, {0}+{1} pins, {2} mm, seated {3} mm up": (
+        "Modül, {0}+{1} pin, {2} mm, {3} mm yukarıda"
+    ),
 }
 
 
