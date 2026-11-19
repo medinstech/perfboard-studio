@@ -1712,3 +1712,18 @@ def test_a_dev_boards_inputs_and_supplies_read_from_its_makers_tables() -> None:
     assert pico["RUN"] == {"in"} and pico["3V3_EN"] == {"in"} and pico["AGND"] == {"ground"}
     assert roles("esp32-c3-devkitm-1")["RST"] == {"in"}
     assert roles("seeed-xiao-esp32c3")["5V"] == {"power-out"}
+
+
+def test_a_drafted_roles_row_waits_without_roles_and_keeps_its_pin_count() -> None:
+    """A row nobody read a maker's document for is not applied -- the part keeps its numbered
+    box -- but it must not rot while it waits: same part, same pin count, only role words."""
+    from perfboard_studio.catalog import _ROLE_WORDS, _ROLES_WAITING, PIN_ROLES
+
+    assert _ROLES_WAITING, "nothing waiting: delete the table and this test"
+    for part_id, words in _ROLES_WAITING.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert part_id not in PIN_ROLES, f"{part_id} is both applied and waiting"
+        assert part.pin_roles == (), part_id
+        assert len(words.split()) == len(part.pin_names), part_id
+        assert set(words.split()) <= set(_ROLE_WORDS), part_id

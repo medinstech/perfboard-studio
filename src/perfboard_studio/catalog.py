@@ -36,17 +36,10 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
-from typing import Literal, TypeAlias
+from typing import Literal
 
-from .model import PartSymbol, PerfDocument, PinNames
+from .model import PartSymbol, PerfDocument, PinNames, PinRole, PinRoles
 from .system import references_in_use
-
-# STUB until model.py carries them (reach's commit after the 0.25 tag): the same names, so
-# this import is the only line that changes.
-PinRole: TypeAlias = Literal[  # noqa: UP040
-    "power", "power-neg", "power-out", "ground", "in", "out", "io", "passive", "nc"
-]
-type PinRoles = tuple[tuple[str, PinRole], ...]
 
 #: What a part is, for grouping a list of them. Engine text; the interface translates the
 #: group headings itself.
@@ -3885,10 +3878,6 @@ PIN_ROLES: dict[str, str] = {
     # Espressif's ESP32-DevKitC V4 user guide, J2 and J3 header tables (type P, I, I/O, G):
     "esp32-devkitc": ("pwr-out gnd in io in io in io in io in io io gnd io io io io io io io io io io io io "
                       "gnd io io io io io io io io io pwr-out io"),
-    # The 30-pin DevKit V1 is the same module on a clone's board: its names are the DevKitC's, its
-    # VIN the regulator's input. TODO before landing: the clone maker's own pin table.
-    "esp32-devkit-v1": ("in io in io in io in io in io io io io io io io io io io io io io io io io io gnd "
-                        "gnd pwr pwr-out"),
     # Espressif's ESP32-C3-DevKitM-1 and ESP32-S3-DevKitC-1 v1.1 user guides: RST is typed I.
     "esp32-c3-devkitm-1": ("gnd gnd pwr-out io pwr-out io io gnd io io gnd io in gnd gnd io io io io io io io "
                            "gnd gnd pwr-out io pwr-out io gnd gnd"),
@@ -3905,16 +3894,6 @@ PIN_ROLES: dict[str, str] = {
     # reference may replace), AGND a ground.
     "raspberry-pi-pico": ("io pwr io pwr gnd gnd io in io pwr-out io pas io io gnd gnd io io io io io in io io "
                           "gnd gnd io io io io io io io io gnd gnd io io io io"),
-    # TODO before landing, no maker document read for the rest of this block: the Pro Mini's and
-    # Pro Micro's RAW (regulator input) and VCC (the regulated rail), the D1 mini's pin text (its
-    # page has the pins only as a picture) and 5V, the NodeMCU's reserved and flash pins, the
-    # ESP-01's pins.
-    "sparkfun-pro-mini": ("io pwr io gnd in in gnd pwr-out io io io io io io io io io io io io io io io io"),
-    "sparkfun-pro-micro": ("io pwr io gnd gnd in gnd pwr-out io io io io io io io io io io io io io io io io"),
-    "wemos-d1-mini": ("in io in io io io io io io io io io io gnd pwr-out pwr-out"),
-    "nodemcu-devkit-1.0": ("in io nc io nc io io io io io io pwr-out io gnd io io io io gnd io pwr-out io in io "
-                           "in io gnd gnd pwr pwr-out"),
-    "esp-01": ("gnd io io io io in in pwr"),
     # -- breakouts and drivers, from the chip's maker sheet where the board's pins are the chip's.
     # TI ADS1115 pin functions (KY-053 carries its pins under the chip's names): AIN0-3 analog
     # inputs, ADDR a digital input, ALERT/RDY an open-drain output, SCL an input, SDA I/O.
@@ -3933,10 +3912,6 @@ PIN_ROLES: dict[str, str] = {
     # TI DRV8871 pin functions: IN1 and IN2 are the logic inputs; ILIM and the outputs are not on
     # Adafruit's four-pin header.
     "adafruit-drv8871": "in in pwr gnd",
-    # TI DRV8833 pin functions: AIN/BIN inputs, nSLEEP input, nFAULT open-drain output, AISEN and
-    # BISEN the bridges' current-sense connections ("passive"), A/BOUT outputs. TODO before landing:
-    # Pololu's carrier text for VIN and VMM (read only as the supply pins by name).
-    "pololu-drv8833": "gnd gnd pwr pwr in out in out in out in out in pas out pas",
     # No KiCad symbol: a generic one-channel relay board, its three pins as its maker prints
     # them (VCC, GND, IN).
     "relay-module-1ch": "pwr gnd in",
@@ -3976,20 +3951,9 @@ PIN_ROLES: dict[str, str] = {
     # KiCad types RESET, PB3, PB4 and PB0 bidirectional (they are ports as well); RESET is
     # "in" here for the reason the ATmega328P's is.
     "attiny85": "in io io gnd io io io pwr",
-    # TODO before landing: re-read against analog.com's DS1307.pdf (it did not load from here;
-    # this is from distributor copies of the Maxim sheet).
-    # X1/X2 are the two ends of a 32.768 kHz crystal: "passive", where KiCad has two inputs --
-    # the datasheet gives no direction (X1 alone takes an external oscillator, X2 then floats).
-    # SQW/OUT is open drain and needs a pull-up (datasheet; KiCad: open_collector), "out".
-    "ds1307": "pas pas pwr gnd io in out pwr",
     # TI ULN2003A pin table: 1B-7B I (Darlington bases), 1C-7C O (collectors), COM "--" (the
     # flyback diodes' common cathode, wired to the load's supply): "passive", as KiCad.
     "uln2003a": "in in in in in in in gnd pas out out out out out out out",
-    # TODO before landing: re-read against analog.com's MAX1487-MAX491.pdf (it did not load
-    # from here; this is from distributor copies of Maxim's sheet). MAX485 pin description: RO receiver output, ~RE receiver output enable and DE
-    # driver output enable (both inputs), DI driver input, A and B the driver outputs and the
-    # receiver inputs at once, so "io".
-    "max485": "out in in in gnd io io pwr",
     # Microchip MCP3008 pin table: CS/SHDN, DIN and CLK are inputs, DOUT an output, CH0-CH7 analog
     # inputs. VREF is the reference the conversion is measured against: "passive" (KiCad:
     # power_in; the table says "Reference Voltage Input");
@@ -4041,9 +4005,6 @@ PIN_ROLES: dict[str, str] = {
     # is "io".
     "lm35": "pwr out gnd",
     "tmp36": "pwr out gnd",
-    # TODO before landing: DQ is the 1-Wire data line, bidirectional; re-read against Maxim's DS18B20
-    # sheet on analog.com (it did not load from here).
-    "ds18b20": "gnd io pwr",
     "a3144": "pwr gnd out",
     "ss49e": "pwr gnd out",
     # Aosong DHT22 sheet: pin 2 DATA is the single bus MCU and sensor both talk on, pin 3 NC; the
@@ -4060,12 +4021,6 @@ PIN_ROLES: dict[str, str] = {
     "ttp223-touch": "gnd pwr out",
     "ssd1306-i2c-gnd-vcc": "gnd pwr in io",
     "ssd1306-i2c-vcc-gnd": "pwr gnd in io",
-    # TODO before landing: the backpack's pins are the I2C slave's by name only; no maker sheet read.
-    "lcd-1602-i2c": "gnd pwr io in",
-    # Hitachi HD44780U sheet: RS, R/W and E are inputs, DB0-DB7 bidirectional tri-state. VO (the
-    # contrast voltage, a trimmer's wiper: "passive") and A/K (the backlight LED's supply and
-    # return) are the module's, not the chip's: TODO before landing, a module maker's pin table.
-    "lcd-1602": "gnd pwr pas in in in io io io io io io io io pwr gnd",
     # InvenSense PS-MPU-6000A-00 rev 3.2 pin table (University of Pennsylvania's host of the
     # maker's PDF; invensense.tdk.com no longer serves it): AUX_DA "I2C master serial data" and
     # AUX_CL "I2C master serial clock, for connecting to external sensors" (the board calls them
@@ -4088,8 +4043,6 @@ PIN_ROLES: dict[str, str] = {
     # Nordic nRF24L01+ product spec pin table: CE, CSN, SCK and MOSI are digital inputs, MISO and
     # IRQ digital outputs.
     "nrf24l01": "gnd pwr in in in in out out",
-    # TODO before landing: DIO is the data line the chip both reads and drives; no maker sheet read.
-    "tm1637-display": "in io pwr gnd",
     "max7219-matrix": "pwr gnd in in in",
     # NXP MFRC522 sheet, read from nxp.com: pin 24 SDA/NSS/RX is NSS, "SPI signal input", in SPI
     # mode -- which is how these boards are wired, so "in" (it is I/O only as I2C SDA). In SPI
@@ -4108,6 +4061,53 @@ PIN_ROLES: dict[str, str] = {
     # input), 8 VCC. Both ends of the input LED are "in": on the sheet that means "on the input
     # side", and the two ends of one LED belong together there.
     "6n137": "nc in in nc gnd out in pwr",
+}
+
+#: Rows drafted and NOT applied: no maker document has been read for them yet, so each part
+#: keeps its numbered box. A row moves up into ``PIN_ROLES`` only with the document it was read
+#: from named beside it. ``tests/test_catalog.py`` holds the drafts to their packages' pin counts, so
+#: one does not go stale while it waits.
+_ROLES_WAITING: dict[str, str] = {
+    # The 30-pin DevKit V1 is the same module on a clone's board: its names are the DevKitC's, its
+    # VIN the regulator's input. TODO before landing: the clone maker's own pin table.
+    "esp32-devkit-v1": ("in io in io in io in io in io io io io io io io io io io io io io io io io io gnd "
+                        "gnd pwr pwr-out"),
+    # TODO before landing, no maker document read for the rest of this block: the Pro Mini's and
+    # Pro Micro's RAW (regulator input) and VCC (the regulated rail), the D1 mini's pin text (its
+    # page has the pins only as a picture) and 5V, the NodeMCU's reserved and flash pins, the
+    # ESP-01's pins.
+    "sparkfun-pro-mini": ("io pwr io gnd in in gnd pwr-out io io io io io io io io io io io io io io io io"),
+    "sparkfun-pro-micro": ("io pwr io gnd gnd in gnd pwr-out io io io io io io io io io io io io io io io io"),
+    "wemos-d1-mini": ("in io in io io io io io io io io io io gnd pwr-out pwr-out"),
+    "nodemcu-devkit-1.0": ("in io nc io nc io io io io io io pwr-out io gnd io io io io gnd io pwr-out io in io "
+                           "in io gnd gnd pwr pwr-out"),
+    "esp-01": ("gnd io io io io in in pwr"),
+    # TI DRV8833 pin functions: AIN/BIN inputs, nSLEEP input, nFAULT open-drain output, AISEN and
+    # BISEN the bridges' current-sense connections ("passive"), A/BOUT outputs. TODO before landing:
+    # Pololu's carrier text for VIN and VMM (read only as the supply pins by name).
+    "pololu-drv8833": "gnd gnd pwr pwr in out in out in out in out in pas out pas",
+    # TODO before landing: re-read against analog.com's DS1307.pdf (it did not load from here;
+    # this is from distributor copies of the Maxim sheet).
+    # X1/X2 are the two ends of a 32.768 kHz crystal: "passive", where KiCad has two inputs --
+    # the datasheet gives no direction (X1 alone takes an external oscillator, X2 then floats).
+    # SQW/OUT is open drain and needs a pull-up (datasheet; KiCad: open_collector), "out".
+    "ds1307": "pas pas pwr gnd io in out pwr",
+    # TODO before landing: re-read against analog.com's MAX1487-MAX491.pdf (it did not load
+    # from here; this is from distributor copies of Maxim's sheet). MAX485 pin description: RO receiver output, ~RE receiver output enable and DE
+    # driver output enable (both inputs), DI driver input, A and B the driver outputs and the
+    # receiver inputs at once, so "io".
+    "max485": "out in in in gnd io io pwr",
+    # TODO before landing: DQ is the 1-Wire data line, bidirectional; re-read against Maxim's DS18B20
+    # sheet on analog.com (it did not load from here).
+    "ds18b20": "gnd io pwr",
+    # TODO before landing: the backpack's pins are the I2C slave's by name only; no maker sheet read.
+    "lcd-1602-i2c": "gnd pwr io in",
+    # Hitachi HD44780U sheet: RS, R/W and E are inputs, DB0-DB7 bidirectional tri-state. VO (the
+    # contrast voltage, a trimmer's wiper: "passive") and A/K (the backlight LED's supply and
+    # return) are the module's, not the chip's: TODO before landing, a module maker's pin table.
+    "lcd-1602": "gnd pwr pas in in in io io io io io io io io pwr gnd",
+    # TODO before landing: DIO is the data line the chip both reads and drives; no maker sheet read.
+    "tm1637-display": "in io pwr gnd",
 }
 
 
