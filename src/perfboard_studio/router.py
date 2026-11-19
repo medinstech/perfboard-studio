@@ -1419,7 +1419,8 @@ def _fold_end_steps(steps: list[_Step], max_hop_holes: int) -> list[_Step]:
 
     def reaches(a: HoleCoord, b: HoleCoord, via: HoleCoord) -> bool:
         in_line = (a.col == via.col == b.col) or (a.row == via.row == b.row)
-        return in_line and manhattan(a, b) - 1 <= max_hop_holes
+        between = manhattan(a, via) + manhattan(via, b) == manhattan(a, b)
+        return in_line and between and manhattan(a, b) - 1 <= max_hop_holes
 
     folded = list(steps)
     # ..., X, (hop) H, (step) E  ->  ..., X, (hop) E

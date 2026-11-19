@@ -793,6 +793,11 @@ def test_a_hop_is_carried_on_only_in_line_and_only_as_far_as_a_hop_goes() -> Non
     ]
     assert _fold_end_steps(corner, 3) == corner
 
+    # Stepping out and hopping back past the start hole is in line, not continuing forward;
+    # folding it would collapse into a one-hole "hop" between adjacent pads.
+    backtrack = [_Step(h(11, 0), False), _Step(h(12, 0), False), _Step(h(10, 0), True)]
+    assert _fold_end_steps(backtrack, 3) == backtrack
+
 
 # ---------------------------------------------------------------------------
 # Wires laid along the grid (RouterOptions.wire_path "grid")
