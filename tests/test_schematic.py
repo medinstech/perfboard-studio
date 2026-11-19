@@ -219,13 +219,16 @@ def test_no_two_symbols_share_space(path: Path) -> None:
 
 def part_label_box(label: Label) -> tuple[float, float, float, float]:
     """The rectangle a reference or a value occupies -- a reference ABOVE its point, a value
-    BELOW it, both centred -- at the sizes the exported sheet draws them. Written out again
-    for the reason ``net_label_box`` is."""
+    BELOW it, anchored on ``label.anchor`` -- at the sizes the exported sheet draws them.
+    Written out again for the reason ``net_label_box`` is."""
     size = REF_LABEL_MM if label.kind == "ref" else VALUE_LABEL_MM
-    half = len(label.text) * size * NET_LABEL_ADVANCE / 2
+    width = len(label.text) * size * NET_LABEL_ADVANCE
+    left = {"left": label.at.x, "centre": label.at.x - width / 2, "right": label.at.x - width}[
+        label.anchor
+    ]
     if label.kind == "ref":
-        return label.at.x - half, label.at.y - size, label.at.x + half, label.at.y
-    return label.at.x - half, label.at.y, label.at.x + half, label.at.y + 1.2 * size
+        return left, label.at.y - size, left + width, label.at.y
+    return left, label.at.y, left + width, label.at.y + 1.2 * size
 
 
 @pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
@@ -2120,25 +2123,95 @@ def test_a_supplys_name_prints_on_no_line(path: Path) -> None:
 
 
 def test_a_value_moves_off_a_lead_that_leaves_the_bottom_of_its_body() -> None:
-    """A turned resistor's second end leaves the bottom of its body, straight through the
-    line its value is printed on. The value moves right, clear of the lead, and an upright
-    one stays centred under its body."""
+    """A regulator's ground or adjust lead leaves the bottom of its body straight through
+    the line its value is printed on, so the value moves right, clear of the lead; turned
+    upside down, that lead leaves the top centre, so the reference moves to top-right.
+    A turned two-pin part puts both its reference and its value beside its body instead."""
     from perfboard_studio.schematic import VALUE_LABEL_MM, VALUE_LEAD_GAP_MM, _text_width
+
+    reg_doc = load(EXAMPLES_DIR / "lm317-supply.perf")
+    reg_doc = dataclasses.replace(
+        reg_doc,
+        components=tuple(
+            dataclasses.replace(c, symbol="regulator") if c.ref == "U1" else c
+            for c in reg_doc.components
+        ),
+    )
+    upright_reg = build_schematic(_at(reg_doc, "U1", 25.4, 25.4, rotation=0), REGISTRY)
+    u1 = next(s for s in upright_reg.symbols if s.ref == "U1")
+    u1_val = next(
+        label for label in upright_reg.labels
+        if label.kind == "value" and label.text == u1.value
+        and abs(label.at.y - (u1.at.y + u1.height + 0.4 * GRID_MM)) < 1e-6
+    )
+    half = _text_width(u1_val.text, VALUE_LABEL_MM) / 2
+    bottom = [u1.at.x + p.at.x for p in u1.pins if p.side == "bottom"]
+    assert len(bottom) == 1
+    assert u1_val.at.x - half == pytest.approx(bottom[0] + VALUE_LEAD_GAP_MM)
+
+    inverted_reg = build_schematic(_at(reg_doc, "U1", 25.4, 25.4, rotation=180), REGISTRY)
+    u1_inv = next(s for s in inverted_reg.symbols if s.ref == "U1")
+    u1_ref = next(label for label in inverted_reg.labels if label.kind == "ref" and label.text == "U1")
+    assert u1_ref.anchor == "left"
+    assert u1_ref.at.x > u1_inv.at.x + u1_inv.width
 
     document = load(GOLDEN_DIR / "ne555.perf")
     for rotation in (0, 90):
         drawing = build_schematic(_at(document, "R1", 25.4, 25.4, rotation=rotation), REGISTRY)
         symbol = next(s for s in drawing.symbols if s.ref == "R1")
+        ref = next(label for label in drawing.labels if label.kind == "ref" and label.text == "R1")
         value = next(
             label for label in drawing.labels
             if label.kind == "value" and label.text == symbol.value
-            and abs(label.at.y - (symbol.at.y + symbol.height + 0.4 * GRID_MM)) < 1e-6
+            and abs(label.at.x - ref.at.x) < 1e-6
         )
-        half = _text_width(value.text, VALUE_LABEL_MM) / 2
-        bottom = [symbol.at.x + p.at.x for p in symbol.pins if p.side == "bottom"]
         if rotation == 0:
-            assert bottom == []
+            assert ref.anchor == "centre"
+            assert value.anchor == "centre"
             assert value.at.x == pytest.approx(symbol.at.x + symbol.width / 2)
         else:
-            assert len(bottom) == 1
-            assert value.at.x - half == pytest.approx(bottom[0] + VALUE_LEAD_GAP_MM)
+            assert ref.anchor == "left"
+            assert value.anchor == "left"
+            assert ref.at.x == pytest.approx(symbol.at.x + symbol.width + 0.75 * GRID_MM)
+            assert value.at.x == pytest.approx(symbol.at.x + symbol.width + 0.75 * GRID_MM)
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+@pytest.mark.parametrize("rotation", [90, 270])
+def test_a_turned_two_pin_parts_labels_cross_no_wire_or_rail_glyph(
+    path: Path, rotation: int
+) -> None:
+    """When two-pin parts are stood vertically on a sheet, their references and values sit
+    beside their bodies rather than over their top and bottom leads, so no reference or
+    value box crosses a drawn wire or a rail glyph."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    base = build_schematic(doc, REGISTRY)
+    ids = {part.ref: part.id for part in circuit_parts(doc)}
+    two_pin = {
+        s.ref
+        for s in base.symbols
+        if len(s.pins) == 2 and s.kind not in ("ic", "connector", "box", "relay")
+    }
+    assert two_pin
+    sheet = tuple(
+        SymbolPlacement(
+            id=ids[s.ref],
+            at=snap_to_grid(s.at),
+            rotation=rotation if s.ref in two_pin else 0,
+            mirrored=False,
+        )
+        for s in base.symbols
+        if s.ref in ids
+    )
+    drawing = build_schematic(dataclasses.replace(doc, sheet=sheet, sheet_wires=()), REGISTRY)
+    lines = _lines_of(drawing)
+    for label in drawing.labels:
+        if label.kind not in ("ref", "value"):
+            continue
+        box = part_label_box(label)
+        for _net, line in lines:
+            for start, end in itertools.pairwise(line):
+                assert not box_meets_segment(box, start, end), (
+                    f"{path.stem} ({rotation} deg): {label.kind} {label.text} at {label.at} "
+                    f"crosses a wire or rail glyph"
+                )

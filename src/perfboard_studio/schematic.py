@@ -1819,8 +1819,8 @@ def _part_text_width(placed: _Placed, options: SchematicOptions) -> Mm:
 
 def _part_label_box(label: Label) -> tuple[Mm, Mm, Mm, Mm] | None:
     """The rectangle a reference or a value occupies, read the way both renderers draw it:
-    a reference sits ABOVE its point and a value BELOW it, each centred on it. None for
-    anything else -- pin text is inside or on its own symbol, where no net name goes."""
+    a reference sits ABOVE its point and a value BELOW it, anchored on ``label.anchor``.
+    None for anything else -- pin text is inside or on its own symbol, where no net name goes."""
     if label.kind == "ref":
         size = REF_LABEL_MM
         top, bottom = label.at.y - size, label.at.y
@@ -1829,8 +1829,11 @@ def _part_label_box(label: Label) -> tuple[Mm, Mm, Mm, Mm] | None:
         top, bottom = label.at.y, label.at.y + 1.2 * size
     else:
         return None
-    half = _text_width(label.text, size) / 2
-    return label.at.x - half, top, label.at.x + half, bottom
+    width = _text_width(label.text, size)
+    left = {"left": label.at.x, "centre": label.at.x - width / 2, "right": label.at.x - width}[
+        label.anchor
+    ]
+    return left, top, left + width, bottom
 
 
 def _box_obstacle(box: tuple[Mm, Mm, Mm, Mm]) -> tuple[tuple[Point2, Point2], ...]:
@@ -3039,15 +3042,52 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
     labels: list[Label] = []
     for placed in ordered:
         centre = placed.x + placed.body.width / 2
+        sides = {pin.side for pin in placed.body.pins}
+        if (
+            placed.body.pins
+            and sides <= {"top", "bottom"}
+            and placed.kind not in ("ic", "connector", "box", "relay")
+            and not placed.body.names_inside
+        ):
+            # A part stood on end: its ends are where the wires join and the glyphs hang,
+            # so the reference and the value go beside the body, as every schematic does.
+            beside = placed.x + placed.body.width + 0.75 * GRID_MM
+            middle = placed.y + placed.body.height / 2
+            labels.append(
+                Label(
+                    text=placed.ref,
+                    at=_p(beside, middle - 0.5 * GRID_MM),
+                    kind="ref",
+                    anchor="left",
+                )
+            )
+            if options.show_values and placed.value:
+                labels.append(
+                    Label(
+                        text=placed.value,
+                        at=_p(beside, middle + 0.5 * GRID_MM),
+                        kind="value",
+                        anchor="left",
+                    )
+                )
+            if options.show_pin_numbers and placed.kind in _TRANSISTOR_KINDS:
+                labels.extend(_lead_number(placed, pin) for pin in placed.body.pins)
+            continue
+        top_lead = any(
+            pin.side == "top" and abs(pin.at.x - placed.body.width / 2) < GRID_MM
+            for pin in placed.body.pins
+        )
         # Well clear of the box rather than snug to it: a reference is drawn at a fixed
         # PIXEL size, so how many millimetres of sheet it occupies grows as the view zooms
         # out -- and the one symbol with anything near its top edge is the LED.
         labels.append(
             Label(
                 text=placed.ref,
-                at=_p(centre, placed.y - 0.75 * GRID_MM),
+                at=_p(placed.x + placed.body.width + 0.5 * GRID_MM, placed.y - 0.25 * GRID_MM)
+                if top_lead
+                else _p(centre, placed.y - 0.75 * GRID_MM),
                 kind="ref",
-                anchor="centre",
+                anchor="left" if top_lead else "centre",
             )
         )
         if options.show_values and placed.value:
@@ -3135,7 +3175,7 @@ def _value_centre_x(placed: _Placed) -> Mm:
     """Where a symbol's value is centred, across from the body's left edge.
 
     Under the middle of the body, unless a lead leaves the bottom there: a regulator's
-    ground, a turned resistor's second end. The lead runs straight down through the value's
+    ground, a turned box's bottom pin. The lead runs straight down through the value's
     line, so the value moves right, clear of the rightmost such lead. The rail symbol at
     the lead's end is a lead's length down, below the value's line, so only the lead
     itself is in the way.
