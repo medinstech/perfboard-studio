@@ -3990,6 +3990,32 @@ TURKISH: Mapping[str, str] = {
         "I2C'yi taşır. Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, "
         "sıralar ve kart çevresi ölçülmüştür."
     ),
+    "Rotary encoder with a push switch and an RGB LED, on 0.1 inch pins: five along one "
+    "edge, three along the other": (
+        "Basmalı anahtarlı ve RGB LED'li döner kodlayıcı, 0,1 inç pinlerde: bir kenarda beş, "
+        "öbüründe üç pin"
+    ),
+    "A, B and C are the encoder's contacts: C is the common one, and A and B each close to "
+    "it in turn as the shaft turns, 24 pulses a turn, so give A and B pull-ups on your "
+    "controller. SWITCH closes to COMMON when the shaft is pushed. RED, GREEN and BLUE are "
+    "the three LEDs' anodes, each against COMMON, the common cathode of COM-15141, so COMMON "
+    "goes to ground and each colour needs its own resistor. The encoder stands 25.3 mm above "
+    "this board; the board is drawn on a female header 8.5 mm up, so set the seat if it is "
+    "soldered in on its own pins. The red and green encoder (COM-15140) goes on the other "
+    "side of this board, with other pins. The height of what is on the board is an "
+    "estimate, and so is its colour; the pins, the rows and the board outline are "
+    "measured.": (
+        "A, B ve C kodlayıcının kontaklarıdır: C ortak olandır, A ve B mil döndükçe sırayla "
+        "ona kapanır, turda 24 darbe; bu yüzden denetleyicinizde A ve B'ye yukarı çekme "
+        "verin. SWITCH, mil basılınca COMMON'a kapanır. RED, GREEN ve BLUE üç LED'in "
+        "anotlarıdır, her biri COMMON'a karşı; COMMON, COM-15141'in ortak katodudur, yani "
+        "COMMON toprağa gider ve her rengin kendi direnci olmalı. Kodlayıcı bu kartın "
+        "25,3 mm üstünde durur; kart 8,5 mm yukarıdaki dişi header üstünde çizilmiştir, "
+        "kendi pinleriyle lehimlenecekse yüksekliği ona göre ayarlayın. Kırmızı-yeşil "
+        "kodlayıcı (COM-15140) bu kartın öbür yüzüne, başka pinlerle takılır. Kartın "
+        "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
+        "çevresi ölçülmüştür."
+    ),
     "Adafruit CCS811 air quality sensor (on a header)": (
         "Adafruit CCS811 hava kalitesi sensörü (header üzerinde)"
     ),

@@ -3399,6 +3399,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("PCF8574", "I2C GPIO expander", "GPIO expander", "I/O expander",
                          "STEMMA QT", "Qwiic")),
+    CatalogPart("sparkfun-encoder-breakout", "SparkFun Rotary Encoder Breakout - Illuminated (RGB)",
+                "module", "mod2-5x3-r10-15.24x27.94x25.3-s8.5",
+                "Rotary encoder with a push switch and an RGB LED, on 0.1 inch pins: five along "
+                "one edge, three along the other",
+                _legs("RED", "GREEN", "SWITCH", "BLUE", "COMMON", "B", "C", "A"),
+                ref_prefix="SW", value="SparkFun BOB-11722",
+                source=(
+                    "SparkFun's own Eagle board for the breakout (github.com/sparkfun/"
+                    "Rotary_Encoder_Breakout-Illuminated, SparkFun_Rotary_Encoder-Illuminated.brd, "
+                    "BOB-11722): the 15.24 x 27.94 mm board, its 1 x 5 and 1 x 3 headers 25.4 mm "
+                    "apart (the three centred on the five), every name read off the board's nets, "
+                    "RED GREEN SWITCH BLUE COMMON left to right along the five and B C A along "
+                    "the three; the encoder is the Top-Up Industry EC12PLRGBSDVBF-D-25K-24-24C-8RU(R) "
+                    "of SparkFun COM-15141 (drawing EC12PSD-062 rev B, 2021-05-24, hosted by "
+                    "SparkFun): 25.3 mm from its frame to the tip of its shaft, the LEDs on "
+                    "pins 1, 2 and 4 and the push switch on pin 3, all against the common pin 5"
+                ),
+                check=(
+                    "A, B and C are the encoder's contacts: C is the common one, and A and B each "
+                    "close to it in turn as the shaft turns, 24 pulses a turn, so give A and B "
+                    "pull-ups on your controller. SWITCH closes to COMMON when the shaft is "
+                    "pushed. RED, GREEN and BLUE are the three LEDs' anodes, each against "
+                    "COMMON, the common cathode of COM-15141, so COMMON goes to ground and each "
+                    "colour needs its own resistor. The encoder stands 25.3 mm above this board; "
+                    "the board is drawn on a female header 8.5 mm up, so set the seat if it is "
+                    "soldered in on its own pins. The red and green encoder (COM-15140) goes on "
+                    "the other side of this board, with other pins. " + _MODULE_TOP
+                ),
+                aliases=("rotary encoder", "illuminated encoder", "RGB encoder", "BOB-11722",
+                         "COM-15141", "enkoder", "döner kodlayıcı")),
     CatalogPart("sparkfun-logic-level-converter",
                 "SparkFun Logic Level Converter - Bi-Directional", "module",
                 "mod-6x2-p1-r4-15.24x12.7x1.6-s8.5",
@@ -4135,6 +4165,11 @@ PIN_ROLES: dict[str, str] = {
     # the slave: the clock is an input), INT "the IRQ output", A0 the address pin you tie to VIN;
     # TI/NXP PCF8574 pin table: P0 to P7 quasi-bidirectional I/O.
     "adafruit-pcf8574-qt": "pwr io io io io io io io io gnd pwr gnd in io out in",
+    # SparkFun's BOB-11722 Eagle board and the Top-Up Industry EC12PLRGBSDVBF encoder drawing
+    # (EC12PSD-062 rev B, hosted by SparkFun as COM-15141's sheet): the encoder's A, B and C are
+    # switch contacts, the three LEDs and the push switch each run to the one common pin 5, so
+    # every lead is a contact or a diode, and none of them supplies or takes a supply.
+    "sparkfun-encoder-breakout": "pas pas pas pas pas pas pas pas",
     # Nordic nRF24L01+ product spec pin table: CE, CSN, SCK and MOSI are digital inputs, MISO and
     # IRQ digital outputs.
     "nrf24l01": "gnd pwr in in in in out out",

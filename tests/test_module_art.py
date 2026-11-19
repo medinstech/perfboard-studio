@@ -66,6 +66,9 @@ DRAWN_AS_THE_BLOCK: dict[str, str] = {
     # resistor packs, the JST-SH sockets), but no layout has been drawn from it yet, and a
     # layout is never invented ahead of the measuring.
     "adafruit-pcf8574-qt": "Adafruit's Eagle board is not yet drawn as a layout",
+    # SparkFun's Eagle board places the encoder and its sockets, but no layout has been drawn
+    # from it, and the encoder is not a chip any art kind knows.
+    "sparkfun-encoder-breakout": "no layout drawn from SparkFun's Eagle board",
     "esp32-cam": (
         "AI-Thinker publishes no drawing of the board, and the only pictures of it are renders "
         "and the community's footprints: the headers are measured, the camera, the FPC "
