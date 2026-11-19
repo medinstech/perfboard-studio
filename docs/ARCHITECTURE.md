@@ -1644,6 +1644,14 @@ Two pins and no more per wire. A net drawn as three wires between four pins read
 like one branching run, and a branch point would need a fourth kind of endpoint — a point on
 another wire — that moves whenever either end does.
 
+**Renaming a part carries its wires and its port links** (`commands.renamed_on_sheet`). A
+wire names its pins by reference, as a net does, and the rename carried only the nets
+(`rename_in_nets`): R1 renamed R7 left every wire drawn to it naming R1, no net held both
+ends, and by the rule above the sheet stopped drawing them, each pin said by name instead;
+every link to a ground or a supply was taken off as naming a pin off its net. The wires, T's
+and links are renamed in the same command as the nets, so it is one undo step.
+`tests/test_sheet_rename.py` holds it.
+
 **A symbol that moves takes its wires with it** (`_reanchored`). Only the two END segments
 give: the first point becomes the pin and the point after it slides along whichever axis that
 segment ran on, so the chain stays orthogonal and the middle is left exactly as drawn. A

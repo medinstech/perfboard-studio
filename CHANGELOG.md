@@ -116,6 +116,10 @@ closed without a bump.
 
 ### Fixed
 
+- **Renaming a part no longer takes its wires off the sheet.** On a sheet drawn by hand,
+  giving R1 another reference left every wire drawn to it naming R1, so the wires stopped
+  being drawn and the pins were labelled with their net's name instead. The wires now follow
+  the new reference, in the same undo step as the rename.
 - **Two nets are no longer drawn as one wire on the sheet drawn for you.** Two pins of
   different nets facing each other across a gap between parts at the same height each ran
   out to a line of their own, and where the left pin's line was the further one the two runs

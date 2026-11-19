@@ -455,6 +455,40 @@ def rename_in_nets(doc: PerfDocument, old_ref: str, new_ref: str) -> tuple[Net, 
     )
 
 
+def renamed_on_sheet(
+    doc: PerfDocument, old_ref: str, new_ref: str
+) -> tuple[tuple[SheetWire, ...], tuple[SheetPort, ...]]:
+    """The sheet's drawn wires and port links carried across a rename, as the nets are.
+
+    A DRAWN WIRE NAMES ITS PINS BY REFERENCE, as a net does, and the rename used to carry
+    only the nets: R1 renamed R7 left every wire drawn to it naming R1, no net held both
+    its ends any more, and the sheet stopped drawing them -- each pin said by name instead,
+    with nothing to say why -- and every link to a ground or a supply was taken off as
+    naming a pin no longer on its net. Carried here, in the same command as the nets
+    (``rename_in_nets``), so the drawing is what it was under the new name.
+    """
+    if old_ref == new_ref:
+        return doc.sheet_wires, doc.sheet_ports
+
+    def node(n: NetNode) -> NetNode:
+        return dataclasses.replace(n, component_ref=new_ref) if n.component_ref == old_ref else n
+
+    def tap(n: NetNode | None) -> NetNode | None:
+        return None if n is None else node(n)
+
+    wires = tuple(
+        dataclasses.replace(w, a=node(w.a), b=node(w.b), tap=tap(w.tap))
+        for w in doc.sheet_wires
+    )
+    ports = tuple(
+        dataclasses.replace(
+            port, links=tuple(dataclasses.replace(link, pin=node(link.pin)) for link in port.links)
+        )
+        for port in doc.sheet_ports
+    )
+    return wires, ports
+
+
 def require_conductor(doc: PerfDocument, id_: ConductorId) -> Conductor:
     for c in doc.conductors:
         if c.id == id_:
@@ -2177,7 +2211,15 @@ class _UpdateComponent:
                 for c in doc.conductors
                 if not (c.kind == "lead-bend" and c.component_id == p.id)
             )
-        return dataclasses.replace(doc, components=components, nets=nets, conductors=conductors)
+        sheet_wires, sheet_ports = renamed_on_sheet(doc, existing.ref, ref)
+        return dataclasses.replace(
+            doc,
+            components=components,
+            nets=nets,
+            conductors=conductors,
+            sheet_wires=sheet_wires,
+            sheet_ports=sheet_ports,
+        )
 
     def describe(self, p: UpdateComponentPayload, doc: PerfDocument) -> str:
         c = next((x for x in doc.components if x.id == p.id), None)
@@ -2440,7 +2482,10 @@ class _UpdatePart:
             else part
             for part in doc.parts
         )
-        return dataclasses.replace(doc, parts=parts, nets=nets)
+        sheet_wires, sheet_ports = renamed_on_sheet(doc, existing.ref, ref)
+        return dataclasses.replace(
+            doc, parts=parts, nets=nets, sheet_wires=sheet_wires, sheet_ports=sheet_ports
+        )
 
     def describe(self, p: UpdatePartPayload, doc: PerfDocument) -> str:
         part = next((x for x in doc.parts if x.id == p.id), None)
