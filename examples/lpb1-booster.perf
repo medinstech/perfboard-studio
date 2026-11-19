@@ -115,7 +115,13 @@
       },
       "rotation": 0,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "E",
+        "2": "B",
+        "3": "C"
+      },
+      "symbol": "npn"
     },
     {
       "id": "c-r1",
