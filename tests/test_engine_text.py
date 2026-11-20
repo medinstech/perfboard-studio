@@ -806,3 +806,118 @@ def test_every_finding_of_the_circuit_is_said_in_turkish(turkish: None) -> None:
             english.append(f"{message!r} -> {said!r}")
     assert english == []
     assert set(RULES) <= seen, set(RULES) - seen
+
+
+def test_p3_and_p5_sheet_commands_and_free_wire_notes_are_said_in_turkish(turkish: None) -> None:
+    """Every loose-wire, paste/duplicate, align/distribute, renumber and label-offset
+    description, plus the sheet's dangling-wire notes, translates into Turkish."""
+    from perfboard_studio.commands import (
+        AddLooseWirePayload,
+        AlignSheetPayload,
+        DeleteLooseWiresPayload,
+        ExtendLooseWirePayload,
+        PasteSheetPart,
+        PasteSheetPayload,
+        RenumberPartsPayload,
+        ReshapeLooseWirePayload,
+    )
+    from perfboard_studio.model import SheetNote
+    from perfboard_studio.schematic import build_schematic
+
+    result = persist.deserialize_document(EXAMPLE.read_text(encoding="utf-8"))
+    bus = CommandBus(
+        result.document,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(result.document)),
+    )
+    said: list[str] = []
+
+    def run(kind: str, payload: object) -> None:
+        outcome = bus.dispatch(kind, payload)
+        assert outcome.ok, f"{kind} failed: {outcome.code} {outcome.message}"
+        said.append(outcome.description)
+
+    run("part.add", AddPartPayload(ref="R30", footprint_id="r-axial-3"))
+    run("part.add", AddPartPayload(ref="R31", footprint_id="r-axial-3"))
+    run("part.add", AddPartPayload(ref="R32", footprint_id="r-axial-3"))
+    by_ref = {p.ref: p.id for p in bus.document.parts}
+    run(
+        "symbol.move",
+        MoveSymbolsPayload(
+            placements=(
+                SymbolPlacement(id=by_ref["R30"], at=Point2(10.16, 10.16)),
+                SymbolPlacement(id=by_ref["R31"], at=Point2(30.48, 20.32)),
+                SymbolPlacement(id=by_ref["R32"], at=Point2(50.80, 30.48)),
+            )
+        ),
+    )
+    run(
+        "symbol.move",
+        MoveSymbolsPayload(
+            placements=(
+                SymbolPlacement(
+                    id=by_ref["R30"], at=Point2(10.16, 10.16), ref_offset=Point2(2.54, 0.0)
+                ),
+            ),
+            label="Move R30 label on the sheet",
+        ),
+    )
+
+    # P3 loose-wire commands + 1-wire and 2-wire drawing notes.
+    run(
+        "sheet.loose.add",
+        AddLooseWirePayload(
+            path=(Point2(10.16, 10.16), Point2(20.32, 10.16)), pin=NetNode("R30", "1")
+        ),
+    )
+    run(
+        "sheet.loose.add",
+        AddLooseWirePayload(path=(Point2(40.64, 10.16), Point2(50.80, 10.16))),
+    )
+    loose_ids = tuple(w.id for w in bus.document.sheet_loose_wires)
+    said.extend(build_schematic(bus.document, LOOKUP).notes)
+    run(
+        "sheet.loose.reshape",
+        ReshapeLooseWirePayload(
+            id=loose_ids[0], path=(Point2(10.16, 10.16), Point2(25.40, 10.16))
+        ),
+    )
+    run(
+        "sheet.loose.extend",
+        ExtendLooseWirePayload(
+            id=loose_ids[0], path=(Point2(10.16, 10.16), Point2(30.48, 10.16))
+        ),
+    )
+    run("sheet.loose.delete", DeleteLooseWiresPayload(ids=(loose_ids[1],)))
+    said.extend(build_schematic(bus.document, LOOKUP).notes)
+    run("sheet.loose.delete", DeleteLooseWiresPayload(ids=(loose_ids[0],)))
+
+    # P5 paste, duplicate, align/distribute, and renumber.
+    pasted = PasteSheetPart(
+        source_ref="R30",
+        footprint_id="r-axial-3",
+        value="10k",
+        at=Point2(10.16, 40.64),
+    )
+    run("sheet.paste", PasteSheetPayload(parts=(pasted,)))
+    run("sheet.paste", PasteSheetPayload(parts=(pasted, pasted)))
+    run(
+        "sheet.paste",
+        PasteSheetPayload(
+            notes=(SheetNote(id="n1", kind="text", at=Point2(0.0, 0.0), to=Point2(0.0, 0.0), text="A"),)
+        ),
+    )
+    run("sheet.paste", PasteSheetPayload(parts=(pasted,), label="Duplicate on the sheet"))
+
+    ids3 = (by_ref["R30"], by_ref["R31"], by_ref["R32"])
+    for mode in ("left", "right", "top", "bottom", "distribute-h", "distribute-v"):
+        run("sheet.align", AlignSheetPayload(mode=mode, ids=ids3))
+
+    run("part.renumber", RenumberPartsPayload(mapping=((by_ref["R30"], "R90"),)))
+    run(
+        "part.renumber",
+        RenumberPartsPayload(mapping=((by_ref["R30"], "R91"), (by_ref["R31"], "R92"))),
+    )
+
+    untranslated = [sentence for sentence in said if say(sentence) == sentence]
+    assert untranslated == [], untranslated
