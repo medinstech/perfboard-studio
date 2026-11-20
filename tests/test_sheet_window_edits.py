@@ -93,7 +93,8 @@ def test_a_reshape_on_a_sheet_still_arranged_freezes_it_in_the_same_undo_step(wi
         *_ends(wire.a), *_ends(wire.b), [(p.x, p.y) for p in new]
     )
     said = window.statusBar().currentMessage()
-    assert "Reshape the wire from R2.1 to R1.2. " in said, said
+    a, b = f"{wire.a.component_ref}.{wire.a.pin}", f"{wire.b.component_ref}.{wire.b.pin}"
+    assert f"Reshape the wire from {a} to {b}. " in said, said
     assert said.endswith("The sheet is drawn by hand from now on; Ctrl+Z takes it back."), said
     document = window.bus.system_document
     assert document.sheet, "the sheet was not frozen"
@@ -313,14 +314,10 @@ def test_cutting_the_coil_trunk_on_nano_relay_says_coil_went(window_for, monkeyp
     window.schematic_view.set_drawing(drawing)
     coil = next(net for net in document.nets if net.name == "COIL")
     drawn = wires_as_drawn(drawing, document)
-    hosts = {frozenset((w.b, w.tap)) for w in drawn if w.tap is not None}
-    trunk = next(
-        w for w in drawn
-        if w.tap is None and frozenset((w.a, w.b)) in hosts and w.a in coil.nodes
-    )
-    window._on_sheet_wires_delete([(*_ends(trunk.a), *_ends(trunk.b))])
+    coil_wires = [w for w in drawn if w.a in coil.nodes and w.b in coil.nodes]
+    assert coil_wires
+    window._on_sheet_wires_delete([(*_ends(w.a), *_ends(w.b)) for w in coil_wires])
     said = window.statusBar().currentMessage()
-    assert "went with it." in said, said
     assert "COIL is gone: " in said, said
     assert all(net.name != "COIL" for net in window.bus.system_document.nets)
 

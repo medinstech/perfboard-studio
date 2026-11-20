@@ -10129,10 +10129,9 @@ def test_a_net_label_stub_is_not_a_wire_to_branch_off() -> None:
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
-    _add(window, "R2", "r-axial-3")
     window.bus.dispatch(
         "net.add",
-        AddNetPayload(name="CLK", nodes=(NetNode("R1", "1"), NetNode("R2", "1"))),
+        AddNetPayload(name="CLK", nodes=(NetNode("R1", "1"),)),
     )
     window.on_sheet_tool("wire")
     window._refresh_schematic_panel()
@@ -11322,9 +11321,10 @@ def test_a_right_click_on_a_wire_offers_the_net() -> None:
     _add(window, "R2", "r-axial-3")
     _wire(window, "OUT", ("R1", "1"), ("R2", "2"))
     wire = window.schematic_view.item.drawing.wires[0]
-    middle = wire.path[len(wire.path) // 2]
+    p0, p1 = wire.path[0], wire.path[1]
+    middle = QPointF((p0.x + p1.x) / 2, (p0.y + p1.y) / 2)
 
-    labels = _labels(window.sheet_menu(_sheet_at(window, middle.x, middle.y)))
+    labels = _labels(window.sheet_menu(_sheet_at(window, middle.x(), middle.y())))
 
     # Net Face only where the board has pads on the component side, as the blank board does.
     assert labels == ["Re&name Net…", "Net &Class", "Net &Face", "&Edit Net…", "De&lete Net"]
