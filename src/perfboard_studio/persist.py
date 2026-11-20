@@ -257,7 +257,14 @@ EXTRA_BOARD_KEY_ORDER: tuple[str, ...] = (
     "heightLimitMm",
     "bodyClearanceMm",
 )
-SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored")
+SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = (
+    "id",
+    "at",
+    "rotation",
+    "mirrored",
+    "refOffset",
+    "valueOffset",
+)
 SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path", "tap")
 SHEET_PORT_KEY_ORDER: tuple[str, ...] = ("id", "kind", "name", "at", "links")
 PORT_LINK_KEY_ORDER: tuple[str, ...] = ("pin", "path")
@@ -643,6 +650,16 @@ def _ordered_symbol_placement(placement: SymbolPlacement, index: int) -> JsonObj
         values["rotation"] = _num(_field_path(path, "rotation"), placement.rotation)
     if placement.mirrored:
         values["mirrored"] = True
+    if placement.ref_offset is not None and (
+        placement.ref_offset.x != 0.0 or placement.ref_offset.y != 0.0
+    ):
+        values["refOffset"] = _ordered_point(placement.ref_offset, _field_path(path, "refOffset"))
+    if placement.value_offset is not None and (
+        placement.value_offset.x != 0.0 or placement.value_offset.y != 0.0
+    ):
+        values["valueOffset"] = _ordered_point(
+            placement.value_offset, _field_path(path, "valueOffset")
+        )
     return _build_ordered(SYMBOL_PLACEMENT_KEY_ORDER, values)
 
 
@@ -1759,6 +1776,16 @@ def _parse_symbol_placement(
         at=_parse_point(_require_field(obj, "at", path), _field_path(path, "at"), warnings),
         rotation=rotation,
         mirrored=_expect_boolean(obj.get("mirrored", False), _field_path(path, "mirrored")),
+        ref_offset=(
+            _parse_point(obj["refOffset"], _field_path(path, "refOffset"), warnings)
+            if "refOffset" in obj
+            else None
+        ),
+        value_offset=(
+            _parse_point(obj["valueOffset"], _field_path(path, "valueOffset"), warnings)
+            if "valueOffset" in obj
+            else None
+        ),
     )
 
 

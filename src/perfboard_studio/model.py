@@ -954,6 +954,10 @@ class SymbolPlacement:
     at: Point2
     rotation: Rotation = 0
     mirrored: bool = False
+    #: Optional millimetres added to the default position of this symbol's reference and value
+    #: labels when dragged by hand on the sheet. Omitted from JSON when unset or zero.
+    ref_offset: Point2 | None = None
+    value_offset: Point2 | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -103,6 +103,7 @@ from perfboard_studio.schematic import (
     moved_end,
     moved_run,
     no_connect_arms,
+    placed_part_labels,
     port_glyph,
     port_stub,
     rail_glyph_bars,
@@ -381,6 +382,8 @@ class SheetItem(QGraphicsItem):
         self.port_ghost: tuple[SheetPortKind, str, Point2, tuple[Point2, ...]] | None = None
         #: A port being dragged, and how far from where the document has it.
         self.port_drag: tuple[str, QPointF] | None = None
+        #: A part ref/value label being dragged, and how far from where it sits.
+        self.label_drag: tuple[Label, QPointF] | None = None
         #: The pin waiting for its partner while a wire is being drawn.
         self.pending_pin: tuple[str, str] | None = None
         #: The pin the wire tool would take if the button went down now -- ringed, so the
@@ -796,6 +799,16 @@ class SheetItem(QGraphicsItem):
             if port is not None:
                 at = Point2(x=port.at.x + shift.x(), y=port.at.y + shift.y())
                 self._port_picture(painter, port.kind, port.name, at, ())
+
+        if self.label_drag is not None:
+            label, shift = self.label_drag
+            box = _part_label_hit_box(label).translated(shift)
+            pen = QPen(QColor(SELECTED))
+            pen.setWidthF(GHOST_MM)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(box)
 
         if self.ghost_shape is not None:
             kind, start, end = self.ghost_shape
@@ -1289,6 +1302,15 @@ class SchematicView(QGraphicsView):
     looseWireDeleteRequested = Signal(list)
     #: R (+1) or Shift+R (-1) was pressed: turn the selected symbols by that many quarters.
     turnRequested = Signal(int)
+    #: X/M ("x") or Y ("y") was pressed: mirror the selected symbols on the sheet.
+    mirrorRequested = Signal(str)
+    #: Sheet clipboard / duplicate shortcuts pressed while the sheet has focus.
+    copyRequested = Signal()
+    cutRequested = Signal()
+    pasteRequested = Signal()
+    duplicateRequested = Signal()
+    #: A symbol's ref or value label was dragged by (dx, dy) mm on the sheet.
+    labelOffsetMoved = Signal(str, str, float, float)
     #: The selection changed on the sheet itself.
     selectionChanged = Signal(list)
     #: The viewport position of a right-click that wants a menu. WHAT is on it is the
@@ -1391,6 +1413,9 @@ class SchematicView(QGraphicsView):
         self._grabbing = False
         self._grab_origin: QPointF | None = None
         self._grab_port: str | None = None
+        #: A part ref/value label pressed in Select: (symbol ref, kind, label).
+        self._press_label: tuple[str, Literal["ref", "value"], Label] | None = None
+        self._label_dragging = False
         #: The last route ``_pin_to_pin`` found: the drawing itself (held, so a new one is
         #: never mistaken for it), the two pins, the route.
         self._route_memo: (
@@ -1987,6 +2012,7 @@ class SchematicView(QGraphicsView):
             or self._reshaping
             or self._moving_end
             or self._port_dragging
+            or self._label_dragging
             or self._band_from is not None
             or self._shape_from is not None
         )
@@ -2018,8 +2044,11 @@ class SchematicView(QGraphicsView):
         self._moving_end = False
         self._press_port = None
         self._port_dragging = False
+        self._press_label = None
+        self._label_dragging = False
         if self.item is not None:
             self.item.port_drag = None
+            self.item.label_drag = None
             self.item.drag_offset = None
             self.item.live_wires = None
             self.item.live_drawing = None
@@ -2171,6 +2200,25 @@ class SchematicView(QGraphicsView):
             if box.contains(scene_pos):
                 return symbol
         return None
+
+    def part_label_at(
+        self, scene_pos: QPointF
+    ) -> tuple[str, Literal["ref", "value"], Label] | None:
+        """The ref or value label under ``scene_pos``, paired with its owning symbol ref."""
+        if self.item is None:
+            return None
+        best: tuple[float, str, Literal["ref", "value"], Label] | None = None
+        for ref, kind, label in placed_part_labels(self.item.drawing):
+            box = _part_label_hit_box(label).adjusted(
+                -PICK_MM * 0.5, -PICK_MM * 0.5, PICK_MM * 0.5, PICK_MM * 0.5
+            )
+            if not box.contains(scene_pos):
+                continue
+            center = box.center()
+            dist = math.hypot(scene_pos.x() - center.x(), scene_pos.y() - center.y())
+            if best is None or dist < best[0]:
+                best = (dist, ref, kind, label)
+        return (best[1], best[2], best[3]) if best is not None else None
 
     def net_at(self, scene_pos: QPointF) -> tuple[str, str] | None:
         """The nearest wire or rail within ``PICK_MM``, as ``(net_id, net_name)``.
@@ -2471,6 +2519,14 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        part_label = None if additive else self.part_label_at(where)
+        if part_label is not None:
+            self._press_label = part_label
+            self.set_selection([part_label[0]])
+            self.selectionChanged.emit([part_label[0]])
+            event.accept()
+            return
+
         run = self.wire_at(where)
         if run is not None:
             self._select_wire(run[0], where)
@@ -2635,6 +2691,11 @@ class SchematicView(QGraphicsView):
 
         if self._press_port is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self._drag_port(event, where)
+            event.accept()
+            return
+
+        if self._press_label is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._drag_label(event, where)
             event.accept()
             return
 
@@ -2886,6 +2947,18 @@ class SchematicView(QGraphicsView):
         self.item.port_drag = (self._press_port, _snapped(where - start))
         self.item.update()
 
+    def _drag_label(self, event: QMouseEvent, where: QPointF) -> None:
+        """Preview dragging a symbol's ref or value label by a grid-snapped offset."""
+        if self._press_at is None or self.item is None or self._press_label is None:
+            return
+        moved = event.position().toPoint() - self._press_at
+        if not self._label_dragging and moved.manhattanLength() < QApplication.startDragDistance():
+            return
+        self._label_dragging = True
+        start = self._press_scene or where
+        self.item.label_drag = (self._press_label[2], _snapped(where - start))
+        self.item.update()
+
     def _end_at(
         self, where: QPointF
     ) -> tuple[tuple[NetNode, NetNode], tuple[Point2, ...], bool] | None:
@@ -3086,6 +3159,17 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        if self._press_label is not None:
+            held_label = self._press_label
+            drag_label = self.item.label_drag if self.item is not None else None
+            self._clear_ghosts()
+            if drag_label is not None and (drag_label[1].x() or drag_label[1].y()):
+                ref, label_kind, _label = held_label
+                shift = drag_label[1]
+                self.labelOffsetMoved.emit(ref, label_kind, shift.x(), shift.y())
+            event.accept()
+            return
+
         if self._press_note is not None:
             self._clear_ghosts()
             event.accept()
@@ -3202,6 +3286,27 @@ class SchematicView(QGraphicsView):
         if (
             event.type() == QEvent.Type.ShortcutOverride
             and isinstance(event, QKeyEvent)
+            and (event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier)
+            == Qt.KeyboardModifier.NoModifier
+            and event.key() in (Qt.Key.Key_X, Qt.Key.Key_Y, Qt.Key.Key_M)
+            and self.selected_refs
+            and not self.wire_in_progress()
+        ):
+            event.accept()
+            return True
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and (event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier)
+            == Qt.KeyboardModifier.ControlModifier
+            and event.key()
+            in (Qt.Key.Key_A, Qt.Key.Key_C, Qt.Key.Key_X, Qt.Key.Key_V, Qt.Key.Key_D)
+        ):
+            event.accept()
+            return True
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
             and event.key() == Qt.Key.Key_Escape
             and self.gesture_in_flight()
         ):
@@ -3224,6 +3329,38 @@ class SchematicView(QGraphicsView):
                 self._space_held = True
                 if not self._panning:
                     self.setCursor(Qt.CursorShape.OpenHandCursor)
+            event.accept()
+            return
+        mods = event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+        if mods == Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_A:
+                self.select_all()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_C:
+                self.copyRequested.emit()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_X:
+                self.cutRequested.emit()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_V:
+                self.pasteRequested.emit()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_D:
+                self.duplicateRequested.emit()
+                event.accept()
+                return
+        if (
+            mods == Qt.KeyboardModifier.NoModifier
+            and event.key() in (Qt.Key.Key_X, Qt.Key.Key_Y, Qt.Key.Key_M)
+            and self.selected_refs
+            and not self.wire_in_progress()
+            and not self._grabbing
+        ):
+            self.mirrorRequested.emit("y" if event.key() == Qt.Key.Key_Y else "x")
             event.accept()
             return
         turn = _turn_of(event)
@@ -3707,6 +3844,20 @@ def _grab(path: Sequence[Point2], where: QPointF) -> tuple[str, int]:
         for index, (start, end) in enumerate(itertools.pairwise(path))
     ]
     return "run", min(runs, default=(0.0, 0))[1]
+
+
+def _part_label_hit_box(label: Label) -> QRectF:
+    """Approximate sheet-millimetre bounding box for hitting a ref or value label."""
+    height = REF_LABEL_MM if label.kind == "ref" else VALUE_LABEL_MM
+    width = max(len(label.text) * height * 0.65, height * 1.5)
+    if label.anchor == "centre":
+        x0 = label.at.x - width / 2
+    elif label.anchor == "right":
+        x0 = label.at.x - width
+    else:
+        x0 = label.at.x
+    y0 = label.at.y - height if label.kind == "ref" else label.at.y
+    return QRectF(x0, y0, width, height)
 
 
 def _grab_loose(fw: FreeWire, where: QPointF, radius: float) -> tuple[str, int]:

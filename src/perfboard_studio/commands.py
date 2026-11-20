@@ -1383,6 +1383,76 @@ class ExtendLooseWirePayload:
 
 
 @dataclass(frozen=True, slots=True)
+class PasteSheetPart:
+    """One part inside a copied/duplicated sheet snippet (``sheet.paste``)."""
+
+    source_ref: str
+    footprint_id: str
+    at: Point2
+    value: str = ""
+    rotation: Rotation = 0
+    mirrored: bool = False
+    pin_names: PinNames = ()
+    pin_roles: PinRoles = ()
+    symbol: PartSymbol | None = None
+    note: str = ""
+    ref_offset: Point2 | None = None
+    value_offset: Point2 | None = None
+
+
+_ZERO_OFFSET = Point2(x=0.0, y=0.0)
+
+
+@dataclass(frozen=True, slots=True)
+class PasteSheetPayload:
+    """Paste or duplicate a snippet of the schematic sheet in ONE undo step.
+
+    Allocates the next free reference for each pasted part (e.g. ``R7`` -> ``R8``), adds
+    the parts and their symbol placements, remaps and connects pasted wires and ports, and
+    carries loose wires and notes shifted by ``offset``.
+    """
+
+    parts: tuple[PasteSheetPart, ...] = ()
+    wires: tuple[SheetWire, ...] = ()
+    loose_wires: tuple[LooseWire, ...] = ()
+    ports: tuple[SheetPort, ...] = ()
+    notes: tuple[SheetNote, ...] = ()
+    offset: Point2 = _ZERO_OFFSET
+    #: As ``DrawSheetWirePayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+    label: str | None = None
+
+
+type SheetAlignMode = Literal["left", "right", "top", "bottom", "distribute-h", "distribute-v"]
+
+
+@dataclass(frozen=True, slots=True)
+class AlignSheetPayload:
+    """Align or distribute selected symbols and ports on the sheet in ONE undo step."""
+
+    mode: SheetAlignMode
+    ids: tuple[ComponentId, ...] = ()
+    port_ids: tuple[str, ...] = ()
+    #: Optional symbol ``(width, height)`` from the drawing for right/bottom alignment and
+    #: distribution; defaults to ``(0, 0)`` when omitted.
+    sizes: tuple[tuple[ComponentId, Point2], ...] = ()
+    wires: tuple[SheetWire, ...] = ()
+    loose_wires: tuple[LooseWire, ...] = ()
+    ports: tuple[SheetPort, ...] = ()
+    #: As ``DrawSheetWirePayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RenumberPartsPayload:
+    """Rename one or more parts simultaneously (e.g. sheet annotation left-to-right,
+    top-to-bottom), carrying nets, drawn wires, T's, ports and loose wires in ONE undo step.
+    """
+
+    mapping: tuple[tuple[ComponentId, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AddSheetNotePayload:
     """A caption or a box on the drawing. Nothing derives anything from it."""
 
@@ -4512,6 +4582,382 @@ class _ExtendLooseWire:
         return "Extend a wire on the sheet"
 
 
+_REF_PARTS = re.compile(r"^([A-Za-z_]+?)(\d*)$")
+_SHEET_GRID_MM: Mm = 2.54
+
+
+def _snap_sheet_mm(value: Mm) -> Mm:
+    return round(round(value / _SHEET_GRID_MM) * _SHEET_GRID_MM, 6)
+
+
+def _shift_point(pt: Point2, offset: Point2) -> Point2:
+    return Point2(x=round(pt.x + offset.x, 6), y=round(pt.y + offset.y, 6))
+
+
+def _next_free_ref(used: set[str], source_ref: str) -> str:
+    """The next unused designator sharing ``source_ref``'s prefix (e.g. R7 -> R8)."""
+    match = _REF_PARTS.match(source_ref.strip())
+    if match:
+        prefix, digits = match.group(1), match.group(2)
+        n = int(digits) + 1 if digits else 1
+    else:
+        prefix, n = source_ref.strip() or "P", 1
+    while f"{prefix}{n}" in used:
+        n += 1
+    chosen = f"{prefix}{n}"
+    used.add(chosen)
+    return chosen
+
+
+class _PasteSheet:
+    """Paste or duplicate parts, wires, ports, loose wires and notes on the sheet in one step."""
+
+    type = "sheet.paste"
+
+    def apply(
+        self, doc: PerfDocument, p: PasteSheetPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not (p.parts or p.wires or p.loose_wires or p.ports or p.notes):
+            raise CommandError("empty-batch", "Nothing to paste on the sheet.")
+        doc = _frozen(doc, p.freeze, ctx)
+        used_refs = {part.ref for part in circuit_parts(doc)}
+        ref_map: dict[str, str] = {}
+        new_parts: list[SchematicPart] = []
+        new_placements: list[SymbolPlacement] = []
+        for item in p.parts:
+            assert_rotation(item.rotation)
+            new_ref = _next_free_ref(used_refs, item.source_ref)
+            ref_map[item.source_ref] = new_ref
+            part_id = ctx.next_id("part")
+            new_parts.append(
+                SchematicPart(
+                    id=part_id,
+                    ref=new_ref,
+                    value=item.value,
+                    footprint_id=item.footprint_id,
+                    pin_names=checked_pin_names(item.pin_names, new_ref),
+                    pin_roles=checked_pin_roles(item.pin_roles, new_ref),
+                    symbol=item.symbol,
+                    note=checked_note(item.note, new_ref),
+                )
+            )
+            new_placements.append(
+                SymbolPlacement(
+                    id=part_id,
+                    at=_shift_point(item.at, p.offset),
+                    rotation=item.rotation,
+                    mirrored=item.mirrored,
+                    ref_offset=item.ref_offset,
+                    value_offset=item.value_offset,
+                )
+            )
+        doc = dataclasses.replace(
+            doc,
+            parts=(*doc.parts, *new_parts),
+            sheet=(*doc.sheet, *new_placements),
+        )
+
+        # Wires: non-T first, then T's so every host wire exists before a branch lands on it.
+        ordered_wires = [w for w in p.wires if w.tap is None] + [
+            w for w in p.wires if w.tap is not None
+        ]
+        for wire in ordered_wires:
+            if wire.a.component_ref not in ref_map or wire.b.component_ref not in ref_map:
+                continue
+            if wire.tap is not None and wire.tap.component_ref not in ref_map:
+                continue
+            remapped = SheetWire(
+                a=NetNode(component_ref=ref_map[wire.a.component_ref], pin=wire.a.pin),
+                b=NetNode(component_ref=ref_map[wire.b.component_ref], pin=wire.b.pin),
+                path=tuple(_shift_point(pt, p.offset) for pt in wire.path),
+                tap=(
+                    NetNode(component_ref=ref_map[wire.tap.component_ref], pin=wire.tap.pin)
+                    if wire.tap is not None
+                    else None
+                ),
+            )
+            doc = _DrawSheetWire().apply(doc, DrawSheetWirePayload(wire=remapped), ctx)
+
+        # Ports: allocate fresh ids, remap links whose pins were pasted, join port nets.
+        port_map: dict[str, str] = {}
+        for port in p.ports:
+            new_pid = ctx.next_id("port")
+            port_map[port.id] = new_pid
+            links = tuple(
+                PortLink(
+                    pin=NetNode(component_ref=ref_map[link.pin.component_ref], pin=link.pin.pin),
+                    path=tuple(_shift_point(pt, p.offset) for pt in link.path),
+                )
+                for link in port.links
+                if link.pin.component_ref in ref_map
+            )
+            doc = _AddSheetPort().apply(
+                doc,
+                AddSheetPortPayload(
+                    id=new_pid,
+                    kind=port.kind,
+                    name=port.name,
+                    at=_shift_point(port.at, p.offset),
+                    links=links,
+                ),
+                ctx,
+            )
+
+        # Loose wires: shift path and remap any anchor kept in the pasted selection.
+        new_loose: list[LooseWire] = []
+        for lw in p.loose_wires:
+            pin = (
+                NetNode(component_ref=ref_map[lw.pin.component_ref], pin=lw.pin.pin)
+                if lw.pin is not None and lw.pin.component_ref in ref_map
+                else None
+            )
+            on = (
+                (
+                    NetNode(component_ref=ref_map[lw.on[0].component_ref], pin=lw.on[0].pin),
+                    NetNode(component_ref=ref_map[lw.on[1].component_ref], pin=lw.on[1].pin),
+                )
+                if lw.on is not None
+                and lw.on[0].component_ref in ref_map
+                and lw.on[1].component_ref in ref_map
+                else None
+            )
+            port_ref = port_map.get(lw.port) if lw.port is not None else None
+            path = tuple(_shift_point(pt, p.offset) for pt in lw.path)
+            _check_square_path(path, "A wire")
+            new_loose.append(
+                LooseWire(id=ctx.next_id("loose"), path=path, pin=pin, on=on, port=port_ref)
+            )
+
+        # Notes: shift both corners and allocate fresh ids.
+        new_notes = tuple(
+            SheetNote(
+                id=ctx.next_id("note"),
+                kind=note.kind,
+                at=_shift_point(note.at, p.offset),
+                to=_shift_point(note.to, p.offset),
+                text=note.text,
+                size_mm=note.size_mm,
+            )
+            for note in p.notes
+        )
+        return dataclasses.replace(
+            doc,
+            sheet_loose_wires=(*doc.sheet_loose_wires, *new_loose),
+            sheet_notes=(*doc.sheet_notes, *new_notes),
+        )
+
+    def describe(self, p: PasteSheetPayload, doc: PerfDocument) -> str:
+        if p.label:
+            return p.label
+        if p.parts:
+            return f"Paste {count_noun(len(p.parts), 'part')} on the sheet"
+        return "Paste on the sheet"
+
+
+class _AlignSheet:
+    """Align or distribute symbols and ports on the sheet in one undo step."""
+
+    type = "sheet.align"
+
+    def apply(
+        self, doc: PerfDocument, p: AlignSheetPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        min_items = 3 if p.mode in ("distribute-h", "distribute-v") else 2
+        by_sym = {pl.id: pl for pl in doc.sheet}
+        by_port = {pt.id: pt for pt in doc.sheet_ports}
+        sizes = dict(p.sizes)
+
+        # Items as (kind, id, x, y, w, h)
+        items: list[tuple[Literal["symbol", "port"], str, Mm, Mm, Mm, Mm]] = []
+        for sid in p.ids:
+            pl = by_sym.get(sid)
+            if pl is None:
+                raise CommandError("unknown-part", f'Symbol "{sid}" is not positioned on the sheet.')
+            sz = sizes.get(sid, Point2(x=0.0, y=0.0))
+            items.append(("symbol", sid, pl.at.x, pl.at.y, sz.x, sz.y))
+        for pid in p.port_ids:
+            pt = by_port.get(pid)
+            if pt is None:
+                raise CommandError("unknown-port", f'No port with id "{pid}" is on the sheet.')
+            items.append(("port", pid, pt.at.x, pt.at.y, 0.0, 0.0))
+
+        if len(items) < min_items:
+            raise CommandError(
+                "too-few-items",
+                f"Select at least {min_items} items on the sheet to {p.mode.replace('-', ' ')}.",
+            )
+
+        new_pos: dict[tuple[str, str], Point2] = {}
+        if p.mode == "left":
+            target = min(x for _, _, x, _, _, _ in items)
+            for kind, oid, _x, y, _w, _h in items:
+                new_pos[(kind, oid)] = Point2(x=_snap_sheet_mm(target), y=y)
+        elif p.mode == "right":
+            target = max(x + w for _, _, x, _, w, _ in items)
+            for kind, oid, _x, y, w, _h in items:
+                new_pos[(kind, oid)] = Point2(x=_snap_sheet_mm(target - w), y=y)
+        elif p.mode == "top":
+            target = min(y for _, _, _, y, _, _ in items)
+            for kind, oid, x, _y, _w, _h in items:
+                new_pos[(kind, oid)] = Point2(x=x, y=_snap_sheet_mm(target))
+        elif p.mode == "bottom":
+            target = max(y + h for _, _, _, y, _, h in items)
+            for kind, oid, x, _y, _w, h in items:
+                new_pos[(kind, oid)] = Point2(x=x, y=_snap_sheet_mm(target - h))
+        elif p.mode == "distribute-h":
+            ordered = sorted(items, key=lambda it: (it[2], it[3], it[1]))
+            start_x, end_x = ordered[0][2], ordered[-1][2]
+            step = (end_x - start_x) / (len(ordered) - 1)
+            for idx, (kind, oid, _x, y, _w, _h) in enumerate(ordered):
+                nx = start_x if idx == 0 else (end_x if idx == len(ordered) - 1 else _snap_sheet_mm(start_x + step * idx))
+                new_pos[(kind, oid)] = Point2(x=nx, y=y)
+        else:  # distribute-v
+            ordered = sorted(items, key=lambda it: (it[3], it[2], it[1]))
+            start_y, end_y = ordered[0][3], ordered[-1][3]
+            step = (end_y - start_y) / (len(ordered) - 1)
+            for idx, (kind, oid, x, _y, _w, _h) in enumerate(ordered):
+                ny = start_y if idx == 0 else (end_y if idx == len(ordered) - 1 else _snap_sheet_mm(start_y + step * idx))
+                new_pos[(kind, oid)] = Point2(x=x, y=ny)
+
+        moved_syms = tuple(
+            dataclasses.replace(pl, at=new_pos[("symbol", pl.id)])
+            if ("symbol", pl.id) in new_pos
+            else pl
+            for pl in doc.sheet
+        )
+        ports_override = {port.id: port for port in p.ports}
+        moved_ports = tuple(
+            dataclasses.replace(
+                ports_override.get(pt.id, pt),
+                at=new_pos.get(("port", pt.id), pt.at),
+            )
+            for pt in doc.sheet_ports
+        )
+        sheet_wires = _with_frozen_wires(doc, p.wires) if p.wires else doc.sheet_wires
+        sheet_loose = doc.sheet_loose_wires
+        if p.loose_wires:
+            by_lid = {lw.id: lw for lw in p.loose_wires}
+            for lw in p.loose_wires:
+                _check_square_path(lw.path, "A wire")
+            sheet_loose = tuple(by_lid.get(w.id, w) for w in doc.sheet_loose_wires)
+        return dataclasses.replace(
+            doc,
+            sheet=moved_syms,
+            sheet_ports=moved_ports,
+            sheet_wires=sheet_wires,
+            sheet_loose_wires=sheet_loose,
+        )
+
+    def describe(self, p: AlignSheetPayload, doc: PerfDocument) -> str:
+        verb = {
+            "left": "Align left on the sheet",
+            "right": "Align right on the sheet",
+            "top": "Align top on the sheet",
+            "bottom": "Align bottom on the sheet",
+            "distribute-h": "Distribute horizontally on the sheet",
+            "distribute-v": "Distribute vertically on the sheet",
+        }[p.mode]
+        return verb
+
+
+class _RenumberParts:
+    """Rename parts and components simultaneously, carrying nets, wires, ports and loose wires."""
+
+    type = "part.renumber"
+
+    def apply(
+        self, doc: PerfDocument, p: RenumberPartsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.mapping:
+            raise CommandError("empty-batch", "part.renumber needs at least one part to rename.")
+        all_parts = {part.id: part.ref for part in circuit_parts(doc)}
+        id_to_new: dict[ComponentId, str] = {}
+        for cid, raw_ref in p.mapping:
+            if cid not in all_parts:
+                raise CommandError("unknown-part", f'No part or component with id "{cid}".')
+            if cid in id_to_new:
+                raise CommandError("duplicate-id", f'Part "{cid}" is renumbered twice in one batch.')
+            cleaned = raw_ref.strip()
+            if not cleaned:
+                raise CommandError("empty-ref", "A part reference cannot be empty.")
+            id_to_new[cid] = cleaned
+
+        final_refs = {cid: id_to_new.get(cid, ref) for cid, ref in all_parts.items()}
+        if len(set(final_refs.values())) != len(final_refs):
+            raise CommandError("duplicate-ref", "Two parts would share the same reference.")
+
+        old_to_new = {
+            old_ref: id_to_new[cid]
+            for cid, old_ref in all_parts.items()
+            if cid in id_to_new and id_to_new[cid] != old_ref
+        }
+        if not old_to_new:
+            raise CommandError("nothing-to-do", "Every reference is already numbered that way.")
+
+        def map_node(n: NetNode) -> NetNode:
+            mapped = old_to_new.get(n.component_ref)
+            return dataclasses.replace(n, component_ref=mapped) if mapped is not None else n
+
+        def map_opt(n: NetNode | None) -> NetNode | None:
+            return None if n is None else map_node(n)
+
+        parts = tuple(
+            dataclasses.replace(part, ref=id_to_new[part.id]) if part.id in id_to_new else part
+            for part in doc.parts
+        )
+        components = tuple(
+            dataclasses.replace(c, ref=id_to_new[c.id]) if c.id in id_to_new else c
+            for c in doc.components
+        )
+        boards = tuple(
+            dataclasses.replace(
+                extra,
+                components=tuple(
+                    dataclasses.replace(c, ref=id_to_new[c.id]) if c.id in id_to_new else c
+                    for c in extra.components
+                ),
+            )
+            for extra in doc.boards
+        )
+        nets = tuple(
+            dataclasses.replace(net, nodes=tuple(map_node(n) for n in net.nodes))
+            for net in doc.nets
+        )
+        sheet_wires = tuple(
+            dataclasses.replace(w, a=map_node(w.a), b=map_node(w.b), tap=map_opt(w.tap))
+            for w in doc.sheet_wires
+        )
+        sheet_ports = tuple(
+            dataclasses.replace(
+                port,
+                links=tuple(dataclasses.replace(link, pin=map_node(link.pin)) for link in port.links),
+            )
+            for port in doc.sheet_ports
+        )
+        sheet_loose = tuple(
+            dataclasses.replace(
+                w,
+                pin=map_opt(w.pin),
+                on=(map_node(w.on[0]), map_node(w.on[1])) if w.on is not None else None,
+            )
+            for w in doc.sheet_loose_wires
+        )
+        return dataclasses.replace(
+            doc,
+            parts=parts,
+            components=components,
+            boards=boards,
+            nets=nets,
+            sheet_wires=sheet_wires,
+            sheet_ports=sheet_ports,
+            sheet_loose_wires=sheet_loose,
+        )
+
+    def describe(self, p: RenumberPartsPayload, doc: PerfDocument) -> str:
+        return f"Renumber {count_noun(len(p.mapping), 'part')} on the sheet"
+
+
 class _AddSheetNote:
     type = "sheet.note.add"
 
@@ -5643,7 +6089,9 @@ DESIGN_COMMANDS = frozenset(
         "part.add",
         "part.addMany",
         "part.delete",
+        "part.renumber",
         "part.update",
+        "sheet.align",
         "sheet.arrange",
         "sheet.loose.add",
         "sheet.loose.delete",
@@ -5652,6 +6100,7 @@ DESIGN_COMMANDS = frozenset(
         "sheet.note.add",
         "sheet.note.delete",
         "sheet.note.update",
+        "sheet.paste",
         "sheet.port.add",
         "sheet.port.delete",
         "sheet.port.link",
@@ -6115,6 +6564,9 @@ add_loose_wire: CommandDefinition[AddLooseWirePayload] = _AddLooseWire()
 reshape_loose_wire: CommandDefinition[ReshapeLooseWirePayload] = _ReshapeLooseWire()
 delete_loose_wires: CommandDefinition[DeleteLooseWiresPayload] = _DeleteLooseWires()
 extend_loose_wire: CommandDefinition[ExtendLooseWirePayload] = _ExtendLooseWire()
+paste_sheet: CommandDefinition[PasteSheetPayload] = _PasteSheet()
+align_sheet: CommandDefinition[AlignSheetPayload] = _AlignSheet()
+renumber_parts: CommandDefinition[RenumberPartsPayload] = _RenumberParts()
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
@@ -6198,6 +6650,9 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     reshape_loose_wire,
     delete_loose_wires,
     extend_loose_wire,
+    paste_sheet,
+    align_sheet,
+    renumber_parts,
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,

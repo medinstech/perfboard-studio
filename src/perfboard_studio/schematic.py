@@ -65,6 +65,7 @@ import dataclasses
 import heapq
 import itertools
 import math
+import re
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -2742,7 +2743,7 @@ def _hand_drawn_sheet(
     # sheet always said both: freezing it used to keep the lines and lose every name. The
     # name goes by the derived sheet's own rule, ``_name_nets``, so a freeze moves none.
     ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
-    part_labels = _part_labels(ordered, options)
+    part_labels = _apply_label_offsets(_part_labels(ordered, options), placements)
     rail_names = _rail_names(rails)
     pins_of = {item.net.id: item.pins for item in resolved}
     named, quiet_names = _name_nets(
@@ -3212,6 +3213,75 @@ def ports_after_move(
         if any_changed:
             changed.append(dataclasses.replace(port, links=tuple(new_links)))
     return tuple(changed)
+
+
+def _apply_label_offsets(
+    labels: list[Label], placements: Mapping[str, SymbolPlacement]
+) -> list[Label]:
+    """Shift each symbol's ref and value labels by any hand-dragged offset stored on its
+    ``SymbolPlacement``. Applied after ``_part_labels`` so default layouts stay untouched."""
+    out: list[Label] = []
+    current_ref: str | None = None
+    for label in labels:
+        if label.kind == "ref":
+            current_ref = label.text
+            pl = placements.get(current_ref)
+            if pl is not None and pl.ref_offset is not None:
+                off = pl.ref_offset
+                label = dataclasses.replace(label, at=_p(label.at.x + off.x, label.at.y + off.y))
+        elif label.kind == "value" and current_ref is not None:
+            pl = placements.get(current_ref)
+            if pl is not None and pl.value_offset is not None:
+                off = pl.value_offset
+                label = dataclasses.replace(label, at=_p(label.at.x + off.x, label.at.y + off.y))
+        out.append(label)
+    return out
+
+
+def placed_part_labels(drawing: SchematicDrawing) -> list[tuple[str, Literal["ref", "value"], Label]]:
+    """Every symbol reference and value label on ``drawing``, paired with its owning symbol ref."""
+    out: list[tuple[str, Literal["ref", "value"], Label]] = []
+    current_ref: str | None = None
+    for label in drawing.labels:
+        if label.kind == "ref":
+            current_ref = label.text
+            out.append((current_ref, "ref", label))
+        elif label.kind == "value" and current_ref is not None:
+            out.append((current_ref, "value", label))
+    return out
+
+
+_RENUMBER_PREFIX = re.compile(r"^([A-Za-z_]+?)(\d+)$")
+
+
+def plan_sheet_renumber(
+    doc: PerfDocument, lookup: FootprintLookup
+) -> tuple[tuple[str, str], ...]:
+    """Compute a left-to-right, top-to-bottom reference renumbering for every part on the
+    sheet, grouped by its reference prefix (R, C, U, ...). Returns ``(part_id, new_ref)``
+    pairs for ``part.renumber``."""
+    drawing = build_schematic(doc, lookup)
+    id_by_ref = {part.ref: part.id for part in circuit_parts(doc)}
+    groups: dict[str, list[tuple[float, float, str, str]]] = defaultdict(list)
+    for symbol in drawing.symbols:
+        part_id = id_by_ref.get(symbol.ref)
+        if part_id is None:
+            continue
+        match = _RENUMBER_PREFIX.match(symbol.ref)
+        if not match:
+            continue
+        prefix = match.group(1)
+        groups[prefix].append((symbol.at.y, symbol.at.x, symbol.ref, part_id))
+
+    mapping: list[tuple[str, str]] = []
+    for prefix in sorted(groups):
+        ordered = sorted(
+            groups[prefix],
+            key=lambda item: (round(item[0] / GRID_MM), round(item[1] / GRID_MM), _ref_sort_key(item[2])),
+        )
+        for index, (_y, _x, _old_ref, part_id) in enumerate(ordered, start=1):
+            mapping.append((part_id, f"{prefix}{index}"))
+    return tuple(mapping)
 
 
 def _laid_onto(point: Point2, path: Sequence[Point2]) -> tuple[Point2, bool]:

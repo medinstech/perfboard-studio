@@ -188,6 +188,7 @@ from perfboard_studio.commands import (
     AddPartsPayload,
     AddSheetNotePayload,
     AddSheetPortPayload,
+    AlignSheetPayload,
     ApplyBoardPresetPayload,
     ArrangeSheetPayload,
     AutoSymbolsPayload,
@@ -222,6 +223,7 @@ from perfboard_studio.commands import (
     RearrangePayload,
     ReconnectSheetWirePayload,
     RenameDocumentPayload,
+    RenumberPartsPayload,
     ReplaceConductorsPayload,
     ReshapeLooseWirePayload,
     ReshapeSheetWirePayload,
@@ -229,6 +231,7 @@ from perfboard_studio.commands import (
     RotateComponentsPayload,
     SetComponentSidePayload,
     SetComponentSidesPayload,
+    SheetAlignMode,
     UnplaceComponentPayload,
     UpdateComponentPayload,
     UpdateComponentsPayload,
@@ -383,11 +386,13 @@ from perfboard_studio.ratsnest import NetRatsnest, ratsnest, summarize
 from perfboard_studio.recovery import RecoveryRecord, is_worth_offering
 from perfboard_studio.router import CrossingPolicy, RouterOptions, RoutingStyle, options_for_style
 from perfboard_studio.schematic import (
+    GRID_MM,
     SchematicDrawing,
     Wire,
     build_schematic,
     drawing_after_move,
     loose_wires_after_move,
+    plan_sheet_renumber,
     ports_after_move,
     snap_to_grid,
     wires_after_move,
@@ -464,6 +469,7 @@ from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
 from .raildialog import RailDialog, rail_refusal
 from .selection import NOTHING, Selection, SelectionKind
+from .sheet_clipboard import sheet_block_from_json, sheet_block_to_json
 from .systemview import SystemView
 from .tour import Spotlight, Tour
 from .tour import Stop as TourStop
@@ -7859,6 +7865,12 @@ class MainWindow(QMainWindow):
         self.schematic_view.looseWireReshaped.connect(self._on_sheet_loose_wire_reshaped)
         self.schematic_view.looseWireDeleteRequested.connect(self._on_sheet_loose_wires_delete)
         self.schematic_view.turnRequested.connect(self.on_schematic_rotate)
+        self.schematic_view.mirrorRequested.connect(self.on_schematic_mirror_axis)
+        self.schematic_view.copyRequested.connect(self.on_sheet_copy)
+        self.schematic_view.cutRequested.connect(self.on_sheet_cut)
+        self.schematic_view.pasteRequested.connect(self.on_sheet_paste)
+        self.schematic_view.duplicateRequested.connect(self.on_sheet_duplicate)
+        self.schematic_view.labelOffsetMoved.connect(self._on_sheet_label_offset_moved)
         self.schematic_view.footprintDropped.connect(self._on_sheet_footprint_dropped)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
         layout.addWidget(self.schematic_view, 1)
@@ -8325,18 +8337,22 @@ class MainWindow(QMainWindow):
         drawing = self.schematic_view.item.drawing if self.schematic_view.item else None
         if drawing is None:
             return ()
+        existing = {pl.id: pl for pl in self.bus.system_document.sheet}
         placements: list[SymbolPlacement] = []
         for symbol in drawing.symbols:
             part_id = self._id_of(symbol.ref)
             if part_id is None:
                 continue
             at = moved.get(symbol.ref, symbol.at)
+            prev = existing.get(part_id)
             placements.append(
                 SymbolPlacement(
                     id=part_id,
                     at=snap_to_grid(at),
                     rotation=symbol.rotation,
                     mirrored=symbol.mirrored,
+                    ref_offset=prev.ref_offset if prev is not None else None,
+                    value_offset=prev.value_offset if prev is not None else None,
                 )
             )
         return tuple(placements)
@@ -8507,12 +8523,23 @@ class MainWindow(QMainWindow):
 
     def on_schematic_mirror(self) -> None:
         """Flip the selected symbols about their own vertical centre."""
+        self.on_schematic_mirror_axis("x")
+
+    def on_schematic_mirror_axis(self, axis: str) -> None:
+        """Mirror the selected symbols horizontally (``"x"``) or vertically (``"y"``)."""
         refs = self._sheet_selection()
         if not refs:
             self.statusBar().showMessage(t("Select a symbol on the sheet first."), 5000)
             return
+        quarter_shift = 2 if axis == "y" else 0
         flipped = tuple(
-            dataclasses.replace(placement, mirrored=not placement.mirrored)
+            dataclasses.replace(
+                placement,
+                mirrored=not placement.mirrored,
+                rotation=_turned(placement.rotation, quarter_shift)
+                if quarter_shift
+                else placement.rotation,
+            )
             if self._ref_of_id(placement.id) in refs
             else placement
             for placement in self._sheet_placements({})
@@ -8529,6 +8556,169 @@ class MainWindow(QMainWindow):
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
+
+    def _on_sheet_label_offset_moved(
+        self, ref: str, kind: str, dx: float, dy: float
+    ) -> None:
+        """Persist a hand-dragged ref or value label offset on ``SymbolPlacement``."""
+        part_id = self._id_of(ref)
+        if part_id is None:
+            return
+        updated: list[SymbolPlacement] = []
+        for placement in self._sheet_placements({}):
+            if placement.id == part_id:
+                if kind == "ref":
+                    base = placement.ref_offset or Point2(x=0.0, y=0.0)
+                    placement = dataclasses.replace(
+                        placement,
+                        ref_offset=Point2(x=round(base.x + dx, 6), y=round(base.y + dy, 6)),
+                    )
+                else:
+                    base = placement.value_offset or Point2(x=0.0, y=0.0)
+                    placement = dataclasses.replace(
+                        placement,
+                        value_offset=Point2(x=round(base.x + dx, 6), y=round(base.y + dy, 6)),
+                    )
+            updated.append(placement)
+        result = self.bus.dispatch(
+            "symbol.move",
+            MoveSymbolsPayload(
+                placements=tuple(updated),
+                label=f"Move {ref} label on the sheet",
+                wires=self._wires_kept_by_freezing(),
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+
+    def _copied_sheet_block(self) -> str:
+        item = self.schematic_view.item
+        if item is None:
+            return ""
+        loose_ids = (
+            [self.schematic_view.selected_loose]
+            if self.schematic_view.selected_loose is not None
+            else []
+        )
+        return sheet_block_to_json(
+            self.bus.system_document,
+            item.drawing,
+            refs=self.schematic_view.selected_refs,
+            port_ids=self.schematic_view.selected_ports,
+            note_indices=self.schematic_view.selected_notes,
+            loose_ids=loose_ids,
+        )
+
+    def on_sheet_copy(self) -> None:
+        text = self._copied_sheet_block()
+        if not text:
+            return
+        QApplication.clipboard().setText(text)
+
+    def on_sheet_cut(self) -> None:
+        text = self._copied_sheet_block()
+        if not text:
+            return
+        QApplication.clipboard().setText(text)
+        if self.schematic_view.selected_ports:
+            self._on_sheet_ports_delete(list(self.schematic_view.selected_ports))
+        elif self.schematic_view.selected_loose is not None:
+            self._on_sheet_loose_wires_delete([self.schematic_view.selected_loose])
+        else:
+            self.on_sheet_delete()
+
+    def _paste_sheet_text(self, text: str, label: str | None = None) -> None:
+        offset = Point2(x=2 * GRID_MM, y=2 * GRID_MM)
+        payload = sheet_block_from_json(text, offset=offset, label=label)
+        if payload is None:
+            return
+        freeze = self._sheet_freeze()
+        before_refs = {part.ref for part in circuit_parts(self.bus.system_document)}
+        result = self.bus.dispatch(
+            "sheet.paste",
+            dataclasses.replace(payload, freeze=freeze),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        added_refs = [
+            part.ref
+            for part in circuit_parts(self.bus.system_document)
+            if part.ref not in before_refs
+        ]
+        if added_refs:
+            self.schematic_view.set_selection(added_refs)
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def on_sheet_paste(self) -> None:
+        self._paste_sheet_text(QApplication.clipboard().text())
+
+    def on_sheet_duplicate(self) -> None:
+        text = self._copied_sheet_block()
+        if not text:
+            return
+        self._paste_sheet_text(text, label="Duplicate on the sheet")
+
+    def on_sheet_align(self, mode: SheetAlignMode) -> None:
+        """Align or distribute the selected symbols and ports on the sheet in one undo step."""
+        item = self.schematic_view.item
+        if item is None:
+            return
+        sym_ids = tuple(
+            pid
+            for ref in self.schematic_view.selected_refs
+            if (pid := self._id_of(ref)) is not None
+        )
+        port_ids = tuple(self.schematic_view.selected_ports)
+        sizes = tuple(
+            (pid, Point2(x=sym.width, y=sym.height))
+            for sym in item.drawing.symbols
+            if sym.ref in self.schematic_view.selected_refs
+            and (pid := self._id_of(sym.ref)) is not None
+        )
+        freeze = self._sheet_freeze()
+        probe_payload = AlignSheetPayload(
+            mode=mode, ids=sym_ids, port_ids=port_ids, sizes=sizes, freeze=freeze
+        )
+        # Dry-run on the current document to compute aligned symbol positions so we can
+        # stretch attached wires/loose wires/ports in the exact same undo step.
+        from perfboard_studio.commands import align_sheet
+
+        try:
+            aligned_doc = align_sheet.apply(
+                self.bus.system_document,
+                probe_payload,
+                CommandContext(next_id=create_document_id_generator(self.bus.system_document)),
+            )
+        except CommandError as err:
+            self.statusBar().showMessage(str(err), 6000)
+            return
+        moved_ids = set(sym_ids)
+        moved_placements = tuple(pl for pl in aligned_doc.sheet if pl.id in moved_ids)
+        wires = self._sheet_wires_after(moved_placements) if moved_placements else ()
+        loose_wires = self._sheet_loose_wires_after(moved_placements) if moved_placements else ()
+        ports = self._sheet_ports_after(moved_placements) if moved_placements else ()
+        result = self.bus.dispatch(
+            "sheet.align",
+            dataclasses.replace(
+                probe_payload, wires=wires, loose_wires=loose_wires, ports=ports
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def on_sheet_renumber(self) -> None:
+        """Renumber references left-to-right, top-to-bottom on the sheet in one undo step."""
+        mapping = plan_sheet_renumber(self.bus.system_document, self.lookup)
+        if not mapping:
+            return
+        result = self.bus.dispatch("part.renumber", RenumberPartsPayload(mapping=mapping))
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _ref_of_id(self, part_id: str) -> str | None:
         found = next((p for p in circuit_parts(self.bus.system_document) if p.id == part_id), None)
@@ -14891,6 +15081,9 @@ class MainWindow(QMainWindow):
         return block_to_json(self.bus.document, components, conductors)
 
     def on_copy(self) -> None:
+        if self.schematic_view.hasFocus():
+            self.on_sheet_copy()
+            return
         text = self._copied_block()
         if not text:
             self.statusBar().showMessage(t("Select a part or a conductor on the board first, then copy it."), 6000
@@ -14925,6 +15118,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(message, 8000)
 
     def on_paste(self) -> None:
+        if self.schematic_view.hasFocus():
+            self.on_sheet_paste()
+            return
         self._paste_text(QApplication.clipboard().text(), "Paste")
 
     def on_duplicate(self) -> None:
@@ -14933,6 +15129,9 @@ class MainWindow(QMainWindow):
         Duplicating a part is a board operation; it has no business throwing away what
         somebody had copied in another application to use in a minute.
         """
+        if self.schematic_view.hasFocus():
+            self.on_sheet_duplicate()
+            return
         text = self._copied_block()
         if not text:
             self.statusBar().showMessage(t("Select a part or a conductor on the board first, then duplicate it."), 6000
