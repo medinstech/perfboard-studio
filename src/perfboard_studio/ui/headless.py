@@ -61,7 +61,7 @@ from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.placer import plan_placement
 from perfboard_studio.ratsnest import ratsnest, summarize
 from perfboard_studio.schematic import build_schematic
-from perfboard_studio.schematic_export import drawing_to_svg
+from perfboard_studio.schematic_export import PAPER, SheetPageSize, TitleBlock, drawing_to_svg
 from perfboard_studio.stripboard import board_joins_holes
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.system import (
@@ -214,17 +214,29 @@ def _describe_board(doc: PerfDocument) -> None:
     print(f"parts        {len(doc.components)}   conductors {len(doc.conductors)}   nets {len(doc.nets)}")
 
 
-def _write_schematic(doc: PerfDocument, lookup: FootprintLookup, out_dir: Path) -> None:
+def _write_schematic(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    out_dir: Path,
+    *,
+    page_size: SheetPageSize = "auto",
+    title_block: TitleBlock | None = None,
+) -> None:
     # --- The schematic, exported. Here rather than left to the GUI because this is the
     # only place the SVG writer, Qt's SVG renderer and a real board meet on all three
     # operating systems: the goldens prove the writer says the same thing everywhere, and
     # this proves what it says can still be turned into a page. It is also the one export
     # that needs no GL, so it runs on the machines where the 3D section does not.
+    # Always PAPER ink even when the app window is in Night/dark theme.
     t0 = time.perf_counter()
     drawing = build_schematic(doc, lookup)
-    sheet_svg = drawing_to_svg(drawing, title=doc.meta.name)
+    sheet_svg = drawing_to_svg(
+        drawing, title=doc.meta.name, ink=PAPER, page_size=page_size, title_block=title_block
+    )
     (out_dir / "schematic.svg").write_text(sheet_svg, encoding="utf-8")
-    sheet_pdf = svg_to_pdf(sheet_svg, out_dir / "schematic.pdf", title=doc.meta.name)
+    sheet_pdf = svg_to_pdf(
+        sheet_svg, out_dir / "schematic.pdf", title=doc.meta.name, page_size=page_size
+    )
     sheet_png = svg_to_png(sheet_svg, out_dir / "schematic.png")
     t_sheet = (time.perf_counter() - t0) * 1000
     print()

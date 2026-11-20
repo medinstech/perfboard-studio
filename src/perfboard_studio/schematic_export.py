@@ -41,6 +41,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
+from typing import Literal
 
 from .model import Mm, Point2
 from .schematic import (
@@ -119,6 +120,43 @@ class SheetInk:
 
 
 PAPER = SheetInk()
+
+#: Dark-canvas Night look matching the schematic panel's dark theme, for screen renders;
+#: exports to paper (SVG, PDF, PNG) default to ``PAPER`` even when the window is dark.
+NIGHT = SheetInk(
+    background="#12131a",
+    ink="#c8d0de",
+    dim="#7d8698",
+    undefined="#e5a840",
+    signal="#3fa9d4",
+    power="#e0723c",
+    ground="#7f8794",
+)
+
+type SheetPageSize = Literal["auto", "A4", "A3"]
+
+#: ISO paper sizes in millimetres (landscape width, height).
+PAGE_DIMENSIONS_MM: dict[Literal["A4", "A3"], tuple[Mm, Mm]] = {
+    "A4": (297.0, 210.0),
+    "A3": (420.0, 297.0),
+}
+FRAME_MARGIN_MM: Mm = 8.0
+TITLE_BLOCK_WIDTH_MM: Mm = 90.0
+TITLE_BLOCK_HEIGHT_MM: Mm = 22.0
+
+
+@dataclass(frozen=True, slots=True)
+class TitleBlock:
+    """Optional engineering title block drawn in the bottom-right corner of an exported sheet.
+
+    Every value is passed in by the host (no clock or filesystem reads inside the engine).
+    Omitted by default so bare sheet exports stay unchanged.
+    """
+
+    title: str = ""
+    revision: str = ""
+    date: str = ""
+    sheet: str = "1 / 1"
 
 
 # ---------------------------------------------------------------------------
@@ -350,10 +388,182 @@ def _label(label: Label, ink: SheetInk) -> str:
     )
 
 
+def _title_block(
+    block: TitleBlock, x: Mm, y: Mm, width: Mm, height: Mm, ink: SheetInk
+) -> list[str]:
+    """An engineering title block in the bottom-right corner, SVG Tiny 1.2 compatible."""
+    split_y = y + height * 0.52
+    col1 = x + width * 0.30
+    col2 = x + width * 0.68
+    pad = 2.0
+    cap_mm = 1.25
+    val_mm = 1.65
+    title_mm = 2.4
+    out: list[str] = [
+        '<g id="title-block" stroke-linecap="round" stroke-linejoin="round">',
+        f'<rect x="{_n(x)}" y="{_n(y)}" width="{_n(width)}" height="{_n(height)}" '
+        f'fill="{ink.background}" stroke="{ink.ink}" stroke-width="{_n(ink.body_mm)}"/>',
+        f'<line x1="{_n(x)}" y1="{_n(split_y)}" x2="{_n(x + width)}" y2="{_n(split_y)}" '
+        f'stroke="{ink.ink}" stroke-width="{_n(ink.wire_mm)}"/>',
+        f'<line x1="{_n(col1)}" y1="{_n(split_y)}" x2="{_n(col1)}" y2="{_n(y + height)}" '
+        f'stroke="{ink.ink}" stroke-width="{_n(ink.wire_mm)}"/>',
+        f'<line x1="{_n(col2)}" y1="{_n(split_y)}" x2="{_n(col2)}" y2="{_n(y + height)}" '
+        f'stroke="{ink.ink}" stroke-width="{_n(ink.wire_mm)}"/>',
+    ]
+    if block.title:
+        out.append(
+            _text(
+                block.title,
+                x + pad,
+                y + height * 0.36,
+                title_mm,
+                ink.ink,
+                "start",
+                ink,
+                bold=True,
+            )
+        )
+    rev_text = block.revision or f"v{__version__}"
+    cells = (
+        (x + pad, "REV", rev_text),
+        (col1 + pad, "DATE", block.date),
+        (col2 + pad, "SHEET", block.sheet),
+    )
+    for cx, caption, value in cells:
+        out.append(_text(caption, cx, split_y + 3.0, cap_mm, ink.dim, "start", ink))
+        if value:
+            out.append(_text(value, cx, y + height - 2.4, val_mm, ink.ink, "start", ink))
+    out.append("</g>")
+    return out
+
+
+def _drawing_elements(drawing: SchematicDrawing, ink: SheetInk) -> list[str]:
+    """Every circuit primitive, annotation and label of ``drawing`` as SVG elements."""
+    out: list[str] = ['<g stroke-linecap="round" stroke-linejoin="round">']
+    for wire in drawing.wires:
+        out.append(_wire(wire, ink))
+    for fw in drawing.free_wires:
+        colour = _class_colour(fw.net_class, ink)
+        out.append(_wire(fw, ink))
+        out.append(_free_end_box(fw.path[-1], colour, ink))
+        if fw.free_start:
+            out.append(_free_end_box(fw.path[0], colour, ink))
+    for rail in drawing.rails:
+        out.append(_wire(rail, ink))
+        out.append(_glyph(rail, ink))
+    for junction in drawing.junctions:
+        out.append(
+            f'<circle cx="{_n(junction.at.x)}" cy="{_n(junction.at.y)}" '
+            f'r="{_n(ink.dot_mm)}" fill="{ink.signal}"/>'
+        )
+    for mark in drawing.no_connects:
+        out.append(_no_connect(mark, ink))
+    for symbol in drawing.symbols:
+        out.append(_symbol(symbol, ink))
+    out.append("</g>")
+    for annotation in drawing.annotations:
+        out.append(_annotation(annotation, ink))
+    for label in drawing.labels:
+        out.append(_label(label, ink))
+    return out
+
+
+def _framed_svg(
+    drawing: SchematicDrawing,
+    title: str | None,
+    ink: SheetInk,
+    page_size: SheetPageSize,
+    title_block: TitleBlock | None,
+) -> str:
+    """ISO A4/A3 true-scale sheet and/or title-block framed SVG."""
+    raw_w = max(drawing.width, 2 * MARGIN_MM)
+    raw_h = max(drawing.height, 2 * MARGIN_MM)
+    notes_h = (
+        ink.note_mm * (_NOTE_LEADING * len(drawing.notes) + 1.0) if drawing.notes else 0.0
+    )
+    if page_size in PAGE_DIMENSIONS_MM:
+        long_mm, short_mm = PAGE_DIMENSIONS_MM[page_size]
+        if raw_h > raw_w:
+            page_w, page_h = short_mm, long_mm
+        else:
+            page_w, page_h = long_mm, short_mm
+    else:
+        tb_h = TITLE_BLOCK_HEIGHT_MM + 4.0 if title_block is not None else 0.0
+        page_w = _ceil_to_written(
+            max(raw_w + 2 * FRAME_MARGIN_MM, TITLE_BLOCK_WIDTH_MM + 2 * FRAME_MARGIN_MM + 8.0)
+        )
+        page_h = _ceil_to_written(raw_h + max(notes_h, tb_h) + 2 * FRAME_MARGIN_MM)
+
+    inner_x = FRAME_MARGIN_MM
+    inner_y = FRAME_MARGIN_MM
+    inner_w = page_w - 2 * FRAME_MARGIN_MM
+    inner_h = page_h - 2 * FRAME_MARGIN_MM
+    bottom_reserve = (
+        max(TITLE_BLOCK_HEIGHT_MM + 2.0, notes_h) if title_block is not None else notes_h
+    )
+    avail_w = max(inner_w - 4.0, 1.0)
+    avail_h = max(inner_h - bottom_reserve - 4.0, 1.0)
+    # True 1:1 millimetre scale whenever the drawing fits; scale down uniformly only if larger.
+    scale = min(1.0, avail_w / raw_w, avail_h / raw_h)
+    tx = inner_x + (inner_w - raw_w * scale) / 2.0
+    ty = inner_y + (inner_h - bottom_reserve - raw_h * scale) / 2.0
+
+    doc_title = title or (title_block.title if title_block is not None else "") or "Schematic"
+    out: list[str] = [
+        '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" '
+        f'width="{_n(page_w)}mm" height="{_n(page_h)}mm" '
+        f'viewBox="0 0 {_n(page_w)} {_n(page_h)}">',
+        f"<title>{escape(doc_title)}</title>",
+        f"<desc>Perfboard Studio {__version__}</desc>",
+        f'<rect x="0" y="0" width="{_n(page_w)}" height="{_n(page_h)}" fill="{ink.background}"/>',
+        f'<rect x="{_n(inner_x)}" y="{_n(inner_y)}" width="{_n(inner_w)}" '
+        f'height="{_n(inner_h)}" fill="none" stroke="{ink.ink}" '
+        f'stroke-width="{_n(ink.body_mm)}"/>',
+    ]
+    if abs(scale - 1.0) < 1e-6:
+        out.append(f'<g transform="translate({_n(tx)},{_n(ty)})">')
+    else:
+        out.append(f'<g transform="translate({_n(tx)},{_n(ty)}) scale({_n(scale)})">')
+    out.extend(_drawing_elements(drawing, ink))
+    out.append("</g>")
+
+    if title_block is not None:
+        tb_x = inner_x + inner_w - TITLE_BLOCK_WIDTH_MM
+        tb_y = inner_y + inner_h - TITLE_BLOCK_HEIGHT_MM
+        out.extend(
+            _title_block(title_block, tb_x, tb_y, TITLE_BLOCK_WIDTH_MM, TITLE_BLOCK_HEIGHT_MM, ink)
+        )
+
+    for index, note in enumerate(drawing.notes):
+        note_y = (
+            inner_y
+            + inner_h
+            - notes_h
+            + ink.note_mm * (1.0 + _NOTE_LEADING * index)
+        )
+        out.append(
+            _text(
+                f"· {note}",
+                inner_x + 3.0,
+                note_y,
+                ink.note_mm,
+                ink.dim,
+                "start",
+                ink,
+            )
+        )
+
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
 def drawing_to_svg(
     drawing: SchematicDrawing,
     title: str | None = None,
     ink: SheetInk = PAPER,
+    *,
+    page_size: SheetPageSize = "auto",
+    title_block: TitleBlock | None = None,
 ) -> str:
     """The sheet as one self-contained SVG document.
 
@@ -362,10 +572,17 @@ def drawing_to_svg(
     band above the sheet and put in the SVG's own ``<title>``, which is what a browser tab
     and an image viewer show.
 
+    With ``page_size`` set to ``"A4"`` or ``"A3"``, or with a :class:`TitleBlock`, the sheet
+    is framed on ISO millimetres at true 1:1 scale (scaled down uniformly only if larger than
+    the frame) with the title block in the bottom-right corner. With the defaults
+    (``page_size="auto"``, ``title_block=None``), the bare sheet output is unchanged.
+
     The output carries the version that wrote it, in a ``<desc>``, for the reason
     ``guide_to_json`` does: an exported file outlives the session that produced it, and the
     first question about a sheet that looks wrong is which build drew it.
     """
+    if page_size != "auto" or title_block is not None:
+        return _framed_svg(drawing, title, ink, page_size, title_block)
     # Rounded OUTWARD to the thousandth _n writes, not to the nearest one. A viewBox short
     # of the drawing crops it, and _n rounds to three decimals -- so a sheet whose width
     # lands a float ULP above a thousandth (462.2800000000001, which is what a 24-part
@@ -414,34 +631,7 @@ def drawing_to_svg(
 
     # The order a draughtsman would use, and the order the panel paints in: wires first so
     # a symbol sits on top of the line reaching it, then rails, dots, bodies, text.
-    out.append('<g stroke-linecap="round" stroke-linejoin="round">')
-    for wire in drawing.wires:
-        out.append(_wire(wire, ink))
-    for fw in drawing.free_wires:
-        colour = _class_colour(fw.net_class, ink)
-        out.append(_wire(fw, ink))
-        out.append(_free_end_box(fw.path[-1], colour, ink))
-        if fw.free_start:
-            out.append(_free_end_box(fw.path[0], colour, ink))
-    for rail in drawing.rails:
-        out.append(_wire(rail, ink))
-        out.append(_glyph(rail, ink))
-    for junction in drawing.junctions:
-        out.append(
-            f'<circle cx="{_n(junction.at.x)}" cy="{_n(junction.at.y)}" '
-            f'r="{_n(ink.dot_mm)}" fill="{ink.signal}"/>'
-        )
-    for mark in drawing.no_connects:
-        out.append(_no_connect(mark, ink))
-    for symbol in drawing.symbols:
-        out.append(_symbol(symbol, ink))
-    out.append("</g>")
-
-    for annotation in drawing.annotations:
-        out.append(_annotation(annotation, ink))
-
-    for label in drawing.labels:
-        out.append(_label(label, ink))
+    out.extend(_drawing_elements(drawing, ink))
 
     for index, note in enumerate(drawing.notes):
         out.append(
@@ -460,4 +650,15 @@ def drawing_to_svg(
     return "\n".join(out) + "\n"
 
 
-__all__ = ["PAPER", "SheetInk", "drawing_to_svg"]
+__all__ = [
+    "FRAME_MARGIN_MM",
+    "NIGHT",
+    "PAGE_DIMENSIONS_MM",
+    "PAPER",
+    "TITLE_BLOCK_HEIGHT_MM",
+    "TITLE_BLOCK_WIDTH_MM",
+    "SheetInk",
+    "SheetPageSize",
+    "TitleBlock",
+    "drawing_to_svg",
+]

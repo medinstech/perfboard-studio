@@ -398,7 +398,7 @@ from perfboard_studio.schematic import (
     wires_after_move,
     wires_as_drawn,
 )
-from perfboard_studio.schematic_export import drawing_to_svg
+from perfboard_studio.schematic_export import PAPER, SheetPageSize, TitleBlock, drawing_to_svg
 from perfboard_studio.stripboard import board_joins_holes, is_stripboard
 from perfboard_studio.striproute import StripboardPlan
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
@@ -18299,7 +18299,12 @@ class MainWindow(QMainWindow):
         else:
             self._offer_to_open(written)
 
-    def on_export_schematic(self) -> None:
+    def on_export_schematic(
+        self,
+        *,
+        page_size: SheetPageSize = "auto",
+        title_block: TitleBlock | None = None,
+    ) -> None:
         """Write the circuit as a sheet -- SVG, PDF and PNG under the one name asked for,
         beside the board unless told otherwise.
 
@@ -18309,9 +18314,10 @@ class MainWindow(QMainWindow):
         PNG is what gets pasted into the message that asks somebody why the circuit does not
         work, which is the single most useful thing to attach to that message.
 
-        ALL THREE COME OUT OF THE SVG (``ui/export_schematic.py``), so they cannot disagree
-        about what the circuit is. And the sheet is built here rather than read off the
-        panel: the panel may never have been opened, and the export must not depend on
+        ALL THREE COME OUT OF THE SVG (``ui/export_schematic.py``), ALWAYS IN PAPER INK
+        (white paper, dark ink) even when the window is in Night/dark theme, so they cannot
+        disagree about what the circuit is. And the sheet is built here rather than read off
+        the panel: the panel may never have been opened, and the export must not depend on
         whether somebody looked at it first.
         """
         drawing = build_schematic(self.bus.system_document, self.lookup)
@@ -18328,7 +18334,13 @@ class MainWindow(QMainWindow):
         if chosen is None:
             return
 
-        svg = drawing_to_svg(drawing, title=self.bus.system_document.meta.name)
+        svg = drawing_to_svg(
+            drawing,
+            title=self.bus.system_document.meta.name,
+            ink=PAPER,
+            page_size=page_size,
+            title_block=title_block,
+        )
         written: list[Path] = []
         # Seconds, not milliseconds, on a real circuit -- Qt paginating the PDF and
         # rasterising the PNG -- and it used to give no sign at all that anything was
@@ -18344,6 +18356,7 @@ class MainWindow(QMainWindow):
                     svg,
                     chosen.with_suffix(".pdf"),
                     title=self.bus.system_document.meta.name,
+                    page_size=page_size,
                 )
             )
             written.append(svg_to_png(svg, chosen.with_suffix(".png")))

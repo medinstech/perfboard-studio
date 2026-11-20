@@ -35,6 +35,8 @@ from PySide6.QtCore import QByteArray, QMarginsF, QRectF
 from PySide6.QtGui import QColor, QImage, QPageLayout, QPageSize, QPainter, QPdfWriter
 from PySide6.QtSvg import QSvgRenderer
 
+from perfboard_studio.schematic_export import PAGE_DIMENSIONS_MM, SheetPageSize
+
 #: Blank border left around the sheet on a printed page, in millimetres. The sheet already
 #: carries its own ``schematic.MARGIN_MM``; this is the part a printer cannot reach.
 PAGE_MARGIN_MM = 8.0
@@ -94,14 +96,38 @@ def _fitted(target: QRectF, aspect: float) -> QRectF:
     )
 
 
+def _resolve_page_size(page_size: QPageSize.PageSizeId | SheetPageSize) -> QPageSize.PageSizeId:
+    if isinstance(page_size, QPageSize.PageSizeId):
+        return page_size
+    if page_size == "A3":
+        return QPageSize.PageSizeId.A3
+    return QPageSize.PageSizeId.A4
+
+
+def _matches_iso_page(sheet_w: float, sheet_h: float, page_id: QPageSize.PageSizeId) -> bool:
+    """Whether the SVG already spans the full ISO page (with its own frame margin)."""
+    if page_id == QPageSize.PageSizeId.A3:
+        long_mm, short_mm = PAGE_DIMENSIONS_MM["A3"]
+    elif page_id == QPageSize.PageSizeId.A4:
+        long_mm, short_mm = PAGE_DIMENSIONS_MM["A4"]
+    else:
+        return False
+    hi, lo = max(sheet_w, sheet_h), min(sheet_w, sheet_h)
+    return abs(hi - long_mm) < 0.5 and abs(lo - short_mm) < 0.5
+
+
 def svg_to_pdf(
     svg: str,
     path: str | Path,
     title: str = "",
-    page_size: QPageSize.PageSizeId = QPageSize.PageSizeId.A4,
+    page_size: QPageSize.PageSizeId | SheetPageSize = QPageSize.PageSizeId.A4,
     resolution: int = 600,
 ) -> Path:
     """Write the sheet to a one-page PDF, fitted to the page and centred.
+
+    When the SVG already carries an ISO A4/A3 true-scale frame (``drawing_to_svg`` with
+    ``page_size="A4"`` or ``"A3"``), zero extra margins are added so the sheet prints at
+    true 1:1 millimetres.
 
     Orientation follows the sheet rather than a convention: a tall circuit on a landscape
     page wastes half the paper and halves the text, and which way round a schematic runs is
@@ -110,16 +136,19 @@ def svg_to_pdf(
     out = Path(path)
     renderer = _renderer(svg)
     sheet_w, sheet_h = _sheet_mm(renderer)
+    resolved_page = _resolve_page_size(page_size)
+    full_bleed = _matches_iso_page(sheet_w, sheet_h, resolved_page)
 
     writer = QPdfWriter(str(out))
-    writer.setPageSize(QPageSize(page_size))
+    writer.setPageSize(QPageSize(resolved_page))
     writer.setPageOrientation(
         QPageLayout.Orientation.Landscape
         if sheet_w > sheet_h
         else QPageLayout.Orientation.Portrait
     )
+    margin = 0.0 if full_bleed else PAGE_MARGIN_MM
     writer.setPageMargins(
-        QMarginsF(PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM),
+        QMarginsF(margin, margin, margin, margin),
         QPageLayout.Unit.Millimeter,
     )
     writer.setResolution(resolution)

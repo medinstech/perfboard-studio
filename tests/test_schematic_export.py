@@ -39,7 +39,13 @@ from perfboard_studio.schematic import (
     no_connect_arms,
     rail_glyph_bars,
 )
-from perfboard_studio.schematic_export import PAPER, SheetInk, drawing_to_svg
+from perfboard_studio.schematic_export import (
+    NIGHT,
+    PAPER,
+    SheetInk,
+    TitleBlock,
+    drawing_to_svg,
+)
 from perfboard_studio.ui.export_schematic import (
     SchematicRenderError,
     _fitted,
@@ -492,3 +498,97 @@ def test_a_broken_svg_is_refused_rather_than_half_drawn(
     outcome that gets noticed after the thing is printed."""
     with pytest.raises(SchematicRenderError):
         svg_to_png("<svg><this is not xml", tmp_path / "no.png")
+
+
+# ---------------------------------------------------------------------------
+# Phase 7: Night look, Paper-on-dark exports, TitleBlock & A4/A3 true-scale
+# ---------------------------------------------------------------------------
+
+
+def test_night_ink_and_paper_default_on_dark_window(qapp: QApplication, tmp_path: Path) -> None:
+    """Exports default to white PAPER even when the window runs in the dark Night theme."""
+    from perfboard_studio.ui import theme
+
+    assert theme.DARK.sheet_paper == NIGHT.background == "#12131a"
+    drawing = drawing_for(EXAMPLES_DIR / "ne555-astable.perf")
+
+    night_svg = drawing_to_svg(drawing, ink=NIGHT)
+    assert f'fill="{NIGHT.background}"' in night_svg
+    assert f'stroke="{NIGHT.signal}"' in night_svg
+
+    paper_svg = drawing_to_svg(drawing)
+    assert f'fill="{PAPER.background}"' in paper_svg
+    assert PAPER.background == "#ffffff"
+    png_path = svg_to_png(paper_svg, tmp_path / "paper.png", px_per_mm=4.0)
+    img = QImage(str(png_path))
+    assert not img.isNull()
+    corner = img.pixelColor(2, 2)
+    assert (corner.red(), corner.green(), corner.blue()) == (255, 255, 255)
+
+
+def test_quiet_net_label_uses_italic_font(qapp: QApplication) -> None:
+    """Quiet net names shown on lit wires use italic typography distinct from explicit labels."""
+    from perfboard_studio.ui.scenetext import label_font
+
+    italic_font = label_font(11, bold=False, italic=True)
+    plain_font = label_font(11, bold=False, italic=False)
+    assert italic_font.italic() is True
+    assert italic_font.bold() is False
+    assert plain_font.italic() is False
+
+
+def test_a4_and_a3_true_scale_svg_and_pdf_with_title_block(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """A4/A3 framed exports emit exact ISO millimetre dimensions, border frame, 1:1 scale
+    when the drawing fits, and the caller-supplied TitleBlock in the bottom-right corner."""
+    small = drawing_for(EXAMPLES_DIR / "ne555-astable.perf")
+    tb = TitleBlock(title="NE555 Astable", revision="Rev B", date="2026-11-20", sheet="1 / 1")
+
+    a4_svg = drawing_to_svg(small, page_size="A4", title_block=tb)
+    root_a4 = ElementTree.fromstring(a4_svg)
+    assert root_a4.get("width") == "297mm"
+    assert root_a4.get("height") == "210mm"
+    assert root_a4.get("viewBox") == "0 0 297 210"
+    assert 'id="title-block"' in a4_svg
+    assert "NE555 Astable" in a4_svg
+    assert "Rev B" in a4_svg
+    assert "2026-11-20" in a4_svg
+    # Fits on A4 at true 1:1 scale (no scale(...) factor needed).
+    assert " scale(" not in a4_svg
+    # Pure & deterministic (no clock reads).
+    assert a4_svg == drawing_to_svg(small, page_size="A4", title_block=tb)
+
+    # A3 landscape SVG and PDF produce exact A3 page dimensions (~1190.55 x 841.89 pt).
+    a3_svg = drawing_to_svg(small, page_size="A3", title_block=tb)
+    root_a3 = ElementTree.fromstring(a3_svg)
+    assert root_a3.get("width") == "420mm"
+    assert root_a3.get("height") == "297mm"
+    assert root_a3.get("viewBox") == "0 0 420 297"
+
+    a4_pdf = svg_to_pdf(a4_svg, tmp_path / "sheet_a4.pdf", title=tb.title, page_size="A4")
+    a3_pdf = svg_to_pdf(a3_svg, tmp_path / "sheet_a3.pdf", title=tb.title, page_size="A3")
+    w4, h4 = _media_box(a4_pdf)
+    w3, h3 = _media_box(a3_pdf)
+    assert w4 == pytest.approx(297.0 * 72.0 / 25.4, abs=2.0)
+    assert h4 == pytest.approx(210.0 * 72.0 / 25.4, abs=2.0)
+    assert w3 == pytest.approx(420.0 * 72.0 / 25.4, abs=2.0)
+    assert h3 == pytest.approx(297.0 * 72.0 / 25.4, abs=2.0)
+
+    # Oversized drawing on A4 scales down cleanly inside the A4 frame without overflowing.
+    huge = SchematicDrawing(width=500.0, height=320.0)
+    huge_a4 = drawing_to_svg(huge, page_size="A4", title_block=tb)
+    root_huge = ElementTree.fromstring(huge_a4)
+    assert root_huge.get("width") == "297mm" and root_huge.get("height") == "210mm"
+    assert " scale(" in huge_a4
+
+    # Auto page size with TitleBlock stays well-formed and carries the title block.
+    auto_tb = drawing_to_svg(small, page_size="auto", title_block=tb)
+    ElementTree.fromstring(auto_tb)
+    assert 'id="title-block"' in auto_tb
+
+    # Portrait orientation when height > width.
+    tall = SchematicDrawing(width=100.0, height=200.0)
+    tall_a4 = drawing_to_svg(tall, page_size="A4")
+    root_tall = ElementTree.fromstring(tall_a4)
+    assert root_tall.get("width") == "210mm" and root_tall.get("height") == "297mm"

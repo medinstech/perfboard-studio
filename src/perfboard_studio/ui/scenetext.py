@@ -38,16 +38,17 @@ from .bodies import PIN_NAME_HEIGHT_MM
 
 #: pixel size -> font. Rulers draw dozens of labels per repaint, so building a QFont and
 #: its metrics every time is worth avoiding.
-_CACHE: dict[tuple[int, bool], QFont] = {}
+_CACHE: dict[tuple[int, bool, bool], QFont] = {}
 
 
-def label_font(pixel_size: int, bold: bool = False) -> QFont:
-    key = (pixel_size, bold)
+def label_font(pixel_size: int, bold: bool = False, italic: bool = False) -> QFont:
+    key = (pixel_size, bold, italic)
     cached = _CACHE.get(key)
     if cached is None:
         cached = QFont()
         cached.setPixelSize(pixel_size)
         cached.setBold(bold)
+        cached.setItalic(italic)
         _CACHE[key] = cached
     return cached
 
@@ -61,6 +62,7 @@ def draw_label(
     bold: bool = False,
     offset: QPointF | None = None,
     background: QColor | None = None,
+    italic: bool = False,
 ) -> None:
     """Draw ``text`` at a fixed ``pixel_size``, anchored at the scene point ``anchor``.
 
@@ -71,7 +73,7 @@ def draw_label(
     one way to keep a label readable over whatever it lands on: pads, a pale body, the
     printed legend. A drop shadow a pixel wide does it over flat substrate and nowhere else.
     """
-    font = label_font(pixel_size, bold)
+    font = label_font(pixel_size, bold, italic)
     box = _label_box(painter.transform().map(anchor), text, font, offset)
 
     painter.save()
@@ -293,10 +295,11 @@ def draw_outlined_label(
     bold: bool,
     colour: QColor,
     halo: QColor,
+    italic: bool = False,
 ) -> None:
     """:func:`draw_label` with each glyph outlined in ``halo`` instead of a plate: the text
     lands exactly where ``draw_label`` puts it, and reads over whatever it crosses."""
-    font = label_font(pixel_size, bold)
+    font = label_font(pixel_size, bold, italic)
     box = _label_box(painter.transform().map(anchor), text, font, None)
     metrics = QFontMetricsF(font)
     rect = metrics.boundingRect(box, int(alignment), text)
@@ -321,11 +324,13 @@ def draw_flag_label(
     *,
     colour: QColor,
     fill: QColor,
+    italic: bool = False,
+    bold: bool = True,
 ) -> None:
     """A net's name on a flag: the plate :func:`draw_label` would put behind it, filled and
     edged in the net's own colour, so a name reads as a label on the wire and not as one
     more piece of floating text beside it."""
-    font = label_font(pixel_size, True)
+    font = label_font(pixel_size, bold, italic)
     plate = _plate(_label_box(painter.transform().map(anchor), text, font, None), text, font, alignment)
     painter.save()
     painter.resetTransform()
@@ -338,7 +343,7 @@ def draw_flag_label(
     painter.drawRoundedRect(plate, radius, radius)
     painter.restore()
     painter.setPen(QPen(colour))
-    draw_label(painter, anchor, text, pixel_size, alignment, bold=True)
+    draw_label(painter, anchor, text, pixel_size, alignment, bold=bold, italic=italic)
 
 
 def draw_outlined_reference(

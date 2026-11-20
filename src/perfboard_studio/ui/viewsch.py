@@ -927,12 +927,12 @@ class SheetItem(QGraphicsItem):
             )
         # A wired net's name the sheet does not print (``schematic._worth_naming``), shown
         # while the net is lit: clicking a wire, or a part on it, says what it is called.
-        # Over everything else and never moved for it, because it is there only for now.
+        # Quiet italic distinguishes a live wire name from an explicit net label.
         for net_id, label in self.drawing.quiet_names:
             if net_id in self.highlight_nets:
                 draw_flag_label(
                     painter, _point(label.at), label.text, sizes["net"], label_alignment(label),
-                    colour=QColor(SIGNAL), fill=QColor(BODY_FILL),
+                    colour=QColor(SIGNAL), fill=QColor(BODY_FILL), italic=True, bold=False,
                 )
 
 
