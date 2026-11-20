@@ -50,7 +50,7 @@ from .command import (
     NextId,
     create_id_generator,
 )
-from .footprints import get_footprint
+from .footprints import footprint_lookup, get_footprint
 from .geometry import (
     OUTSIDE_FINGER_MIN_MM,
     FingerCell,
@@ -1154,6 +1154,17 @@ class AutoSymbolsPayload:
     """
 
     ids: tuple[ComponentId, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ArrangeSheetPayload:
+    """Arrange the sheet into an editable layout in one undo step.
+
+    Empty ``refs`` arranges the whole sheet; a non-empty tuple arranges only those parts,
+    leaving every other symbol, wire and port where it was.
+    """
+
+    refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -3312,6 +3323,39 @@ class _AutoSymbols:
         return f"Lay {count_noun(len(p.ids), 'symbol')} out automatically"
 
 
+class _ArrangeSheet:
+    """Arrange the whole sheet, or selected symbols on it, into an ordinary editable sheet."""
+
+    type = "sheet.arrange"
+
+    def apply(
+        self, doc: PerfDocument, p: ArrangeSheetPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        from .schlayout import arrange_sheet
+
+        known = {part.ref for part in circuit_parts(doc)}
+        known.update(node.component_ref for net in doc.nets for node in net.nodes)
+        if not known:
+            raise CommandError("nothing-to-do", "There are no parts on this sheet to arrange.")
+        refs = tuple(dict.fromkeys(p.refs))
+        for ref in refs:
+            if ref not in known:
+                raise CommandError("unknown-ref", f'No part "{ref}" exists on this sheet.')
+        result = arrange_sheet(doc, footprint_lookup(), refs=refs or None)
+        return dataclasses.replace(
+            doc,
+            sheet=result.placements,
+            sheet_wires=result.wires,
+            sheet_ports=result.ports,
+        )
+
+    def describe(self, p: ArrangeSheetPayload, doc: PerfDocument) -> str:
+        refs = tuple(dict.fromkeys(p.refs))
+        if not refs:
+            return "Arrange the sheet"
+        return f"Arrange {count_noun(len(refs), 'symbol')} on the sheet"
+
+
 def _frozen(
     doc: PerfDocument, freeze: MoveSymbolsPayload | None, ctx: CommandContext
 ) -> PerfDocument:
@@ -5234,6 +5278,7 @@ DESIGN_COMMANDS = frozenset(
         "part.addMany",
         "part.delete",
         "part.update",
+        "sheet.arrange",
         "sheet.note.add",
         "sheet.note.delete",
         "sheet.note.update",
@@ -5686,6 +5731,7 @@ delete_part: CommandDefinition[DeletePartPayload] = _DeletePart()
 place_parts: CommandDefinition[PlacePartsPayload] = _PlaceParts()
 move_symbols: CommandDefinition[MoveSymbolsPayload] = _MoveSymbols()
 auto_symbols: CommandDefinition[AutoSymbolsPayload] = _AutoSymbols()
+arrange_sheet_cmd: CommandDefinition[ArrangeSheetPayload] = _ArrangeSheet()
 draw_sheet_wire: CommandDefinition[DrawSheetWirePayload] = _DrawSheetWire()
 delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWires()
 cut_sheet_wires: CommandDefinition[CutSheetWiresPayload] = _CutSheetWires()
@@ -5781,6 +5827,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     update_board_note,
     delete_board_notes,
     auto_symbols,
+    arrange_sheet_cmd,
     add_conductor,
     add_conductors,
     set_conductor_path,

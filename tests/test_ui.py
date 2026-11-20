@@ -19507,10 +19507,13 @@ def test_the_hints_arrange_arranges_and_the_hint_goes(monkeypatch, tmp_path) -> 
         assert not hint.isHidden()
         button = next(b for b in hint.buttons if b.defaultAction() is window.act_sch_auto)
         nets = window.bus.document.nets
+        before_sheet = window.bus.document.sheet
         button.click()
         assert hint.isHidden()
-        assert not window.bus.document.sheet and not window.bus.document.sheet_wires
+        assert window.bus.document.sheet and window.bus.document.sheet_ports
         assert window.bus.document.nets == nets, "every connection stays"
+        assert window.bus.undo() is not None
+        assert window.bus.document.sheet == before_sheet
     finally:
         _close(window)
 

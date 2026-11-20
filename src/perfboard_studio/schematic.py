@@ -667,7 +667,24 @@ def route_sheet_wire(
         return None
     grid = [_cell(start), *out, *found, *reversed(back), _cell(end)]
     points = [Point2(x * GRID_MM, y * GRID_MM) for x, y in grid]
-    points[0], points[-1] = start, end
+    # A pin sitting on a half-grid (a switch's legs) differs from its rounded cell on the
+    # cross axis. Keep the exit and arrival runs strictly orthogonal by jogging at the first
+    # clear column/row instead of bending the last segment diagonally into the pin.
+    if len(points) >= 2:
+        if start_side in ("left", "right") and abs(points[1].y - start.y) > 1e-6:
+            points = [start, Point2(points[1].x, start.y), *points[1:]]
+        elif start_side in ("top", "bottom") and abs(points[1].x - start.x) > 1e-6:
+            points = [start, Point2(start.x, points[1].y), *points[1:]]
+        else:
+            points[0] = start
+        if end_side in ("left", "right") and abs(points[-2].y - end.y) > 1e-6:
+            points = [*points[:-1], Point2(points[-2].x, end.y), end]
+        elif end_side in ("top", "bottom") and abs(points[-2].x - end.x) > 1e-6:
+            points = [*points[:-1], Point2(end.x, points[-2].y), end]
+        else:
+            points[-1] = end
+    else:
+        points[0], points[-1] = start, end
     return _aligned(_corners_only(_tidy(points)))
 
 
@@ -726,19 +743,20 @@ def _sheet_for(
 
 
 def _text_cells(drawing: SchematicDrawing) -> set[Cell]:
-    """The grid points a part's reference or value is printed over.
+    """The grid points a part's reference, value, or supply name is printed over.
 
-    A reference prints above its point and a value below it (``viewsch``'s alignment), a
-    grid deep and ``ROUTE_TEXT_GRIDS_PER_CHAR`` a character wide, from its anchor.
+    A reference or supply name prints above its point and a value below it (``viewsch``'s
+    alignment), a grid deep and ``ROUTE_TEXT_GRIDS_PER_CHAR`` a character wide, from its
+    anchor.
     """
     cells: set[Cell] = set()
     for label in drawing.labels:
-        if label.kind not in ("ref", "value"):
+        if label.kind not in ("ref", "value", "rail"):
             continue
         x, y = label.at.x / GRID_MM, label.at.y / GRID_MM
         width = len(label.text) * ROUTE_TEXT_GRIDS_PER_CHAR
         left = {"left": x, "centre": x - width / 2, "right": x - width}[label.anchor]
-        top, bottom = (y - 1.0, y) if label.kind == "ref" else (y, y + 1.0)
+        top, bottom = (y - 1.0, y) if label.kind in ("ref", "rail") else (y, y + 1.0)
         for cx in range(math.ceil(left - 1e-9), math.floor(left + width + 1e-9) + 1):
             for cy in range(math.ceil(top - 1e-9), math.floor(bottom + 1e-9) + 1):
                 cells.add((cx, cy))
@@ -1904,7 +1922,27 @@ def build_schematic(
     }
     if placements:
         return _hand_drawn_sheet(doc, symbols, resolved, placements, options, notes, annotations)
-    return _derived_sheet(symbols, resolved, options, notes, annotations)
+    from .schlayout import arrange_sheet
+
+    layout = arrange_sheet(doc, lookup, options)
+    arranged_doc = dataclasses.replace(
+        doc, sheet=layout.placements, sheet_wires=layout.wires
+    )
+    arranged_placements = {
+        ref_of.get(placement.id, placement.id): placement
+        for placement in layout.placements
+        if ref_of.get(placement.id, placement.id) in symbols
+    }
+    return _hand_drawn_sheet(
+        arranged_doc,
+        symbols,
+        resolved,
+        arranged_placements,
+        options,
+        notes,
+        annotations,
+        derived=True,
+    )
 
 
 def wires_as_drawn(drawing: SchematicDrawing, doc: PerfDocument) -> tuple[SheetWire, ...]:
@@ -1933,12 +1971,16 @@ def wires_as_drawn(drawing: SchematicDrawing, doc: PerfDocument) -> tuple[SheetW
         for pin in symbol.pins:
             at = (symbol.at.x + pin.at.x, symbol.at.y + pin.at.y)
             anchors.setdefault(at, NetNode(component_ref=symbol.ref, pin=pin.number))
+    existing = {frozenset((w.a, w.b)) for w in doc.sheet_wires}
     runs_of: dict[NetId, list[tuple[Point2, ...]]] = {}
+    frozen: list[SheetWire] = []
     for wire in drawing.wires:
         if wire.ends is None:
             runs_of.setdefault(wire.net_id, []).append(wire.path)
+        elif frozenset(wire.ends) not in existing:
+            frozen.append(SheetWire(a=wire.ends[0], b=wire.ends[1], path=wire.path))
+            existing.add(frozenset(wire.ends))
 
-    frozen: list[SheetWire] = []
     for net in doc.nets:
         runs = runs_of.get(net.id)
         if not runs:
@@ -2186,11 +2228,15 @@ def _wire_net_of(doc: PerfDocument, wire: SheetWire) -> Net | None:
     connection somebody has since removed stop being drawn instead of quietly asserting a
     join that no longer exists. It is also what makes renaming a net cost nothing here.
     """
+    fallback: Net | None = None
     for net in doc.nets:
         nodes = set(net.nodes)
         if wire.a in nodes and wire.b in nodes:
-            return net
-    return None
+            if net.net_class == "signal":
+                return net
+            if fallback is None:
+                fallback = net
+    return fallback
 
 
 def _reanchored(path: tuple[Point2, ...], start: Point2, end: Point2) -> tuple[Point2, ...]:
@@ -2463,6 +2509,8 @@ def _hand_drawn_sheet(
     options: SchematicOptions,
     notes: list[str],
     annotations: tuple[Annotation, ...],
+    *,
+    derived: bool = False,
 ) -> SchematicDrawing:
     """Draw the sheet as it was arranged, and join by name whatever has no wire."""
     # -- where everything is, and which way round ---------------------------
@@ -2646,7 +2694,17 @@ def _hand_drawn_sheet(
             if len(item.pins) < 2:
                 # One pin and nothing to join it to. Saying the name would claim a
                 # connection to something; the derived sheet draws a stub here and says so
-                # in the notes, and so does this.
+                # in the notes.
+                if derived:
+                    dx, dy = PIN_DIRECTION[pin.side]
+                    wires.append(
+                        Wire(
+                            net_id=item.net.id,
+                            net_name=item.net.name,
+                            net_class=item.net.net_class,
+                            path=(anchor, _p(anchor.x + dx * GRID_MM, anchor.y + dy * GRID_MM)),
+                        )
+                    )
                 continue
             stub, said = _said_at_pin(item.net, anchor, pin.side)
             wires.append(stub)
@@ -2682,9 +2740,9 @@ def _hand_drawn_sheet(
         if (ref, pin.number) not in wired_pins
     ]
 
-    width, height = _sheet_extent(ordered, wires, rails, no_connects, annotations)
+    width, height = _sheet_extent(ordered, wires, rails, no_connects, annotations, part_labels)
 
-    drawn = _symbols_drawn(ordered, placements)
+    drawn = _symbols_drawn(ordered, placements, derived=derived)
     if parked:
         notes.append(
             f"{len(parked)} part(s) have no place on this sheet yet and are parked at the "
@@ -2884,7 +2942,10 @@ def _port_label(port: SheetPort, paths: Sequence[tuple[Point2, ...]]) -> Label:
 
 
 def _symbols_drawn(
-    ordered: Sequence[_Placed], placements: dict[str, SymbolPlacement]
+    ordered: Sequence[_Placed],
+    placements: dict[str, SymbolPlacement],
+    *,
+    derived: bool = False,
 ) -> tuple[Symbol, ...]:
     return tuple(
         Symbol(
@@ -2901,7 +2962,7 @@ def _symbols_drawn(
             undefined=placed.undefined,
             rotation=placements[placed.ref].rotation if placed.ref in placements else 0,
             mirrored=placements[placed.ref].mirrored if placed.ref in placements else False,
-            positioned=placed.ref in placements,
+            positioned=False if derived else placed.ref in placements,
         )
         for placed in ordered
     )
@@ -3226,6 +3287,7 @@ def _sheet_extent(
     rails: Sequence[Rail],
     no_connects: Sequence[NoConnect],
     annotations: Sequence[Annotation],
+    part_labels: Sequence[Label] = (),
 ) -> tuple[Mm, Mm]:
     """How big the paper has to be. A margin past everything that is on it.
 
@@ -3250,6 +3312,11 @@ def _sheet_extent(
     for note in annotations:
         right = max(right, note.at.x, note.to.x)
         bottom = max(bottom, note.at.y, note.to.y)
+    for label in part_labels:
+        box = _part_label_box(label)
+        if box is not None:
+            right = max(right, box[2])
+            bottom = max(bottom, box[3])
     # A label's own width is not known here -- it is drawn at a size the renderer picks --
     # so the margin doubles as the room for a net name written at the right-hand edge.
     return right + 2 * MARGIN_MM, bottom + MARGIN_MM

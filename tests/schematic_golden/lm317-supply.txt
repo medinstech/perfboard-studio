@@ -1,109 +1,93 @@
-sheet 233.68 x 119.38
-symbol C1 capacitor c-disc-p2 at 58.42,50.80 size 20.32x10.16 value='0.1uF'
-    pin 1 name=None left 0.00,5.08
-    pin 2 name=None right 20.32,5.08
-symbol C2 polarised-capacitor c-elec-d5-p2 at 58.42,22.86 size 20.32x10.16 value='10uF'
-    pin 1 name='+' left 0.00,5.08
-    pin 2 name='-' right 20.32,5.08
-symbol C3 polarised-capacitor c-elec-d6.3-p2 at 58.42,83.82 size 20.32x10.16 value='100uF'
-    pin 1 name='+' left 0.00,5.08
-    pin 2 name='-' right 20.32,5.08
-symbol D1 diode d-do41 at 109.22,22.86 size 20.32x10.16 value='1N4007'
+sheet 208.28 x 137.16
+symbol C1 capacitor c-disc-p2 at 55.88,15.24 size 10.16x20.32 value='0.1uF'
+    pin 1 name=None top 5.08,0.00
+    pin 2 name=None bottom 5.08,20.32
+symbol C2 polarised-capacitor c-elec-d5-p2 at 55.88,101.60 size 10.16x20.32 value='10uF'
+    pin 1 name='+' top 5.08,0.00
+    pin 2 name='-' bottom 5.08,20.32
+symbol C3 polarised-capacitor c-elec-d6.3-p2 at 55.88,58.42 size 10.16x20.32 value='100uF'
+    pin 1 name='+' top 5.08,0.00
+    pin 2 name='-' bottom 5.08,20.32
+symbol D1 diode d-do41 at 88.90,48.26 size 20.32x10.16 value='1N4007'
     pin 1 name='K' left 0.00,5.08
     pin 2 name='A' right 20.32,5.08
-symbol J1 connector hdr-1x2 at 109.22,81.28 size 20.32x15.24 value='DC IN'
-    pin 1 name=None left 0.00,5.08
-    pin 2 name=None left 0.00,10.16
-symbol J2 connector hdr-1x2 at 109.22,50.80 size 20.32x15.24 value='DC OUT'
-    pin 1 name=None left 0.00,5.08
-    pin 2 name=None left 0.00,10.16
-symbol LED1 led led-5mm at 193.04,50.80 size 20.32x10.16 value='LED'
-    pin 2 name='K' left 0.00,5.08
-    pin 1 name='A' right 20.32,5.08
-symbol R1 resistor r-axial-3 at 152.40,22.86 size 20.32x10.16 value='240'
-    pin 1 name=None left 0.00,5.08
-    pin 2 name=None right 20.32,5.08
-symbol R2 resistor r-axial-3 at 152.40,50.80 size 20.32x10.16 value='2k2'
+symbol J1 connector hdr-1x2 at 15.24,40.64 size 20.32x15.24 value='DC IN'
+    pin 1 name=None right 20.32,5.08
+    pin 2 name=None right 20.32,10.16
+symbol J2 connector hdr-1x2 at 15.24,63.50 size 20.32x15.24 value='DC OUT'
+    pin 1 name=None right 20.32,5.08
+    pin 2 name=None right 20.32,10.16
+symbol LED1 led led-5mm at 132.08,93.98 size 10.16x20.32 value='LED'
+    pin 2 name='K' bottom 5.08,20.32
+    pin 1 name='A' top 5.08,0.00
+symbol R1 resistor r-axial-3 at 88.90,66.04 size 20.32x10.16 value='240'
     pin 1 name=None left 0.00,5.08
     pin 2 name=None right 20.32,5.08
-symbol RV1 potentiometer pot-3 at 152.40,81.28 size 20.32x15.24 value='5k'
-    pin 1 name=None left 0.00,10.16
-    pin 2 name=None right 20.32,2.54
-    pin 3 name=None right 20.32,10.16
-symbol U1 regulator to220 at 20.32,48.26 size 25.40x17.78 value='LM317'
+symbol R2 resistor r-axial-3 at 88.90,83.82 size 20.32x10.16 value='2k2'
+    pin 1 name=None left 0.00,5.08
+    pin 2 name=None right 20.32,5.08
+symbol RV1 potentiometer pot-3 at 162.56,58.42 size 20.32x15.24 value='5k'
+    pin 1 name=None right 20.32,5.08
+    pin 2 name=None left 0.00,12.70
+    pin 3 name=None left 0.00,5.08
+symbol U1 regulator to220 at 86.36,17.78 size 25.40x17.78 value='LM317'
     pin 3 name='IN' left 0.00,7.62
     pin 2 name='OUT' right 25.40,7.62
     pin 1 name='ADJ' bottom 12.70,17.78
-wire VIN [signal] 109.22,86.36 -> 91.44,86.36 -> 91.44,71.12
-wire VIN [signal] 58.42,55.88 -> 55.88,55.88 -> 55.88,71.12
-wire VIN [signal] 58.42,88.90 -> 53.34,88.90 -> 53.34,71.12
-wire VIN [signal] 20.32,55.88 -> 12.70,55.88 -> 12.70,71.12
-wire VIN [signal] 129.54,27.94 -> 134.62,27.94 -> 134.62,71.12
-wire VIN [signal] 12.70,71.12 -> 134.62,71.12
-wire VOUT [signal] 45.72,55.88 -> 50.80,55.88 -> 50.80,38.10
-wire VOUT [signal] 152.40,27.94 -> 139.70,27.94 -> 139.70,38.10
-wire VOUT [signal] 58.42,27.94 -> 48.26,27.94 -> 48.26,38.10
-wire VOUT [signal] 109.22,27.94 -> 91.44,27.94 -> 91.44,38.10
-wire VOUT [signal] 152.40,55.88 -> 137.16,55.88 -> 137.16,38.10
-wire VOUT [signal] 109.22,55.88 -> 93.98,55.88 -> 93.98,38.10
-wire VOUT [signal] 48.26,38.10 -> 139.70,38.10
-wire ADJ [signal] 33.02,66.04 -> 50.80,66.04 -> 50.80,73.66
-wire ADJ [signal] 172.72,27.94 -> 175.26,27.94 -> 175.26,73.66
-wire ADJ [signal] 172.72,83.82 -> 177.80,83.82 -> 177.80,73.66
-wire ADJ [signal] 172.72,91.44 -> 180.34,91.44 -> 180.34,73.66
-wire ADJ [signal] 50.80,73.66 -> 180.34,73.66
-wire LED_A [signal] 172.72,55.88 -> 177.80,55.88 -> 177.80,71.12
-wire LED_A [signal] 213.36,55.88 -> 215.90,55.88 -> 215.90,71.12
-wire LED_A [signal] 177.80,71.12 -> 215.90,71.12
-rail GND [ground] down 109.22,91.44 -> 104.14,91.44 -> 104.14,93.98
-rail GND [ground] down 109.22,60.96 -> 104.14,60.96 -> 104.14,63.50
-rail GND [ground] down 78.74,55.88 -> 83.82,55.88 -> 83.82,58.42
-rail GND [ground] down 78.74,88.90 -> 83.82,88.90 -> 83.82,91.44
-rail GND [ground] down 78.74,27.94 -> 83.82,27.94 -> 83.82,30.48
-rail GND [ground] down 152.40,91.44 -> 147.32,91.44 -> 147.32,93.98
-rail GND [ground] down 193.04,55.88 -> 187.96,55.88 -> 187.96,58.42
-junction net-1 91.44,71.12
-junction net-1 55.88,71.12
-junction net-1 53.34,71.12
-junction net-3 50.80,38.10
-junction net-3 91.44,38.10
-junction net-3 137.16,38.10
-junction net-3 93.98,38.10
-junction net-4 175.26,73.66
-junction net-4 177.80,73.66
-label [ref/centre] 68.58,48.89 C1
-label [value/centre] 68.58,61.98 0.1uF
-label [ref/centre] 68.58,20.95 C2
-label [value/centre] 68.58,34.04 10uF
-label [ref/centre] 68.58,81.92 C3
-label [value/centre] 68.58,95.00 100uF
-label [ref/centre] 119.38,20.95 D1
-label [value/centre] 119.38,34.04 1N4007
-label [ref/centre] 119.38,79.38 J1
-label [value/centre] 119.38,97.54 DC IN
-label [pin/left] 115.57,86.36 1
-label [pin/left] 115.57,91.44 2
-label [ref/centre] 119.38,48.89 J2
-label [value/centre] 119.38,67.06 DC OUT
-label [pin/left] 115.57,55.88 1
-label [pin/left] 115.57,60.96 2
-label [ref/centre] 203.20,48.89 LED1
-label [value/centre] 203.20,61.98 LED
-label [ref/centre] 162.56,20.95 R1
-label [value/centre] 162.56,34.04 240
-label [ref/centre] 162.56,48.89 R2
-label [value/centre] 162.56,61.98 2k2
-label [ref/centre] 162.56,79.38 RV1
-label [value/centre] 162.56,97.54 5k
-label [ref/centre] 33.02,46.35 U1
-label [value/centre] 36.22,67.06 LM317
-label [pin/left] 26.67,55.88 IN
-label [pin/centre] 22.86,57.02 3
-label [pin/right] 39.37,55.88 OUT
-label [pin/centre] 43.18,57.02 2
-label [pin/centre] 33.02,59.69 ADJ
-label [pin/left] 34.16,63.50 1
-label [net/left] 13.46,70.23 VIN
-label [net/left] 49.02,37.21 VOUT
-quiet net-4 54.10,72.77 ADJ
-quiet net-5 178.56,70.23 LED_A
+wire ADJ [signal] 162.56,71.12 -> 160.02,71.12 -> 160.02,63.50 -> 162.56,63.50
+wire VOUT [signal] 88.90,71.12 -> 86.36,71.12 -> 86.36,88.90 -> 88.90,88.90
+wire VOUT [signal] 88.90,53.34 -> 86.36,53.34 -> 86.36,71.12 -> 88.90,71.12
+wire LED_A [signal] 137.16,93.98 -> 137.16,88.90 -> 109.22,88.90
+wire VIN [signal] 60.96,15.24 -> 60.96,12.70 -> 83.82,12.70 -> 83.82,25.40 -> 86.36,25.40
+wire VIN [signal] 60.96,58.42 -> 60.96,45.72 -> 35.56,45.72
+wire VOUT [signal] 60.96,101.60 -> 60.96,88.90 -> 88.90,88.90
+wire VIN [signal] 60.96,15.24 -> 60.96,12.70 -> 53.34,12.70 -> 53.34,55.88 -> 60.96,55.88 -> 60.96,58.42
+wire ADJ [signal] 109.22,71.12 -> 114.30,71.12 -> 114.30,40.64 -> 99.06,40.64 -> 99.06,35.56
+wire VOUT [signal] 88.90,53.34 -> 86.36,53.34 -> 86.36,43.18 -> 116.84,43.18 -> 116.84,25.40 -> 111.76,25.40
+wire VIN [signal] 109.22,53.34 -> 121.92,53.34 -> 121.92,12.70 -> 83.82,12.70 -> 83.82,25.40 -> 86.36,25.40
+wire ADJ [signal] 109.22,71.12 -> 162.56,71.12
+wire VOUT [signal] 35.56,68.58 -> 53.34,68.58 -> 53.34,88.90 -> 83.82,88.90 -> 83.82,71.12 -> 88.90,71.12
+rail GND [ground] down 35.56,50.80 -> 40.64,50.80 -> 40.64,53.34
+rail GND [ground] down 35.56,73.66 -> 40.64,73.66 -> 40.64,76.20
+rail GND [ground] down 60.96,35.56 -> 60.96,40.64
+rail GND [ground] down 60.96,78.74 -> 60.96,83.82
+rail GND [ground] down 60.96,121.92 -> 60.96,127.00
+rail GND [ground] down 182.88,63.50 -> 187.96,63.50 -> 187.96,66.04
+rail GND [ground] down 137.16,114.30 -> 137.16,119.38
+junction net-3 88.90,71.12
+label [ref/left] 67.95,24.13 C1
+label [value/left] 67.95,26.67 0.1uF
+label [ref/left] 67.95,110.49 C2
+label [value/left] 67.95,113.03 10uF
+label [ref/left] 67.95,67.31 C3
+label [value/left] 67.95,69.85 100uF
+label [ref/centre] 99.06,46.35 D1
+label [value/centre] 99.06,59.44 1N4007
+label [ref/centre] 25.40,38.73 J1
+label [value/centre] 25.40,56.90 DC IN
+label [pin/right] 29.21,45.72 1
+label [pin/right] 29.21,50.80 2
+label [ref/centre] 25.40,61.59 J2
+label [value/centre] 25.40,79.76 DC OUT
+label [pin/right] 29.21,68.58 1
+label [pin/right] 29.21,73.66 2
+label [ref/left] 144.15,102.87 LED1
+label [value/left] 144.15,105.41 LED
+label [ref/centre] 99.06,64.14 R1
+label [value/centre] 99.06,77.22 240
+label [ref/centre] 99.06,81.92 R2
+label [value/centre] 99.06,95.00 2k2
+label [ref/centre] 172.72,56.52 RV1
+label [value/centre] 172.72,74.68 5k
+label [ref/centre] 99.06,15.88 U1
+label [value/centre] 102.25,36.58 LM317
+label [pin/left] 92.71,25.40 IN
+label [pin/centre] 88.90,26.54 3
+label [pin/right] 105.41,25.40 OUT
+label [pin/centre] 109.22,26.54 2
+label [pin/centre] 99.06,29.21 ADJ
+label [pin/left] 100.20,33.02 1
+label [net/left] 54.10,11.81 VIN
+label [net/left] 54.10,88.01 VOUT
+quiet net-4 109.98,70.23 ADJ
+quiet net-5 109.98,88.01 LED_A

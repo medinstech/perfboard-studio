@@ -31,6 +31,7 @@ from perfboard_studio.commands import (
     AddSheetNotePayload,
     AddSheetPortPayload,
     ApplyBoardPresetPayload,
+    ArrangeSheetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
     CutSheetWiresPayload,
@@ -337,6 +338,9 @@ def _session() -> list[str]:
     run("sheet.wire.cut", CutSheetWiresPayload(wires=bus.document.sheet_wires))
     run("symbol.auto", AutoSymbolsPayload(ids=(part("R9").id,)))
     run("symbol.auto", AutoSymbolsPayload())
+    run("sheet.arrange", ArrangeSheetPayload())
+    run("sheet.arrange", ArrangeSheetPayload(refs=("R9",)))
+    run("sheet.arrange", ArrangeSheetPayload(refs=("R9", "R11")))
     run(
         "sheet.note.add",
         AddSheetNotePayload(kind="rectangle", at=Point2(0.0, 0.0), to=Point2(10.0, 10.0)),

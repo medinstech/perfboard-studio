@@ -137,6 +137,9 @@ TEMPLATES: tuple[str, ...] = (
     "Lay {count} symbol out automatically",
     "Lay {count} symbols out automatically",
     "Lay the whole sheet out automatically",
+    "Arrange {count} symbol on the sheet",
+    "Arrange {count} symbols on the sheet",
+    "Arrange the sheet",
     # A port: before the wires, which would read "Wire U1.3 to the ground GND" as a
     # wire between two pins.
     "Put the ground {net} on the sheet",

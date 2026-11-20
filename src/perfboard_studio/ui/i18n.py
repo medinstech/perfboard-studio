@@ -1496,9 +1496,6 @@ TURKISH: Mapping[str, str] = {
         "Sayfanın tamamını düzene geri verir: taşıdığınız her sembol ve çizdiğiniz her tel. "
         "Neyin bağlı olduğuna dokunulmaz."
     ),
-    "Nothing on this sheet has been moved by hand.": (
-        "Bu sayfada elle taşınmış bir şey yok."
-    ),
     "Put the sheet in a window of its own, so it and the board can sit side by "
     "side. Dragging its title bar does the same, and so does dropping it back.": (
         "Sayfayı kendi penceresine alır, böylece kartla yan yana durabilirler. Başlık "
@@ -6344,6 +6341,9 @@ TURKISH: Mapping[str, str] = {
     "Lay {count} symbol out automatically": "{count} sembolü otomatik diz",
     "Lay {count} symbols out automatically": "{count} sembolü otomatik diz",
     "Lay the whole sheet out automatically": "Bütün şemayı otomatik diz",
+    "Arrange {count} symbol on the sheet": "Şemadaki {count} sembolü düzenle",
+    "Arrange {count} symbols on the sheet": "Şemadaki {count} sembolü düzenle",
+    "Arrange the sheet": "Şemayı düzenle",
     "Put the ground {net} on the sheet": "Şemaya {net} toprak sembolü koy",
     "Put the ground {net} on {count} pins": "{count} pine {net} toprak sembolü koy",
     "Put the ground {net} on {pin}": "{pin} pinine {net} toprak sembolü koy",

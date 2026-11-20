@@ -188,6 +188,7 @@ from perfboard_studio.commands import (
     AddSheetNotePayload,
     AddSheetPortPayload,
     ApplyBoardPresetPayload,
+    ArrangeSheetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
     CutSheetWiresPayload,
@@ -8873,17 +8874,13 @@ class MainWindow(QMainWindow):
             self._remove_symbol(ref)
 
     def on_schematic_auto_layout(self) -> None:
-        """Hand the whole sheet back to the layout.
-
-        Its own gesture rather than an undo, because the two are different questions: undo
-        takes back the last move, and this takes back the arrangement -- which after an
-        afternoon of tidying is a great many moves and one decision.
-        """
-        result = self.bus.dispatch("symbol.auto", AutoSymbolsPayload())
+        """Arrange the sheet -- or a multi-symbol selection on it -- into an editable
+        layout in one undo step."""
+        selected = tuple(self._sheet_selection())
+        refs = selected if len(selected) > 1 else ()
+        result = self.bus.dispatch("sheet.arrange", ArrangeSheetPayload(refs=refs))
         if not result.ok:
-            self.statusBar().showMessage(
-                t("Nothing on this sheet has been moved by hand."), 6000
-            )
+            self.statusBar().showMessage(refused(result), 6000)
             return
         self.statusBar().showMessage(did(result.description), 6000)
 

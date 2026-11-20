@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -63,6 +64,7 @@ from .schematic import (
     _part_labels,
     _part_text_width,
     _Placed,
+    _rail_names,
     _ref_sort_key,
     _resolve_nets,
     _ResolvedNet,
@@ -402,15 +404,15 @@ class _Layout:
         return None if best is None else (best[2], best[3])
 
     def glyph_room(self, part: _Part) -> tuple[float, float]:
-        """How far a supply glyph stands over ``part`` and a ground glyph hangs under it."""
+        """How far a supply glyph or a vertical signal exit needs above and below ``part``."""
         above = below = 0.0
         for pin in part.shape.pins:
-            if self.rail_want(part.ref, pin.number) is None:
-                continue
+            is_rail = self.rail_want(part.ref, pin.number) is not None
+            room = GLYPH_ROOM * GRID_MM if is_rail else 2 * GRID_MM
             if pin.side == "top":
-                above = GLYPH_ROOM * GRID_MM
+                above = max(above, room)
             elif pin.side == "bottom":
-                below = GLYPH_ROOM * GRID_MM
+                below = max(below, room)
         return above, below
 
     def level_with(self, part: _Part) -> tuple[float, int] | None:
@@ -830,7 +832,30 @@ class _Layout:
             left = min(p.x for p in placed)
         else:
             left = 0.0
-        if (
+        if not self.hubs and not band and not band_loose:
+            pass
+        elif (
+            not self.hubs
+            and len(band) >= 4
+            and all(len(g) == 1 for g in band)
+            and not band_loose
+        ):
+            # A board of unconnected or rail-only parts with no hub: pack into a tidy block
+            # rather than one long strip across the page.
+            parts = [self.parts[g[0]] for g in band]
+            for part in parts:
+                _orient(part, self.wants(part, "left"))
+            cols = max(2, math.ceil(math.sqrt(len(parts))))
+            col_w = max(p.shape.width + self.side_label_room(p) for p in parts)
+            row_h = max(
+                p.shape.height + sum(self.glyph_room(p)) + STACK_GAP * GRID_MM for p in parts
+            )
+            for idx, part in enumerate(parts):
+                col, row = idx % cols, idx // cols
+                part.x = _grid(left + col * (col_w + COLUMN_GAP * GRID_MM))
+                part.y = _grid(row * row_h)
+                part.done = True
+        elif (
             self.hubs
             and not band
             and band_loose
@@ -938,7 +963,11 @@ class _Layout:
                         direction="down" if kind == "ground" else "up",
                     )
                 )
-        drawing = dataclasses.replace(drawing, rails=tuple(rails))
+        drawing = dataclasses.replace(
+            drawing,
+            rails=tuple(rails),
+            labels=(*drawing.labels, *_rail_names(rails)),
+        )
 
         # Which block each part is in: its cluster, with every hub a block of its own
         # that reaches into each cluster on it.
@@ -967,8 +996,9 @@ class _Layout:
             return cur
 
         candidates: list[tuple[float, str, PinKey, PinKey, _ResolvedNet]] = []
+        wire_all = self.options.name_nets_at == 0
         for item in self.signal_nets():
-            if not local(item):
+            if not wire_all and not local(item):
                 continue
             pins = sorted(
                 ((ref, pin.number) for ref, pin in item.pins),
@@ -995,7 +1025,9 @@ class _Layout:
             path = route_sheet_wire(
                 dataclasses.replace(drawing, wires=tuple(laid)), first, second
             )
-            if path is None or _length(path) > DETOUR_FACTOR * gap + DETOUR_SLACK_MM:
+            if path is None or (
+                not wire_all and _length(path) > DETOUR_FACTOR * gap + DETOUR_SLACK_MM
+            ):
                 continue
             parent[(net_id, rb)] = ra
             a, b = NetNode(first[0], first[1]), NetNode(second[0], second[1])
@@ -1016,13 +1048,172 @@ def _length(path: Sequence[Point2]) -> float:
     return sum(abs(q.x - p.x) + abs(q.y - p.y) for p, q in itertools.pairwise(path))
 
 
+def _shift_arrangement(
+    result: Arrangement, dx: float, dy: float
+) -> Arrangement:
+    """Translate every placement, wire and port by ``(dx, dy)``, snapped to the sheet grid."""
+    sdx, sdy = _grid(dx), _grid(dy)
+    if sdx == 0.0 and sdy == 0.0:
+        return result
+    placements = tuple(
+        dataclasses.replace(p, at=Point2(_grid(p.at.x + sdx), _grid(p.at.y + sdy)))
+        for p in result.placements
+    )
+    wires = tuple(
+        dataclasses.replace(
+            w, path=tuple(Point2(_grid(pt.x + sdx), _grid(pt.y + sdy)) for pt in w.path)
+        )
+        for w in result.wires
+    )
+    ports = tuple(
+        dataclasses.replace(
+            port,
+            at=Point2(_grid(port.at.x + sdx), _grid(port.at.y + sdy)),
+            links=tuple(
+                dataclasses.replace(
+                    link,
+                    path=tuple(
+                        Point2(_grid(pt.x + sdx), _grid(pt.y + sdy)) for pt in link.path
+                    ),
+                )
+                for link in port.links
+            ),
+        )
+        for port in result.ports
+    )
+    return Arrangement(placements=placements, wires=wires, ports=ports)
+
+
+def _arrange_subset(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    options: SchematicOptions,
+    selected: set[str],
+) -> Arrangement:
+    """Arrange only ``selected`` parts on an existing hand-drawn sheet, keeping every other
+    symbol, wire and port untouched and shifting the arranged block clear of fixed bodies."""
+    sub_doc = dataclasses.replace(
+        doc,
+        components=tuple(c for c in doc.components if c.ref in selected),
+        boards=tuple(
+            dataclasses.replace(
+                b, components=tuple(c for c in b.components if c.ref in selected)
+            )
+            for b in doc.boards
+        ),
+        parts=tuple(p for p in doc.parts if p.ref in selected),
+        nets=tuple(
+            dataclasses.replace(
+                n, nodes=tuple(node for node in n.nodes if node.component_ref in selected)
+            )
+            for n in doc.nets
+            if any(node.component_ref in selected for node in n.nodes)
+        ),
+        sheet=(),
+        sheet_wires=(),
+        sheet_ports=(),
+    )
+    sub_layout = _Layout(sub_doc, lookup, options)
+    if not sub_layout.parts:
+        return Arrangement(placements=doc.sheet, wires=doc.sheet_wires, ports=doc.sheet_ports)
+    sub_layout.arrange()
+    sub_wires, sub_ports = sub_layout.wire_up()
+    sub = Arrangement(
+        placements=sub_layout.placements(), wires=sub_wires, ports=sub_ports
+    )
+
+    # Align the arranged block's centre with the selected symbols' old centre on the sheet.
+    ref_of = {p.id: p.ref for p in doc.parts}
+    ref_of.update({c.id: c.ref for c in every_component(doc)})
+    old_selected = [p for p in doc.sheet if ref_of.get(p.id) in selected]
+    if old_selected:
+        old_cx = (min(p.at.x for p in old_selected) + max(p.at.x for p in old_selected)) / 2
+        old_cy = (min(p.at.y for p in old_selected) + max(p.at.y for p in old_selected)) / 2
+        new_cx = (min(p.at.x for p in sub.placements) + max(p.at.x for p in sub.placements)) / 2
+        new_cy = (min(p.at.y for p in sub.placements) + max(p.at.y for p in sub.placements)) / 2
+        sub = _shift_arrangement(sub, old_cx - new_cx, old_cy - new_cy)
+
+    # Shift clear if the arranged block would overlap any fixed unselected symbol.
+    full_notes: list[str] = []
+    all_symbols = _collect_symbols(doc, lookup, full_notes)
+    fixed_boxes: list[tuple[float, float, float, float]] = []
+    for placement in doc.sheet:
+        ref = ref_of.get(placement.id)
+        if ref is None or ref in selected or ref not in all_symbols:
+            continue
+        body = _orient_body(all_symbols[ref].body, placement.rotation, placement.mirrored)
+        fixed_boxes.append(
+            (placement.at.x, placement.at.y, placement.at.x + body.width, placement.at.y + body.height)
+        )
+    if fixed_boxes:
+        sub_sizes = {sub_layout.part_id(p.ref): (p.shape.width, p.shape.height) for p in sub_layout.parts.values()}
+        margin = STACK_GAP * GRID_MM
+        for _ in range(32):
+            hit_bottom: float | None = None
+            for placement in sub.placements:
+                w, h = sub_sizes[placement.id]
+                x0, y0, x1, y1 = placement.at.x, placement.at.y, placement.at.x + w, placement.at.y + h
+                for fx0, fy0, fx1, fy1 in fixed_boxes:
+                    if x0 < fx1 + margin and fx0 - margin < x1 and y0 < fy1 + margin and fy0 - margin < y1:
+                        delta = fy1 + margin - y0
+                        if hit_bottom is None or delta > hit_bottom:
+                            hit_bottom = delta
+            if hit_bottom is None:
+                break
+            sub = _shift_arrangement(sub, 0.0, hit_bottom)
+
+    selected_ids = {p.id for p in sub.placements}
+    kept_placements = tuple(p for p in doc.sheet if p.id not in selected_ids)
+    kept_wires = tuple(
+        w
+        for w in doc.sheet_wires
+        if w.a.component_ref not in selected and w.b.component_ref not in selected
+    )
+    kept_ports: list[SheetPort] = []
+    for port in doc.sheet_ports:
+        remaining = tuple(link for link in port.links if link.pin.component_ref not in selected)
+        if remaining:
+            kept_ports.append(dataclasses.replace(port, links=remaining))
+        elif not port.links:
+            kept_ports.append(port)
+    used_port_ids = {port.id for port in kept_ports}
+    unique_sub_ports: list[SheetPort] = []
+    for port in sub.ports:
+        pid = port.id
+        suffix = 2
+        while pid in used_port_ids:
+            pid = f"{port.id}-{suffix}"
+            suffix += 1
+        used_port_ids.add(pid)
+        unique_sub_ports.append(dataclasses.replace(port, id=pid))
+    return Arrangement(
+        placements=kept_placements + sub.placements,
+        wires=kept_wires + sub.wires,
+        ports=tuple(kept_ports) + tuple(unique_sub_ports),
+    )
+
+
 def arrange_sheet(
     doc: PerfDocument,
     lookup: FootprintLookup,
     options: SchematicOptions = DEFAULT_SCHEMATIC_OPTIONS,
+    *,
+    refs: Sequence[str] | None = None,
 ) -> Arrangement:
-    """Every part placed and the short connections wired, as a hand-drawn sheet."""
+    """Every part placed and the short connections wired, as a hand-drawn sheet.
+
+    When ``refs`` names a subset of the parts on an already-placed sheet, only those parts
+    are arranged and the rest of the sheet stays where it was.
+    """
+    if refs and doc.sheet:
+        selected = set(refs)
+        notes: list[str] = []
+        all_refs = set(_collect_symbols(doc, lookup, notes))
+        if selected and selected < all_refs:
+            return _arrange_subset(doc, lookup, options, selected)
     layout = _Layout(doc, lookup, options)
+    if not layout.parts:
+        return Arrangement(placements=(), wires=(), ports=())
     layout.arrange()
     wires, ports = layout.wire_up()
     return Arrangement(placements=layout.placements(), wires=wires, ports=ports)
