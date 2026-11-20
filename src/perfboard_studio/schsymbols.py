@@ -21,6 +21,7 @@ Pure like the rest of the engine: no clock, no RNG, no filesystem, no Qt.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
@@ -30,6 +31,7 @@ from .model import (
     Footprint,
     Mm,
     PartSymbol,
+    PinRole,
     Point2,
     pin_number_sort_key,
 )
@@ -163,6 +165,7 @@ class SymbolPin:
 class PinSpec:
     number: str
     name: str | None
+    role: PinRole | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -804,6 +807,8 @@ def _named_body_width(
 
 
 def _ic_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolBody:
+    if _has_functional_roles(pins):
+        return functional_ic_body(pins)
     return _boxy_body(pins, body_width=8 * GRID_MM, split=True, dip_order=True, notch=True)
 
 
@@ -838,8 +843,11 @@ def _box_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) -> SymbolB
 
     Five pins or fewer go down one side, because a three-lead part with one pin on the left
     and two on the right invites the reader to see a transistor -- which is precisely the
-    reading this box exists to avoid.
+    reading this box exists to avoid. A module or generic part that declares roles for every
+    lead draws as a functional box instead.
     """
+    if _has_functional_roles(pins):
+        return functional_ic_body(pins)
     split = len(pins) > 5
     return _boxy_body(pins, body_width=6 * GRID_MM, split=split, dip_order=False, notch=False)
 
@@ -1701,6 +1709,229 @@ def _optocoupler_body(pins: tuple[PinSpec, ...], footprint: Footprint | None) ->
         shapes += [_line(7, 3, 8.9, 3), _line(10, 3, 12, 3)]
         drawn.append(_lead(base, 12, 3, "right"))
     return SymbolBody(tuple(shapes), tuple(drawn), 12 * GRID_MM, 6 * GRID_MM, names_inside=True)
+
+
+# -- a functional IC or module from its pin roles ---------------------------------------------
+
+_ROLE_LEFT: frozenset[PinRole] = frozenset({"in", "passive"})
+_ROLE_RIGHT: frozenset[PinRole] = frozenset({"out"})
+_ROLE_TOP: frozenset[PinRole] = frozenset({"power", "power-out"})
+_ROLE_BOTTOM: frozenset[PinRole] = frozenset({"ground", "power-neg"})
+
+#: Names the catalog gives a pin by its ALTERNATE function, keyed to the port it sits on. Used
+#: to GROUP and ORDER only: what a pin prints on the sheet is still the part's own name.
+ORDER_ALIASES: dict[str, str] = {
+    "RXD": "PD0",
+    "TXD": "PD1",
+    "MOSI": "PB3",
+    "MISO": "PB4",
+    "SCK": "PB5",
+    "XTAL1": "PB6",
+    "XTAL2": "PB7",
+}
+
+_NAME_PARTS = re.compile(r"^([^\d/]*)(\d+)?(.*)$")
+_LETTERED = re.compile(r"^([A-Z])[A-Z]'?$")
+
+#: Real sans-serif capitals run ~0.68 em while ``pin_label_width`` counts 0.55 em; scaling by
+#: this factor keeps left and right pin names clear of each other inside a functional box.
+_FUNCTIONAL_LABEL_MARGIN: float = 1.25
+
+
+def _order_name(pin: PinSpec) -> str:
+    name = pin.name or pin.number
+    return ORDER_ALIASES.get(name, name)
+
+
+def _name_stem(name: str) -> str:
+    """The name without its number or suffix: PB3 -> PB, IN1- -> IN, D1/TX -> D, QH' -> QH'."""
+    match = _NAME_PARTS.match(name)
+    assert match is not None
+    return match.group(1) or name
+
+
+def _name_root(name: str) -> str:
+    """The family a name sorts in. Port letters and a lettered bank are one family each:
+    PB, PC, PD read as P; QA..QH and QH' as Q. Everything else is its own stem."""
+    stem = _name_stem(name)
+    letters = _LETTERED.match(name)
+    if letters is not None and not re.search(r"\d", name):
+        return letters.group(1)
+    if len(stem) == 2 and stem.isalpha() and stem.isupper() and re.search(r"\d", name):
+        return stem[0]
+    return stem
+
+
+def _natural_name_key(name: str) -> tuple[str, int, str]:
+    match = _NAME_PARTS.match(name)
+    assert match is not None
+    return (
+        match.group(1),
+        int(match.group(2)) if match.group(2) is not None else -1,
+        match.group(3),
+    )
+
+
+def _side_of_role(role: PinRole) -> Literal["left", "right"] | None:
+    if role in _ROLE_LEFT:
+        return "left"
+    if role in _ROLE_RIGHT:
+        return "right"
+    return None
+
+
+def _has_functional_roles(pins: Sequence[PinSpec]) -> bool:
+    """Whether every pin carries a declared role and at least one pin is connected."""
+    return (
+        bool(pins)
+        and all(pin.role is not None for pin in pins)
+        and any(pin.role != "nc" for pin in pins)
+    )
+
+
+def functional_ic_body(pins: Sequence[PinSpec]) -> SymbolBody:
+    """A box that says what each pin DOES: inputs on the left, outputs on the right, supply on
+    top and ground underneath. A pin whose role is ``io`` goes on whichever side keeps the
+    columns even.
+
+    A pin whose role is ``nc`` is not drawn, like an unused lead on any schematic.
+
+    Pins are kept in FAMILIES by the name they share: D0..D13, IN1..IN7, PB0..PD7, QA..QH and
+    QH'. A family sits on one side, in natural order (D2 before D10), so what belongs together
+    reads together and OUTn faces INn; the family goes where most of its pins with a fixed role
+    go (XTAL1 in, XTAL2 out: a crystal's two ends stay together). Families with no fixed-side
+    votes are split between the two sides in order, at the point that makes the columns most
+    even.
+    """
+    live = [pin for pin in pins if (pin.role or "io") != "nc"]
+    top = [pin for pin in live if (pin.role or "io") in _ROLE_TOP]
+    bottom = [pin for pin in live if (pin.role or "io") in _ROLE_BOTTOM]
+    sided = [pin for pin in live if pin not in top and pin not in bottom]
+
+    first_seen: dict[str, int] = {}
+    root_of_stem: dict[str, str] = {}
+    families: dict[str, list[PinSpec]] = {}
+    for index, pin in enumerate(sided):
+        key = _order_name(pin)
+        stem = _name_stem(key)
+        root = _name_root(key)
+        first_seen.setdefault(root, index)
+        root_of_stem.setdefault(stem, root)
+        families.setdefault(stem, []).append(pin)
+
+    def family_key(stem: str) -> tuple[int, str]:
+        return first_seen[root_of_stem[stem]], stem
+
+    left_families: list[str] = []
+    right_families: list[str] = []
+    free: list[str] = []
+    for stem in sorted(families, key=family_key):
+        votes = [_side_of_role(member.role or "io") for member in families[stem]]
+        lefts, rights = votes.count("left"), votes.count("right")
+        if lefts == 0 and rights == 0:
+            free.append(stem)
+        elif lefts >= rights:
+            left_families.append(stem)
+        else:
+            right_families.append(stem)
+
+    def rows(stems: Sequence[str]) -> int:
+        return sum(len(families[stem]) for stem in stems)
+
+    best_k = 0
+    best_cost: int | None = None
+    for k in range(len(free) + 1):
+        cost = max(rows(left_families) + rows(free[:k]), rows(right_families) + rows(free[k:]))
+        if best_cost is None or cost < best_cost:
+            best_k, best_cost = k, cost
+    left_families += free[:best_k]
+    right_families += free[best_k:]
+
+    def ordered(stems: Sequence[str]) -> list[PinSpec]:
+        out: list[PinSpec] = []
+        for stem in sorted(
+            stems, key=lambda st: (first_seen[root_of_stem[st]], root_of_stem[st], st)
+        ):
+            out += sorted(families[stem], key=lambda member: _natural_name_key(_order_name(member)))
+        return out
+
+    left = ordered(left_families)
+    right = ordered(right_families)
+
+    rows_n = max(len(left), len(right), 1)
+    pitch = 2
+    lead = 2
+    has_top, has_bottom = bool(top), bool(bottom)
+    body_top = lead if has_top else 1
+    # A supply or ground name sits just inside its horizontal edge: keep the first and last
+    # side rows clear of it.
+    pad_top = 1 if has_top else 0
+    pad_bottom = 1 if has_bottom else 0
+    body_bottom = body_top + pad_top + rows_n * pitch + pad_bottom
+    height = body_bottom + (lead if has_bottom else 1)
+
+    inset = 0.5
+    left_w = (
+        max(
+            (pin_label_width(pin.name or pin.number) * _FUNCTIONAL_LABEL_MARGIN for pin in left),
+            default=0.0,
+        )
+        / GRID_MM
+    )
+    right_w = (
+        max(
+            (pin_label_width(pin.name or pin.number) * _FUNCTIONAL_LABEL_MARGIN for pin in right),
+            default=0.0,
+        )
+        / GRID_MM
+    )
+    edge_w = (
+        max(
+            (
+                pin_label_width(pin.name or pin.number) * _FUNCTIONAL_LABEL_MARGIN
+                for pin in (*top, *bottom)
+            ),
+            default=0.0,
+        )
+        / GRID_MM
+    )
+    gap = 1.0 if (left_w and right_w) else 0.0
+    inner = math.ceil(inset * 2 + left_w + right_w + gap - 1e-9)
+    edge_pins = max(len(top), len(bottom))
+    inner = max(inner, 6, edge_pins * 2 + 2, math.ceil(edge_w + 1.0 - 1e-9))
+    # Whole grid steps, and even so a centred supply or ground pin lands on a grid line.
+    if inner % 2:
+        inner += 1
+    body_left = lead if left else 0
+    body_right = body_left + inner
+    width = body_right + (lead if right else 0)
+
+    shapes: list[SymbolShape] = [_rect(body_left, body_top, body_right, body_bottom)]
+    drawn: list[SymbolPin] = []
+    for index, pin in enumerate(left):
+        y = body_top + pad_top + pitch * (index + 1) - 1
+        shapes.append(_line(0, y, body_left, y))
+        drawn.append(_lead(pin, 0, y, "left"))
+    for index, pin in enumerate(right):
+        y = body_top + pad_top + pitch * (index + 1) - 1
+        shapes.append(_line(body_right, y, width, y))
+        drawn.append(_lead(pin, width, y, "right"))
+
+    def spread(group: list[PinSpec], y_edge: float, y_end: float, side: PinSide) -> None:
+        span = (len(group) - 1) * 2
+        start = body_left + (inner - span) / 2
+        for index, pin in enumerate(group):
+            x = start + index * 2
+            shapes.append(_line(x, y_edge, x, y_end))
+            drawn.append(_lead(pin, x, y_end, side))
+
+    if has_top:
+        spread(top, body_top, 0, "top")
+    if has_bottom:
+        spread(bottom, body_bottom, height, "bottom")
+    return SymbolBody(
+        tuple(shapes), tuple(drawn), width * GRID_MM, height * GRID_MM, names_inside=True
+    )
 
 
 BUILDERS: dict[

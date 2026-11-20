@@ -13,6 +13,7 @@ import pytest
 
 from perfboard_studio.catalog import CATALOG, catalog_part
 from perfboard_studio.footprints import get_footprint
+from perfboard_studio.model import PinRole
 from perfboard_studio.schsymbols import (
     BUILDERS,
     DECLARED_SYMBOL_RULES,
@@ -21,6 +22,8 @@ from perfboard_studio.schsymbols import (
     SymbolBody,
     SymbolKind,
     declared_symbol_kind,
+    functional_ic_body,
+    symbol_kind_for,
 )
 
 
@@ -260,3 +263,133 @@ def test_every_declared_kind_is_drawn_for_every_catalog_part_that_declares_it(pa
     kind, why_not = declared_symbol_kind(part.symbol, pins, footprint)
     assert kind is not None, f"{part.id}: {why_not}"
     assert_on_grid(BUILDERS[kind](pins, footprint), part.id, strokes=False)
+
+
+# ---------------------------------------------------------------------------
+# Functional IC and module symbols from pin_roles
+# ---------------------------------------------------------------------------
+
+
+def _ic(*pairs: tuple[str | None, PinRole]) -> SymbolBody:
+    return functional_ic_body(
+        tuple(PinSpec(str(i + 1), name, role) for i, (name, role) in enumerate(pairs))
+    )
+
+
+def _where(body: SymbolBody) -> dict[str, tuple[float, float, str]]:
+    """Each pin's name -> (x, y in grid steps, side)."""
+    return {p.name: (steps(p.at.x), steps(p.at.y), p.side) for p in body.pins if p.name}
+
+
+def test_a_bank_reads_in_order_and_the_prime_comes_last() -> None:
+    names = ["QB", "QC", "QD", "QE", "QF", "QG", "QH", "QH'", "QA"]
+    body = _ic(*((n, "out") for n in names), ("SER", "in"), ("VCC", "power"), ("GND", "ground"))
+    right = sorted((p for p in body.pins if p.side == "right"), key=lambda p: p.at.y)
+    assert [p.name for p in right] == ["QA", "QB", "QC", "QD", "QE", "QF", "QG", "QH", "QH'"]
+    assert_on_grid(body, "74HC595")
+
+
+def test_an_output_faces_the_input_with_its_number() -> None:
+    ins: list[tuple[str, PinRole]] = [(f"IN{n}", "in") for n in range(1, 8)]
+    outs: list[tuple[str, PinRole]] = [(f"OUT{n}", "out") for n in range(7, 0, -1)]
+    body = _ic(*ins, *outs, ("COM", "passive"), ("GND", "ground"))
+    where = _where(body)
+    for n in range(1, 8):
+        assert where[f"IN{n}"][1] == where[f"OUT{n}"][1]
+    assert where["COM"][1] > where["IN7"][1]
+    assert_on_grid(body, "ULN2003A")
+
+
+def test_numbers_sort_naturally_and_a_family_stays_together() -> None:
+    pairs: list[tuple[str, PinRole]] = [(f"D{n}", "io") for n in (10, 2, 0, 9, 1, 13)] + [
+        (f"A{n}", "in" if n > 5 else "io") for n in (7, 0, 6, 3)
+    ]
+    body = _ic(*pairs, ("GND", "ground"))
+    for stem in ("D", "A"):
+        side_pins = [p for p in body.pins if p.name and p.name[0] == stem]
+        assert len({p.side for p in side_pins}) == 1
+        ordered = [p.name for p in sorted(side_pins, key=lambda p: p.at.y) if p.name]
+        assert ordered == sorted(ordered, key=lambda n: int(n[1:]))
+    assert_on_grid(body, "natural-order")
+
+
+def test_a_crystals_two_ends_stay_together() -> None:
+    body = _ic(("XTAL1", "in"), ("XTAL2", "out"), ("PB0", "io"), ("PB1", "io"), ("VCC", "power"))
+    where = _where(body)
+    assert where["XTAL1"][2] == where["XTAL2"][2]
+    assert abs(where["XTAL1"][1] - where["XTAL2"][1]) == 2
+    assert_on_grid(body, "xtal")
+
+
+def test_a_functional_ic_omits_nc_pins() -> None:
+    body = _ic(("A", "in"), ("NC", "nc"), ("Y", "out"), ("VCC", "power"), ("GND", "ground"))
+    assert {p.name for p in body.pins} == {"A", "Y", "VCC", "GND"}
+    assert_on_grid(body, "nc-omitted")
+
+
+def test_an_alternate_function_name_sorts_with_its_port_and_prints_as_itself() -> None:
+    names = ["RXD", "TXD", "PD2", "PB0", "PB1", "PB2", "MOSI", "MISO", "SCK", "XTAL1", "XTAL2"]
+    pairs: list[tuple[str, PinRole]] = [
+        (n, "in" if n == "XTAL1" else ("out" if n == "XTAL2" else "io")) for n in names
+    ]
+    body = _ic(*pairs, ("VCC", "power"))
+    b_names = {"PB0", "PB1", "PB2", "MOSI", "MISO", "SCK", "XTAL1", "XTAL2"}
+    assert len({p.side for p in body.pins if p.name in b_names}) == 1
+    port_b = [p.name for p in sorted(body.pins, key=lambda p: p.at.y) if p.name in b_names]
+    assert port_b == ["PB0", "PB1", "PB2", "MOSI", "MISO", "SCK", "XTAL1", "XTAL2"]
+    port_d = [p.name for p in sorted(body.pins, key=lambda p: p.at.y) if p.name in {"RXD", "TXD", "PD2"}]
+    assert port_d == ["RXD", "TXD", "PD2"]
+    assert_on_grid(body, "alt-fn-aliases")
+
+
+def test_parts_without_complete_roles_keep_the_numbered_box_unchanged() -> None:
+    plain_pins = specs("GND", "TRIG", "OUT", "RESET", "CTRL", "THR", "DIS", "VCC")
+    partial_pins = (PinSpec("1", "GND", "ground"), *plain_pins[1:])
+    all_nc = tuple(PinSpec(str(i + 1), "NC", "nc") for i in range(4))
+
+    for kind in ("ic", "box"):
+        plain = BUILDERS[kind](plain_pins, None)
+        assert not plain.names_inside
+        assert {p.side for p in plain.pins} <= {"left", "right"}
+        assert BUILDERS[kind](partial_pins, None) == plain
+        nc_box = BUILDERS[kind](all_nc, None)
+        assert not nc_box.names_inside
+        assert len(nc_box.pins) == 4
+
+
+def test_functional_ic_handles_edge_shapes_and_mixed_case_names() -> None:
+    mixed = _ic(("In1", "in"), ("Ch2", "out"), (None, "io"), ("VCC", "power"), ("GND", "ground"))
+    assert_on_grid(mixed, "mixed-case-unnamed")
+    right_only = _ic(("OUT1", "out"), ("OUT2", "out"), ("VCC", "power"), ("GND", "ground"))
+    assert_on_grid(right_only, "right-only")
+    assert {p.side for p in right_only.pins} == {"right", "top", "bottom"}
+    rails_only = _ic(("VCC", "power"), ("GND", "ground"))
+    assert_on_grid(rails_only, "rails-only")
+    assert {p.side for p in rails_only.pins} == {"top", "bottom"}
+
+
+@pytest.mark.parametrize(
+    "part", [part for part in CATALOG if part.pin_roles], ids=lambda part: part.id
+)
+def test_every_catalog_part_with_pin_roles_draws_a_valid_functional_body(part) -> None:
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    named = dict(part.pin_names)
+    roles = dict(part.pin_roles)
+    pins = tuple(
+        PinSpec(pin.number, named.get(pin.number), roles[pin.number]) for pin in footprint.pins
+    )
+    kind = symbol_kind_for(footprint, len(pins))
+    body = BUILDERS[kind](pins, footprint) if kind in ("ic", "box") else functional_ic_body(pins)
+    assert body.names_inside
+    assert_on_grid(body, part.id)
+    expected_live = {p.number for p in pins if p.role != "nc"}
+    assert {p.number for p in body.pins} == expected_live
+    for drawn in body.pins:
+        role = roles[drawn.number]
+        if role in ("power", "power-out"):
+            assert drawn.side == "top", f"{part.id} pin {drawn.number} ({role})"
+        elif role in ("ground", "power-neg"):
+            assert drawn.side == "bottom", f"{part.id} pin {drawn.number} ({role})"
+        else:
+            assert drawn.side in ("left", "right"), f"{part.id} pin {drawn.number} ({role})"
