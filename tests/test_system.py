@@ -81,7 +81,8 @@ def test_every_field_is_a_boards_own_or_the_designs() -> None:
     assert extra_fields == set(system.BOARD_FIELDS)
     assert set(system.BOARD_FIELDS) <= document_fields
     assert set(system.shared_fields()) == {
-        "meta", "parts", "nets", "sheet", "sheet_wires", "sheet_ports", "sheet_notes", "format_version",
+        "meta", "parts", "nets", "sheet", "sheet_wires", "sheet_ports", "sheet_loose_wires",
+        "sheet_notes", "format_version",
     }
 
 

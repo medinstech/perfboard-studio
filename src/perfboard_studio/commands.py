@@ -103,6 +103,7 @@ from .model import (
     FingerShape,
     HoleCoord,
     LeadBendConductor,
+    LooseWire,
     Mm,
     MountingHole,
     Net,
@@ -220,6 +221,10 @@ def create_document_id_generator(doc: PerfDocument) -> NextId:
     # out the same way.
     for part in doc.parts:
         note(part.id)
+    for port in doc.sheet_ports:
+        note(port.id)
+    for loose in doc.sheet_loose_wires:
+        note(loose.id)
     for sheet_note in doc.sheet_notes:
         note(sheet_note.id)
 
@@ -313,6 +318,7 @@ def design_on_a_new_board(doc: PerfDocument, meta: DocumentMeta) -> PerfDocument
         sheet=doc.sheet,
         sheet_wires=doc.sheet_wires,
         sheet_ports=doc.sheet_ports,
+        sheet_loose_wires=doc.sheet_loose_wires,
         sheet_notes=doc.sheet_notes,
         height_limit_mm=doc.height_limit_mm,
         body_clearance_mm=doc.body_clearance_mm,
@@ -457,8 +463,8 @@ def rename_in_nets(doc: PerfDocument, old_ref: str, new_ref: str) -> tuple[Net, 
 
 def renamed_on_sheet(
     doc: PerfDocument, old_ref: str, new_ref: str
-) -> tuple[tuple[SheetWire, ...], tuple[SheetPort, ...]]:
-    """The sheet's drawn wires and port links carried across a rename, as the nets are.
+) -> tuple[tuple[SheetWire, ...], tuple[SheetPort, ...], tuple[LooseWire, ...]]:
+    """The sheet's drawn wires, port links and loose wires carried across a rename, as the nets are.
 
     A DRAWN WIRE NAMES ITS PINS BY REFERENCE, as a net does, and the rename used to carry
     only the nets: R1 renamed R7 left every wire drawn to it naming R1, no net held both
@@ -468,7 +474,7 @@ def renamed_on_sheet(
     (``rename_in_nets``), so the drawing is what it was under the new name.
     """
     if old_ref == new_ref:
-        return doc.sheet_wires, doc.sheet_ports
+        return doc.sheet_wires, doc.sheet_ports, doc.sheet_loose_wires
 
     def node(n: NetNode) -> NetNode:
         return dataclasses.replace(n, component_ref=new_ref) if n.component_ref == old_ref else n
@@ -486,7 +492,15 @@ def renamed_on_sheet(
         )
         for port in doc.sheet_ports
     )
-    return wires, ports
+    loose = tuple(
+        dataclasses.replace(
+            w,
+            pin=tap(w.pin),
+            on=(node(w.on[0]), node(w.on[1])) if w.on is not None else None,
+        )
+        for w in doc.sheet_loose_wires
+    )
+    return wires, ports, loose
 
 
 def require_conductor(doc: PerfDocument, id_: ConductorId) -> Conductor:
@@ -1137,6 +1151,10 @@ class MoveSymbolsPayload:
     placements: tuple[SymbolPlacement, ...]
     label: str | None = None
     wires: tuple[SheetWire, ...] = ()
+    #: Loose wires and port links stretched along with the moved symbols, carried in the
+    #: same command so one undo takes back both the symbols and every wire they pulled.
+    loose_wires: tuple[LooseWire, ...] = ()
+    ports: tuple[SheetPort, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1306,6 +1324,61 @@ class DeleteSheetPortsPayload:
     ids: tuple[str, ...]
     cut: bool = False
     #: As ``AddSheetPortPayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AddLooseWirePayload:
+    """A wire drawn on the sheet with a free end on nothing (``model.LooseWire``).
+
+    JOINS NOTHING: ``doc.nets`` is untouched. Continuing it onto a pin, a wire or a port
+    turns it into a connecting wire in one command (``sheet.loose.extend``).
+    """
+
+    path: tuple[Point2, ...]
+    pin: NetNode | None = None
+    on: tuple[NetNode, NetNode] | None = None
+    port: str | None = None
+    id: str | None = None
+    #: As ``DrawSheetWirePayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReshapeLooseWirePayload:
+    """A loose wire laid on a new orthogonal path: a corner, run or free end dragged."""
+
+    id: str
+    path: tuple[Point2, ...]
+    #: As ``DrawSheetWirePayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteLooseWiresPayload:
+    """Loose wires taken off the sheet. Never touches ``doc.nets``."""
+
+    ids: tuple[str, ...]
+    #: As ``DrawSheetWirePayload.freeze``.
+    freeze: MoveSymbolsPayload | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExtendLooseWirePayload:
+    """Continue a loose wire from its free end.
+
+    With ``to_pin``, ``to_on`` or ``to_port`` empty, the wire stays loose on its longer
+    ``path``. With a target, a wire that started on nothing anchors there (reversing so
+    the anchored end is first), and a wire that already started on a pin, a wire or a port
+    becomes the connecting ``SheetWire`` or ``PortLink`` in one undo step.
+    """
+
+    id: str
+    path: tuple[Point2, ...]
+    to_pin: NetNode | None = None
+    to_on: tuple[NetNode, NetNode] | None = None
+    to_port: str | None = None
+    #: As ``DrawSheetWirePayload.freeze``.
     freeze: MoveSymbolsPayload | None = None
 
 
@@ -2222,7 +2295,7 @@ class _UpdateComponent:
                 for c in doc.conductors
                 if not (c.kind == "lead-bend" and c.component_id == p.id)
             )
-        sheet_wires, sheet_ports = renamed_on_sheet(doc, existing.ref, ref)
+        sheet_wires, sheet_ports, sheet_loose = renamed_on_sheet(doc, existing.ref, ref)
         return dataclasses.replace(
             doc,
             components=components,
@@ -2230,6 +2303,7 @@ class _UpdateComponent:
             conductors=conductors,
             sheet_wires=sheet_wires,
             sheet_ports=sheet_ports,
+            sheet_loose_wires=sheet_loose,
         )
 
     def describe(self, p: UpdateComponentPayload, doc: PerfDocument) -> str:
@@ -2493,9 +2567,14 @@ class _UpdatePart:
             else part
             for part in doc.parts
         )
-        sheet_wires, sheet_ports = renamed_on_sheet(doc, existing.ref, ref)
+        sheet_wires, sheet_ports, sheet_loose = renamed_on_sheet(doc, existing.ref, ref)
         return dataclasses.replace(
-            doc, parts=parts, nets=nets, sheet_wires=sheet_wires, sheet_ports=sheet_ports
+            doc,
+            parts=parts,
+            nets=nets,
+            sheet_wires=sheet_wires,
+            sheet_ports=sheet_ports,
+            sheet_loose_wires=sheet_loose,
         )
 
     def describe(self, p: UpdatePartPayload, doc: PerfDocument) -> str:
@@ -3246,8 +3325,39 @@ class _MoveSymbols:
         sheet_wires = doc.sheet_wires
         if p.wires:
             sheet_wires = _with_frozen_wires(doc, p.wires)
+        sheet_loose = doc.sheet_loose_wires
+        if p.loose_wires:
+            known_loose = {w.id for w in doc.sheet_loose_wires}
+            by_id: dict[str, LooseWire] = {}
+            for lw in p.loose_wires:
+                if lw.id not in known_loose:
+                    raise CommandError(
+                        "unknown-loose-wire",
+                        f'No loose wire with id "{lw.id}" is on the sheet.',
+                    )
+                _check_square_path(lw.path, "A loose wire")
+                by_id[lw.id] = lw
+            sheet_loose = tuple(by_id.get(w.id, w) for w in doc.sheet_loose_wires)
+        sheet_ports = doc.sheet_ports
+        if p.ports:
+            known_ports = {port.id for port in doc.sheet_ports}
+            ports_by_id: dict[str, SheetPort] = {}
+            for port in p.ports:
+                if port.id not in known_ports:
+                    raise CommandError(
+                        "unknown-port",
+                        f'No port with id "{port.id}" is on the sheet.',
+                    )
+                for link in port.links:
+                    _check_link(link)
+                ports_by_id[port.id] = port
+            sheet_ports = tuple(ports_by_id.get(port.id, port) for port in doc.sheet_ports)
         return dataclasses.replace(
-            doc, sheet=tuple(kept) + tuple(p.placements), sheet_wires=sheet_wires
+            doc,
+            sheet=tuple(kept) + tuple(p.placements),
+            sheet_wires=sheet_wires,
+            sheet_loose_wires=sheet_loose,
+            sheet_ports=sheet_ports,
         )
 
     def describe(self, p: MoveSymbolsPayload, doc: PerfDocument) -> str:
@@ -3308,7 +3418,9 @@ class _AutoSymbols:
             # The whole sheet, so the wires go too -- see AutoSymbolsPayload. Notes stay:
             # a caption is a person writing on the drawing and has nothing to do with
             # where the layout decides to put a resistor.
-            return dataclasses.replace(doc, sheet=(), sheet_wires=(), sheet_ports=())
+            return dataclasses.replace(
+                doc, sheet=(), sheet_wires=(), sheet_ports=(), sheet_loose_wires=()
+            )
         dropped = set(p.ids)
         kept = tuple(placement for placement in doc.sheet if placement.id not in dropped)
         if len(kept) == len(doc.sheet):
@@ -3821,7 +3933,21 @@ class _ReconnectSheetWire:
                     net, id=ctx.next_id("net"), name=next_net_name(named), nodes=piece
                 )
             )
-        return dataclasses.replace(doc, nets=tuple(nets), sheet_wires=kept)
+        sheet_loose = tuple(
+            dataclasses.replace(
+                lw,
+                on=(
+                    p.to if lw.on[0] == p.end else lw.on[0],
+                    p.to if lw.on[1] == p.end else lw.on[1],
+                ),
+            )
+            if lw.on is not None and frozenset(lw.on) in renamed
+            else lw
+            for lw in doc.sheet_loose_wires
+        )
+        return dataclasses.replace(
+            doc, nets=tuple(nets), sheet_wires=kept, sheet_loose_wires=sheet_loose
+        )
 
     def describe(self, p: ReconnectSheetWirePayload, doc: PerfDocument) -> str:
         stay = p.b if p.end == p.a else p.a
@@ -4144,6 +4270,246 @@ class _DeleteSheetPorts:
         if len(names) == 1:
             return f"{verb} {names[0]} on the sheet"
         return f"{verb} {count_noun(len(names), 'port')} on the sheet"
+
+
+def _check_square_path(path: tuple[Point2, ...], label: str = "A wire") -> None:
+    if len(path) < 2:
+        raise CommandError("path-too-short", "A wire on the sheet needs at least two points.")
+    for start, end in pairwise(path):
+        if abs(start.x - end.x) > 1e-6 and abs(start.y - end.y) > 1e-6:
+            raise CommandError(
+                "diagonal-wire",
+                f"{label} runs on a slant between ({start.x:g}, {start.y:g}) and "
+                f"({end.x:g}, {end.y:g}); a wire on the sheet runs across or down, "
+                "turning at its corners.",
+            )
+
+
+def _check_loose_host(doc: PerfDocument, on: tuple[NetNode, NetNode]) -> None:
+    key = frozenset(on)
+    host = next((w for w in doc.sheet_wires if frozenset((w.a, w.b)) == key), None)
+    if host is None:
+        raise CommandError(
+            "no-such-wire",
+            f"No wire is drawn from {_pin_name(on[0])} to {_pin_name(on[1])} to branch off.",
+        )
+    if not any(host.a in net.nodes and host.b in net.nodes for net in doc.nets):
+        raise CommandError(
+            "wire-not-drawn",
+            f"The wire from {_pin_name(host.a)} to {_pin_name(host.b)} no longer joins one "
+            "net, so it is not drawn and nothing can branch off it.",
+        )
+
+
+def _loose_named(doc: PerfDocument, id_: str) -> LooseWire:
+    found = next((w for w in doc.sheet_loose_wires if w.id == id_), None)
+    if found is None:
+        raise CommandError("unknown-loose-wire", f'No loose wire with id "{id_}" is on the sheet.')
+    return found
+
+
+class _AddLooseWire:
+    """Draw a wire on the sheet with a free end on nothing. Never touches ``doc.nets``."""
+
+    type = "sheet.loose.add"
+
+    def apply(
+        self, doc: PerfDocument, p: AddLooseWirePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        _check_square_path(p.path, "A wire")
+        if sum(x is not None for x in (p.pin, p.on, p.port)) > 1:
+            raise CommandError(
+                "loose-wire-two-starts",
+                "A wire's first point is on one thing at most: a pin, a wire or a port.",
+            )
+        if p.on is not None:
+            _check_loose_host(doc, p.on)
+        if p.port is not None:
+            _port_named(doc, p.port)
+        id_ = p.id if p.id is not None else ctx.next_id("loose")
+        if any(w.id == id_ for w in doc.sheet_loose_wires):
+            raise CommandError(
+                "duplicate-id", f'A loose wire with id "{id_}" is already on the sheet.'
+            )
+        wire = LooseWire(id=id_, path=p.path, pin=p.pin, on=p.on, port=p.port)
+        return dataclasses.replace(doc, sheet_loose_wires=(*doc.sheet_loose_wires, wire))
+
+    def describe(self, p: AddLooseWirePayload, doc: PerfDocument) -> str:
+        if p.pin is not None:
+            return f"Draw a wire from {_pin_name(p.pin)}"
+        return "Draw a wire on the sheet"
+
+
+class _ReshapeLooseWire:
+    """Lay a loose wire on a new orthogonal path: a corner, run or free end dragged."""
+
+    type = "sheet.loose.reshape"
+
+    def apply(
+        self, doc: PerfDocument, p: ReshapeLooseWirePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        wire = _loose_named(doc, p.id)
+        _check_square_path(p.path, "A wire")
+        if p.path == wire.path:
+            raise CommandError("nothing-to-do", "The wire is already drawn that way.")
+        reshaped = dataclasses.replace(wire, path=p.path)
+        return dataclasses.replace(
+            doc,
+            sheet_loose_wires=tuple(
+                reshaped if w.id == p.id else w for w in doc.sheet_loose_wires
+            ),
+        )
+
+    def describe(self, p: ReshapeLooseWirePayload, doc: PerfDocument) -> str:
+        return "Reshape a wire on the sheet"
+
+
+class _DeleteLooseWires:
+    """Remove loose wires from the sheet. Never touches ``doc.nets``."""
+
+    type = "sheet.loose.delete"
+
+    def apply(
+        self, doc: PerfDocument, p: DeleteLooseWiresPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        if not p.ids:
+            raise CommandError(
+                "empty-batch", "sheet.loose.delete needs at least one wire to delete."
+            )
+        for id_ in p.ids:
+            _loose_named(doc, id_)
+        dropped = set(p.ids)
+        kept = tuple(w for w in doc.sheet_loose_wires if w.id not in dropped)
+        return dataclasses.replace(doc, sheet_loose_wires=kept)
+
+    def describe(self, p: DeleteLooseWiresPayload, doc: PerfDocument) -> str:
+        return f"Delete {count_noun(len(p.ids), 'wire')} on the sheet"
+
+
+class _ExtendLooseWire:
+    """Continue a loose wire from its free end, turning it into a join when it reaches one."""
+
+    type = "sheet.loose.extend"
+
+    def apply(
+        self, doc: PerfDocument, p: ExtendLooseWirePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        doc = _frozen(doc, p.freeze, ctx)
+        loose = _loose_named(doc, p.id)
+        _check_square_path(p.path, "A wire")
+        if sum(x is not None for x in (p.to_pin, p.to_on, p.to_port)) > 1:
+            raise CommandError(
+                "loose-wire-two-ends",
+                "A wire ends on one thing at most: a pin, a wire or a port.",
+            )
+        # Still dangling: replace its path in place.
+        if p.to_pin is None and p.to_on is None and p.to_port is None:
+            extended = dataclasses.replace(loose, path=p.path)
+            return dataclasses.replace(
+                doc,
+                sheet_loose_wires=tuple(
+                    extended if w.id == p.id else w for w in doc.sheet_loose_wires
+                ),
+            )
+        # Started on nothing: anchor the new end as path[0], leaving the other end free.
+        if loose.pin is None and loose.on is None and loose.port is None:
+            if p.to_on is not None:
+                _check_loose_host(doc, p.to_on)
+            if p.to_port is not None:
+                _port_named(doc, p.to_port)
+            anchored = LooseWire(
+                id=loose.id,
+                path=tuple(reversed(p.path)),
+                pin=p.to_pin,
+                on=p.to_on,
+                port=p.to_port,
+            )
+            return dataclasses.replace(
+                doc,
+                sheet_loose_wires=tuple(
+                    anchored if w.id == p.id else w for w in doc.sheet_loose_wires
+                ),
+            )
+        # Started on a pin, wire or port and now reaches a target: remove the loose wire
+        # and make the real connection in the same undo step.
+        without = dataclasses.replace(
+            doc, sheet_loose_wires=tuple(w for w in doc.sheet_loose_wires if w.id != p.id)
+        )
+        if loose.pin is not None:
+            if p.to_pin is not None:
+                return _DrawSheetWire().apply(
+                    without,
+                    DrawSheetWirePayload(wire=SheetWire(a=loose.pin, b=p.to_pin, path=p.path)),
+                    ctx,
+                )
+            if p.to_on is not None:
+                return _DrawSheetWire().apply(
+                    without,
+                    DrawSheetWirePayload(
+                        wire=SheetWire(a=loose.pin, b=p.to_on[0], path=p.path, tap=p.to_on[1])
+                    ),
+                    ctx,
+                )
+            assert p.to_port is not None
+            return _LinkSheetPort().apply(
+                without,
+                LinkSheetPortPayload(id=p.to_port, link=PortLink(pin=loose.pin, path=p.path)),
+                ctx,
+            )
+        if loose.on is not None:
+            if p.to_pin is None:
+                raise CommandError(
+                    "cannot-join", "A wire starting on another wire has to end on a pin."
+                )
+            return _DrawSheetWire().apply(
+                without,
+                DrawSheetWirePayload(
+                    wire=SheetWire(
+                        a=p.to_pin,
+                        b=loose.on[0],
+                        path=tuple(reversed(p.path)),
+                        tap=loose.on[1],
+                    )
+                ),
+                ctx,
+            )
+        assert loose.port is not None
+        if p.to_pin is None:
+            raise CommandError("cannot-join", "A wire starting on a port has to end on a pin.")
+        return _LinkSheetPort().apply(
+            without,
+            LinkSheetPortPayload(
+                id=loose.port, link=PortLink(pin=p.to_pin, path=tuple(reversed(p.path)))
+            ),
+            ctx,
+        )
+
+    def describe(self, p: ExtendLooseWirePayload, doc: PerfDocument) -> str:
+        loose = next((w for w in doc.sheet_loose_wires if w.id == p.id), None)
+        if loose is not None and loose.pin is not None and p.to_pin is not None:
+            return f"Wire {_pin_name(loose.pin)} to {_pin_name(p.to_pin)}"
+        if loose is not None and loose.pin is not None and p.to_on is not None:
+            return (
+                f"Wire {_pin_name(loose.pin)} onto the wire from "
+                f"{_pin_name(p.to_on[0])} to {_pin_name(p.to_on[1])}"
+            )
+        if loose is not None and loose.on is not None and p.to_pin is not None:
+            return (
+                f"Wire {_pin_name(p.to_pin)} onto the wire from "
+                f"{_pin_name(loose.on[0])} to {_pin_name(loose.on[1])}"
+            )
+        if loose is not None and loose.pin is not None and p.to_port is not None:
+            port = next((q for q in doc.sheet_ports if q.id == p.to_port), None)
+            said = _port_said(port) if port is not None else p.to_port
+            return f"Wire {_pin_name(loose.pin)} to {said}"
+        if loose is not None and loose.port is not None and p.to_pin is not None:
+            port = next((q for q in doc.sheet_ports if q.id == loose.port), None)
+            said = _port_said(port) if port is not None else loose.port
+            return f"Wire {_pin_name(p.to_pin)} to {said}"
+        return "Extend a wire on the sheet"
 
 
 class _AddSheetNote:
@@ -5279,6 +5645,10 @@ DESIGN_COMMANDS = frozenset(
         "part.delete",
         "part.update",
         "sheet.arrange",
+        "sheet.loose.add",
+        "sheet.loose.delete",
+        "sheet.loose.extend",
+        "sheet.loose.reshape",
         "sheet.note.add",
         "sheet.note.delete",
         "sheet.note.update",
@@ -5741,6 +6111,10 @@ add_sheet_port: CommandDefinition[AddSheetPortPayload] = _AddSheetPort()
 link_sheet_port: CommandDefinition[LinkSheetPortPayload] = _LinkSheetPort()
 move_sheet_port: CommandDefinition[MoveSheetPortPayload] = _MoveSheetPort()
 delete_sheet_ports: CommandDefinition[DeleteSheetPortsPayload] = _DeleteSheetPorts()
+add_loose_wire: CommandDefinition[AddLooseWirePayload] = _AddLooseWire()
+reshape_loose_wire: CommandDefinition[ReshapeLooseWirePayload] = _ReshapeLooseWire()
+delete_loose_wires: CommandDefinition[DeleteLooseWiresPayload] = _DeleteLooseWires()
+extend_loose_wire: CommandDefinition[ExtendLooseWirePayload] = _ExtendLooseWire()
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
@@ -5820,6 +6194,10 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     link_sheet_port,
     move_sheet_port,
     delete_sheet_ports,
+    add_loose_wire,
+    reshape_loose_wire,
+    delete_loose_wires,
+    extend_loose_wire,
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,

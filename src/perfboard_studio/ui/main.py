@@ -182,6 +182,7 @@ from perfboard_studio.commands import (
     AddBoardPayload,
     AddCablePayload,
     AddConductorsPayload,
+    AddLooseWirePayload,
     AddNetPayload,
     AddPartPayload,
     AddPartsPayload,
@@ -196,6 +197,7 @@ from perfboard_studio.commands import (
     DeleteComponentPayload,
     DeleteComponentsPayload,
     DeleteConductorsPayload,
+    DeleteLooseWiresPayload,
     DeleteNetPayload,
     DeletePartPayload,
     DeleteSheetNotesPayload,
@@ -203,6 +205,7 @@ from perfboard_studio.commands import (
     DeleteSheetWiresPayload,
     DisconnectPinsPayload,
     DrawSheetWirePayload,
+    ExtendLooseWirePayload,
     ImportNetlistPayload,
     LinkSheetPortPayload,
     LockComponentsPayload,
@@ -220,6 +223,7 @@ from perfboard_studio.commands import (
     ReconnectSheetWirePayload,
     RenameDocumentPayload,
     ReplaceConductorsPayload,
+    ReshapeLooseWirePayload,
     ReshapeSheetWirePayload,
     RotateComponentPayload,
     RotateComponentsPayload,
@@ -320,6 +324,7 @@ from perfboard_studio.model import (
     EdgeConnector,
     Footprint,
     HoleCoord,
+    LooseWire,
     MountingHole,
     Net,
     NetClass,
@@ -334,6 +339,7 @@ from perfboard_studio.model import (
     Rotation,
     SchematicPart,
     SheetNoteKind,
+    SheetPort,
     SheetPortKind,
     SheetWire,
     SymbolPlacement,
@@ -381,6 +387,8 @@ from perfboard_studio.schematic import (
     Wire,
     build_schematic,
     drawing_after_move,
+    loose_wires_after_move,
+    ports_after_move,
     snap_to_grid,
     wires_after_move,
     wires_as_drawn,
@@ -7843,8 +7851,13 @@ class MainWindow(QMainWindow):
         self.schematic_view.portMoved.connect(self._on_sheet_port_moved)
         self.schematic_view.portDeleteRequested.connect(self._on_sheet_ports_delete)
         self.schematic_view.live_wires_for = self._live_wires
+        self.schematic_view.live_drawing_for = self._live_drawing
         self.schematic_view.wireReshaped.connect(self._on_sheet_wire_reshaped)
         self.schematic_view.wireEndMoved.connect(self._on_sheet_wire_end_moved)
+        self.schematic_view.looseWireDrawn.connect(self._on_sheet_loose_wire_drawn)
+        self.schematic_view.looseWireExtended.connect(self._on_sheet_loose_wire_extended)
+        self.schematic_view.looseWireReshaped.connect(self._on_sheet_loose_wire_reshaped)
+        self.schematic_view.looseWireDeleteRequested.connect(self._on_sheet_loose_wires_delete)
         self.schematic_view.turnRequested.connect(self.on_schematic_rotate)
         self.schematic_view.footprintDropped.connect(self._on_sheet_footprint_dropped)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
@@ -8346,10 +8359,9 @@ class MainWindow(QMainWindow):
         )
         self._dispatch_sheet_layout(places, label)
 
-    def _live_wires(self, moved: list[tuple[str, float, float]]) -> tuple[Wire, ...] | None:
-        """The wires as dropping the symbols here would leave them, for a drag still going:
-        the drawing the drop's own ``wires`` are read off, so what is shown is what is
-        saved."""
+    def _live_drawing(self, moved: list[tuple[str, float, float]]) -> SchematicDrawing | None:
+        """The sheet as dropping the symbols here would leave it, for a drag or G-stretch
+        still going: connected wires, free wires, port stems and junctions all stretch live."""
         places = {
             str(ref): Point2(x=float(x), y=float(y))
             for ref, x, y in moved
@@ -8359,13 +8371,19 @@ class MainWindow(QMainWindow):
             return None
         placements = self._sheet_placements(places)
         moving = {p.id for p in placements if self._ref_of_id(p.id) in places}
-        drawing = drawing_after_move(
+        return drawing_after_move(
             self.bus.system_document,
             self.lookup,
             [p for p in placements if p.id in moving],
             self._wires_kept_by_freezing(),
         )
-        return drawing.wires
+
+    def _live_wires(self, moved: list[tuple[str, float, float]]) -> tuple[Wire, ...] | None:
+        """The wires as dropping the symbols here would leave them, for a drag still going:
+        the drawing the drop's own ``wires`` are read off, so what is shown is what is
+        saved."""
+        drawing = self._live_drawing(moved)
+        return drawing.wires if drawing is not None else None
 
     def _sheet_wires_after(
         self, placements: Sequence[SymbolPlacement]
@@ -8376,6 +8394,20 @@ class MainWindow(QMainWindow):
         (``schematic.wires_after_move``). One command, so the saved file is what the screen
         shows and one undo takes both back."""
         return wires_after_move(
+            self.bus.system_document, self.lookup, placements, self._wires_kept_by_freezing()
+        )
+
+    def _sheet_loose_wires_after(
+        self, placements: Sequence[SymbolPlacement]
+    ) -> tuple[LooseWire, ...]:
+        return loose_wires_after_move(
+            self.bus.system_document, self.lookup, placements, self._wires_kept_by_freezing()
+        )
+
+    def _sheet_ports_after(
+        self, placements: Sequence[SymbolPlacement]
+    ) -> tuple[SheetPort, ...]:
+        return ports_after_move(
             self.bus.system_document, self.lookup, placements, self._wires_kept_by_freezing()
         )
 
@@ -8395,7 +8427,11 @@ class MainWindow(QMainWindow):
         result = self.bus.dispatch(
             "symbol.move",
             MoveSymbolsPayload(
-                placements=placements, label=label, wires=self._sheet_wires_after(placements)
+                placements=placements,
+                label=label,
+                wires=self._sheet_wires_after(placements),
+                loose_wires=self._sheet_loose_wires_after(placements),
+                ports=self._sheet_ports_after(placements),
             ),
         )
         if not result.ok:
@@ -8462,6 +8498,8 @@ class MainWindow(QMainWindow):
                 placements=tuple(turned),
                 label=f"Turn {count_noun(len(refs), 'symbol')} on the sheet",
                 wires=self._sheet_wires_after(tuple(turned)),
+                loose_wires=self._sheet_loose_wires_after(tuple(turned)),
+                ports=self._sheet_ports_after(tuple(turned)),
             ),
         )
         if not result.ok:
@@ -8485,6 +8523,8 @@ class MainWindow(QMainWindow):
                 placements=flipped,
                 label=f"Flip {count_noun(len(refs), 'symbol')} on the sheet",
                 wires=self._sheet_wires_after(flipped),
+                loose_wires=self._sheet_loose_wires_after(flipped),
+                ports=self._sheet_ports_after(flipped),
             ),
         )
         if not result.ok:
@@ -8579,6 +8619,91 @@ class MainWindow(QMainWindow):
         )
         result = self.bus.dispatch(
             "sheet.wire", DrawSheetWirePayload(wire=wire, freeze=freeze)
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_loose_wire_drawn(
+        self, kind: str, ref_a: str, pin_a: str, ref_b: str, pin_b: str, path: object
+    ) -> None:
+        if not isinstance(path, list) or len(path) < 2:
+            return
+        freeze = self._sheet_freeze()
+        pts = tuple(Point2(x=float(x), y=float(y)) for x, y in path)
+        payload = AddLooseWirePayload(
+            path=pts,
+            pin=NetNode(component_ref=ref_a, pin=pin_a) if kind == "pin" else None,
+            on=(
+                NetNode(component_ref=ref_a, pin=pin_a),
+                NetNode(component_ref=ref_b, pin=pin_b),
+            )
+            if kind == "on"
+            else None,
+            port=ref_a if kind == "port" else None,
+            freeze=freeze,
+        )
+        result = self.bus.dispatch("sheet.loose.add", payload)
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_loose_wire_extended(
+        self,
+        loose_id: str,
+        target_kind: str,
+        ref_a: str,
+        pin_a: str,
+        ref_b: str,
+        pin_b: str,
+        path: object,
+    ) -> None:
+        if not isinstance(path, list) or len(path) < 2:
+            return
+        freeze = self._sheet_freeze()
+        pts = tuple(Point2(x=float(x), y=float(y)) for x, y in path)
+        payload = ExtendLooseWirePayload(
+            id=loose_id,
+            path=pts,
+            to_pin=NetNode(component_ref=ref_a, pin=pin_a) if target_kind == "pin" else None,
+            to_on=(
+                NetNode(component_ref=ref_a, pin=pin_a),
+                NetNode(component_ref=ref_b, pin=pin_b),
+            )
+            if target_kind == "on"
+            else None,
+            to_port=ref_a if target_kind == "port" else None,
+            freeze=freeze,
+        )
+        result = self.bus.dispatch("sheet.loose.extend", payload)
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_loose_wire_reshaped(self, loose_id: str, path: object) -> None:
+        if not isinstance(path, list) or len(path) < 2:
+            return
+        freeze = self._sheet_freeze()
+        pts = tuple(Point2(x=float(x), y=float(y)) for x, y in path)
+        result = self.bus.dispatch(
+            "sheet.loose.reshape",
+            ReshapeLooseWirePayload(id=loose_id, path=pts, freeze=freeze),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self._say_on_sheet(did(result.description), freeze, 6000)
+
+    def _on_sheet_loose_wires_delete(self, ids: object) -> None:
+        if not isinstance(ids, list) or not ids:
+            return
+        freeze = self._sheet_freeze()
+        result = self.bus.dispatch(
+            "sheet.loose.delete",
+            DeleteLooseWiresPayload(ids=tuple(str(i) for i in ids), freeze=freeze),
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)

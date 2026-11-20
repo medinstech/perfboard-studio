@@ -70,6 +70,7 @@ from .model import (
     HoleCoord,
     LeadBendConductor,
     LetterEdges,
+    LooseWire,
     MountingHole,
     Net,
     NetClass,
@@ -233,6 +234,7 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "sheet",
     "sheetWires",
     "sheetPorts",
+    "sheetLooseWires",
     "sheetNotes",
     "boards",
     "cables",
@@ -259,6 +261,7 @@ SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored
 SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path", "tap")
 SHEET_PORT_KEY_ORDER: tuple[str, ...] = ("id", "kind", "name", "at", "links")
 PORT_LINK_KEY_ORDER: tuple[str, ...] = ("pin", "path")
+LOOSE_WIRE_KEY_ORDER: tuple[str, ...] = ("id", "path", "pin", "on", "port")
 SHEET_NOTE_KEY_ORDER: tuple[str, ...] = ("id", "kind", "at", "to", "text", "sizeMm")
 BOARD_NOTE_KEY_ORDER: tuple[str, ...] = (
     "id",
@@ -704,6 +707,30 @@ def _ordered_sheet_port(port: SheetPort, index: int) -> JsonObj:
     return _build_ordered(SHEET_PORT_KEY_ORDER, values)
 
 
+def _ordered_node(node: NetNode) -> JsonObj:
+    return _build_ordered(NET_NODE_KEY_ORDER, {"componentRef": node.component_ref, "pin": node.pin})
+
+
+def _ordered_loose_wire(wire: LooseWire, index: int) -> JsonObj:
+    path = _index_path("sheetLooseWires", index)
+    values: dict[str, JsonValue] = {
+        "id": wire.id,
+        "path": [
+            _ordered_point(point, _index_path(_field_path(path, "path"), i))
+            for i, point in enumerate(wire.path)
+        ],
+    }
+    # What its first point is on, when it is on anything; a wire free at both ends says
+    # neither.
+    if wire.pin is not None:
+        values["pin"] = _ordered_node(wire.pin)
+    if wire.on is not None:
+        values["on"] = [_ordered_node(wire.on[0]), _ordered_node(wire.on[1])]
+    if wire.port is not None:
+        values["port"] = wire.port
+    return _build_ordered(LOOSE_WIRE_KEY_ORDER, values)
+
+
 def _ordered_sheet_note(note: SheetNote, index: int) -> JsonObj:
     path = _index_path("sheetNotes", index)
     values: dict[str, JsonValue] = {
@@ -776,6 +803,7 @@ def serialize_document(doc: PerfDocument) -> str:
     # reorder the file. A wire is named by its two pins and a note by its id.
     sheet_wires = sorted(doc.sheet_wires, key=lambda wire: (wire.a, wire.b))
     sheet_ports = sorted(doc.sheet_ports, key=lambda port: port.id)
+    sheet_loose = sorted(doc.sheet_loose_wires, key=lambda wire: wire.id)
     sheet_notes = sorted(doc.sheet_notes, key=lambda note: note.id)
 
     root = _build_ordered(
@@ -842,6 +870,16 @@ def serialize_document(doc: PerfDocument) -> str:
                     ]
                 }
                 if sheet_ports
+                else {}
+            ),
+            # Wires with an end on nothing, by the same rule: none before 0.26.
+            **(
+                {
+                    "sheetLooseWires": [
+                        _ordered_loose_wire(wire, i) for i, wire in enumerate(sheet_loose)
+                    ]
+                }
+                if sheet_loose
                 else {}
             ),
             **(
@@ -1749,6 +1787,49 @@ def _parse_sheet_wire(raw: object, path: str, warnings: list[str]) -> SheetWire:
     )
 
 
+def _parse_loose_wire(raw: object, path: str, warnings: list[str]) -> LooseWire:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, LOOSE_WIRE_KEY_ORDER, path, warnings)
+    points = _expect_array(_require_field(obj, "path", path), _field_path(path, "path"))
+    if len(points) < 2:
+        raise ValidationError(
+            "sheet-wire-too-short",
+            "A wire on the sheet needs at least two points.",
+            _field_path(path, "path"),
+        )
+    on: tuple[NetNode, NetNode] | None = None
+    if "on" in obj:
+        ends = _expect_array(obj["on"], _field_path(path, "on"))
+        if len(ends) != 2:
+            raise ValidationError(
+                "loose-wire-on-invalid",
+                "A wire's end on another wire names that wire by its two pins.",
+                _field_path(path, "on"),
+            )
+        on = (
+            _parse_net_node(ends[0], _index_path(_field_path(path, "on"), 0), warnings),
+            _parse_net_node(ends[1], _index_path(_field_path(path, "on"), 1), warnings),
+        )
+    pin = _parse_net_node(obj["pin"], _field_path(path, "pin"), warnings) if "pin" in obj else None
+    port = _expect_string(obj["port"], _field_path(path, "port")) if "port" in obj else None
+    if sum(x is not None for x in (pin, on, port)) > 1:
+        raise ValidationError(
+            "loose-wire-two-starts",
+            "A wire's first point is on one thing at most: a pin, a wire or a port.",
+            path,
+        )
+    return LooseWire(
+        id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
+        path=tuple(
+            _parse_point(point, _index_path(_field_path(path, "path"), i), warnings)
+            for i, point in enumerate(points)
+        ),
+        pin=pin,
+        on=on,
+        port=port,
+    )
+
+
 def _parse_sheet_port(raw: object, path: str, warnings: list[str]) -> SheetPort:
     obj = _expect_object(raw, path)
     _check_unknown_keys(obj, SHEET_PORT_KEY_ORDER, path, warnings)
@@ -2349,6 +2430,21 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
                     f"{link.pin.component_ref}.{link.pin.pin} is not on {port.name}, so its "
                     f"wire to that {port.kind} is not drawn."
                 )
+    # A wire with an end on nothing joins nothing, so nothing it names can be wrong about
+    # the circuit: a pin, wire or port it starts on that has gone is drawn as a free end.
+    loose_raw = _expect_array(migrated.get("sheetLooseWires", []), "sheetLooseWires")
+    sheet_loose: list[LooseWire] = []
+    seen_loose: set[str] = set()
+    for index, item in enumerate(loose_raw):
+        loose = _parse_loose_wire(item, _index_path("sheetLooseWires", index), warnings)
+        if loose.id in seen_loose:
+            raise ValidationError(
+                "duplicate-id",
+                f'Two wires on the sheet share the id "{loose.id}".',
+                _index_path("sheetLooseWires", index),
+            )
+        seen_loose.add(loose.id)
+        sheet_loose.append(loose)
     notes_raw = _expect_array(migrated.get("sheetNotes", []), "sheetNotes")
     sheet_notes: list[SheetNote] = []
     seen_notes: set[str] = set()
@@ -2410,6 +2506,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         sheet=tuple(sheet),
         sheet_wires=sheet_wires,
         sheet_ports=tuple(sheet_ports),
+        sheet_loose_wires=tuple(sheet_loose),
         sheet_notes=tuple(sheet_notes),
         boards=tuple(boards),
         cables=tuple(cables),

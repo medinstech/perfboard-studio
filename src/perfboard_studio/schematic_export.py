@@ -44,12 +44,14 @@ from html import escape
 
 from .model import Mm, Point2
 from .schematic import (
+    FREE_END_MM,
     MARGIN_MM,
     NET_LABEL_MM,
     PIN_LABEL_MM,
     REF_LABEL_MM,
     VALUE_LABEL_MM,
     Annotation,
+    FreeWire,
     Label,
     NoConnect,
     Rail,
@@ -228,11 +230,20 @@ def _class_colour(net_class: str, ink: SheetInk) -> str:
     return ink.signal
 
 
-def _wire(run: Wire | Rail, ink: SheetInk) -> str:
+def _wire(run: Wire | Rail | FreeWire, ink: SheetInk) -> str:
     colour = _class_colour(run.net_class, ink)
     return (
         f'<polyline points="{_points(run.path)}" fill="none" '
         f'stroke="{colour}" stroke-width="{_n(ink.wire_mm)}"/>'
+    )
+
+
+def _free_end_box(at: Point2, colour: str, ink: SheetInk) -> str:
+    half = FREE_END_MM
+    return (
+        f'<rect x="{_n(at.x - half)}" y="{_n(at.y - half)}" '
+        f'width="{_n(2 * half)}" height="{_n(2 * half)}" '
+        f'fill="{ink.background}" stroke="{colour}" stroke-width="{_n(ink.wire_mm)}"/>'
     )
 
 
@@ -406,6 +417,12 @@ def drawing_to_svg(
     out.append('<g stroke-linecap="round" stroke-linejoin="round">')
     for wire in drawing.wires:
         out.append(_wire(wire, ink))
+    for fw in drawing.free_wires:
+        colour = _class_colour(fw.net_class, ink)
+        out.append(_wire(fw, ink))
+        out.append(_free_end_box(fw.path[-1], colour, ink))
+        if fw.free_start:
+            out.append(_free_end_box(fw.path[0], colour, ink))
     for rail in drawing.rails:
         out.append(_wire(rail, ink))
         out.append(_glyph(rail, ink))

@@ -73,6 +73,7 @@ from typing import Literal
 from .connectivity import FootprintLookup
 from .model import (
     ComponentInstance,
+    LooseWire,
     Mm,
     Net,
     NetClass,
@@ -117,7 +118,7 @@ from .schsymbols import SymbolShape as SymbolShape
 from .schsymbols import declared_symbol_kind as declared_symbol_kind
 from .schsymbols import pin_label_width as pin_label_width
 from .schsymbols import symbol_kind_for as symbol_kind_for
-from .system import every_component
+from .system import circuit_parts, every_component
 
 # ---------------------------------------------------------------------------
 # The sheet's units
@@ -197,6 +198,9 @@ NET_LABEL_INSET_MM: Mm = 0.3 * GRID_MM
 #: of them down an unused header reads as a row of marks rather than as hatching, and it
 #: stays inside the lead so it cannot touch the body or a neighbouring pin.
 NO_CONNECT_MM: Mm = 0.3 * GRID_MM
+
+#: Half-side of the open square drawn on the dangling end of a free wire (``FreeWire``).
+FREE_END_MM: Mm = 0.25 * GRID_MM
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +320,21 @@ class PlacedPort:
 
 
 @dataclass(frozen=True, slots=True)
+class FreeWire:
+    """A wire drawn on the sheet with an end on nothing (``model.LooseWire``).
+
+    Joins no net. Its last point is always free; ``free_start`` is True when its first point
+    is also on nothing (or what it started on has since gone). Both renderers draw an open
+    square at each free end so a dangling wire is never mistaken for a finished connection.
+    """
+
+    id: str
+    path: tuple[Point2, ...]
+    free_start: bool = False
+    net_class: NetClass = "signal"
+
+
+@dataclass(frozen=True, slots=True)
 class NoConnect:
     """A cross on a pin that no net in the document reaches.
 
@@ -419,6 +438,8 @@ class SchematicDrawing:
     #: a net's name in ``rails`` and ``labels`` like any other; this is where a click finds
     #: one. Empty on the sheet drawn for you.
     ports: tuple[PlacedPort, ...] = ()
+    #: Wires drawn with an end on nothing (``LooseWire``). Empty on the sheet drawn for you.
+    free_wires: tuple[FreeWire, ...] = ()
     #: Captions and boxes, in both kinds of sheet. Nothing derives anything from them.
     annotations: tuple[Annotation, ...] = ()
     width: Mm = 0.0
@@ -2563,6 +2584,7 @@ def _hand_drawn_sheet(
     # drawn (its net no longer holds both its ends); it goes to its pin instead, which is
     # still true: it joins that pin's net.
     drawn_paths: dict[frozenset[NetNode], tuple[Point2, ...]] = {}
+    drawn_nets: dict[frozenset[NetNode], Net] = {}
     waiting = list(doc.sheet_wires)
     stalled = False
     provisional: SchematicDrawing | None = None
@@ -2644,6 +2666,7 @@ def _hand_drawn_sheet(
                 )
             )
             drawn_paths[frozenset((wire.a, wire.b))] = path
+            drawn_nets[frozenset((wire.a, wire.b))] = net
             drawn_pins.add((wire.a.component_ref, wire.a.pin))
         if len(still) == len(waiting):
             stalled = True
@@ -2662,6 +2685,9 @@ def _hand_drawn_sheet(
         for port in doc.sheet_ports
         if port.kind == "label" and (net := net_named(doc.nets, port.name)) is not None
     }
+
+    # -- the wires with an end on nothing (LooseWire) --------------------------
+    free_wires = _free_wires_drawn(doc, symbols, drawn_paths, drawn_nets, ports, tees)
 
     # -- and a name, or a rail glyph, on everything else ---------------------
     drawn_wires = list(wires)
@@ -2740,13 +2766,22 @@ def _hand_drawn_sheet(
         if (ref, pin.number) not in wired_pins
     ]
 
-    width, height = _sheet_extent(ordered, wires, rails, no_connects, annotations, part_labels)
+    width, height = _sheet_extent(
+        ordered, wires, rails, no_connects, annotations, part_labels, free_wires
+    )
 
     drawn = _symbols_drawn(ordered, placements, derived=derived)
     if parked:
         notes.append(
             f"{len(parked)} part(s) have no place on this sheet yet and are parked at the "
             f"right-hand edge: {', '.join(parked)}"
+        )
+    if free_wires:
+        n_free = len(free_wires)
+        notes.append(
+            "1 wire on the sheet ends on nothing and joins no net"
+            if n_free == 1
+            else f"{n_free} wires on the sheet end on nothing and join no net"
         )
     return SchematicDrawing(
         symbols=drawn,
@@ -2757,11 +2792,67 @@ def _hand_drawn_sheet(
         labels=(*part_labels, *rail_names, *net_labels),
         quiet_names=tuple(quiet_names),
         ports=ports,
+        free_wires=free_wires,
         annotations=annotations,
         width=width,
         height=height,
         notes=tuple(notes),
     )
+
+
+def _free_wires_drawn(
+    doc: PerfDocument,
+    symbols: dict[str, _Placed],
+    drawn_paths: Mapping[frozenset[NetNode], tuple[Point2, ...]],
+    drawn_nets: Mapping[frozenset[NetNode], Net],
+    ports: Sequence[PlacedPort],
+    tees: list[Junction],
+) -> tuple[FreeWire, ...]:
+    """Every ``LooseWire`` reanchored onto whatever its first point starts on."""
+    if not doc.sheet_loose_wires:
+        return ()
+    port_by_id = {port.id: port for port in ports}
+    pin_net_class = {
+        node: net.net_class for net in doc.nets for node in net.nodes
+    }
+    out: list[FreeWire] = []
+    for loose in sorted(doc.sheet_loose_wires, key=lambda w: w.id):
+        start: Point2 | None = None
+        net_class: NetClass = "signal"
+        if loose.pin is not None:
+            start = _pin_of(symbols, loose.pin)
+            net_class = pin_net_class.get(loose.pin, "signal")
+        elif loose.on is not None:
+            host_key = frozenset(loose.on)
+            host_path = drawn_paths.get(host_key)
+            if host_path is not None:
+                landed, on_end = _laid_onto(loose.path[0], host_path)
+                start = landed
+                host_net = drawn_nets.get(host_key)
+                if host_net is not None:
+                    net_class = host_net.net_class
+                    if not on_end:
+                        tees.append(Junction(net_id=host_net.id, at=landed))
+        elif loose.port is not None:
+            port_obj = port_by_id.get(loose.port)
+            if port_obj is not None:
+                start = port_obj.at
+                if port_obj.kind == "supply":
+                    net_class = "power"
+                elif port_obj.kind == "ground":
+                    net_class = "ground"
+                else:
+                    net = net_named(doc.nets, port_obj.name)
+                    if net is not None:
+                        net_class = net.net_class
+        if start is not None:
+            path = _reanchored(loose.path, start, loose.path[-1])
+            free_start = False
+        else:
+            path = loose.path
+            free_start = True
+        out.append(FreeWire(id=loose.id, path=path, free_start=free_start, net_class=net_class))
+    return tuple(out)
 
 
 def _ports_drawn(
@@ -2984,9 +3075,38 @@ def _after_move(
     frozen: Sequence[SheetWire],
 ) -> tuple[SchematicDrawing, dict[frozenset[NetNode], SheetWire]]:
     placed = {p.id: p for p in doc.sheet}
+    old_by_id = dict(placed)
     placed.update({p.id: p for p in moved})
+    # When two ends of one wire move together by the same grid shift (no rotation or mirror
+    # change), carry the wire's intermediate corners by the same shift so a dragged group
+    # keeps its internal wiring rigid instead of stretching each end separately.
+    ref_by_id = {part.id: part.ref for part in circuit_parts(doc)}
+    shifts: dict[str, tuple[Mm, Mm]] = {}
+    for p in moved:
+        old = old_by_id.get(p.id)
+        ref = ref_by_id.get(p.id)
+        if (
+            old is not None
+            and ref is not None
+            and old.rotation == p.rotation
+            and old.mirrored == p.mirrored
+        ):
+            dx, dy = p.at.x - old.at.x, p.at.y - old.at.y
+            if abs(dx) > _EPS or abs(dy) > _EPS:
+                shifts[ref] = (dx, dy)
     stored = {frozenset((w.a, w.b)): w for w in doc.sheet_wires}
     stored.update({frozenset((w.a, w.b)): w for w in frozen})
+    if shifts:
+        for key, wire in list(stored.items()):
+            if wire.tap is not None:
+                continue
+            sa = shifts.get(wire.a.component_ref)
+            sb = shifts.get(wire.b.component_ref)
+            if sa is not None and sb is not None and abs(sa[0] - sb[0]) < _EPS and abs(sa[1] - sb[1]) < _EPS:
+                dx, dy = sa
+                stored[key] = dataclasses.replace(
+                    wire, path=tuple(_p(pt.x + dx, pt.y + dy) for pt in wire.path)
+                )
     after = dataclasses.replace(
         doc, sheet=tuple(placed.values()), sheet_wires=tuple(stored.values())
     )
@@ -3016,11 +3136,13 @@ def wires_after_move(
     A symbol that moves takes its wires with it, and a wire it drags into a backtrack, a
     line over itself, a symbol or another net's wire is laid again
     (``_hand_drawn_sheet``). That is done in drawing, and this reads the answer off it:
-    every wire from pin to pin whose path the move changed. ``frozen`` is the derived
+    every wire (including T-branches) whose path the move changed. ``frozen`` is the derived
     sheet's wires when this move is the one freezing it (``wires_as_drawn``), which then
     come back too, changed or not -- they are not stored yet.
     """
-    drawing, stored = _after_move(doc, lookup, moved, frozen)
+    drawing, _stored = _after_move(doc, lookup, moved, frozen)
+    original = {frozenset((w.a, w.b)): w for w in doc.sheet_wires}
+    original.update({frozenset((w.a, w.b)): w for w in frozen})
     out: dict[frozenset[NetNode], SheetWire] = {
         frozenset((w.a, w.b)): w for w in frozen
     }
@@ -3028,12 +3150,68 @@ def wires_after_move(
         if wire.ends is None:
             continue
         key = frozenset(wire.ends)
-        old = stored.get(key)
-        if old is None or old.tap is not None:
+        old = original.get(key)
+        if old is None:
             continue
         if wire.path != old.path:
             out[key] = dataclasses.replace(old, path=wire.path)
     return tuple(out.values())
+
+
+def loose_wires_after_move(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    moved: Sequence[SymbolPlacement],
+    frozen: Sequence[SheetWire] = (),
+) -> tuple[LooseWire, ...]:
+    """The loose wires whose path a move of ``moved`` stretched, for ``MoveSymbolsPayload``."""
+    if not doc.sheet_loose_wires:
+        return ()
+    drawing = _after_move(doc, lookup, moved, frozen)[0]
+    by_id = {w.id: w for w in doc.sheet_loose_wires}
+    changed: list[LooseWire] = []
+    for fw in drawing.free_wires:
+        old = by_id.get(fw.id)
+        if old is not None and fw.path != old.path:
+            changed.append(dataclasses.replace(old, path=fw.path))
+    return tuple(changed)
+
+
+def ports_after_move(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    moved: Sequence[SymbolPlacement],
+    frozen: Sequence[SheetWire] = (),
+) -> tuple[SheetPort, ...]:
+    """The ports whose link paths a move of ``moved`` stretched, for ``MoveSymbolsPayload``."""
+    if not doc.sheet_ports:
+        return ()
+    drawing = _after_move(doc, lookup, moved, frozen)[0]
+    pin_pos: dict[tuple[str, str], Point2] = {
+        (symbol.ref, pin.number): _p(symbol.at.x + pin.at.x, symbol.at.y + pin.at.y)
+        for symbol in drawing.symbols
+        for pin in symbol.pins
+    }
+    changed: list[SheetPort] = []
+    for port in doc.sheet_ports:
+        new_links = []
+        any_changed = False
+        for link in port.links:
+            start = pin_pos.get((link.pin.component_ref, link.pin.pin))
+            if start is None:
+                new_links.append(link)
+                continue
+            path = _reanchored(link.path, start, port.at)
+            if port.kind != "label":
+                path = _into_glyph(path, port.at, "up" if port.kind == "supply" else "down")
+            if path != link.path:
+                any_changed = True
+                new_links.append(dataclasses.replace(link, path=path))
+            else:
+                new_links.append(link)
+        if any_changed:
+            changed.append(dataclasses.replace(port, links=tuple(new_links)))
+    return tuple(changed)
 
 
 def _laid_onto(point: Point2, path: Sequence[Point2]) -> tuple[Point2, bool]:
@@ -3288,6 +3466,7 @@ def _sheet_extent(
     no_connects: Sequence[NoConnect],
     annotations: Sequence[Annotation],
     part_labels: Sequence[Label] = (),
+    free_wires: Sequence[FreeWire] = (),
 ) -> tuple[Mm, Mm]:
     """How big the paper has to be. A margin past everything that is on it.
 
@@ -3302,6 +3481,7 @@ def _sheet_extent(
         bottom = max(bottom, placed.y + placed.body.height)
     runs: list[tuple[Point2, ...]] = [wire.path for wire in wires]
     runs.extend(rail.path for rail in rails)
+    runs.extend(fw.path for fw in free_wires)
     for path in runs:
         for point in path:
             right = max(right, point.x)

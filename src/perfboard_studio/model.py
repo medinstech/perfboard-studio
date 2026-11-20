@@ -1039,6 +1039,34 @@ class SheetPort:
     links: tuple[PortLink, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class LooseWire:
+    """A wire drawn on the sheet with an end on nothing: a dangling end, for now.
+
+    IT JOINS NOTHING. A ``SheetWire`` is drawn between two pins it joins and a port link
+    between a pin and the net its port names; this one has a free end, so there is nothing
+    for it to join, and ``doc.nets`` never hears of it -- LVS, the router and the guide are
+    exactly as they were. It is a line somebody stopped drawing, as in KiCad, where a wire
+    may end anywhere and is picked up again later: the sheet marks its free end and says so
+    in its notes, and continuing it onto a pin, a wire or a port turns it into the wire that
+    joins (``sheet.loose.extend``) in one command.
+
+    ``path`` runs from its first point to its free LAST point, orthogonal, in sheet
+    millimetres. The first point is on at most one thing, and is free when it is on none:
+
+    - ``pin``, a pin: drawn from the pin wherever its symbol is, as a wire's end is;
+    - ``on``, a drawn wire, named by its two pins as a T names the wire it lands on, the
+      first point laid back onto that wire each time the sheet is drawn;
+    - ``port``, a port's id: drawn from the port's ``at``.
+    """
+
+    id: str
+    path: tuple[Point2, ...]
+    pin: NetNode | None = None
+    on: tuple[NetNode, NetNode] | None = None
+    port: str | None = None
+
+
 #: What a sheet note draws. Text, and the three shapes an annotation is made of -- which is
 #: the same argument ``SymbolShape`` makes about having three kinds and no more.
 type SheetNoteKind = Literal["text", "line", "rectangle", "circle"]
@@ -1386,6 +1414,8 @@ class PerfDocument:
     #: Supplies, grounds and names somebody put on the sheet -- see ``SheetPort``. Drawing
     #: only, as the wires are: which pins a port joins is what ``nets`` says.
     sheet_ports: tuple[SheetPort, ...] = ()
+    #: Wires drawn with an end on nothing -- see ``LooseWire``. Drawing only, joining nothing.
+    sheet_loose_wires: tuple[LooseWire, ...] = ()
     #: Captions and boxes on the drawing. Nothing derives anything from them.
     sheet_notes: tuple[SheetNote, ...] = ()
     #: Mechanical features of the board. They sit on the document rather than on
