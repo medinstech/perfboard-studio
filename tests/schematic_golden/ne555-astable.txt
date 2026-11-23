@@ -46,6 +46,9 @@ rail GND [ground] down 152.40,96.52 -> 152.40,101.60
 rail GND [ground] down 182.88,93.98 -> 182.88,99.06
 rail GND [ground] down 20.32,88.90 -> 20.32,93.98
 rail GND [ground] down 35.56,38.10 -> 40.64,38.10 -> 40.64,40.64
+junction net-5 127.00,63.50
+junction net-5 152.40,68.58
+junction net-6 152.40,43.18
 label [ref/left] 159.38,85.09 C1
 label [value/left] 159.38,87.63 10uF
 label [ref/left] 189.87,82.55 C2

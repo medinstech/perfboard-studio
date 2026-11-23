@@ -1395,20 +1395,64 @@ def test_an_empty_document_draws_nothing_and_says_so() -> None:
     assert drawing.notes and "Nothing to draw" in drawing.notes[0]
 
 
-def test_a_junction_only_appears_in_the_middle_of_a_trunk() -> None:
-    """A dot at the end of a trunk would claim a join where the wire only turns a corner."""
-    drawing = drawing_for(EXAMPLES_DIR / "ne555-astable.perf")
-    trunks = {
-        wire.net_id: wire
-        for wire in drawing.wires
-        if len(wire.path) == 2 and abs(wire.path[0].y - wire.path[1].y) < 1e-9
-        and abs(wire.path[0].x - wire.path[1].x) > 1e-9
-    }
+def _ways_out(drawing: SchematicDrawing, net_id: str, x: float, y: float) -> set[str]:
+    """Which ways one net's drawn wires leave the point (x, y): "+x", "-y" and so on. A
+    wire passing through leaves two ways, one ending there one, and two wires laid along
+    the same line leave the same way -- the count is of what a reader sees."""
+    ways: set[str] = set()
+    for wire in drawing.wires:
+        if wire.net_id != net_id:
+            continue
+        for a, b in itertools.pairwise(wire.path):
+            for there in (a, b):
+                on = (
+                    min(a.x, b.x) - 1e-6 <= x <= max(a.x, b.x) + 1e-6
+                    and min(a.y, b.y) - 1e-6 <= y <= max(a.y, b.y) + 1e-6
+                )
+                if not on or (abs(there.x - x) < 1e-6 and abs(there.y - y) < 1e-6):
+                    continue
+                if abs(a.x - b.x) < 1e-6:
+                    ways.add("+y" if there.y > y else "-y")
+                elif abs(a.y - b.y) < 1e-6:
+                    ways.add("+x" if there.x > x else "-x")
+    return ways
+
+
+@pytest.mark.parametrize(
+    ("name", "count"),
+    [("ne555-astable", 3), ("lm317-supply", 10), ("atmega328-relay", 6), ("relay-and-supply", 5)],
+)
+def test_a_dot_is_where_three_ways_of_one_net_meet(name: str, count: int) -> None:
+    """The sheet drawn for you lays each connection pin to pin, and one net's wires share a
+    line; where one leaves it is a T that no three wire ENDS meet at, and every one of them
+    went without a dot (A7) -- a reader could not tell the join from a crossing. The counts
+    were taken by eye on each sheet before the fix, by somebody else. A dot where a wire
+    only turns a corner would claim a join that is a bend, so every dot has three ways out."""
+    drawing = drawing_for(EXAMPLES_DIR / f"{name}.perf")
+    assert len(drawing.junctions) == count
     for junction in drawing.junctions:
-        trunk = trunks[junction.net_id]
-        low, high = sorted((trunk.path[0].x, trunk.path[1].x))
-        assert abs(junction.at.y - trunk.path[0].y) < 1e-9
-        assert low < junction.at.x < high
+        ways = _ways_out(drawing, junction.net_id, junction.at.x, junction.at.y)
+        assert len(ways) >= 3, (junction, ways)
+
+
+def test_two_wires_of_one_net_crossing_in_the_middle_carry_no_dot() -> None:
+    """A crossing is not a join, even within one net: the dot is the only way a reader
+    tells the two apart."""
+    from perfboard_studio.schematic import Wire, _junctions_of
+
+    across = Wire(net_id="n", net_name="N", net_class="signal",
+                  path=(Point2(x=0.0, y=5.0), Point2(x=10.0, y=5.0)))
+    down = Wire(net_id="n", net_name="N", net_class="signal",
+                path=(Point2(x=5.0, y=0.0), Point2(x=5.0, y=10.0)))
+    assert _junctions_of([across, down]) == ()
+    # Ending on the other's middle, it is a T, and that is a dot.
+    onto = Wire(net_id="n", net_name="N", net_class="signal",
+                path=(Point2(x=5.0, y=0.0), Point2(x=5.0, y=5.0)))
+    assert [j.at for j in _junctions_of([across, onto])] == [Point2(x=5.0, y=5.0)]
+    # Two laid along one line and parting: one dot, where they part, none where they start.
+    bend = Wire(net_id="n", net_name="N", net_class="signal",
+                path=(Point2(x=0.0, y=5.0), Point2(x=6.0, y=5.0), Point2(x=6.0, y=9.0)))
+    assert [j.at for j in _junctions_of([across, bend])] == [Point2(x=6.0, y=5.0)]
 
 
 # ---------------------------------------------------------------------------

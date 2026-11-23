@@ -3328,21 +3328,74 @@ def _pin_of(symbols: dict[str, _Placed], node: NetNode) -> Point2 | None:
 
 
 def _junctions_of(wires: Sequence[Wire]) -> tuple[Junction, ...]:
-    """A dot where three or more ends of one net meet at a point.
+    """A dot wherever three or more runs of one net meet at a point.
 
     THREE, NOT TWO, and that is the whole convention: two wires meeting end to end are one
-    wire that turns a corner, and a dot there claims a join that is really a bend. Counted
-    from the ENDS only -- a wire crossing another in the middle is an ordinary schematic
-    crossing and carries no dot, which is what lets a reader tell the two apart.
+    wire that turns a corner, and a dot there claims a join that is really a bend. A wire
+    crossing another in the middle is an ordinary schematic crossing and carries no dot,
+    which is what lets a reader tell the two apart.
+
+    Counted on what is DRAWN, not on the wires' ends: one net's wires are taken together,
+    cut at every corner and end any of them has, and a run two of them lie along is one
+    run. The sheet drawn for you lays each connection pin to pin and lets one net's wires
+    share a line, so a wire leaving the shared line is a T that no three ENDS ever meet at:
+    counting ends left every such T without a dot (six on atmega328-relay, ten on
+    lm317-supply), and a reader could not tell it from a crossing.
     """
-    counts: dict[tuple[NetId, float, float], int] = defaultdict(int)
+    by_net: dict[NetId, list[tuple[Point2, ...]]] = defaultdict(list)
     for wire in wires:
-        for end in (wire.path[0], wire.path[-1]):
-            counts[(wire.net_id, end.x, end.y)] += 1
-    return tuple(
-        Junction(net_id=net_id, at=_p(x, y))
-        for (net_id, x, y), count in sorted(counts.items())
-        if count >= 3
+        if len(wire.path) > 1:
+            by_net[wire.net_id].append(wire.path)
+    found: list[Junction] = []
+
+    def key(point: Point2) -> tuple[float, float]:
+        return round(point.x, 6), round(point.y, 6)
+
+    for net_id in sorted(by_net):
+        paths = by_net[net_id]
+        corners = {key(point) for path in paths for point in path}
+        runs: set[frozenset[tuple[float, float]]] = set()
+        for path in paths:
+            for a, b in itertools.pairwise(path):
+                start, end = key(a), key(b)
+                if start == end:
+                    continue
+                cuts = sorted(
+                    (
+                        point
+                        for point in corners
+                        if _strictly_between(start, end, point)
+                    ),
+                    key=lambda point: abs(point[0] - start[0]) + abs(point[1] - start[1]),
+                )
+                stops = [start, *cuts, end]
+                runs.update(
+                    frozenset((p, q)) for p, q in itertools.pairwise(stops)
+                )
+        degree: dict[tuple[float, float], int] = defaultdict(int)
+        for run in runs:
+            for point in run:
+                degree[point] += 1
+        found.extend(
+            Junction(net_id=net_id, at=_p(x, y))
+            for (x, y), count in sorted(degree.items())
+            if count >= 3
+        )
+    return tuple(found)
+
+
+def _strictly_between(
+    start: tuple[float, float], end: tuple[float, float], point: tuple[float, float]
+) -> bool:
+    """Whether ``point`` lies on the segment from ``start`` to ``end``, not at either end."""
+    if point in (start, end):
+        return False
+    (ax, ay), (bx, by), (px, py) = start, end, point
+    if abs((bx - ax) * (py - ay) - (by - ay) * (px - ax)) > 1e-6:
+        return False
+    return (
+        min(ax, bx) - 1e-6 <= px <= max(ax, bx) + 1e-6
+        and min(ay, by) - 1e-6 <= py <= max(ay, by) + 1e-6
     )
 
 

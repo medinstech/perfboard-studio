@@ -148,6 +148,11 @@ closed without a bump.
 
 ### Fixed
 
+- **The sheet drawn for you puts a dot on every join again.** It lays each connection
+  pin to pin and lets one net's wires share a line, and a dot went only where three wire
+  ENDS met, so a wire leaving a shared line was a join with no dot, drawn like a crossing:
+  three on ne555-astable, ten on lm317-supply. A dot now goes wherever three or more ways
+  of one net meet; a wire crossing another in the middle still carries none.
 - **A part's reference is no longer printed on a pin name.** On atmega328-relay
   K1's reference, over the relay, covered U1's "AVCC" under the chip. A reference whose
   place covers a printed pin name now moves to another side of its part, as it already

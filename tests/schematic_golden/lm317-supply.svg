@@ -31,7 +31,16 @@
 <line x1="186.36" y1="66.04" x2="189.56" y2="66.04" stroke="#111111" stroke-width="0.35"/><line x1="187" y1="66.84" x2="188.92" y2="66.84" stroke="#111111" stroke-width="0.35"/><line x1="187.56" y1="67.64" x2="188.36" y2="67.64" stroke="#111111" stroke-width="0.35"/>
 <polyline points="137.16,114.3 137.16,119.38" fill="none" stroke="#111111" stroke-width="0.25"/>
 <line x1="135.56" y1="119.38" x2="138.76" y2="119.38" stroke="#111111" stroke-width="0.35"/><line x1="136.2" y1="120.18" x2="138.12" y2="120.18" stroke="#111111" stroke-width="0.35"/><line x1="136.76" y1="120.98" x2="137.56" y2="120.98" stroke="#111111" stroke-width="0.35"/>
-<circle cx="88.9" cy="71.12" r="0.6" fill="#111111"/>
+<circle cx="60.96" cy="12.7" r="0.6" fill="#111111"/>
+<circle cx="60.96" cy="55.88" r="0.6" fill="#111111"/>
+<circle cx="83.82" cy="12.7" r="0.6" fill="#111111"/>
+<circle cx="60.96" cy="88.9" r="0.6" fill="#111111"/>
+<circle cx="83.82" cy="88.9" r="0.6" fill="#111111"/>
+<circle cx="86.36" cy="53.34" r="0.6" fill="#111111"/>
+<circle cx="86.36" cy="71.12" r="0.6" fill="#111111"/>
+<circle cx="86.36" cy="88.9" r="0.6" fill="#111111"/>
+<circle cx="114.3" cy="71.12" r="0.6" fill="#111111"/>
+<circle cx="160.02" cy="71.12" r="0.6" fill="#111111"/>
 <g transform="translate(55.88,15.24)"><polyline points="5.08,0 5.08,9.144" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.176 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,9.144 1.778,9.144" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.176 1.778,11.176" fill="none" stroke="#111111" stroke-width="0.35"/></g>
 <g transform="translate(55.88,101.6)"><polyline points="5.08,0 5.08,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.684 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,8.89 1.778,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.684 7.556,12.24 6.731,12.636 5.905,12.875 5.08,12.954 4.255,12.875 3.429,12.636 2.604,12.24 1.778,11.684" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="9.906,5.207 9.906,6.985" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="10.795,6.096 9.017,6.096" fill="none" stroke="#111111" stroke-width="0.35"/></g>
 <g transform="translate(55.88,58.42)"><polyline points="5.08,0 5.08,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.684 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,8.89 1.778,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.684 7.556,12.24 6.731,12.636 5.905,12.875 5.08,12.954 4.255,12.875 3.429,12.636 2.604,12.24 1.778,11.684" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="9.906,5.207 9.906,6.985" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="10.795,6.096 9.017,6.096" fill="none" stroke="#111111" stroke-width="0.35"/></g>
