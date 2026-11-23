@@ -4709,6 +4709,30 @@ class ComponentItem(QGraphicsItem):
             rects.append(rect)
         return rects
 
+    def pin_name_ink_rects(self) -> list[QRectF]:
+        """Each printed pin name's tag as it is DRAWN, in item coordinates: from where the
+        name starts to where its text ends, not over all the room it may take
+        (``pin_name_rects``). What a reference must not be printed over."""
+        if not self.show_pin_names or not self.faces_the_viewer():
+            return []
+        half = PIN_NAME_TAG_HEIGHT_MM / 2
+        rects = []
+        for label in self.pin_names:
+            width = physical_label_width_mm(
+                label.name, PIN_NAME_HEIGHT_MM, label.room, bold=False
+            )
+            rect = QRectF()
+            for along in (
+                label.start - PIN_NAME_TAG_PAD_MM,
+                label.start + width + PIN_NAME_TAG_PAD_MM,
+            ):
+                x, y = _local_offset_mm(
+                    label.x + label.dx * along, label.y + label.dy * along, self.comp, self.side
+                )
+                rect = rect.united(QRectF(x - half, y - half, 2 * half, 2 * half))
+            rects.append(rect)
+        return rects
+
     def _flying_lead_routes(self) -> list[tuple[str, list[QPointF]]]:
         """Each wire of a part off the board, pad to past the edge, in item coordinates.
 
@@ -5268,6 +5292,15 @@ class ComponentItem(QGraphicsItem):
             return []
         return [transform.mapRect(self.mapRectToScene(rect)) for rect in self.pin_name_rects()]
 
+    def _pin_name_ink_on_screen(self, transform: QTransform) -> list[QRectF]:
+        """This part's pin names as printed, in device pixels -- none when the view is too
+        far out for ``_paint_pin_names`` to print them."""
+        if not self.isVisible() or math.hypot(transform.m11(), transform.m12()) < 5.0:
+            return []
+        return [
+            transform.mapRect(self.mapRectToScene(rect)) for rect in self.pin_name_ink_rects()
+        ]
+
     def _pin_name_rects_on_screen(self, transform: QTransform) -> list[QRectF]:
         """Every part's printed pin names in this scene, in device pixels."""
         scene = self.scene()
@@ -5359,13 +5392,15 @@ def settle_reference_placements(
     where no two names share a place, so such a board prints as it always did -- and the
     order is the references', so the same board prints the same way every time.
 
-    A pin name keeps a moved reference off it but does not move one: its tag is measured
-    over the room the name may take, wider than the name, and asked of every reference it
-    moved R2 on ne555-astable off a place nothing was printed on."""
+    A pin name's ROOM keeps a moved reference off it but does not move one: it is wider
+    than the name, and asked of every reference it moved R2 on ne555-astable off a place
+    nothing was printed on. The name's INK does move one: on atmega328-relay K1's
+    reference, over the relay, was printed across U1's "AVCC" under the chip."""
     if not items:
         return {}
     own = {item.comp.id: item._own_reference_placement(transform) for item in items}
     pins = {item.comp.id: item._pin_name_rects_on_screen_of_own(transform) for item in items}
+    ink = [rect for item in items for rect in item._pin_name_ink_on_screen(transform)]
     notes = items[0]._note_rects(transform)
     legend = items[0]._legend_rects(transform)
 
@@ -5389,7 +5424,7 @@ def settle_reference_placements(
             placed[item.comp.id] = None
             continue
         here = plate(item, where)
-        if not hits(here, settled):
+        if not hits(here, settled + ink):
             placed[item.comp.id] = where
             settled.append(here)
             continue

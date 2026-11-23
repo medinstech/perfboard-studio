@@ -16039,6 +16039,49 @@ def test_a_shipped_example_prints_no_reference_on_another(stem: str) -> None:
         _close(window)
 
 
+def test_no_reference_is_printed_on_a_pin_name() -> None:
+    """On atmega328-relay K1's reference, over the relay, was printed across U1's "AVCC"
+    under the chip. A reference whose own place covers a printed pin name moves to another
+    side of its body, as it does off another reference; one that covers only the room a
+    name could take, and not the name, stays where it was."""
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        window.resize(1600, 1000)
+        window.show()
+        window.show_board()
+        QApplication.processEvents()
+        window.view._fitted = False  # or the next resize fits it again
+        window.view.resetTransform()
+        window.view.scale(13.0, 13.0)  # the zoom of the headless picture it was seen in
+        window.scene._reference_cache = None
+        transform = window.view.viewportTransform()
+        items = {item.comp.ref: item for item in window.scene.component_items.values()}
+        ink = [
+            (ref, rect)
+            for ref, item in items.items()
+            for rect in item._pin_name_ink_on_screen(transform)
+        ]
+        assert ink, "the names are printed at this zoom"
+        k1 = items["K1"]
+        own = k1._own_reference_placement(transform)
+        assert own is not None
+        own_plate = k1.reference_rect(transform.map(own[0]), own[1])
+
+        plates = _reference_plates(window)
+        assert not [
+            (ref, other)
+            for ref, (plate, _where) in plates.items()
+            for other, rect in ink
+            if plate.intersects(rect)
+        ]
+        # Where the font makes them meet, as it does on Windows: K1 is the one that moved.
+        # A font that sets "K1" or "AVCC" narrower may leave its own place clear.
+        if any(ref == "U1" and own_plate.intersects(rect) for ref, rect in ink):
+            assert plates["K1"][1] != own
+    finally:
+        _close(window)
+
+
 def test_part_values_are_printed_after_their_references() -> None:
     """#11: View > Show Part Values prints each part's value after its reference, on the
     reference's own plate -- "R1 10k" -- where the reference already is: over the body,

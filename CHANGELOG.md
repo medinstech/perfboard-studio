@@ -148,6 +148,10 @@ closed without a bump.
 
 ### Fixed
 
+- **A part's reference is no longer printed on a pin name.** On atmega328-relay
+  K1's reference, over the relay, covered U1's "AVCC" under the chip. A reference whose
+  place covers a printed pin name now moves to another side of its part, as it already
+  did off another reference.
 - **A turned symbol's ground and supply symbols sit on its pins.** On a sheet drawn by hand,
   a part turned with R had each ground, supply and net name at its pins drawn where the pin
   would be unturned, beside the body. They now start at the pin as it is drawn.
