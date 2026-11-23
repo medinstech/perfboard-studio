@@ -85,6 +85,14 @@ closed without a bump.
   sheet. Until copper goes down, a missing value and a part on no net are now still to do.
   Once every part is on the board, the hint says to press C and click a pin and the pin it
   connects to, Next arms the board's Connect, and Set the Values keeps the board in front.
+- **A relay, a crystal and a pot say what they are on the board.** A relay is drawn as a
+  grey case with square shoulders and its coil and contact printed on top, a crystal carries
+  its frequency on the can, and a pot its value on the case in the case's own ink.
+- **Pin names keep off the board's printed letters and numbers.** A chip on the first row
+  or column prints the names that have no room beside it on its own top, and its marking
+  moves into the strip they leave. A name with nowhere else to go still crosses the legend
+  rather than being lost. On screen, a row or column address a part or a name stands on is
+  said again just outside the board, ruler style; the 1:1 print is unchanged.
 - **Of two wires that cost Auto-wire the same, it lays the one lying across fewer joints.**
   A tie used to go to whichever path the search happened to try first. Over the
   scoreboard's 23 boards, each wired from bare: wires lying across a pin 22 → 17, wire
