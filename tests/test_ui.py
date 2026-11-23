@@ -15919,8 +15919,9 @@ def test_no_two_references_are_printed_in_one_place() -> None:
             for ref, where in own.items()
             if where is not None
         }
-        # The board does crowd them, as it did in the picture.
-        assert own_plates["R1"].intersects(own_plates["U1"])
+        # The board does crowd them, as it did in the picture. R1 and U1 did too, until
+        # U1's left-hand names, which C1 left no room for beside it, were printed on the
+        # chip (2026-11-23, ``bodies._on_its_own_top``) and its reference went elsewhere.
         assert own_plates["J1"].intersects(own_plates["C1"])
 
         plates = _reference_plates(window)
@@ -15933,7 +15934,7 @@ def test_no_two_references_are_printed_in_one_place() -> None:
             if plates[a][0].intersects(plates[b][0])
         ]
         moved = {ref for ref in names if plates[ref][1] != own[ref]}
-        assert moved == {"R1", "J1"}, moved
+        assert moved == {"J1"}, moved
         # Asked twice, the same answer: the order is the references', not the scene's.
         window.scene._reference_cache = None
         assert {ref: where for ref, (_plate, where) in _reference_plates(window).items()} == {

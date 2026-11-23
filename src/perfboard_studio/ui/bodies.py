@@ -43,7 +43,9 @@ from perfboard_studio.geometry import (
     SubstrateEdges,
     board_note_centre_mm,
     flying_lead_routes,
+    hole_span_mm,
     hole_to_mm,
+    legend_layout,
     mounting_hole_centre_mm,
     substrate_edges_mm,
     transform_offset,
@@ -713,6 +715,9 @@ class PinLabel:
     #: Printed on a tag over whatever stands under it, because the module's own parts cover
     #: the board where its names would go (``moduleart.ModuleArt.names_over_parts``).
     backed: bool = False
+    #: Printed on the part's own top, running in from its pin, because outside there was
+    #: no room for it (``lay_out_pin_names``): the 3D view lifts it onto the body.
+    on_body: bool = False
 
 
 def pin_labels(
@@ -828,6 +833,20 @@ def pin_labels(
 
 #: A name narrowed further than this to fit a gap is left off instead.
 PIN_NAME_MIN_SQUEEZE = 0.6
+#: Parts whose top a name may be printed on, running in from its pin, when there is no
+#: room outside: a DIP, whose names along its edge read like the pinout drawing they are.
+#: Chosen 2026-11-23 from rendered candidates, over leaving them off: atmega328-relay's U1
+#: stands on the first row, and its fourteen names ran across the column letters printed
+#: above it, H to T, so the letters a hole is called by could not be read.
+INWARD_NAME_ARCHETYPES: frozenset[str] = frozenset({"dip"})
+#: How far from its pin a name on the part's top starts: past the pad ring.
+INWARD_NAME_START_MM = 0.95
+#: How far short of the body's middle it stops, so names from its two rows never meet.
+#: The value printed along the chip moves over into the half they leave free
+#: (``view2d._marking_gap``); held to the middle, XTAL1 and RESET did not fit.
+INWARD_NAME_KEEPS_OFF_MM = 0.15
+#: Clearance between a name's tag and the board's printed legend.
+LEGEND_CLEAR_MM = 0.1
 #: The dark tag a name on this board is printed on: how far it reaches past the ink at each
 #: end, and how tall it is. Both views draw it this size, so it is what has to fit.
 PIN_NAME_TAG_PAD_MM = 0.25
@@ -860,7 +879,7 @@ def lay_out_pin_names(
     that they leave off the same names.
     """
     board = document.board
-    edges = substrate_edges_mm(board)
+    edges = _short_of_the_legend(document, substrate_edges_mm(board))
     # Everything a name may not run under, by the part it belongs to.
     standing: list[tuple[str, BoardBox]] = []
     for comp in document.components:
@@ -944,6 +963,7 @@ def lay_out_pin_names(
 
         kept: list[PinLabel] = []
         dropped: list[tuple[str, str]] = []
+        inward = turn == 1.0 and footprint.body.archetype in INWARD_NAME_ARCHETYPES
         for label, need, run in zip(wanted, needs, runs[turn], strict=True):
             free = _free_run(run, label.start, others + printed, edges)
             if free >= need:
@@ -951,7 +971,16 @@ def lay_out_pin_names(
             elif free >= need * PIN_NAME_MIN_SQUEEZE:
                 room = free
             else:
-                dropped.append((label.number, label.name))
+                on_top = (
+                    _on_its_own_top(label, footprint, comp, board, need, others + printed, edges)
+                    if inward
+                    else None
+                )
+                if on_top is None:
+                    dropped.append((label.number, label.name))
+                else:
+                    kept.append(on_top[0])
+                    printed.append(on_top[1])
                 continue
             kept.append(
                 label
@@ -968,6 +997,72 @@ def lay_out_pin_names(
 
 #: A pin's centre on the board, ``(x, y)`` mm, and the axis its name runs along there.
 type BoardRun = tuple[float, float, int, int]
+
+
+def _short_of_the_legend(document: PerfDocument, edges: SubstrateEdges) -> SubstrateEdges:
+    """Where a name on this board has to stop: at the board's edge, or short of the band
+    along it that the board's own addresses are printed in.
+
+    A name run across that band hid the letters under it, and the address a hole is
+    called by is what the guide, DRC and the router all speak in; a DIP's name finds room on
+    the chip's own top instead (``INWARD_NAME_ARCHETYPES``), anything else's is narrowed or
+    left off as against any other obstacle. Asked in the board's frame, unmirrored, like
+    every box ``lay_out_pin_names`` measures against.
+    """
+    labels = document.board.labels
+    if labels is None:
+        return edges
+    layout = legend_layout(document, labels)
+    if layout.height <= 0.0:
+        return edges
+    span_w, span_h = hole_span_mm(document.board)
+    clear = layout.height / 2 + LEGEND_CLEAR_MM
+    min_x, max_x, min_y, max_y = edges.min_x, edges.max_x, edges.min_y, edges.max_y
+    for y in layout.column_ys:
+        if y < span_h / 2:
+            min_y = max(min_y, y + clear)
+        else:
+            max_y = min(max_y, y - clear)
+    for x in layout.row_xs:
+        if x < span_w / 2:
+            min_x = max(min_x, x + clear)
+        else:
+            max_x = min(max_x, x - clear)
+    return SubstrateEdges(min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y)
+
+
+def _on_its_own_top(
+    label: PinLabel,
+    footprint: Footprint,
+    comp: ComponentInstance,
+    board: Board,
+    need: float,
+    obstacles: list[BoardBox],
+    edges: SubstrateEdges,
+) -> tuple[PinLabel, BoardBox] | None:
+    """``label`` turned round onto its part's top, running in from its pin and stopping
+    short of the middle; None when it does not fit there either."""
+    placement = placement_for(footprint, board.pitch)
+    toward = abs(placement.centre_y - label.y) if label.dy else abs(placement.centre_x - label.x)
+    room = toward - INWARD_NAME_START_MM - INWARD_NAME_KEEPS_OFF_MM - PIN_NAME_TAG_PAD_MM
+    run = _run_on_board(label, comp, board, -1.0)
+    px, py, _ux, _uy = run
+    if not (edges.min_x <= px <= edges.max_x and edges.min_y <= py <= edges.max_y):
+        # The pin hangs off the board (DRC says so), and its name would start off it too.
+        return None
+    room = min(room, label.room, _free_run(run, INWARD_NAME_START_MM, obstacles, edges))
+    if room < need * PIN_NAME_MIN_SQUEEZE:
+        return None
+    turned = replace(
+        label,
+        dx=-label.dx,
+        dy=-label.dy,
+        start=INWARD_NAME_START_MM,
+        room=room,
+        either_side=False,
+        on_body=True,
+    )
+    return turned, _tag_box(run, INWARD_NAME_START_MM, min(need, room))
 
 
 def _run_on_board(

@@ -930,6 +930,80 @@ class HoleRulerItem(QGraphicsItem):
             )
 
 
+class LegendEchoItem(QGraphicsItem):
+    """A printed address something stands on, said again just outside the board.
+
+    The legend is ink on the substrate, so a part standing on it hides it, as it does on
+    the real board -- a terminal on the first column took the row numbers beside it, a
+    pin name or a reference the letter under it -- and the ruler that would name those
+    holes stands down while the board prints its own (``BoardScene._build``). So each
+    address hidden there is drawn where the ruler would draw it, in the ruler's style and
+    at its pixel size, and only that one: the rest the board says itself. Outside the
+    outline, so it is on screen and never on the 1:1 print, which renders the outline
+    alone. Chosen 2026-11-23 from rendered candidates.
+    """
+
+    def __init__(self, scene: BoardScene, legend: BoardLegendItem) -> None:
+        super().__init__()
+        self._scene = scene
+        self.legend = legend
+        self.board = legend.board
+        self.side = legend.side
+        self.setZValue(80)
+
+    def boundingRect(self) -> QRectF:
+        # Padded as the ruler's is, for the same reason: a pixel-sized label needs more
+        # scene room the further out the view is zoomed.
+        pad = RULER_MARGIN_MM + 30
+        return _outline_rect(self.board).adjusted(-pad, -pad, pad, pad)
+
+    def hidden(self, transform: QTransform) -> list[tuple[QPointF, str, float]]:
+        """Each printed address something stands on at this zoom: (centre, text,
+        rotation), in scene millimetres."""
+        covers: list[QRectF] = []
+        for item in self._scene.component_items.values():
+            if not item.isVisible() or not item.faces_the_viewer():
+                continue
+            covers.append(item.mapRectToScene(item._local_body_rect()))
+            covers.extend(item.mapRectToScene(rect) for rect in item.pin_name_rects())
+        under_references = self.legend.covered_labels(transform)
+        return [
+            (centre, text, rotation)
+            for index, ((centre, text, _height, _wide, rotation, _ink), rect) in enumerate(
+                zip(self.legend._printed(), self.legend.label_rects(), strict=True)
+            )
+            if index in under_references or any(rect.intersects(cover) for cover in covers)
+        ]
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        outline = _outline_rect(self.board)
+        painter.setPen(QPen(RULER_TEXT_MAJOR))
+        for centre, text, rotation in self.hidden(painter.worldTransform()):
+            if rotation:
+                # A row number, beside the edge it is printed along.
+                left = centre.x() < outline.center().x()
+                draw_label(
+                    painter,
+                    QPointF(outline.left() - 1.2 if left else outline.right() + 1.2, centre.y()),
+                    text,
+                    RULER_LABEL_PX,
+                    (Qt.AlignmentFlag.AlignRight if left else Qt.AlignmentFlag.AlignLeft)
+                    | Qt.AlignmentFlag.AlignVCenter,
+                    bold=True,
+                )
+            else:
+                top = centre.y() < outline.center().y()
+                draw_label(
+                    painter,
+                    QPointF(centre.x(), outline.top() - 1.4 if top else outline.bottom() + 1.4),
+                    text,
+                    RULER_LABEL_PX,
+                    Qt.AlignmentFlag.AlignHCenter
+                    | (Qt.AlignmentFlag.AlignBottom if top else Qt.AlignmentFlag.AlignTop),
+                    bold=True,
+                )
+
+
 # ------------------------------------------------- printed legend and board features
 
 
@@ -3449,6 +3523,7 @@ def _paint_top_marking(
     comp: ComponentInstance,
     rect: QRectF | None = None,
     from_below: bool = False,
+    names: tuple[PinLabel, ...] = (),
 ) -> None:
     """What a part says on its top: its value, as the part carries it -- a DIP's part number
     along the package, a sealed relay's part number over the contact diagram moulded beside
@@ -3467,6 +3542,15 @@ def _paint_top_marking(
         return
     if rect is None:
         rect = _body_rect(placement)
+    # As tall as the whole package allows, even when the print moves into a strip of it.
+    package_short = min(rect.width(), rect.height())
+    if any(label.on_body for label in names):
+        # Pin names printed on the chip (``bodies._on_its_own_top``): the print moves into
+        # the room they leave, and when they leave none, the names are what it says.
+        gap = _marking_gap(rect, names)
+        if gap is None:
+            return
+        rect = gap
     along_x = rect.width() >= rect.height()
     long_side, short_side = (rect.width(), rect.height()) if along_x else (rect.height(), rect.width())
     rotation = 0.0 if along_x else 90.0
@@ -3499,12 +3583,48 @@ def _paint_top_marking(
             text if archetype == "crystal-hc49" else text.upper(),
             min(CRYSTAL_MARKING_MM, short_side * 0.2)
             if archetype == "crystal-hc49"
-            else min(TOP_MARKING_MM, short_side * 0.16),
+            else min(TOP_MARKING_MM, package_short * 0.16, short_side * 0.7),
             bold=False,
-            max_width_mm=long_side * (0.45 if archetype == "crystal-hc49" else 0.62),
+            max_width_mm=long_side * (0.45 if archetype == "crystal-hc49" else TOP_MARKING_SHARE),
             rotation_deg=rotation,
         )
     painter.restore()
+
+
+def _marking_gap(rect: QRectF, names: tuple[PinLabel, ...]) -> QRectF | None:
+    """The widest strip of ``rect`` along its long side that no pin name printed on the
+    part covers, in the part's own frame; None when that leaves less than a line of print.
+    A name on the top runs across the package from its pin, so it covers an interval of
+    the short side, its tag and all -- if it stands where the print runs, the middle
+    ``TOP_MARKING_SHARE`` of the package: PB2 at the end of a DIP-28 is not in its way."""
+    along_x = rect.width() >= rect.height()
+    low, high = (rect.top(), rect.bottom()) if along_x else (rect.left(), rect.right())
+    middle, long_side = (
+        (rect.center().x(), rect.width()) if along_x else (rect.center().y(), rect.height())
+    )
+    reach = long_side * TOP_MARKING_SHARE / 2 + PIN_NAME_TAG_HEIGHT_MM / 2
+    covered: list[tuple[float, float]] = []
+    for label in names:
+        if not label.on_body or abs((label.x if along_x else label.y) - middle) > reach:
+            continue
+        pin, way = (label.y, label.dy) if along_x else (label.x, label.dx)
+        ends = (
+            pin + way * (label.start - PIN_NAME_TAG_PAD_MM),
+            pin + way * (label.start + label.room + PIN_NAME_TAG_PAD_MM),
+        )
+        covered.append((min(ends), max(ends)))
+    best: tuple[float, float] = (low, low)
+    edge = low
+    for start, end in sorted([*covered, (high, high)]):
+        if start - edge > best[1] - best[0]:
+            best = (edge, start)
+        edge = max(edge, end)
+    a, b = best
+    if b - a < TOP_MARKING_MM * 1.2:
+        return None
+    if along_x:
+        return QRectF(rect.left(), a, rect.width(), b - a)
+    return QRectF(a, rect.top(), b - a, rect.height())
 
 
 #: The parts whose top carries their value in print, seen from above. Not a TO-92 or a
@@ -3513,6 +3633,8 @@ def _paint_top_marking(
 #: (``view3d.PRINTED_ARCHETYPES``); the crystal's frequency is stamped on its domed cap,
 #: which only this flat view can ink without bending the glyphs over it.
 TOP_PRINTED_ARCHETYPES = frozenset({"dip", "relay-box", "crystal-hc49", "potentiometer"})
+#: How much of a package's length its print may take, at most.
+TOP_MARKING_SHARE = 0.62
 #: How tall a relay's part number is printed: Songle's is about this, in bold.
 RELAY_MARKING_MM = 1.5
 #: An HC-49 can's frequency, stamped smaller than a chip's print: the can is 4.65 mm across.
@@ -4953,10 +5075,11 @@ class ComponentItem(QGraphicsItem):
             # From the document's own value, so the bands cannot disagree with the
             # netlist. None for anything that is not a resistor with a readable value.
             bands = resistor_bands(self.fp, self.comp.value)
+            names = self.pin_names if self.show_pin_names else ()
             if not off_board and measured:
                 _paint_top_view(painter, view, style, self.isSelected(), placement, bands)
                 _paint_top_marking(
-                    painter, self.fp, placement, self.comp, view.marking, from_below
+                    painter, self.fp, placement, self.comp, view.marking, from_below, names
                 )
                 _paint_plus_mark(painter, self.fp, self.board.pitch)
             elif not off_board and self.standing is not None:
@@ -4973,7 +5096,9 @@ class ComponentItem(QGraphicsItem):
                     bands=bands,
                     art=self.art,
                 )
-                _paint_top_marking(painter, self.fp, placement, self.comp, None, from_below)
+                _paint_top_marking(
+                    painter, self.fp, placement, self.comp, None, from_below, names
+                )
             if self.show_pin_names:
                 _paint_pin_names(painter, self.pin_names, self.comp, style.accent, from_below)
             painter.restore()
@@ -5663,6 +5788,7 @@ class BoardScene(QGraphicsScene):
         self.breadboard_item: BreadboardItem | None = None
         #: The addresses the board prints (BoardLegendItem); None on a board printing none.
         self.legend_item: BoardLegendItem | None = None
+        self.legend_echo: LegendEchoItem | None = None
         self.show_ratsnest = show_ratsnest
         self.show_rulers = show_rulers
         self.highlighted_nets: tuple[str, ...] = ()
@@ -6120,8 +6246,13 @@ class BoardScene(QGraphicsScene):
         # millimetres apart and in two different styles, which reads as a rendering fault
         # rather than as two features. Only when the legend is on the far face -- where it
         # is a dim ghost rather than something you can read -- is the ruler wanted again.
+        self.legend_echo = None
         if self.show_rulers and not self.legend_is_readable():
             self.addItem(HoleRulerItem(board, self.side))
+        elif self.show_rulers and self.legend_item is not None:
+            # ...except for an address something stands on: see LegendEchoItem.
+            self.legend_echo = LegendEchoItem(self, self.legend_item)
+            self.addItem(self.legend_echo)
 
         net_class_by_id = {net.id: net.net_class for net in self.document.nets}
         net_name_by_id = {net.id: net.name for net in self.document.nets}

@@ -10,6 +10,7 @@ the board as it is in the hand (2026-11-03): every pad is tin on both.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from pathlib import Path
 
@@ -17,7 +18,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QRectF
-from PySide6.QtGui import QImage, QPainter
+from PySide6.QtGui import QImage, QPainter, QTransform
 from PySide6.QtWidgets import QApplication
 
 from perfboard_studio import persist
@@ -169,6 +170,48 @@ def test_a_relay_a_crystal_and_a_pot_carry_their_value_and_a_transistor_does_not
     assert "10k" in printed, "RV1, the pot"
     assert "ATMEGA328P-PU" in printed, "U1 still, in capitals"
     assert "BC547" not in printed and "L7805" not in printed
+
+
+def test_a_chip_on_the_first_row_prints_its_names_on_itself_not_over_the_letters() -> None:
+    """Chosen 2026-11-23 from rendered candidates. atmega328-relay's U1 stands on the first
+    row, and its names ran across the column letters printed above it, H to T. A name now
+    stops short of the band the legend is printed in, and a DIP's that finds no room there
+    is printed on the chip, running in from its pin -- none is left off -- while the chip's
+    own print moves into the half of it they leave free."""
+    scene = view2d.BoardScene(_example("atmega328-relay"), LOOKUP, side="top")
+    u1 = next(item for item in scene.component_items.values() if item.comp.ref == "U1")
+    assert scene.legend_item is not None
+    letters = scene.legend_item.label_rects()
+    names = [u1.mapRectToScene(rect) for rect in u1.pin_name_rects()]
+    assert names and not [name for name in names if any(name.intersects(r) for r in letters)]
+    # The short names, whatever the font: how wide XTAL1 is printed depends on one, and
+    # Qt's offscreen plugin on Windows has none (see test_ui's skipif guards).
+    on_top = {label.name for label in u1.pin_names if label.on_body}
+    assert {"PB0", "PD7", "PD6", "PD5", "GND", "VCC", "PD4", "TXD", "RXD"} <= on_top
+    placement = view2d.placement_for(u1.fp, scene.document.board.pitch)
+    strip = view2d._marking_gap(view2d._body_rect(placement), u1.pin_names)
+    assert strip is not None, "ATMEGA328P-PU is still printed"
+    assert strip.height() >= view2d.TOP_MARKING_MM * 1.2 or strip.width() >= view2d.TOP_MARKING_MM * 1.2
+
+
+def test_an_address_a_part_stands_on_is_said_again_outside_the_board() -> None:
+    """J2 stands on the row numbers beside it and RV1 on the ones across the board: each
+    hidden address is drawn where the ruler would draw it, and only those -- the rest the
+    board says itself. Outside the outline, so never on the 1:1 print."""
+    doc = _example("atmega328-relay")
+    scene = view2d.BoardScene(doc, LOOKUP, side="top")
+    assert scene.legend_echo is not None
+    hidden = scene.legend_echo.hidden(QTransform())
+    rows = [text for _centre, text, rotation in hidden if rotation]
+    assert {"05", "06", "07", "08"} <= set(rows), rows
+    assert "A" not in {text for _centre, text, rotation in hidden if not rotation}
+    assert scene.legend_item is not None
+    assert len(hidden) < len(scene.legend_item.label_rects()) / 4, "only what is hidden"
+    _on_screen(scene)
+
+    # A board printing no addresses has the ruler instead, and nothing to say again.
+    bare = dataclasses.replace(doc, board=dataclasses.replace(doc.board, labels=None))
+    assert view2d.BoardScene(bare, LOOKUP, side="top").legend_echo is None
 
 
 def test_a_relay_is_a_case_with_square_shoulders() -> None:

@@ -6614,14 +6614,19 @@ def build_pin_names(
     body = _world_body(lookup, comp, board)
     if body is None:
         return []
-    if len({label.on_module for label in labels}) > 1:
-        # A module's outer header row prints on this board, the rest on the module: each
-        # group at its own height and in its own ink.
+    groups = sorted({(label.on_module, label.on_body) for label in labels}, reverse=True)
+    if len(groups) > 1:
+        # A module's outer header row prints on this board, the rest on the module, and a
+        # DIP's name with no room beside it on the chip's top: each group at its own height
+        # and in its own ink.
         return [
             actor
-            for group in (True, False)
+            for group in groups
             for actor in build_pin_names(
-                lookup, comp, board, tuple(label for label in labels if label.on_module is group)
+                lookup,
+                comp,
+                board,
+                tuple(label for label in labels if (label.on_module, label.on_body) == group),
             )
         ]
     where = {pin.number: xy for pin, xy in zip(footprint.pins, body.pins, strict=False)}
@@ -6637,6 +6642,10 @@ def build_pin_names(
         seat = float(footprint.body.dims.get("seat", MODULE_SEAT_SOCKETED_MM))
         lift = seat + MODULE_PCB_MM + _DECAL_PROUD_MM
         ink = _rgb(body.style.accent)
+    elif labels[0].on_body:
+        # On the part's own top, where its value is printed (``bodies._on_its_own_top``).
+        lift = _LIFT + body.height + _DECAL_PROUD_MM
+        ink = LEGEND_RGB
     else:
         # On its tag, above the pad rings a name runs across.
         lift = PAD_LIFT_MM + _DECAL_PROUD_MM
@@ -7942,18 +7951,21 @@ def populate_renderer(
                 owners[actor] = ("component", comp.id)
             ren.AddActor(actor)
         if printed is not None:
-            # A module's names are on its own board and rise with it; a part's names on
-            # this board stay on this board -- and so do a module's outer header row's.
+            # A module's names are on its own board and rise with it, as do a DIP's printed
+            # on the chip; a part's names on this board stay on this board -- and so do a
+            # module's outer header row's.
             names = printed.labels.get(comp.id, ())
-            for on_module in (True, False):
-                group = tuple(label for label in names if label.on_module is on_module)
+            for rides in (True, False):
+                group = tuple(
+                    label for label in names if (label.on_module or label.on_body) is rides
+                )
                 if not group:
                     continue
                 for actor in build_pin_names(lookup, comp, board, group):
-                    _lift(actor, exploded_mm if on_module else 0.0)
+                    _lift(actor, exploded_mm if rides else 0.0)
                     if highlight is not None:
                         (_pick_out if subject else _dim)(actor)
-                    if subject and on_module and arriving is not None:
+                    if subject and rides and arriving is not None:
                         arriving.append(actor)
                     if owners is not None:
                         owners[actor] = ("component", comp.id)
