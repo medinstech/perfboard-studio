@@ -336,7 +336,10 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "potentiometer": "circle",
     "tactile-switch": "rect",
     "crystal-hc49": "rounded",
-    "relay-box": "rounded",
+    # A sealed case with square shoulders, as the 3D view moulds it (``RELAY_CORNER_MM``):
+    # "rounded" drew a glossy pebble. Picked by Sinan on 2026-11-23 from rendered
+    # candidates, with its part number printed on top (``view2d._paint_top_marking``).
+    "relay-box": "rect",
     "generic-box": "rect",
     "box-header": "rect",
     "wire-to-board": "rect",

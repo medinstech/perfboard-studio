@@ -142,6 +142,43 @@ def test_a_dip_says_its_value_on_its_top(monkeypatch) -> None:  # type: ignore[n
     assert dips and set(marked) == dips
 
 
+def test_a_relay_a_crystal_and_a_pot_carry_their_value_and_a_transistor_does_not(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Chosen 2026-11-23 from rendered candidates: what a part's top really carries is
+    printed on it. A TO-92's and a TO-220's print is on their front face, which a view from
+    above does not see, so they stay blank. The case is the document's, but a DIP's."""
+    printed: list[str] = []
+    real = view2d.draw_physical_label
+    real_marking = view2d._paint_top_marking
+
+    def marking(painter, footprint, placement, comp, *rest):  # type: ignore[no-untyped-def]
+        def record(painter, centre, text, height_mm, *args, **kwargs):  # type: ignore[no-untyped-def]
+            printed.append(text)
+            return real(painter, centre, text, height_mm, *args, **kwargs)
+
+        monkeypatch.setattr(view2d, "draw_physical_label", record)
+        try:
+            real_marking(painter, footprint, placement, comp, *rest)
+        finally:
+            monkeypatch.setattr(view2d, "draw_physical_label", real)
+
+    monkeypatch.setattr(view2d, "_paint_top_marking", marking)
+    _on_screen(view2d.BoardScene(_example("atmega328-relay"), LOOKUP, side="top"))
+
+    assert "SRD-05VDC-SL-C" in printed, "K1, the relay"
+    assert "16MHz" in printed, "Y1, the crystal, in its own case"
+    assert "10k" in printed, "RV1, the pot"
+    assert "ATMEGA328P-PU" in printed, "U1 still, in capitals"
+    assert "BC547" not in printed and "L7805" not in printed
+
+
+def test_a_relay_is_a_case_with_square_shoulders() -> None:
+    from perfboard_studio.ui.bodies import placement_for
+
+    relay = LOOKUP("relay-spdt")
+    assert relay is not None
+    assert placement_for(relay, 2.54).silhouette == "rect"
+
+
 def test_references_are_outlined_on_screen_and_plated_on_paper(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     outlined: list[str] = []
     printed: list[str] = []

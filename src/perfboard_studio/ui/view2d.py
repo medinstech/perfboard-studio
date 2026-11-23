@@ -3450,11 +3450,20 @@ def _paint_top_marking(
     rect: QRectF | None = None,
     from_below: bool = False,
 ) -> None:
-    """What a DIP says on its top: its value, along the package, as the chip carries it.
+    """What a part says on its top: its value, as the part carries it -- a DIP's part number
+    along the package, a sealed relay's part number over the contact diagram moulded beside
+    it, an HC-49 can's frequency, a pot's value stamped in its cover in front of the shaft.
     Physical ink, so it scales with the board and prints on the 1:1 sheet too. ``rect`` is
     where the print goes when the measured top view says (``TopView.marking``): on the
-    case's flat top, inside the shoulders, rather than across the whole body DRC measures."""
-    if footprint.body.archetype != "dip" or not comp.value.strip():
+    case's flat top, inside the shoulders, rather than across the whole body DRC measures.
+    A DIP's part number in capitals, as chips are lasered; anything else as the document
+    has it, as the 3D view prints it -- "16MHz" in capitals is a different unit."""
+    archetype = footprint.body.archetype
+    text = comp.value.strip()
+    if archetype not in TOP_PRINTED_ARCHETYPES or not text:
+        return
+    if archetype == "potentiometer":
+        _paint_pot_marking(painter, placement, comp, text, from_below)
         return
     if rect is None:
         rect = _body_rect(placement)
@@ -3465,21 +3474,110 @@ def _paint_top_marking(
     # Never upside down on screen, as the pin names are not.
     if 90.0 < (rotation + turned) % 360.0 < 270.0:
         rotation += 180.0
+    ink = _top_marking_ink(footprint)
     painter.save()
     painter.translate(rect.center())
     if reflected:
         painter.scale(-1.0, 1.0)
+    painter.setPen(ink)
+    if archetype == "relay-box":
+        painter.rotate(rotation)
+        height = min(RELAY_MARKING_MM, short_side * 0.1)
+        draw_physical_label(
+            painter,
+            QPointF(0.0, -height * 0.9),
+            text,
+            height,
+            bold=True,
+            max_width_mm=long_side * 0.62,
+        )
+        _paint_relay_diagram(painter, ink, height)
+    else:
+        draw_physical_label(
+            painter,
+            QPointF(0.0, 0.0),
+            text if archetype == "crystal-hc49" else text.upper(),
+            min(CRYSTAL_MARKING_MM, short_side * 0.2)
+            if archetype == "crystal-hc49"
+            else min(TOP_MARKING_MM, short_side * 0.16),
+            bold=False,
+            max_width_mm=long_side * (0.45 if archetype == "crystal-hc49" else 0.62),
+            rotation_deg=rotation,
+        )
+    painter.restore()
+
+
+#: The parts whose top carries their value in print, seen from above. Not a TO-92 or a
+#: TO-220: theirs is on the front face, which this view does not see, and printing it on top
+#: would draw a part that does not exist. The 3D view prints the relay and the pot
+#: (``view3d.PRINTED_ARCHETYPES``); the crystal's frequency is stamped on its domed cap,
+#: which only this flat view can ink without bending the glyphs over it.
+TOP_PRINTED_ARCHETYPES = frozenset({"dip", "relay-box", "crystal-hc49", "potentiometer"})
+#: How tall a relay's part number is printed: Songle's is about this, in bold.
+RELAY_MARKING_MM = 1.5
+#: An HC-49 can's frequency, stamped smaller than a chip's print: the can is 4.65 mm across.
+CRYSTAL_MARKING_MM = 0.75
+#: Dark ink, for print on a light case -- a crystal's steel, where the etched grey a black
+#: chip carries vanished into the metal.
+TOP_MARKING_INK_DARK = QColor(40, 42, 48, 190)
+
+
+def _top_marking_ink(footprint: Footprint) -> QColor:
+    return TOP_MARKING_INK if QColor(style_for(footprint).fill).lightness() < 150 else TOP_MARKING_INK_DARK
+
+
+def _paint_relay_diagram(painter: QPainter, ink: QColor, height: float) -> None:
+    """The coil and the change-over contact printed under a relay's part number, as the
+    cans carry them: a box for the coil, a blade from the common to one of two contacts.
+    In the frame the part number was just drawn in, centred under it."""
+    unit = height / RELAY_MARKING_MM
+    painter.save()
+    painter.scale(unit, unit)
+    painter.setPen(QPen(ink, 0.16))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    top = 0.5
+    painter.drawRect(QRectF(-3.0, top, 1.8, 1.3))
+    painter.drawLine(QPointF(-2.1, top - 0.4), QPointF(-2.1, top))
+    painter.drawLine(QPointF(-2.1, top + 1.3), QPointF(-2.1, top + 1.7))
+    painter.drawLine(QPointF(0.8, top + 1.7), QPointF(0.8, top + 1.0))
+    painter.drawLine(QPointF(0.8, top + 1.0), QPointF(2.5, top + 0.2))
+    painter.drawEllipse(QPointF(2.7, top + 0.05), 0.18, 0.18)
+    painter.drawEllipse(QPointF(2.7, top + 1.3), 0.18, 0.18)
+    painter.restore()
+
+
+def _paint_pot_marking(
+    painter: QPainter, placement: BodyPlacement, comp: ComponentInstance, text: str, from_below: bool
+) -> None:
+    """A pot's value, stamped into its cover in front of the bushing -- where the 3D view
+    stamps it (``view3d._pot_pieces``) -- and level on screen however the pot is turned: it
+    is round, so no side of it is "along"."""
+    rect = _body_rect(placement)
+    radius = min(rect.width(), rect.height()) / 2
+    turned, reflected = _ink_frame(comp, from_below)
+    painter.save()
+    painter.translate(rect.center())
+    if reflected:
+        painter.scale(-1.0, 1.0)
+    painter.rotate(-turned)
     painter.setPen(TOP_MARKING_INK)
     draw_physical_label(
         painter,
-        QPointF(0.0, 0.0),
-        comp.value.strip().upper(),
-        min(TOP_MARKING_MM, short_side * 0.16),
+        QPointF(0.0, radius * (1 + POT_BUSHING_SHARE) / 2),
+        text,
+        radius * 0.17,
         bold=False,
-        max_width_mm=long_side * 0.62,
-        rotation_deg=rotation,
+        max_width_mm=radius * (1 - POT_BUSHING_SHARE) * 1.7,
     )
     painter.restore()
+
+
+#: A panel pot's bushing and shaft as shares of its radius: the common 16 mm part's M7
+#: bushing and 6 mm shaft, the proportions ``view3d._pot_pieces`` turns them in.
+POT_BUSHING_SHARE = 0.44
+POT_SHAFT_SHARE = 0.375
+#: The knurl's teeth round the shaft, seen end on.
+POT_KNURL_TEETH = 24
 
 
 #: How much darker a case's sloped side is drawn than its flat top, as ``QColor.darker``
@@ -3764,12 +3862,43 @@ def _paint_body(
             x, y = pin.d_col * pitch, pin.d_row * pitch
             painter.drawRect(QRectF(x - side / 2, y - side / 2, side, side))
 
-    elif archetype in ("potentiometer", "tactile-switch"):
-        # The shaft or the button: the thing a finger or a screwdriver has to reach.
-        radius = min(rect.width(), rect.height()) * (0.15 if archetype == "potentiometer" else 0.24)
+    elif archetype == "potentiometer":
+        _paint_pot_shaft(painter, rect, style)
+
+    elif archetype == "tactile-switch":
+        # The button: the thing a finger has to reach.
+        radius = min(rect.width(), rect.height()) * 0.24
         painter.setPen(QPen(QColor(style.edge), 0.14))
         painter.setBrush(QBrush(accent))
         painter.drawEllipse(rect.center(), radius, radius)
+
+
+def _paint_pot_shaft(painter: QPainter, rect: QRectF, style: BodyStyle) -> None:
+    """A panel pot from above, as the 3D view turns it (``view3d._pot_pieces``): the
+    threaded bushing a panel nut goes on, the knurled shaft a knob goes on, and the
+    screwdriver slot across its end. It was a small grey dot on a blue disc, which said
+    "round part" and not "pot"; picked by Sinan on 2026-11-23 from rendered candidates."""
+    centre = rect.center()
+    radius = min(rect.width(), rect.height()) / 2
+    bushing = radius * POT_BUSHING_SHARE
+    shaft = radius * POT_SHAFT_SHARE
+    painter.setPen(QPen(QColor(style.edge), 0.12))
+    painter.setBrush(QBrush(LEAD.darker(125)))
+    painter.drawEllipse(centre, bushing, bushing)
+    painter.setBrush(QBrush(LEAD.lighter(108)))
+    painter.drawEllipse(centre, shaft, shaft)
+    painter.setPen(QPen(LEAD.darker(160), 0.1))
+    for tooth in range(POT_KNURL_TEETH):
+        angle = 2 * math.pi * tooth / POT_KNURL_TEETH
+        dx, dy = math.cos(angle), math.sin(angle)
+        painter.drawLine(
+            QPointF(centre.x() + shaft * 0.78 * dx, centre.y() + shaft * 0.78 * dy),
+            QPointF(centre.x() + shaft * dx, centre.y() + shaft * dy),
+        )
+    slot = QPen(LEAD.darker(190), shaft * 0.26)
+    slot.setCapStyle(Qt.PenCapStyle.FlatCap)
+    painter.setPen(slot)
+    painter.drawLine(QPointF(centre.x() - shaft * 0.7, centre.y()), QPointF(centre.x() + shaft * 0.7, centre.y()))
 
 
 def _paint_adapter(
