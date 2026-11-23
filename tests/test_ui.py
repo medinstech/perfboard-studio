@@ -15973,6 +15973,16 @@ def test_no_two_references_are_printed_in_one_place() -> None:
         window.show_board()
         window.view.fit_board()
         QApplication.processEvents()
+        # At the zoom the crowding was seen at, not at whatever a fit gives: a reference's
+        # place is worked out in pixels, so which ones collide depends on the zoom, and the
+        # fit on how much room the panels leave the board and on when the docks settle.
+        # Fitted with the panels as cards the board came out twice as large, R1's own place
+        # was on U1's there, and R1 moved too -- rightly, but not what this pins.
+        QApplication.processEvents()
+        window.view._fitted = False  # or the next resize fits it again
+        window.view.resetTransform()
+        window.view.scale(4.8, 4.8)
+        window.scene._reference_cache = None
         transform = window.view.viewportTransform()
         items = {item.comp.ref: item for item in window.scene.component_items.values()}
         own = {ref: item._own_reference_placement(transform) for ref, item in items.items()}
