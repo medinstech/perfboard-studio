@@ -879,7 +879,8 @@ def lay_out_pin_names(
     that they leave off the same names.
     """
     board = document.board
-    edges = _short_of_the_legend(document, substrate_edges_mm(board))
+    substrate = substrate_edges_mm(board)
+    edges = _short_of_the_legend(document, substrate)
     # Everything a name may not run under, by the part it belongs to.
     standing: list[tuple[str, BoardBox]] = []
     for comp in document.components:
@@ -976,12 +977,18 @@ def lay_out_pin_names(
                     if inward
                     else None
                 )
-                if on_top is None:
-                    dropped.append((label.number, label.name))
-                else:
+                if on_top is not None:
                     kept.append(on_top[0])
                     printed.append(on_top[1])
-                continue
+                    continue
+                # Nowhere else to go: across the legend after all, as before 2026-11-23,
+                # rather than gone -- nano-relay's K1 lost NC, NO and COM. The letters it
+                # hides are said again outside the board (``view2d.LegendEchoItem``).
+                free = _free_run(run, label.start, others + printed, substrate)
+                if free < need * PIN_NAME_MIN_SQUEEZE:
+                    dropped.append((label.number, label.name))
+                    continue
+                room = min(label.room, free)
             kept.append(
                 label
                 if turn == 1.0 and room == label.room
@@ -1005,9 +1012,10 @@ def _short_of_the_legend(document: PerfDocument, edges: SubstrateEdges) -> Subst
 
     A name run across that band hid the letters under it, and the address a hole is
     called by is what the guide, DRC and the router all speak in; a DIP's name finds room on
-    the chip's own top instead (``INWARD_NAME_ARCHETYPES``), anything else's is narrowed or
-    left off as against any other obstacle. Asked in the board's frame, unmirrored, like
-    every box ``lay_out_pin_names`` measures against.
+    the chip's own top instead (``INWARD_NAME_ARCHETYPES``), anything else's is narrowed to
+    the band, and one with no room short of it still crosses it rather than being lost --
+    the window says the letters it hides again outside the board. Asked in the board's
+    frame, unmirrored, like every box ``lay_out_pin_names`` measures against.
     """
     labels = document.board.labels
     if labels is None:

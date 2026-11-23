@@ -949,6 +949,10 @@ class LegendEchoItem(QGraphicsItem):
         self.legend = legend
         self.board = legend.board
         self.side = legend.side
+        #: ``hidden`` at the last zoom it was asked at: a pan repaints every frame, and the
+        #: answer changes with the zoom alone (a reference's plate holds a pixel size)
+        #: until the scene is rebuilt, which makes a new item.
+        self._hidden: tuple[float, list[tuple[QPointF, str, float]]] | None = None
         self.setZValue(80)
 
     def boundingRect(self) -> QRectF:
@@ -978,7 +982,10 @@ class LegendEchoItem(QGraphicsItem):
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         outline = _outline_rect(self.board)
         painter.setPen(QPen(RULER_TEXT_MAJOR))
-        for centre, text, rotation in self.hidden(painter.worldTransform()):
+        transform = painter.worldTransform()
+        if self._hidden is None or self._hidden[0] != transform.m11():
+            self._hidden = (transform.m11(), self.hidden(transform))
+        for centre, text, rotation in self._hidden[1]:
             if rotation:
                 # A row number, beside the edge it is printed along.
                 left = centre.x() < outline.center().x()
@@ -3538,7 +3545,7 @@ def _paint_top_marking(
     if archetype not in TOP_PRINTED_ARCHETYPES or not text:
         return
     if archetype == "potentiometer":
-        _paint_pot_marking(painter, placement, comp, text, from_below)
+        _paint_pot_marking(painter, placement, comp, text, from_below, _top_marking_ink(footprint))
         return
     if rect is None:
         rect = _body_rect(placement)
@@ -3669,7 +3676,12 @@ def _paint_relay_diagram(painter: QPainter, ink: QColor, height: float) -> None:
 
 
 def _paint_pot_marking(
-    painter: QPainter, placement: BodyPlacement, comp: ComponentInstance, text: str, from_below: bool
+    painter: QPainter,
+    placement: BodyPlacement,
+    comp: ComponentInstance,
+    text: str,
+    from_below: bool,
+    ink: QColor,
 ) -> None:
     """A pot's value, stamped into its cover in front of the bushing -- where the 3D view
     stamps it (``view3d._pot_pieces``) -- and level on screen however the pot is turned: it
@@ -3682,7 +3694,7 @@ def _paint_pot_marking(
     if reflected:
         painter.scale(-1.0, 1.0)
     painter.rotate(-turned)
-    painter.setPen(TOP_MARKING_INK)
+    painter.setPen(ink)
     draw_physical_label(
         painter,
         QPointF(0.0, radius * (1 + POT_BUSHING_SHARE) / 2),

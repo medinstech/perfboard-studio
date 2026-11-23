@@ -214,6 +214,18 @@ def test_an_address_a_part_stands_on_is_said_again_outside_the_board() -> None:
     assert view2d.BoardScene(bare, LOOKUP, side="top").legend_echo is None
 
 
+def test_a_name_with_nowhere_else_to_go_still_crosses_the_legend() -> None:
+    """Only a DIP has a top to print a name on. nano-relay's J2 stands on the first column
+    with its names behind it, where the row numbers are: kept off the legend they were
+    lost, so they cross it after all, and the numbers they hide are said outside."""
+    scene = view2d.BoardScene(_example("nano-relay"), LOOKUP, side="top")
+    j2 = next(item for item in scene.component_items.values() if item.comp.ref == "J2")
+    assert {label.name for label in j2.pin_names} == {"COM", "NO", "NC"}
+    assert scene.legend_echo is not None
+    rows = {text for _centre, text, rotation in scene.legend_echo.hidden(QTransform()) if rotation}
+    assert {"08", "10", "12"} <= rows, rows
+
+
 def test_a_relay_is_a_case_with_square_shoulders() -> None:
     from perfboard_studio.ui.bodies import placement_for
 
