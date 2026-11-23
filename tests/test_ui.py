@@ -8143,6 +8143,7 @@ def test_every_library_group_says_how_many_parts_it_holds() -> None:
             group = tree.topLevelItem(i)
             assert group.text(1) == str(group.childCount()), group.text(0)
             assert group.toolTip(1)
+            assert not group.toolTip(1).startswith("1 parts"), group.toolTip(1)
     finally:
         _close(window)
 

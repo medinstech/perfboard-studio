@@ -1368,7 +1368,12 @@ def count_group(group: QTreeWidgetItem) -> None:
     group.setText(1, str(count))
     group.setTextAlignment(1, PINS_ALIGNMENT)
     group.setForeground(1, QColor(theme.ACTIVE.text_tertiary))
-    group.setToolTip(1, t("{count} parts in this group").format(count=count))
+    group.setToolTip(
+        1,
+        t("1 part in this group")
+        if count == 1
+        else t("{count} parts in this group").format(count=count),
+    )
 
 
 def catalog_leaf(part: CatalogPart) -> QTreeWidgetItem:
@@ -1941,10 +1946,13 @@ class PackagePicker(QDialog):
         self.filter.textChanged.connect(self._refilter)
         self.filter.returnPressed.connect(self._take)
         self.tree = PartTree()
+        # The Library's tree in a dialog, and drawn as it is: the same rows on tiles.
+        self.tree.setObjectName("libraryTree")
         self.tree.setHeaderLabels([t("Part"), t("Pins")])
         self.tree.setRootIsDecorated(True)
         self.tree.setIconSize(QSize(icons.PART_SIZE, icons.PART_SIZE))
-        self.tree.setIndentation(12)
+        self.tree.setIndentation(14)
+        self.tree.setAlternatingRowColors(False)
         header = self.tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
