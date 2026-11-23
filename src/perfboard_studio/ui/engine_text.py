@@ -88,6 +88,8 @@ TEMPLATES: tuple[str, ...] = (
     "Move {ref} to Solder Side",
     "Move {ref} to Component Side",
     "Move {ref} to {hole}",
+    "Move {ref} beside the board",
+    "Put {ref} back beside its wires",
     "Rotate {ref} to {degrees} degrees",
     "Unmirror {ref}",
     "Mirror {ref}",

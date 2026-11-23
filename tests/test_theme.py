@@ -385,6 +385,7 @@ PHYSICAL: dict[str, str] = {
     "boardcolors.py": "the solder-mask schemes the View menu offers",
     "bodies.py": "part bodies, one table for the 2D view, the 3D view and the guide",
     "moduleart.py": "module boards, drawn by what they are called",
+    "offboard.py": "the things beside the board: batteries, panel parts, modules on a cable",
     "icons.py": "the part pictures, in the bodies' colours",
     "export_pdf.py": "the 1:1 print, black ink on white paper whatever the theme",
     "export_schematic.py": "the exported sheet's paper, white whatever the theme",

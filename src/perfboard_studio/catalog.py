@@ -38,7 +38,15 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal
 
-from .model import PartSymbol, PerfDocument, PinNames, PinRole, PinRoles
+from .model import (
+    ComponentInstance,
+    Footprint,
+    PartSymbol,
+    PerfDocument,
+    PinNames,
+    PinRole,
+    PinRoles,
+)
 from .system import references_in_use
 
 #: What a part is, for grouping a list of them. Engine text; the interface translates the
@@ -4303,6 +4311,42 @@ def not_offered(query: str) -> NotOffered | None:
 def catalog_part(part_id: str) -> CatalogPart | None:
     """One part by its id, or ``None``."""
     return _BY_ID.get(part_id.strip().lower())
+
+
+#: What a placed part keeps of the catalog part it was: its package and its value. The
+#: first catalog part with a pair wins, as it is the one a search lists first.
+_BY_PACKAGE_AND_VALUE: dict[tuple[str, str], CatalogPart] = {}
+for _part in CATALOG:
+    _BY_PACKAGE_AND_VALUE.setdefault((_part.footprint_id, _part.placed_value), _part)
+
+
+def catalog_part_placed_as(component: ComponentInstance) -> CatalogPart | None:
+    """The catalog part ``component`` was placed from, as far as the board can tell: the one
+    with its package and its value. A value edited by hand is a part the catalog does not
+    know, and None."""
+    return _BY_PACKAGE_AND_VALUE.get((component.footprint_id, component.value))
+
+
+#: What the catalog says of a module that reaches the board down a cable into a header.
+CABLED = "cable plugs into this"
+#: Cabled, and with nothing on the other end worth drawing: a power lead goes to a bench
+#: supply or an adapter, whatever the builder has.
+NOT_A_THING: frozenset[str] = frozenset({"power-header-2"})
+
+
+def stands_off_board(component: ComponentInstance, footprint: Footprint | None) -> bool:
+    """Whether ``component`` is a thing beside the board rather than on it: a part on wires
+    (``flying-leads``), or a module the catalog says a cable plugs into.
+
+    One answer with two askers -- the window draws exactly these beside the board, and
+    ``component.placeOffBoard`` places exactly these -- so a thing on the screen is never one
+    the command refuses to move, and the file never keeps a place for a thing nobody draws.
+    A plain header is on the board: anything could be on its other end, or nothing.
+    """
+    if footprint is not None and footprint.body.archetype == "flying-leads":
+        return True
+    part = catalog_part_placed_as(component)
+    return part is not None and CABLED in part.summary and part.id not in NOT_A_THING
 
 
 #: A maker's letters in front of a part number, as a bag or a value prints them: SN74HC595N

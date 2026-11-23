@@ -105,6 +105,7 @@ from perfboard_studio.commands import (
     NewSolderTraceConductor,
     NewWireConductor,
     PlaceComponentPayload,
+    PlaceOffBoardPayload,
     SetConductorPathPayload,
     UpdateBoardNotePayload,
     count_noun,
@@ -253,6 +254,7 @@ from .moduleart import (
     fit_standing_board,
     gull_wing_dot,
 )
+from .offboard import OffBoardItem, things_for
 from .partnames import footprint_label
 from .scenetext import (
     draw_flag_label,
@@ -4587,6 +4589,9 @@ class ComponentItem(QGraphicsItem):
         #: Pin number -> the colour of the wire leaving that pad, for a part off the board:
         #: its net's, by the cut list's convention (``insulation_color``).
         self.lead_colours = lead_colours or {}
+        #: The thing at the far end of the wires is drawn beside the board
+        #: (``offboard.OffBoardItem``), so the wires carry on to it rather than fading out.
+        self.leads_carry_on = False
         #: Print the part's pin names beside its pins (View > Show Pin Names).
         self.show_pin_names = show_pin_names
         #: Print the part's reference above it. Off only in a board PICTURE
@@ -4859,6 +4864,10 @@ class ComponentItem(QGraphicsItem):
                 painter.setPen(pen)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPath(on_board)
+                if self.leads_carry_on:
+                    # The thing it goes to is drawn, and its cable starts where this stops.
+                    painter.drawLine(edge, end)
+                    continue
                 # Off the board: the same wire, fading towards the panel it is going to.
                 fade = QLinearGradient(edge, end)
                 fade.setColorAt(0.0, pen_colour)
@@ -5751,9 +5760,17 @@ class BoardScene(QGraphicsScene):
         show_values: bool = False,
         show_vias: bool = True,
         show_net_names: bool = False,
+        show_off_board: bool = False,
     ) -> None:
         super().__init__()
         self.lookup = lookup
+        #: Draw the thing each part off the board is, beside the board (View > Parts Off the
+        #: Board): the window's, on by default there; off in every picture, print and export,
+        #: which show the board and only the board.
+        self.show_off_board = show_off_board
+        self.off_board_items: dict[str, OffBoardItem] = {}
+        #: A thing let go somewhere, waiting for the release to finish before it is committed.
+        self._off_board_drop: tuple[str, Point2] | None = None
         #: The nets' names on the wires (``NetNameLayerItem``): the window's view setting,
         #: on there by default; off in every picture, print and export made from a scene.
         self.show_net_names = show_net_names
@@ -5957,6 +5974,70 @@ class BoardScene(QGraphicsScene):
             self.show_far_side = show
             self._build()
 
+    def _add_off_board_things(
+        self, net_by_pin: Mapping[tuple[str, str], Net], colour_names: Mapping[str, str]
+    ) -> None:
+        """The thing each part off the board is, beside the board, and room to see it.
+
+        Its wires are coloured as the part's own are -- the net's, by the cut list's name
+        for it -- and the scene grows to hold every thing, so a fit frames the board and
+        what hangs off it, and a thing dragged further out can still be scrolled to.
+        """
+
+        def colour_of(comp: ComponentInstance, pin: str) -> QColor:
+            net = net_by_pin.get((comp.ref, pin))
+            if net is None:
+                return CONDUCTOR_STYLE["insulated-wire"][0]
+            return _INSULATION_SCREEN.get(
+                colour_names.get(net.id, "grey"), CONDUCTOR_STYLE["insulated-wire"][0]
+            )
+
+        board = self.document.board
+        things = things_for(
+            self.document,
+            self.lookup,
+            colour_of,
+            self.component_items,
+            _outline_rect(board),
+            self._note_off_board_drop,
+        )
+        rect = self.sceneRect()
+        for thing in things:
+            self.addItem(thing)
+            self.off_board_items[thing.comp.id] = thing
+            owner = self.component_items.get(thing.comp.id)
+            if owner is not None:
+                owner.leads_carry_on = True
+            rect = rect.united(thing.sceneBoundingRect().adjusted(-6.0, -6.0, 6.0, 6.0))
+        self.setSceneRect(rect)
+
+    def _note_off_board_drop(self, comp_id: str, at: Point2) -> None:
+        self._off_board_drop = (comp_id, at)
+
+    def commit_off_board_drop(self) -> DispatchResult | None:
+        """Dispatch ``component.placeOffBoard`` for the thing just let go, if one was.
+
+        Called after the release has been delivered, never from the item's own handler: the
+        command rebuilds the scene, which destroys the item."""
+        drop, self._off_board_drop = self._off_board_drop, None
+        if drop is None or self.bus is None:
+            return None
+        comp_id, at = drop
+        current = next((c for c in self.document.components if c.id == comp_id), None)
+        if current is None or current.off_board_at == at:
+            # Let go where it already was: nothing to do, and nothing to say -- a refusal
+            # would reach the status line as an error for an ordinary click.
+            return None
+        result = self.bus.dispatch("component.placeOffBoard", PlaceOffBoardPayload(id=comp_id, at=at))
+        self.moveCommitted.emit([result])
+        return result
+
+    def set_show_off_board(self, show: bool) -> None:
+        """Draw what each part off the board is, beside the board, or only its wires."""
+        if show != self.show_off_board:
+            self.show_off_board = show
+            self._build()
+
     def set_show_board_notes(self, show: bool) -> None:
         """Draw the labels written on the board, or not."""
         if show != self.show_board_notes:
@@ -6111,6 +6192,7 @@ class BoardScene(QGraphicsScene):
         # Emptying first means the handler sees an empty selection, which is the truth.
         self.component_items = {}
         self.conductor_items = {}
+        self.off_board_items = {}
         # Handles and a handle's drag go with the items clear() destroys; the handles are
         # made again below from the selection, and a drag the rebuild interrupted is over.
         self._handles = []
@@ -6345,6 +6427,8 @@ class BoardScene(QGraphicsScene):
             self.component_items[comp.id] = item
             if comp.id in previously_selected:
                 item.setSelected(True)
+        if self.show_off_board and self.side == "top":
+            self._add_off_board_things(net_by_pin, colour_names)
 
         # Labels last, over everything: they are written on top of what they are about.
         # Only the face in view -- a label on the far side is on the far side.
@@ -6621,6 +6705,8 @@ class BoardScene(QGraphicsScene):
         net ids; what to do with them is the host's business.
         """
         self._sync_handles()
+        for thing in self.off_board_items.values():
+            thing.update()
         selected_refs = {
             item.comp.ref for item in self.component_items.values() if item.isSelected()
         }
@@ -8199,6 +8285,7 @@ class BoardScene(QGraphicsScene):
         super().mouseReleaseEvent(event)
         self._say_drag("")
         self.commit_pending_moves()
+        self.commit_off_board_drop()
 
     def report_drag(self) -> str:
         """Whether the parts being dragged can land where they are, said while they are
@@ -8285,7 +8372,13 @@ class BoardScene(QGraphicsScene):
             over = self.conductor_at(pos)
             if over is not None and over.zValue() > best.zValue():
                 return None
-        return best
+            return best
+        # The thing at the end of a part's wires is that part, to the right-click menu and
+        # a double-click: what is done to it is done to the part.
+        for thing in self.off_board_items.values():
+            if thing.shape().contains(thing.mapFromScene(pos)):
+                return self.component_items.get(thing.comp.id)
+        return None
 
     def connector_at(self, pos: QPointF) -> str | None:
         """The id of the edge connector whose finger is under a scene position, or None --

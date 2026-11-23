@@ -54,6 +54,7 @@ from perfboard_studio.commands import (
     MoveSheetPortPayload,
     MoveSymbolsPayload,
     PartPlacement,
+    PlaceOffBoardPayload,
     PlacePartsPayload,
     ReconnectSheetWirePayload,
     RenameDocumentPayload,
@@ -71,7 +72,7 @@ from perfboard_studio.commands import (
     create_document_id_generator,
     create_standard_registry,
 )
-from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.footprints import footprint_lookup, off_board_mount
 from perfboard_studio.model import (
     HoleCoord,
     NetNode,
@@ -251,6 +252,23 @@ def _session() -> list[str]:
         "part.place",
         PlacePartsPayload(placements=(PartPlacement(id=r1.id, anchor=HoleCoord(19, 5), rotation=0),)),
     )
+    # The thing on the end of a part's wires, dragged beside the board and let go again --
+    # only a part on wires has one, so R1 goes on the panel first and comes back after.
+    on_board = component("R1")
+    package = LOOKUP(on_board.footprint_id)
+    assert package is not None
+    panel = off_board_mount(on_board, package)
+    run(
+        "component.update",
+        UpdateComponentPayload(
+            id=r1.id, footprint_id=panel.footprint_id, pin_names=panel.pin_names, symbol=panel.symbol
+        ),
+    )
+    run("component.placeOffBoard", PlaceOffBoardPayload(id=r1.id, at=Point2(-30.0, 12.5)))
+    run("component.placeOffBoard", PlaceOffBoardPayload(id=r1.id, at=None))
+    for _ in range(3):
+        bus.undo()
+    assert component("R1") == on_board
 
     # The design.
     run("part.add", AddPartPayload(ref="R9", footprint_id="r-axial-3", value="1k"))

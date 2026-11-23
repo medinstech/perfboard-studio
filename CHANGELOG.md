@@ -22,6 +22,22 @@ closed without a bump.
 
 ### Added
 
+- **What a part off the board is, drawn beside it.** A battery on its clip, a pot or a
+  button on the panel, an e-stop, a motor, a display or a relay module down a cable: the
+  board holds only the pads their wires land in, and the 2D view now draws each one as the
+  thing it is, at its real size, beside the edge its wires leave over. Its wires run to its
+  lugs in their nets' colours, and a module on a header gets its jumper cable from the
+  header pins. A thing is placed clear of the board, of the other things and of their
+  cables, and the same board is laid out the same way every time. Drag one to put it
+  somewhere else: that is one undo step (`component.placeOffBoard`), and where it was put
+  is saved with the part as `offBoardAt`. The field is left out of the file until a thing
+  is moved, so every board saved before this opens and saves byte for byte as it did.
+  A part on the board is refused a place beside it. A thing dropped onto the board is laid
+  out again rather than drawn over its parts.
+  Clicking a thing selects its part. View > Show on the Board > Parts Off the Board turns
+  them off. The screen only: prints, PDFs, the headless run and the guide still show the
+  board alone, and no rule, route or guide step reads where a thing is drawn.
+
 - **A part can say what each of its pins does.** Each pin can carry a role: a supply in or
   out, ground, an input, an output, both ways, passive, or not connected. Roles are kept in
   the file as `pinRoles` and left out when a part has none, so every board saved before

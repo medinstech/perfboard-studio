@@ -374,6 +374,15 @@ TURKISH: Mapping[str, str] = {
     "Show Hole &Addresses": "Delik &Adreslerini Göster",
     "&Copper on the Far Side": "Karşı &Yüzdeki Bakır",
     "&Net Names on Wires": "Kablolarda &Net Adları",
+    "Parts &Off the Board": "Kart &Dışındaki Parçalar",
+    "Draw what each part on wires or on a cable is — the battery, the display, "
+    "the button — at its own size beside the board, its wires running to it. "
+    "Drag one to put it somewhere else. The screen only: prints and exports "
+    "show the board alone.": (
+        "Tellerle ya da kabloyla bağlanan her parçayı — pili, ekranı, butonu — kendi "
+        "boyutunda kartın yanında, telleri ona uzanarak çizer. Başka bir yere koymak için "
+        "sürükleyin. Yalnızca ekranda: baskılar ve dışa aktarmalar yalnızca kartı gösterir."
+    ),
     "Write each net's name on its wires and solder runs: once per net with the board in "
     "view, on every long run zoomed in. Never on the far face's copper.": (
         "Her netin adını kablolarının ve lehim yollarının üzerine yazar: kart ekrana "
@@ -6293,6 +6302,8 @@ TURKISH: Mapping[str, str] = {
     "Move {ref} on the sheet": "{ref} sembolünü şemada taşı",
     "Add {ref} to the sheet at ({x}, {y})": "{ref} sembolünü şemaya ekle ({x}, {y})",
     "Move {ref} to {hole}": "{ref} parçasını {hole} deliğine taşı",
+    "Move {ref} beside the board": "{ref} parçasını kartın yanına taşı",
+    "Put {ref} back beside its wires": "{ref} parçasını tellerinin yanına geri koy",
     "Move {ref} to Solder Side: its rows of pins swapped sides, so its wiring needs redoing":
         "{ref} parçasını lehim yüzüne taşı: bacak sıraları yer değiştirdi, kablolamasını yeniden yapmanız gerekir",
     "Move {ref} to Solder Side: its pins moved to other holes, so its wiring needs redoing":

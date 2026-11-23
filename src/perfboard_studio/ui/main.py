@@ -941,6 +941,7 @@ RULERS_KEY = "session/showRulers"
 #: plainly, and read as this it would hide the far side from exactly those people.
 FAR_SIDE_KEY = "session/showFarSide"
 NET_NAMES_KEY = "session/showNetNames"
+OFF_BOARD_KEY = "session/showOffBoard"
 VALUES_KEY = "session/showValues"
 #: Whether the canvas wheel pans rather than zooms (View > Mouse Wheel).
 WHEEL_SCROLLS_KEY = "session/wheelScrolls"
@@ -6552,6 +6553,22 @@ class MainWindow(QMainWindow):
         )
         self.act_net_names.toggled.connect(self.scene.set_show_net_names)
         self.act_net_names.setChecked(True)
+        # ON by default: a battery, a motor and an emergency stop on three pairs of wires
+        # were three identical bundles leaving the edge. Drawn as what they are, at their
+        # own size, beside the board (``offboard``); off, for a board being routed in a
+        # small window. The screen only -- every print and export is the board alone.
+        self.act_off_board = shown_menu.addAction(t("Parts &Off the Board"))
+        self.act_off_board.setCheckable(True)
+        self.act_off_board.setToolTip(
+            t(
+                "Draw what each part on wires or on a cable is — the battery, the display, "
+                "the button — at its own size beside the board, its wires running to it. "
+                "Drag one to put it somewhere else. The screen only: prints and exports "
+                "show the board alone."
+            )
+        )
+        self.act_off_board.toggled.connect(self.scene.set_show_off_board)
+        self.act_off_board.setChecked(True)
 
         # Perfboard work is full of distances that have to be right before anything is
         # soldered -- how far apart to bend a resistor's legs, whether a TO-220 clears
@@ -17761,6 +17778,7 @@ class MainWindow(QMainWindow):
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
         settings.setValue(FAR_SIDE_KEY, self.act_far_side.isChecked())
         settings.setValue(NET_NAMES_KEY, self.act_net_names.isChecked())
+        settings.setValue(OFF_BOARD_KEY, self.act_off_board.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
@@ -17815,6 +17833,7 @@ class MainWindow(QMainWindow):
         self.act_rulers.setChecked(_stored_bool(settings, RULERS_KEY, True))
         self.act_far_side.setChecked(_stored_bool(settings, FAR_SIDE_KEY, True))
         self.act_net_names.setChecked(_stored_bool(settings, NET_NAMES_KEY, True))
+        self.act_off_board.setChecked(_stored_bool(settings, OFF_BOARD_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
         self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
 

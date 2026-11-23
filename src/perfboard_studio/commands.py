@@ -42,6 +42,7 @@ from .boardfamily import (
     preset_mounting_holes,
 )
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard, pattern_board
+from .catalog import stands_off_board
 from .command import (
     CommandContext,
     CommandDefinition,
@@ -1005,6 +1006,16 @@ class SetComponentSidePayload:
 
     id: ComponentId
     side: BoardSide
+
+
+@dataclass(frozen=True, slots=True)
+class PlaceOffBoardPayload:
+    """Where the window draws the thing a part off the board is: its centre in board
+    millimetres, or None to let the window place it again. A drawing position only -- see
+    ``ComponentInstance.off_board_at``."""
+
+    id: ComponentId
+    at: Point2 | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2163,6 +2174,47 @@ class _MoveComponent:
         c = next((x for x in doc.components if x.id == p.id), None)
         ref = c.ref if c is not None else p.id
         return f"Move {ref} to {format_hole(p.anchor, doc.board)}"
+
+
+class _PlaceOffBoard:
+    """The thing on the end of a part's wires, dragged somewhere beside the board.
+
+    Its own command rather than a field of ``component.update`` because a drag is a gesture
+    of its own on the undo stack, and because it is NOT a move: the part's pads stay where
+    they are, so a locked part's picture still goes where it is dragged. Refused for what
+    ``persist`` refuses at load -- a coordinate that is not a finite number -- for a drag
+    that changes nothing, and for a part that is ON the board (``catalog.stands_off_board``,
+    the very predicate the window draws by): an agent or a replayed journal could otherwise
+    keep a place in the file for a thing nothing draws. Putting one back (``at`` None) is
+    never refused for that, so a part that has since moved onto the board can be cleaned.
+    """
+
+    type = "component.placeOffBoard"
+
+    def apply(self, doc: PerfDocument, p: PlaceOffBoardPayload, ctx: CommandContext) -> PerfDocument:
+        existing = require_component(doc, p.id)
+        if p.at is not None and not (math.isfinite(p.at.x) and math.isfinite(p.at.y)):
+            raise CommandError(
+                "invalid-value", f"Where {existing.ref} is drawn must be a finite point in millimetres."
+            )
+        if p.at == existing.off_board_at:
+            raise CommandError("nothing-to-do", f"{existing.ref} is already drawn there.")
+        if p.at is not None and not stands_off_board(existing, get_footprint(existing.footprint_id)):
+            raise CommandError(
+                "not-off-board",
+                f"{existing.ref} is on the board: only a part on wires or on a cable is drawn beside it.",
+            )
+        components = tuple(
+            dataclasses.replace(c, off_board_at=p.at) if c.id == p.id else c for c in doc.components
+        )
+        return dataclasses.replace(doc, components=components)
+
+    def describe(self, p: PlaceOffBoardPayload, doc: PerfDocument) -> str:
+        c = next((x for x in doc.components if x.id == p.id), None)
+        ref = c.ref if c is not None else p.id
+        if p.at is None:
+            return f"Put {ref} back beside its wires"
+        return f"Move {ref} beside the board"
 
 
 class _MoveComponents:
@@ -6538,6 +6590,7 @@ delete_component: CommandDefinition[DeleteComponentPayload] = _DeleteComponent()
 rotate_components: CommandDefinition[RotateComponentsPayload] = _RotateComponents()
 mirror_components: CommandDefinition[MirrorComponentsPayload] = _MirrorComponents()
 set_component_side: CommandDefinition[SetComponentSidePayload] = _SetComponentSide()
+place_off_board: CommandDefinition[PlaceOffBoardPayload] = _PlaceOffBoard()
 set_component_sides: CommandDefinition[SetComponentSidesPayload] = _SetComponentSides()
 update_components: CommandDefinition[UpdateComponentsPayload] = _UpdateComponents()
 lock_components: CommandDefinition[LockComponentsPayload] = _LockComponents()
@@ -6627,6 +6680,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     mirror_components,
     set_component_side,
     set_component_sides,
+    place_off_board,
     update_components,
     lock_components,
     delete_components,

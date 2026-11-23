@@ -288,6 +288,26 @@ Four things carry it, each with a test in `tests/test_flying_leads.py`:
   wire. The JSON emits `lead_list` only when it is not empty (the `language` rule), the CSV and
   HTML add rows only when there are any, so every guide golden is byte for byte what it was.
 
+**On the screen, the thing at the other end is drawn too** (`ui/offboard.py`, View > Parts
+Off the Board), and it is the one place this part has a document field:
+`ComponentInstance.off_board_at`, `offBoardAt` in the file, set by `component.placeOffBoard`
+when a thing is dragged and left out while it is None. It is a DRAWING position and nothing
+else. It is in the document rather than the window's settings so that it is undone with the
+drag and travels with the file. Since it is in the document, `tests/test_offboard.py` reads the sources and fails if any module
+outside `ui/`, `model.py`, `persist.py` and `commands.py` mentions it, and if
+`commands.py` imports from `ui/` at all: no rule, route or guide step may move because a
+picture moved. WHICH parts stand beside the board is one predicate with two askers,
+`catalog.stands_off_board`: a part on wires, or a module the catalog says a cable plugs into
+(a plain header could have anything on its other end; `power-header-2` is excluded by id, its
+other end being whatever supply the builder has). The window draws exactly those and
+`component.placeOffBoard` places exactly those, refusing any other part as `not-off-board`, so
+an agent or a journal cannot keep a place in the file for a thing nothing draws -- a test runs
+both over every example and fixture. What a part is drawn AS is recognised, not stored: the
+catalog part by its package and value, then words in the value ("e-stop"), then the symbol. A
+kept place that overlaps the board (a drop on it, or a board grown since) is laid out afresh. Things are laid out greedily in a few orders and the order whose cables run
+under the fewest things wins, so the layout is deterministic and a dragged thing is never
+pushed. Every other scene (print, headless, previews, the system view) leaves them off.
+
 ## Two version numbers
 
 `version.py` holds the application version — the single source, read by `pyproject.toml`,

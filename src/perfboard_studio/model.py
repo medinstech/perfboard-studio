@@ -783,6 +783,16 @@ class ComponentInstance:
     #: What each lead does (``PinRole``), copied from the catalog when the part is placed.
     #: Empty, the part is drawn as a numbered box -- and the field is left out of the file.
     pin_roles: PinRoles = ()
+    #: Where the window draws the THING a part off the board is -- the battery on the end of
+    #: its clip, the LCD on the end of its cable -- once the builder has dragged it there:
+    #: its centre, in board millimetres from the first hole's centre (the 2D view's frame).
+    #: A DRAWING position and nothing else: the part's pads, its wires and every rule are
+    #: ``off_board_mount``'s row of pads (docs/ARCHITECTURE.md, "A part off the board is the
+    #: pads its wires land in"), and no module below ``ui/`` reads this. None, the window
+    #: works out a place itself -- and the field is left out of the file. A part made anew
+    #: (a paste, ``part.place``, ``component.add``) starts without one and is laid out again:
+    #: the place belonged to the thing that was dragged, not to a copy of it.
+    off_board_at: Point2 | None = None
 
 
 @dataclass(frozen=True, slots=True)

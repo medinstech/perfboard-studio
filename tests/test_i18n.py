@@ -419,7 +419,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "show on the board": ["Show &Missing Connections", "Show Hole &Addresses",
                               "Sho&w Pin Names", "Show Part Val&ues",
                               "Show Labels on &the Board", "&Copper on the Far Side",
-                              "&Net Names on Wires"],
+                              "&Net Names on Wires", "Parts &Off the Board"],
         "theme": ["&Dark", "&Light"],
         # Route ▸ Preferred Connection. Five items in one submenu, and the one place in the
         # application where a user picks between whole routing strategies -- so an

@@ -344,6 +344,7 @@ COMPONENT_KEY_ORDER: tuple[str, ...] = (
     "pinRoles",
     "symbol",
     "note",
+    "offBoardAt",
 )
 PART_KEY_ORDER: tuple[str, ...] = (
     "id", "ref", "value", "footprintId", "pinNames", "pinRoles", "symbol", "note"
@@ -555,6 +556,12 @@ def _ordered_component(c: ComponentInstance, index: int) -> JsonObj:
             **({"side": c.side} if c.side != "top" else {}),
             "locked": c.locked,
             **_declared_fields(c),
+            # Where the window draws the thing off the board; left out until it is dragged.
+            **(
+                {"offBoardAt": _ordered_point(c.off_board_at, _field_path(path, "offBoardAt"))}
+                if c.off_board_at is not None
+                else {}
+            ),
         },
     )
 
@@ -1704,6 +1711,11 @@ def _parse_component(raw: object, path: str, warnings: list[str]) -> ComponentIn
         note=_parse_note(obj, path),
         side=side,
         pin_roles=_parse_pin_roles(obj, path),
+        off_board_at=(
+            _parse_point(obj["offBoardAt"], _field_path(path, "offBoardAt"), warnings)
+            if "offBoardAt" in obj
+            else None
+        ),
     )
 
 
