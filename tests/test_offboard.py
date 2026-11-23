@@ -395,3 +395,34 @@ def test_letting_go_where_it_already_was_is_no_command_and_no_error() -> None:
     thing.on_dropped(ids["J5"], Point2(-60.0, -40.0))
     assert scene.commit_off_board_drop() is None
     assert committed == [] and bus.history() == before
+
+
+#: Every catalog part ``stands_off_board`` puts beside the board. Which modules are cabled is
+#: read from a sentence in each one's summary, and the drawing and the command move together
+#: when it changes -- so a summary reworded while polishing the catalog would drop a module
+#: from both without a word. This list is what makes it say so.
+STANDS_OFF_BOARD: frozenset[str] = frozenset({
+    "adafruit-adxl345", "adafruit-aht20", "adafruit-apds9960", "adafruit-as5600", "adafruit-bh1750",
+    "adafruit-bno055", "adafruit-ccs811", "adafruit-hmc5883l", "adafruit-ili9341-tft", "adafruit-lsm6ds3",
+    "adafruit-max31855", "adafruit-max98357", "adafruit-mcp4725", "adafruit-mpr121", "adafruit-qmc5883p",
+    "adafruit-rfm9x-lora", "adafruit-sht31", "adafruit-tcs34725", "adafruit-tmc2209", "adafruit-vl53l0x",
+    "adafruit-vl53l1x", "ams1117-33-module", "battery-9v-clip", "battery-aa-holder", "dc-jack-panel",
+    "dc-motor-130", "ds1307-tiny-rtc", "ds3231-rtc", "ftdi-basic", "gy-bme280", "gy-bme280-3v3", "gy-bmp280",
+    "hc-05", "hc-06", "hc-12", "keypad-4x4", "ky-009-rgb-led", "ky-011-two-colour-led", "ky-016-rgb-led",
+    "ky-023-joystick", "ky-040-encoder", "ky-051-level-shifter", "ky-053-ads1115", "l298n-board",
+    "lcd-1602-i2c", "max485-module", "max7219-matrix", "micro-sd-module", "mt3608-boost", "nokia-5110",
+    "pca9685-servo-driver", "piezo-disc-7bb", "pot-panel", "rc522-module", "relay-module-1ch",
+    "sensor-board-3pin", "sensor-board-4pin", "servo-header", "sparkfun-ad8232", "sparkfun-max30105",
+    "sparkfun-temt6000", "st7735-tft-18", "tm1637-display", "tp4056-module", "ttp223-touch",
+    "uln2003-board", "ws2812b-strip", "xl6009-boost",
+})
+
+
+def test_which_catalog_parts_stand_beside_the_board_is_written_down() -> None:
+    base = _component(None)
+    found = set()
+    for part in CATALOG:
+        comp = dataclasses.replace(base, footprint_id=part.footprint_id, value=part.placed_value)
+        if stands_off_board(comp, LOOKUP(part.footprint_id)):
+            found.add(part.id)
+    assert found == STANDS_OFF_BOARD
