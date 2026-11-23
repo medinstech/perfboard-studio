@@ -55,6 +55,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
+    QDockWidget,
     QGroupBox,
     QLabel,
     QMenu,
@@ -83,6 +84,9 @@ class Tokens:
     bg_hover: str
     bg_pressed: str
     bg_input: str
+    #: The soft square a part's picture sits on in a list: a black TO-92 drawn straight
+    #: on the dark panel was a hole in the row.
+    icon_tile: str
     # Lines.
     border: str  # the hairline between regions
     border_strong: str  # the edge of an input, a button, a raised surface
@@ -132,6 +136,7 @@ class Tokens:
 #: board's is the one kept, because the 2D render golden is drawn on it.
 DARK = Tokens(
     name="dark",
+    icon_tile="#3a4050",
     bg_app="#14161b",
     bg_surface="#1b1e25",
     bg_raised="#242833",
@@ -179,6 +184,7 @@ DARK = Tokens(
 #: (``tests/test_theme.py``).
 LIGHT = Tokens(
     name="light",
+    icon_tile="#ebedf1",
     bg_app="#ececef",
     bg_surface="#ffffff",
     bg_raised="#ffffff",
@@ -275,6 +281,11 @@ RADIUS_LG = 8
 #: The spacing scale (px). Every padding and margin in the stylesheet is one of these.
 SPACE = {"2xs": 2, "xs": 4, "sm": 6, "md": 8, "lg": 12, "xl": 16, "2xl": 24}
 
+#: A docked panel is a card on the window's gutter (``card``): this much gutter round
+#: it, and this round a corner.
+CARD_GUTTER = SPACE["md"]
+RADIUS_CARD = 10
+
 
 def chosen_theme(environ: Mapping[str, str], stored: object) -> Tokens:
     """The variable, then the stored choice, then the default. Anything unknown is skipped."""
@@ -356,6 +367,25 @@ def elevate(widget: QWidget) -> None:
     widget.setGraphicsEffect(shadow)
 
 
+def card(dock: QDockWidget) -> None:
+    """Draw a docked panel as a card standing on the gutter rather than a region ruled off
+    by hairlines -- the look the user picked from three rendered candidates ("Kartlar").
+
+    The dock keeps its widget: the card is a property the stylesheet draws
+    (``*[card="true"]``) and a margin round it, so ``dock.widget()`` is still the panel
+    every caller holds, and ``restoreState`` sees the docks it always saw. A dock whose
+    widget is replaced is carded again after it."""
+    inner = dock.widget()
+    if inner is None:
+        return
+    dock.setContentsMargins(CARD_GUTTER, 0, CARD_GUTTER, CARD_GUTTER)
+    inner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    inner.setProperty("card", True)
+    inset = SPACE["xs"]
+    inner.setContentsMargins(inset, inset, inset, inset)
+    restyle(inner)
+
+
 def variant(widget: QWidget, name: Variant | None) -> None:
     """A button's kind -- the one accent-filled action on a surface, a destructive answer,
     or a link -- or a card: a raised surface with a hairline edge, for a frame that groups."""
@@ -416,7 +446,9 @@ QWidget {{
     color: {k.text};
 }}
 QMainWindow {{ background: {k.bg_app}; }}
-QMainWindow::separator {{ background: {k.bg_app}; width: 1px; height: 1px; }}
+/* The gutter the panels stand on as cards (``card``): wide enough to read as a gap,
+   and the handle a panel is resized by. */
+QMainWindow::separator {{ background: {k.bg_app}; width: {CARD_GUTTER}px; height: {CARD_GUTTER}px; }}
 QLabel {{ background: transparent; }}
 {tones}
 {_box_arrows(arrows) if arrows else ''}
@@ -490,18 +522,23 @@ QToolBar#headerToolbar {{ border: 0; padding: 0; spacing: 0; }}
 QToolBar::separator {{ width: 1px; background: {k.border}; margin: {s["md"]}px {s["sm"]}px; }}
 
 QDockWidget {{
+    background: {k.bg_app};
     color: {k.text_secondary};
     font-weight: {SEMIBOLD};
     titlebar-close-icon: none;
     titlebar-normal-icon: none;
 }}
 QDockWidget::title {{
-    background: {k.bg_surface};
-    padding: {s["md"]}px {s["lg"]}px;
-    border-bottom: 1px solid {k.border};
+    background: {k.bg_app};
+    padding: {s["md"]}px {s["lg"]}px {s["xs"]}px {s["lg"]}px;
     /* Left-aligned: a centred dock title over a wide panel reads as a heading for the
        whole window rather than a label for the panel it belongs to. */
     text-align: left;
+}}
+*[card="true"] {{
+    background: {k.bg_surface};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_CARD}px;
 }}
 QTabBar {{ background: {k.bg_app}; }}
 QTabBar::tab {{
@@ -517,6 +554,19 @@ QTabBar::tab:selected {{
     border-top: 2px solid {k.accent};
 }}
 QTabBar::tab:hover:!selected {{ color: {k.text}; }}
+/* The tabs of a group of panels -- Library, Parts, Nets; Board, Schematic, 3D -- are pills
+   on the gutter: a tab bar QMainWindow puts over a dock group is its own child. */
+QMainWindow > QTabBar {{ background: transparent; qproperty-drawBase: 0; }}
+QMainWindow > QTabBar::tab {{
+    background: transparent;
+    color: {k.text_secondary};
+    border: none;
+    border-radius: {RADIUS_MD}px;
+    padding: {s["xs"] + 1}px {s["lg"]}px;
+    margin: {s["sm"]}px {s["2xs"]}px {s["sm"]}px 0px;
+}}
+QMainWindow > QTabBar::tab:selected {{ background: {k.bg_pressed}; color: {k.text}; border: none; }}
+QMainWindow > QTabBar::tab:hover:!selected {{ background: {k.bg_hover}; color: {k.text}; }}
 
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit {{
     background: {k.bg_input};
@@ -712,10 +762,11 @@ QLabel#problemsBadge[tone="danger"], QLabel#problemsBadge[tone="warning"] {{
 }}
 QLabel#problemsBadge[tone="danger"] {{ background: {k.danger}; color: {k.text_on_status}; }}
 QLabel#problemsBadge[tone="warning"] {{ background: {k.warning}; color: {k.text_on_status}; }}
-QWidget#propertiesPanel {{ background: {k.bg_surface}; border-left: 1px solid {k.border}; }}
+QWidget#propertiesPanel {{ background: {k.bg_surface}; }}
+/* The panel's title, the first thing on its card. */
 QLabel[role="caption"] {{
-    color: {k.text_secondary};
-    font-size: {CAPTION_PX}px;
+    color: {k.text};
+    font-size: {LEAD_PX}px;
     font-weight: {SEMIBOLD};
 }}
 
@@ -790,6 +841,9 @@ QTreeView, QListView, QTableView {{
     outline: none;
 }}
 QTreeView::item, QListView::item {{ padding: {s["2xs"]}px {s["xs"]}px; }}
+/* The library: a row per picture, room round it, and a selection with round corners. */
+QTreeView#libraryTree::item {{ padding: {s["xs"]}px {s["xs"]}px; border-radius: {RADIUS_MD}px; }}
+QTreeView#libraryTree::branch:selected {{ background: transparent; }}
 QTreeView::item:hover, QListView::item:hover {{ background: {k.bg_hover}; }}
 QTreeView::item:selected, QListView::item:selected, QTableView::item:selected {{
     background: {k.accent_subtle};

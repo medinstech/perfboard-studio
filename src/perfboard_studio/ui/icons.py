@@ -718,8 +718,13 @@ def icon(name: str) -> QIcon:
 # board next to it is what shows the footprint.
 
 
-#: Icon size for a tree row. Smaller than the toolbar's, which is a button.
-PART_SIZE = 20
+#: Icon size for a tree row: the picture on its tile. Smaller than the toolbar's, which
+#: is a button.
+PART_SIZE = 26
+#: The picture itself, inside the tile.
+PICTURE_SIZE = 20
+#: The tile's corner.
+TILE_RADIUS = 6
 
 #: Tinned component lead. Matches ``view2d.LEAD``, kept local so the icons do not drag in
 #: the whole 2D scene module to draw a wire.
@@ -1021,7 +1026,7 @@ def part_icon(footprint: Any) -> QIcon:
 
     archetype = footprint.body.archetype
     style = style_for(footprint)
-    key = f"{archetype}:{footprint.polarized}:{style.fill}"
+    key = f"{archetype}:{footprint.polarized}:{style.fill}:{TOKENS.icon_tile}"
     cached = _part_cache.get(key)
     if cached is not None:
         return cached
@@ -1031,7 +1036,15 @@ def part_icon(footprint: Any) -> QIcon:
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.scale(PART_SIZE * scale / BOX, PART_SIZE * scale / BOX)
+    painter.scale(scale, scale)
+    # A soft tile under the picture: the parts are drawn in their own colours, and a black
+    # TO-92 or a dark-blue electrolytic straight on the dark panel was a hole in the row.
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(TOKENS.icon_tile))
+    painter.drawRoundedRect(QRectF(0.5, 0.5, PART_SIZE - 1, PART_SIZE - 1), TILE_RADIUS, TILE_RADIUS)
+    inset = (PART_SIZE - PICTURE_SIZE) / 2
+    painter.translate(inset, inset)
+    painter.scale(PICTURE_SIZE / BOX, PICTURE_SIZE / BOX)
     if archetype == "axial-cylinder":
         _axial(painter, style, bool(footprint.polarized))
     elif archetype == "axial-upright":

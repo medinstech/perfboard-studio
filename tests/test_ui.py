@@ -8115,6 +8115,68 @@ def test_the_parts_panel_shows_a_picture_on_every_row() -> None:
     _close(window)
 
 
+def test_a_part_picture_sits_on_its_tile() -> None:
+    """A black TO-92 drawn straight on the dark panel was a hole in the row, so every
+    picture sits on a soft tile of the theme's: its corners are the tile's colour, and the
+    part's own colours are inside it."""
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.ui import theme
+    from perfboard_studio.ui.icons import PART_SIZE, PICTURE_SIZE, part_icon
+
+    assert PART_SIZE > PICTURE_SIZE
+    to92 = next(f for f in standard_footprints().values() if f.body.archetype == "to92")
+    image = part_icon(to92).pixmap(PART_SIZE * 2, PART_SIZE * 2).toImage()
+    middle = image.width() // 2
+    # Just inside the rounded corner, on the tile's edge row.
+    assert image.pixelColor(middle, 2).name() == theme.ACTIVE.icon_tile
+    assert image.pixelColor(0, 0).alpha() < 255
+
+
+def test_every_library_group_says_how_many_parts_it_holds() -> None:
+    """Closed, "Sensors" said nothing of whether it held two parts or fifty."""
+    window = _window_on(_load_dense())
+    try:
+        tree = window.library_tree
+        assert not tree.alternatingRowColors()
+        assert tree.objectName() == "libraryTree"
+        for i in range(tree.topLevelItemCount()):
+            group = tree.topLevelItem(i)
+            assert group.text(1) == str(group.childCount()), group.text(0)
+            assert group.toolTip(1)
+    finally:
+        _close(window)
+
+
+def test_every_panel_is_a_card_and_keeps_its_widget() -> None:
+    """The panels stand on the gutter as cards (theme.card): a property the stylesheet
+    draws, so each dock still holds the very widget every caller reads through
+    ``widget()``. The update strip is a bar across the window and is no card. The guide's
+    panel is built on first use, after the window carded a stand-in, and is carded too."""
+    from PySide6.QtWidgets import QDockWidget
+
+    window = _window_on(_load_dense())
+    try:
+        holds = {
+            window.dock_library: None,
+            window.dock_properties: window.properties,
+            window.dock_part_list: window.part_list,
+        }
+        pages = window.guide_pages  # built here, on first use
+        holds[window.dock_guide] = pages
+        for dock in window.findChildren(QDockWidget):
+            inner = dock.widget()
+            assert inner is not None, dock.objectName()
+            if dock is window.update_strip:
+                assert not inner.property("card")
+                continue
+            assert inner.property("card") is True, dock.objectName()
+            expected = holds.get(dock)
+            if expected is not None:
+                assert inner is expected, dock.objectName()
+    finally:
+        _close(window)
+
+
 # ---------------------------------------------------------------------------
 # Escape leaves the mode. From anywhere. Every mode.
 #
@@ -21823,7 +21885,9 @@ def test_no_dock_separator_is_left_lying_over_the_problems_list(monkeypatch) -> 
     visible, where the column's edge was. The drawer opened over it and the handle, which
     nothing moves any more, painted itself across the list."""
     from PySide6.QtCore import QPoint, QRect
-    from PySide6.QtWidgets import QApplication, QWidget
+    from PySide6.QtWidgets import QApplication, QStyle, QWidget
+
+    from perfboard_studio.ui import theme
 
     window = _shown_window_without_3d(monkeypatch, width=1440)
     try:
@@ -21838,9 +21902,14 @@ def test_no_dock_separator_is_left_lying_over_the_problems_list(monkeypatch) -> 
             if handle.isVisible()
         ]
         assert not [rect for rect in stray if rect.intersects(listed)], stray
-        # The handles that ARE the layout's are still there to be dragged.
-        assert any(rect.width() > rect.height() for rect in stray)
-        assert any(rect.height() > rect.width() for rect in stray)
+        # The handles that ARE the layout's are still there to be dragged. Qt makes those
+        # widgets only for a hairline separator; with the panels as cards the separator is
+        # the gutter between them, and the window itself is what is dragged.
+        extent = window.style().pixelMetric(
+            QStyle.PixelMetric.PM_DockWidgetSeparatorExtent, None, window
+        )
+        assert extent == theme.CARD_GUTTER
+        assert not stray
     finally:
         _close(window)
 

@@ -95,6 +95,14 @@ closed without a bump.
 
 ### Changed
 
+- **The panels are cards.** Every panel stands on the window's gutter as a card with round
+  corners instead of a region ruled off by hairlines, and the gutter between two panels is
+  what is dragged to resize them. A group's tabs (Library, Parts, Nets; Board, Schematic,
+  3D View, Build Guide) are pills. In the Library each part's picture sits on a soft tile, so
+  a black TO-92 no longer disappears into the dark panel, every group says how many parts it
+  holds, and the rows lose their stripes and gain room. The Properties title is the panel's
+  heading, and Board Settings… is a button rather than an underlined link. On the light
+  canvas the name under a part drawn off the board is dark, where it was white on white.
 - **Parts put straight on the board are a circuit still being drawn.** Placed from the
   Library onto the holes with no sheet ever opened, the first part without a value turned
   the bar amber with a Problems count, and the Circuit step's hint and Next sent you to the

@@ -1357,7 +1357,18 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
         tree.addTopLevelItem(group)
         for _rank, _index, leaf in found:
             group.addChild(leaf)
+        count_group(group)
         group.setExpanded(opened)
+
+
+def count_group(group: QTreeWidgetItem) -> None:
+    """A heading says how many parts are under it, in its Pins column and quieter than a
+    part's own pin count: closed, "Sensors" said nothing of whether it held two or fifty."""
+    count = group.childCount()
+    group.setText(1, str(count))
+    group.setTextAlignment(1, PINS_ALIGNMENT)
+    group.setForeground(1, QColor(theme.ACTIVE.text_tertiary))
+    group.setToolTip(1, t("{count} parts in this group").format(count=count))
 
 
 def catalog_leaf(part: CatalogPart) -> QTreeWidgetItem:
@@ -3365,6 +3376,10 @@ class MainWindow(QMainWindow):
         self._build_drc_dock()
         self._build_properties_dock()
         self._arrange_docks()
+        # Every panel a card on the gutter (theme.card). Not the update strip: it is a bar
+        # across the top of the window, not a panel.
+        for dock in (*self._view_docks(), *self._side_docks(), self.dock_drc, self.dock_properties):
+            theme.card(dock)
         for dock in self._view_docks():
             dock.visibilityChanged.connect(
                 lambda visible, dock=dock: self._make_room(dock) if visible else None
@@ -7120,12 +7135,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.library_note)
 
         self.library_tree = PartTree()
+        # Named for the stylesheet: a row per picture, with room round it.
+        self.library_tree.setObjectName("libraryTree")
         self.library_tree.setHeaderLabels([t("Part"), t("Pins")])
         self.library_tree.setRootIsDecorated(True)
         self.library_tree.setIconSize(QSize(icons.PART_SIZE, icons.PART_SIZE))
         # Tighter than Qt's default, to pay for the icons: a picture and an indent both
         # come out of the same column, and the name is what gets elided when they win.
-        self.library_tree.setIndentation(12)
+        self.library_tree.setIndentation(14)
+        # Rows on tiles are told apart by the tiles; stripes under them were noise.
+        self.library_tree.setAlternatingRowColors(False)
         header = self.library_tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -7251,6 +7270,7 @@ class MainWindow(QMainWindow):
                 for leaf in leaves:
                     group.addChild(leaf)
                 group.setIcon(0, leaves[0].icon(0))
+                count_group(group)
                 tree.insertTopLevelItem(0, group)
                 group.setExpanded(True)
         tree.blockSignals(False)
@@ -10215,6 +10235,7 @@ class MainWindow(QMainWindow):
 
         stand_in = self.dock_guide.widget()
         self.dock_guide.setWidget(self._guide_pages_widget)
+        theme.card(self.dock_guide)
         if stand_in is not None:
             stand_in.deleteLater()
 

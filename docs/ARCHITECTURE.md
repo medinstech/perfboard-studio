@@ -2748,6 +2748,17 @@ and the sheet joins symbol pins, and the two must not disagree about the three c
 are not "make a net": one pin already on a rail, both on the same net, both on different
 nets (refused, because merging two nets is a decision about the circuit).
 
+**Each panel is a card on the gutter, and the card is a property, not a frame.** Picked from
+three rendered candidates ("Kartlar"). `theme.card(dock)` sets the dock's margins and
+marks its widget `card`, which the one stylesheet draws as a rounded surface. The first
+prototype wrapped each panel in two frames, and every caller that reads `dock.widget()`
+(the guide's stand-in swap among them) would then have held the wrapper. A dock whose
+widget is replaced is carded again after the swap. The gutter is `QMainWindow::separator` at
+`CARD_GUTTER` px, and at that width Qt draws and drags the separator itself rather than
+making the `qt_qmainwindow_extended_splitter` handle widgets it makes for a hairline. That
+is why `test_no_dock_separator_is_left_lying_over_the_problems_list` now asserts there are
+no such widgets rather than that both kinds exist.
+
 ## The MCP server is behaviour in one file, protocol in the other
 
 `mcp/session.py` holds every tool's actual behaviour; `mcp/server.py` only binds names,

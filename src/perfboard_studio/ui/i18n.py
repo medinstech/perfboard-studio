@@ -1911,6 +1911,7 @@ TURKISH: Mapping[str, str] = {
     "Where Board Setup, Part Properties, the toolbar and the menus went.": (
         "Kart Ayarları, Parça Özellikleri, araç çubuğu ve menülerin yeni yerleri."
     ),
+    "{count} parts in this group": "Bu grupta {count} parça",
     "Offered instead": "Bunun yerine önerilenler",
     "Custom Part…": "Özel Parça…",
     "Describe a part the library does not have. It is stored as an identifier "

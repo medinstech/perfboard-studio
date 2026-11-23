@@ -54,6 +54,7 @@ from perfboard_studio.geometry import (
     flying_lead_side,
 )
 from perfboard_studio.model import ComponentInstance, Footprint, PerfDocument, Point2, pin_name_of
+from perfboard_studio.ui.theme import ACTIVE as THEME_TOKENS
 
 #: How far past the board's edge a wire's run on the board ends: where the 2D view's flying
 #: leads end, so a thing's cable carries on from the very point the part's wire stopped.
@@ -937,7 +938,9 @@ DUPONT_MM = 2.4
 #: The name under a thing, millimetres high.
 TAG_MM = 2.4
 TAG_GAP_MM = 2.0
-TAG_INK = QColor("#c9ccd3")
+#: On the canvas, not on the thing: the theme's, as the ruler is, so it reads on the light
+#: canvas too -- a fixed pale grey was white on white there.
+TAG_INK = QColor(THEME_TOKENS.canvas_ruler_major)
 
 
 @dataclass(frozen=True, slots=True)

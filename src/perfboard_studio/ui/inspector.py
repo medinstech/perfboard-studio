@@ -436,8 +436,8 @@ class _StepCard(QWidget):
         self.next = QPushButton()
         theme.variant(self.next, "primary")
         self.next.clicked.connect(lambda: inspector.hooks.next_step())
+        # A quiet button rather than an underlined link: on a card, a link read as a note.
         self.board_settings = QPushButton(t("Board Settings…"))
-        theme.variant(self.board_settings, "link")
         self.board_settings.setToolTip(
             t("The board's name, its size and type, and what a case asks of it.")
         )
