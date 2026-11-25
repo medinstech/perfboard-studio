@@ -32,7 +32,8 @@ closed without a bump.
   Drawn as a pin header until their own bodies arrive (#16).
 - **A printed legend can go on past Z in doubled letters.** `AxisLegend.letters = "doubled"`
   prints A..Z, then AA, BB, .. ZZ, as some boards do, where the default carries on AA, AB, ..
-  as the addresses do. Left out of the file at its default, so every board keeps its bytes;
+  as the addresses do. Left out of a board file and a saved board family at its default, so
+  every board and family keeps its bytes;
   the guide and the MCP server's board info say it (#16).
 - **A custom board takes the border you ask for.** `boardfamily.size_for_grid` and
   `size_for_mm` take a border (across, down), and `FIT_TO_GRID` cuts the board flush, half a

@@ -50,7 +50,7 @@ from perfboard_studio.geometry import (
     mounting_hole_centre_mm,
     surviving_finger_holes,
 )
-from perfboard_studio.model import DocumentMeta, HoleCoord
+from perfboard_studio.model import AxisLegend, DocumentMeta, HoleCoord
 
 META = DocumentMeta(name="t", created="", modified="")
 EVERY_SIZE = [
@@ -360,3 +360,20 @@ def test_a_saved_breadboard_family_comes_back_as_it_went() -> None:
     )
     assert family_problem(mine) is None, family_problem(mine)
     assert family_from_json(family_to_json(mine)) == mine
+
+
+def test_a_saved_family_says_its_legend_letters_only_when_they_are_doubled() -> None:
+    """As a board leaves ``letters`` out of the file at its default, so does a family: one
+    with nothing doubled is the text it always was, and a doubled one comes back doubled."""
+    plain = AxisLegend(runs=(("A", "Z"), ("AA", "AD")))
+    doubled = dataclasses.replace(plain, runs=(("A", "Z"), ("AA", "DD")), letters="doubled")
+    for numbering, written in ((plain, False), (doubled, True)):
+        family = dataclasses.replace(
+            GREEN_DOUBLE_SIDED,
+            legend=dataclasses.replace(
+                GREEN_DOUBLE_SIDED.legend or boardfamily.Legend(), columns=numbering
+            ),
+        )
+        text = family_to_json(family)
+        assert ('"letters"' in text) is written
+        assert family_from_json(text) == family

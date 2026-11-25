@@ -842,7 +842,17 @@ def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHo
 def family_to_json(family: BoardFamily) -> str:
     """The family as text, for the host to keep. Carries ``FAMILY_FORMAT`` from the first
     version on."""
-    return json.dumps({"format": FAMILY_FORMAT, **_plain(dataclasses.asdict(family))}, indent=2)
+    data = _plain(dataclasses.asdict(family))
+    # A legend's ``letters`` is left out at its default, as ``persist`` leaves it out of a
+    # board: a family with nothing doubled is the text it was before the field existed, and
+    # a build that predates it reads that text the same. A doubled one still says so.
+    legend = data.get("legend")
+    if isinstance(legend, dict):
+        for axis in ("columns", "rows"):
+            numbering = legend.get(axis)
+            if isinstance(numbering, dict) and numbering.get("letters") == "spreadsheet":
+                del numbering["letters"]
+    return json.dumps({"format": FAMILY_FORMAT, **data}, indent=2)
 
 
 def _plain(value: Any) -> Any:
