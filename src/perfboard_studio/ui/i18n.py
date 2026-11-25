@@ -1209,6 +1209,16 @@ TURKISH: Mapping[str, str] = {
     "◀  Step by step": "◀  Adım adım",
     "Cut": "Kes",
     "Colour": "Renk",
+    "Yellow": "Sarı",
+    "Orange": "Turuncu",
+    "Violet": "Mor",
+    "Grey": "Gri",
+    "Brown": "Kahverengi",
+    "Custom…": "Özel…",
+    "By net": "Nete göre",
+    "Choose a wire colour": "Tel rengi seçin",
+    "Pick any wire colour": "İstediğiniz bir tel rengini seçin",
+    "Use the net's own wire colour": "Netin kendi tel rengini kullanır",
     "Strip": "Şerit",
     "A new design. Draw the circuit; the board it goes on is the next step, tried with the circuit on it.": (
         "Yeni bir tasarım. Devreyi çizin; gideceği kart bir sonraki adımda, devre üzerindeyken denenir."

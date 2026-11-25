@@ -25,18 +25,20 @@ The kinds without an editor yet are said in one line, as the panel's stand-in di
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from html import escape
 from typing import Literal, TypeVar, cast
 
-from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QAction, QColor, QKeyEvent, QPixmap
+from PySide6.QtCore import QEvent, QObject, QSize, Qt
+from PySide6.QtGui import QAction, QColor, QIcon, QKeyEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -95,6 +97,7 @@ from perfboard_studio.model import (
     Rotation,
     SchematicPart,
     SheetNote,
+    WireConductor,
     has_component_side_copper,
 )
 from perfboard_studio.phrasebook import guide_language, phrasebook
@@ -106,7 +109,7 @@ from perfboard_studio.system import (
     connector_of,
     extra_board,
 )
-from perfboard_studio.wirecolour import net_colours
+from perfboard_studio.wirecolour import COLOR_BY_NET_CLASS, SIGNAL_COLORS, net_colours
 
 from . import theme
 from .boardfeatures import FeatureEditor, FeaturesGroup
@@ -355,7 +358,7 @@ def value_placeholder(ref: str) -> str:
     return "10k, 100nF, NE555…"
 
 
-def _add_field(form: QFormLayout, label: str, field: QWidget, problem: _Problem) -> None:
+def _add_field(form: QFormLayout, label: str, field: QWidget, problem: _Problem) -> QWidget:
     """A field and, under it, the line that says why it was refused."""
     holder = QWidget()
     column = QVBoxLayout(holder)
@@ -364,6 +367,7 @@ def _add_field(form: QFormLayout, label: str, field: QWidget, problem: _Problem)
     column.addWidget(field)
     column.addWidget(problem)
     form.addRow(label, holder)
+    return holder
 
 
 def _fact(text: str = "") -> QLabel:
@@ -2198,6 +2202,167 @@ class _SheetNoteEditor(QWidget):
 # -- one conductor ---------------------------------------------------------------------------
 
 
+#: The stocked wire colours offered as swatches: power, ground, and every signal colour.
+STOCKED_WIRE_COLOURS: tuple[str, ...] = (
+    *COLOR_BY_NET_CLASS.values(),
+    *SIGNAL_COLORS,
+)
+
+
+def _wire_colour_labels() -> dict[str, str]:
+    """Each stocked wire colour's tooltip in the window's language."""
+    return {
+        "red": t("Red"),
+        "black": t("Black"),
+        "yellow": t("Yellow"),
+        "green": t("Green"),
+        "blue": t("Blue"),
+        "white": t("White"),
+        "orange": t("Orange"),
+        "violet": t("Violet"),
+        "grey": t("Grey"),
+        "brown": t("Brown"),
+    }
+
+
+def _swatch_icon(colour: QColor, size: int = 14) -> QIcon:
+    """A crisp rounded colour chip on HiDPI, outlined so white reads on light and black on dark."""
+    pixmap = QPixmap(size * 2, size * 2)
+    pixmap.setDevicePixelRatio(2)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(colour)
+    painter.setPen(QPen(QColor(theme.ACTIVE.border_strong), 1.0))
+    painter.drawRoundedRect(1, 1, size - 2, size - 2, 3, 3)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _replace_wire_colours(
+    inspector: Inspector, wires: Sequence[WireConductor], color: str | None
+) -> str | None:
+    """Set or clear ``WireConductor.color`` on ``wires`` in ONE ``conductor.replace`` keeping
+    every id, path, kind and net intact."""
+    if not wires:
+        return None
+    if all((wire.color or None) == color for wire in wires):
+        return None
+    specs = tuple(
+        NewWireConductor(
+            path=wire.path,
+            kind=wire.kind,
+            side=wire.side,
+            gauge_awg=wire.gauge_awg,
+            color=color,
+            net_id=wire.net_id,
+            layer_z=wire.layer_z,
+        )
+        for wire in wires
+    )
+    ids = tuple(wire.id for wire in wires)
+    return inspector.dispatch(
+        "conductor.replace",
+        ReplaceConductorsPayload(remove_ids=ids, conductors=specs, ids=ids),
+    )
+
+
+class _WireColourRow(QWidget):
+    """Stocked wire swatches, Custom… and By net, shared by single- and multi-wire editors."""
+
+    def __init__(self, on_choose: Callable[[str | None], None]) -> None:
+        super().__init__()
+        from .view2d import named_insulation
+
+        self._on_choose = on_choose
+        self._current: str | None = None
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(theme.SPACE["xs"])
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(theme.SPACE["xs"])
+        labels = _wire_colour_labels()
+        self.swatches: dict[str, QToolButton] = {}
+        for index, name in enumerate(STOCKED_WIRE_COLOURS):
+            button = QToolButton()
+            button.setCheckable(True)
+            button.setAutoRaise(True)
+            button.setProperty("segment", True)
+            button.setFixedSize(24, 24)
+            button.setIcon(_swatch_icon(named_insulation(name)))
+            button.setIconSize(QSize(14, 14))
+            button.setToolTip(labels.get(name, name))
+            button.setAccessibleName(labels.get(name, name))
+            button.clicked.connect(lambda _checked=False, n=name: self._on_choose(n))
+            grid.addWidget(button, index // 5, index % 5)
+            self.swatches[name] = button
+        grid.setColumnStretch(5, 1)
+        outer.addLayout(grid)
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(theme.SPACE["xs"])
+        self.custom = QToolButton()
+        self.custom.setText(t("Custom…"))
+        self.custom.setToolTip(t("Pick any wire colour"))
+        self.custom.setCheckable(True)
+        self.custom.setAutoRaise(True)
+        self.custom.setProperty("segment", True)
+        self.custom.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.custom.setIconSize(QSize(12, 12))
+        self.custom.clicked.connect(self._on_custom)
+        actions.addWidget(self.custom)
+
+        self.by_net = QToolButton()
+        self.by_net.setText(t("By net"))
+        self.by_net.setToolTip(t("Use the net's own wire colour"))
+        self.by_net.setCheckable(True)
+        self.by_net.setAutoRaise(True)
+        self.by_net.setProperty("segment", True)
+        self.by_net.clicked.connect(lambda _checked=False: self._on_choose(None))
+        actions.addWidget(self.by_net)
+        actions.addStretch(1)
+        outer.addLayout(actions)
+
+    def choose_custom(self, initial: QColor) -> str | None:
+        """Open the platform colour picker; separated so offscreen tests can stand in for it."""
+        picked = QColorDialog.getColor(initial, self, t("Choose a wire colour"))
+        return picked.name().lower() if picked.isValid() else None
+
+    def _on_custom(self) -> None:
+        from .view2d import explicit_colour, named_insulation
+
+        initial = (
+            explicit_colour(self._current)
+            or named_insulation(self._current)
+        )
+        chosen = self.choose_custom(initial)
+        if chosen is not None:
+            self._on_choose(chosen)
+        else:
+            # Cancelled: put the checked mark back as it was.
+            self.show_colours((self._current,))
+
+    def show_colours(self, colours: Sequence[str | None]) -> None:
+        from .view2d import explicit_colour
+
+        normalised = {(c.strip().lower() if isinstance(c, str) and c.strip() else None) for c in colours}
+        shared = next(iter(normalised)) if len(normalised) == 1 else ...
+        self._current = shared if isinstance(shared, str) else None
+        for name, button in self.swatches.items():
+            button.setChecked(shared == name)
+        self.by_net.setChecked(shared is None)
+        if isinstance(shared, str) and shared not in self.swatches:
+            self.custom.setChecked(True)
+            chip = explicit_colour(shared)
+            self.custom.setIcon(_swatch_icon(chip, 12) if chip is not None else QIcon())
+        else:
+            self.custom.setChecked(False)
+            self.custom.setIcon(QIcon())
+
+
 class _ConductorEditor(QWidget):
     """One run of copper or wire: what it is, from where to where, over how many holes, and
     on which net. What the status bar said about a selected conductor, and more of it --
@@ -2240,8 +2405,10 @@ class _ConductorEditor(QWidget):
         }
         self.kind.activated.connect(self._on_kind_chosen)
         self.kind_problem = _Problem()
-        _add_field(form, t("Kind"), self.kind, self.kind_problem)
-        self._kind_row = self.kind
+        self._kind_row = _add_field(form, t("Kind"), self.kind, self.kind_problem)
+        self.colour = _WireColourRow(self._commit_colour)
+        self.colour_problem = _Problem()
+        self._colour_row = _add_field(form, t("Colour"), self.colour, self.colour_problem)
         self.ends = _fact()
         form.addRow(t("Holes"), self.ends)
         self.net = _fact()
@@ -2312,13 +2479,19 @@ class _ConductorEditor(QWidget):
         family = self.SOLDER if kind in self.SOLDER else self.WIRE if kind in self.WIRE else ()
         self._loading = True
         try:
-            self._kind_row.setVisible(bool(family))
+            self._form.setRowVisible(self._kind_row, bool(family))
             self.kind.clear()
             for each in family:
                 self.kind.addItem(self._kind_words[each].replace("&", ""), each)
             self.kind.setCurrentIndex(max(0, self.kind.findData(kind)))
+            if isinstance(conductor, WireConductor):
+                self._form.setRowVisible(self._colour_row, True)
+                self.colour.show_colours((conductor.color,))
+            else:
+                self._form.setRowVisible(self._colour_row, False)
             if another:
                 self.kind_problem.show_problem("")
+                self.colour_problem.show_problem("")
         finally:
             self._loading = False
         # Each kind in the words its drawing tool has; asked here, in the window's language.
@@ -2429,6 +2602,72 @@ class _ConductorEditor(QWidget):
         self.kind_problem.show_problem(problem or "")
         if problem:
             self.load(document, conductor)
+
+    def _commit_colour(self, color: str | None) -> None:
+        conductor, document = self._conductor, self._document
+        if self._loading or not isinstance(conductor, WireConductor) or document is None:
+            return
+        problem = _replace_wire_colours(self._inspector, (conductor,), color)
+        self.colour_problem.show_problem(problem or "")
+        if problem:
+            self.load(document, conductor)
+
+
+class _ConductorsEditor(QWidget):
+    """Several conductors selected together: wire colour in one command, plus Delete / Auto-wire."""
+
+    def __init__(self, inspector: Inspector, actions: InspectorActions) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._document: PerfDocument | None = None
+        self._conductors: tuple[Conductor, ...] = ()
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        form = _form()
+        self.colour = _WireColourRow(self._commit_colour)
+        self.colour_problem = _Problem()
+        self._colour_row = _add_field(form, t("Colour"), self.colour, self.colour_problem)
+        self._form = form
+        layout.addLayout(form)
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(_action_button(actions.route_selected))
+        buttons.addStretch(1)
+        buttons.addWidget(_action_button(actions.delete))
+        layout.addLayout(buttons)
+
+    def load(self, document: PerfDocument, conductors: tuple[Conductor, ...]) -> None:
+        another = tuple(c.id for c in self._conductors) != tuple(c.id for c in conductors)
+        self._document = document
+        self._conductors = conductors
+        self.title.setText(theme.heading(t("{count} selected").format(count=len(conductors))))
+        wires = tuple(c for c in conductors if isinstance(c, WireConductor))
+        self._loading = True
+        try:
+            self._form.setRowVisible(self._colour_row, bool(wires))
+            if wires:
+                self.colour.show_colours(tuple(w.color for w in wires))
+            if another:
+                self.colour_problem.show_problem("")
+        finally:
+            self._loading = False
+
+    def _commit_colour(self, color: str | None) -> None:
+        document = self._document
+        if self._loading or document is None:
+            return
+        wires = tuple(c for c in self._conductors if isinstance(c, WireConductor))
+        if not wires:
+            return
+        problem = _replace_wire_colours(self._inspector, wires, color)
+        self.colour_problem.show_problem(problem or "")
+        if problem:
+            self.load(document, self._conductors)
 
 
 # -- everything else, said in one line until it has an editor ----------------------------
@@ -2587,6 +2826,10 @@ class Inspector(QWidget):
         return self._page("conductor", lambda: _ConductorEditor(self, self._actions))
 
     @property
+    def conductors_editor(self) -> _ConductorsEditor:
+        return self._page("conductors", lambda: _ConductorsEditor(self, self._actions))
+
+    @property
     def feature_editor(self) -> FeatureEditor:
         return self._page("feature", lambda: FeatureEditor(self.dispatch))
 
@@ -2677,6 +2920,12 @@ class Inspector(QWidget):
             if conductor is not None:
                 self.conductor_editor.load(document, conductor)
                 page = self.conductor_editor
+        elif selection.kind == "conductors" and selection.ids:
+            chosen = set(selection.ids)
+            conductors = tuple(c for c in document.conductors if c.id in chosen)
+            if len(conductors) > 1:
+                self.conductors_editor.load(document, conductors)
+                page = self.conductors_editor
         elif selection.kind == "mounting-hole" and selection.ids:
             mount = next((m for m in document.mounting_holes if m.id == selection.ids[0]), None)
             if mount is not None:

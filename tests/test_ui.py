@@ -18037,6 +18037,76 @@ def test_a_kind_switch_never_drops_the_run() -> None:
         _close(window)
 
 
+def test_wire_colour_row_is_for_wires_only_and_uses_conductor_replace(monkeypatch) -> None:
+    window = _window_on(_ne555_as_shipped())
+    try:
+        trace = next(c for c in window.bus.document.conductors if c.kind == "solder-trace")
+        _select_conductor(window, trace.id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        assert not editor._form.isRowVisible(editor._colour_row)
+
+        wire = _add_wire(window, (HoleCoord(0, 0), HoleCoord(0, 3)), "insulated-wire")
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
+        assert window.inspector.shown is editor
+        assert editor._form.isRowVisible(editor._colour_row)
+        assert editor.colour.by_net.isChecked()
+
+        # Stocked swatch -> one conductor.replace keeping the same id.
+        before_history = len(window.bus.history())
+        editor.colour.swatches["blue"].click()
+        now = next(c for c in window.bus.document.conductors if c.id == wire.id)
+        assert now.color == "blue"
+        assert len(window.bus.history()) == before_history + 1
+        assert editor.colour.swatches["blue"].isChecked()
+        assert not editor.colour.by_net.isChecked()
+
+        # Custom… -> hex colour stored and Custom… marked checked.
+        monkeypatch.setattr(editor.colour, "choose_custom", lambda _initial: "#12ab34")
+        editor.colour.custom.click()
+        now = next(c for c in window.bus.document.conductors if c.id == wire.id)
+        assert now.color == "#12ab34"
+        assert editor.colour.custom.isChecked()
+
+        # By net -> clears explicit colour back to None.
+        editor.colour.by_net.click()
+        now = next(c for c in window.bus.document.conductors if c.id == wire.id)
+        assert now.color is None
+        assert editor.colour.by_net.isChecked()
+    finally:
+        _close(window)
+
+
+def test_several_wires_change_colour_in_one_command() -> None:
+    window = _blank_window()
+    try:
+        w1 = _add_wire(window, (HoleCoord(1, 1), HoleCoord(4, 1)), "insulated-wire")
+        w2 = _add_wire(window, (HoleCoord(1, 3), HoleCoord(4, 3)), "top-jumper")
+        window.scene.select_conductors([w1.id, w2.id])
+        window._refresh_properties()
+        editor = window.inspector.conductors_editor
+        assert window.inspector.shown is editor
+        assert editor._form.isRowVisible(editor._colour_row)
+
+        before_history = len(window.bus.history())
+        editor.colour.swatches["orange"].click()
+        assert len(window.bus.history()) == before_history + 1
+        by_id = {c.id: c for c in window.bus.document.conductors}
+        assert by_id[w1.id].color == "orange"
+        assert by_id[w2.id].color == "orange"
+        assert editor.colour.swatches["orange"].isChecked()
+
+        editor.colour.by_net.click()
+        assert len(window.bus.history()) == before_history + 2
+        by_id = {c.id: c for c in window.bus.document.conductors}
+        assert by_id[w1.id].color is None
+        assert by_id[w2.id].color is None
+    finally:
+        _close(window)
+
+
 @pytest.mark.parametrize("language", ["en", "tr"])
 def test_every_editor_in_properties_fits_its_panel(language: str) -> None:
     """At 1280 and 1600 alike Change…, the 270° button and Delete were cut off the panel's
