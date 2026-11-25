@@ -1162,6 +1162,7 @@ TURKISH: Mapping[str, str] = {
     "Redoing the wiring was refused": "Kablolamayı yeniden yapma reddedildi",
     "The guide has gaps": "Rehberde eksikler var",
     "About Perfboard Studio": "Perfboard Studio Hakkında",
+    "Open www.medinstech.com": "www.medinstech.com adresini açar",
     # -- status bar ----------------------------------------------------------
     "hole": "delik",
     "component side": "parça yüzü",

@@ -435,6 +435,8 @@ from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
 from .boardstrip import SYSTEM_ENTRY, BoardStrip
+from .brand import URL as BRAND_URL
+from .brand import BrandLink, open_home_page
 from .cabledialog import CableDialog
 from .canvastools import FloatingBar, TwoWaySwitch
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
@@ -18673,26 +18675,73 @@ class MainWindow(QMainWindow):
         ShortcutsDialog(self._menus, self).exec()
 
     def on_about(self) -> None:
-        """The version, in a form someone can copy into a bug report.
+        self.about_dialog().exec()
+
+    def about_dialog(self) -> QDialog:
+        """The version, in a form someone can copy into a bug report, and who makes it.
 
         Selectable text rather than a picture: the whole point of the line is that it can be
-        pasted, and QMessageBox renders it unselectable unless asked.
+        pasted. Under a rule, the Medinstech mark and the site, each a link to it
+        (``ui/brand.py``).
         """
-        box = QMessageBox(self)
-        box.setWindowTitle(t("About Perfboard Studio"))
+        dialog = QDialog(self)
+        dialog.setWindowTitle(t("About Perfboard Studio"))
+        dialog.setFixedWidth(450)
+        column = QVBoxLayout(dialog)
+        column.setContentsMargins(24, 22, 24, 18)
+        column.setSpacing(14)
+        top = QHBoxLayout()
+        top.setSpacing(14)
+        icon_path = Path(__file__).resolve().parent / "assets" / "perfboard-studio.png"
+        if icon_path.exists():
+            mark = QLabel()
+            mark.setPixmap(
+                QIcon(str(icon_path)).pixmap(QSize(52, 52), dialog.devicePixelRatioF())
+            )
+            top.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
+        words = QVBoxLayout()
+        words.setSpacing(4)
+        title = QLabel(theme.heading("Perfboard Studio"))
+        theme.size(title, 15)
+        words.addWidget(title)
         # The version once, in the line that is copied into a bug report; the title is the
         # name. And both licences: the meshes are KiCad's and CC-BY-SA, which "Apache-2.0"
         # alone said they were not.
-        box.setText("<b>Perfboard Studio</b>")
-        box.setInformativeText(
+        self.about_text = QLabel(
             f"{describe_version()}\n\n"
             + t("Perfboard layout design, verification and a soldering guide.")
             + "\n"
             + t("Code: Apache-2.0 · 3D part models: CC-BY-SA 4.0, from KiCad")
             + "\ngithub.com/medinstech/perfboard-studio"
         )
-        box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
-        box.exec()
+        self.about_text.setTextFormat(Qt.TextFormat.PlainText)
+        self.about_text.setWordWrap(True)
+        self.about_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        theme.tone(self.about_text, "secondary")
+        words.addWidget(self.about_text)
+        top.addLayout(words, 1)
+        column.addLayout(top)
+        rule = QFrame()
+        rule.setFrameShape(QFrame.Shape.HLine)
+        column.addWidget(rule)
+        maker = QHBoxLayout()
+        maker.setContentsMargins(0, 2, 0, 2)
+        maker.setSpacing(10)
+        self.about_brand = BrandLink("about")
+        maker.addWidget(self.about_brand)
+        maker.addStretch(1)
+        site = QLabel(f'<a href="{BRAND_URL}">www.medinstech.com</a>')
+        site.setTextFormat(Qt.TextFormat.RichText)
+        site.setToolTip(t("Open www.medinstech.com"))
+        site.linkActivated.connect(lambda _href: open_home_page())
+        theme.size(site, theme.CAPTION_PX)
+        maker.addWidget(site)
+        column.addLayout(maker)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(dialog.accept)
+        column.addWidget(buttons)
+        dialog.adjustSize()
+        return dialog
 
     # -- updates -------------------------------------------------------------
     #

@@ -86,6 +86,7 @@ from perfboard_studio.version import __version__
 
 from . import theme
 from .boardpreview import render_board
+from .brand import BrandLink
 from .i18n import t
 from .viewsch import SHEET, SheetItem
 from .workflow import DOT_SIZE, StepState, step_dot, step_title
@@ -924,6 +925,11 @@ class Home(QWidget):
         theme.size(version, theme.CAPTION_PX)
         theme.tone(version, "tertiary")
         column.addWidget(version)
+        # Who makes it, in the corner under the version: the mark and the name, a link to
+        # the site (``ui/brand.py``), quieter than anything above it.
+        column.addSpacing(theme.SPACE["xs"])
+        self.brand = BrandLink("home")
+        column.addWidget(self.brand, 0, Qt.AlignmentFlag.AlignLeft)
         return side
 
     def _banner(self, name: str) -> tuple[QFrame, FramedPicture, QVBoxLayout]:

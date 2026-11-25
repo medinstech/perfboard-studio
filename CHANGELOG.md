@@ -30,6 +30,9 @@ closed without a bump.
   to, and the placer moves it to an edge as it does a header. KiCad's `PinSocket` now reads
   as a female header and `_Horizontal` as right-angle, and the catalog offers common sizes.
   Drawn as a pin header until their own bodies arrive (#16).
+- **Who makes it.** The Medinstech mark and name sit in Home's corner, under the version, and
+  in Help ▸ About, each a link to www.medinstech.com. The dark theme has its own white mark.
+  The logo files are the company's trademark and not under the Apache licence (NOTICE).
 - **A printed legend can go on past Z in doubled letters.** `AxisLegend.letters = "doubled"`
   prints A..Z, then AA, BB, .. ZZ, as some boards do, where the default carries on AA, AB, ..
   as the addresses do. Left out of a board file and a saved board family at its default, so

@@ -31,6 +31,14 @@ KiCad's exception waives share-alike for designs made using the library.
 
 ---
 
+Trademarks
+
+The Medinstech name and logo are trademarks of medinstech and are not licensed under the
+Apache License above. The logo files in src/perfboard_studio/ui/assets/ are included only so
+the application can show who makes it.
+
+---
+
 Clean-room notice
 -----------------
 
