@@ -427,6 +427,8 @@ TEMPLATES: tuple[str, ...] = (
     "{first}–{last} cannot be printed: it counts backwards.",
     "{first}–{last} cannot be printed: a run is capital letters to capital letters (A–Z) "
     "or a number to a number (1–60), one kind to a run.",
+    "{first}–{last} cannot be printed: in doubled letters a label is one letter repeated (A, BB, CCC).",
+    "A printed {axis} legend's letters go on past Z as one of: spreadsheet, doubled; not {letters}.",
 )
 
 #: Every DRC and LVS finding as the findings panel shows it in English, after

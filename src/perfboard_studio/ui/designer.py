@@ -50,6 +50,7 @@ from perfboard_studio.boardfamily import (
     FAMILIES,
     FAMILY_BOARD_TYPES,
     FINISHES,
+    FIT_TO_GRID,
     LETTER_EDGES,
     MASKS,
     NUMBER_EDGES,
@@ -81,6 +82,7 @@ from perfboard_studio.breadboard import (
 from perfboard_studio.commands import create_empty_document
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import (
+    LEGEND_LETTER_STYLES,
     MAX_LEGEND_DIGITS,
     corner_mounting_holes,
     legend_runs_text,
@@ -92,6 +94,7 @@ from perfboard_studio.model import (
     BoardSide,
     DocumentMeta,
     EdgeConnector,
+    LegendLetters,
     MountingHole,
     PerfDocument,
 )
@@ -443,6 +446,22 @@ class LegendAxisFields:
     runs: QLineEdit
     every: QSpinBox
     digits: QSpinBox
+    letters: QComboBox
+
+
+def _end_letter(count: int, style: LegendLetters) -> str:
+    """The label of the ``count``-th lettered position (1-based), in ``style``."""
+    index = max(0, count - 1)
+    if style == "doubled":
+        return chr(65 + index % 26) * (index // 26 + 1)
+    n = index
+    chars: list[str] = []
+    while True:
+        chars.append(chr(65 + n % 26))
+        n = n // 26 - 1
+        if n < 0:
+            break
+    return "".join(reversed(chars))
 
 
 class BoardDesigner(QDialog):
@@ -473,6 +492,9 @@ class BoardDesigner(QDialog):
         self._resolved = ""
         self._family: BoardFamily = FAMILIES[0]
         self._size: BoardSize = FAMILIES[0].sizes[0]
+        #: Explicit (across, down) border override when the user edits the border fields or
+        #: ticks "Fit board to hole grid" (FIT_TO_GRID); None uses the family's default border.
+        self._border_override: tuple[float, float] | None = None
         self._redraw = QTimer(self)
         self._redraw.setSingleShot(True)
         self._redraw.setInterval(0)
@@ -683,6 +705,23 @@ class BoardDesigner(QDialog):
         outline_row.addWidget(QLabel("×"))
         outline_row.addWidget(self.height_mm, 1)
         self._row(size, t("Size in mm"), outline, "sizes")
+        self.fit_to_grid = QCheckBox(t("Fit board to hole grid"))
+        self.fit_to_grid.setToolTip(
+            t("Cut the board flush round its outermost holes, with no extra margin.")
+        )
+        self.fit_to_grid.toggled.connect(self._on_fit_to_grid)
+        self._row(size, "", self.fit_to_grid, key="fit_to_grid")
+        custom_border = QWidget()
+        custom_border_row = QHBoxLayout(custom_border)
+        custom_border_row.setContentsMargins(0, 0, 0, 0)
+        self.custom_border_x, self.custom_border_y = _mm(2.0, 50.0, 2), _mm(2.0, 50.0, 2)
+        for box in (self.custom_border_x, self.custom_border_y):
+            box.setSingleStep(0.5)
+            box.editingFinished.connect(self._on_custom_border)
+        custom_border_row.addWidget(self.custom_border_x, 1)
+        custom_border_row.addWidget(QLabel("×"))
+        custom_border_row.addWidget(self.custom_border_y, 1)
+        self._row(size, t("Border"), custom_border, key="custom_border")
         # A breadboard's channel, and a wide one's narrow part (lhm0's "flex" bodies keep
         # the ordinary channel for their first columns, so a DIP still fits beside the
         # module); a solderable one's border, the one thing its makers differ in.
@@ -778,6 +817,27 @@ class BoardDesigner(QDialog):
         self.row_digits.setToolTip(t('2 prints row 7 as "07", the way most such boards do.'))
         self.row_digits.valueChanged.connect(changed)
         self._row(legend, t("Row digits"), self.row_digits, "legend.row_digits")
+        # Quick switch for boards printed with numbers across and letters down (the reverse
+        # of the default addresses); fills the two run fields directly so it stays editable.
+        orient_widget = QWidget()
+        orient_row = QHBoxLayout(orient_widget)
+        orient_row.setContentsMargins(0, 0, 0, 0)
+        orient_row.setSpacing(4)
+        self.legend_letters_across = QPushButton(t("Letters across"))
+        self.legend_letters_across.setAutoDefault(False)
+        self.legend_letters_across.setToolTip(
+            t("Standard numbering: letters across the columns, numbers down the rows.")
+        )
+        self.legend_letters_across.clicked.connect(lambda: self._apply_legend_axes(False))
+        self.legend_numbers_across = QPushButton(t("Numbers across"))
+        self.legend_numbers_across.setAutoDefault(False)
+        self.legend_numbers_across.setToolTip(
+            t("Swapped numbering: numbers across the columns, letters down the rows.")
+        )
+        self.legend_numbers_across.clicked.connect(lambda: self._apply_legend_axes(True))
+        orient_row.addWidget(self.legend_letters_across, 1)
+        orient_row.addWidget(self.legend_numbers_across, 1)
+        self._row(legend, t("Axes"), orient_widget, "legend.axes")
         # A BOARD THAT COUNTS ITS OWN WAY (#13): A..Z and then A..P again, letters down the
         # side, numbers with every fifth marked. Empty prints the addresses. What is typed
         # is read by the engine (``parse_legend_runs``) and refused in its words.
@@ -836,6 +896,17 @@ class BoardDesigner(QDialog):
         )
         for spin in (every, digits):
             spin.valueChanged.connect(self._changed)
+        letters = QComboBox()
+        letter_labels: dict[LegendLetters, str] = {
+            "spreadsheet": "AA, AB, AC…",
+            "doubled": "AA, BB, CC…",
+        }
+        for style in LEGEND_LETTER_STYLES:
+            letters.addItem(letter_labels[style], style)
+        letters.setToolTip(
+            t("How lettered runs carry on past Z: spreadsheet (AA, AB…) or doubled (AA, BB…).")
+        )
+        letters.activated.connect(self._changed)
         row = QWidget()
         column = QVBoxLayout(row)
         column.setContentsMargins(0, 0, 0, 0)
@@ -848,7 +919,12 @@ class BoardDesigner(QDialog):
         line.addWidget(digits)
         line.addStretch(1)
         column.addLayout(line)
-        return LegendAxisFields(row, runs, every, digits)
+        after_z = QHBoxLayout()
+        after_z.addWidget(QLabel(t("after Z")))
+        after_z.addWidget(letters)
+        after_z.addStretch(1)
+        column.addLayout(after_z)
+        return LegendAxisFields(row, runs, every, digits, letters)
 
     @staticmethod
     def _axis(fields: LegendAxisFields) -> AxisLegend | None:
@@ -857,11 +933,17 @@ class BoardDesigner(QDialog):
         text = fields.runs.text().strip()
         if not text:
             return None
+        style: LegendLetters = fields.letters.currentData() or "spreadsheet"
         try:
-            runs = parse_legend_runs(text)
+            runs = parse_legend_runs(text, letters=style)
         except ValueError:
             return None
-        return AxisLegend(runs=runs, every=fields.every.value(), digits=fields.digits.value())
+        return AxisLegend(
+            runs=runs,
+            every=fields.every.value(),
+            digits=fields.digits.value(),
+            letters=style,
+        )
 
     def _unreadable_runs(self) -> tuple[str, str] | None:
         """(path, why) for a run typed that does not read, while a legend is printed."""
@@ -870,11 +952,22 @@ class BoardDesigner(QDialog):
         for path, fields in (("legend.columns", self.legend_columns), ("legend.rows", self.legend_rows)):
             text = fields.runs.text().strip()
             if text:
+                style: LegendLetters = fields.letters.currentData() or "spreadsheet"
                 try:
-                    parse_legend_runs(text)
+                    parse_legend_runs(text, letters=style)
                 except ValueError as error:
                     return path, str(error)
         return None
+
+    def _apply_legend_axes(self, numbers_across: bool) -> None:
+        """Fill the column and row run fields for standard or swapped legend axes."""
+        if not numbers_across:
+            self.legend_columns.runs.setText("")
+            self.legend_rows.runs.setText("")
+            return
+        row_style: LegendLetters = self.legend_rows.letters.currentData() or "spreadsheet"
+        self.legend_columns.runs.setText(f"1-{self.cols.value()}")
+        self.legend_rows.runs.setText(f"A-{_end_letter(self.rows.value(), row_style)}")
 
     def _on_runs(self, *_args: object) -> None:
         """What the fields beside a run mean: nothing while it is empty, so they are greyed
@@ -884,6 +977,7 @@ class BoardDesigner(QDialog):
             typed = bool(fields.runs.text().strip())
             fields.every.setEnabled(typed)
             fields.digits.setEnabled(typed)
+            fields.letters.setEnabled(typed)
         self._only_what_means_something()
         self._changed()
 
@@ -932,6 +1026,7 @@ class BoardDesigner(QDialog):
         family = everything[row]
         self._family = family
         self._size = _first_size(family) or self._size
+        self._border_override = None
         self._load(family, self._size)
         self.name.setText(family.name if family.user else "")
         self._redraw.start()
@@ -966,6 +1061,14 @@ class BoardDesigner(QDialog):
             self.rows.setValue(size.rows)
             self.width_mm.setValue(size.width_mm)
             self.height_mm.setValue(size.height_mm)
+            bx = max(0.0, round((size.width_mm - size.cols * family.pitch_mm) / 2.0, 2))
+            by = max(0.0, round((size.height_mm - size.rows * family.pitch_mm) / 2.0, 2))
+            flush = bx <= 0.01 and by <= 0.01
+            self.fit_to_grid.setChecked(flush)
+            self.custom_border_x.setValue(bx)
+            self.custom_border_y.setValue(by)
+            self.custom_border_x.setEnabled(not flush)
+            self.custom_border_y.setEnabled(not flush)
             self.type.setCurrentIndex(max(0, self.type.findData(family.type)))
             self.strip_axis.setCurrentIndex(
                 max(0, self.strip_axis.findData(family.strip_axis or "horizontal")))
@@ -999,6 +1102,12 @@ class BoardDesigner(QDialog):
                 fields.runs.setText(legend_runs_text(axis.runs) if axis else "")
                 fields.every.setValue(axis.every if axis else 1)
                 fields.digits.setValue(axis.digits if axis else 1)
+                style_index = fields.letters.findData(axis.letters if axis else "spreadsheet")
+                fields.letters.setCurrentIndex(max(0, style_index))
+                typed = bool(fields.runs.text().strip())
+                fields.every.setEnabled(typed)
+                fields.digits.setEnabled(typed)
+                fields.letters.setEnabled(typed)
             self._show_printed(family, size)
             self.mask_kind.setCurrentIndex(
                 0 if family.mask is None else max(0, self.mask_kind.findData(family.mask)))
@@ -1037,6 +1146,8 @@ class BoardDesigner(QDialog):
         rows = {
             "grid": not pattern,
             "sizes": not pattern,
+            "fit_to_grid": not pattern,
+            "custom_border": not pattern,
             "strip_axis": not pattern and self.type.currentData() == "stripboard",
             "pad_length_mm": not pattern and oblong,
             "pad_axis": not pattern and oblong,
@@ -1046,6 +1157,7 @@ class BoardDesigner(QDialog):
             "breadboard.border_y_mm": kind == "solderable-breadboard",
             "legend.row_digits": not pattern and not self._legend_off()
             and not self.legend_rows.runs.text().strip(),
+            "legend.axes": not pattern and not self._legend_off(),
             "legend.columns": not pattern and not self._legend_off(),
             "legend.rows": not pattern and not self._legend_off(),
         }
@@ -1079,6 +1191,7 @@ class BoardDesigner(QDialog):
             (each for each in family.sizes if each.name == self._size.name),
             family.sizes[0] if family.sizes else self._size,
         )
+        self._border_override = None
         self._load(family, self._size)
         self._redraw.start()
 
@@ -1099,6 +1212,7 @@ class BoardDesigner(QDialog):
         family = self._current_family()
         listed = _listed(family)
         if 0 <= index < len(listed):
+            self._border_override = None
             self._size = listed[index]
             self._load(family, self._size)
         self._redraw.start()
@@ -1106,16 +1220,43 @@ class BoardDesigner(QDialog):
     def _on_grid(self) -> None:
         if self._loading or is_pattern(self._family):
             return
-        self._size = size_for_grid(self._current_family(), self.cols.value(), self.rows.value())
-        self._load(self._current_family(), self._size)
+        family = self._current_family()
+        self._size = size_for_grid(
+            family, self.cols.value(), self.rows.value(), border_mm=self._border_override
+        )
+        self._load(family, self._size)
         self._redraw.start()
 
     def _on_outline(self) -> None:
         if self._loading or is_pattern(self._family):
             return
+        family = self._current_family()
         self._size = size_for_mm(
-            self._current_family(), self.width_mm.value(), self.height_mm.value())
-        self._load(self._current_family(), self._size)
+            family, self.width_mm.value(), self.height_mm.value(), border_mm=self._border_override
+        )
+        self._load(family, self._size)
+        self._redraw.start()
+
+    def _on_fit_to_grid(self, checked: bool) -> None:
+        if self._loading or is_pattern(self._family):
+            return
+        family = self._current_family()
+        self._border_override = FIT_TO_GRID if checked else None
+        self._size = size_for_grid(
+            family, self.cols.value(), self.rows.value(), border_mm=self._border_override
+        )
+        self._load(family, self._size)
+        self._redraw.start()
+
+    def _on_custom_border(self) -> None:
+        if self._loading or is_pattern(self._family):
+            return
+        family = self._current_family()
+        self._border_override = (self.custom_border_x.value(), self.custom_border_y.value())
+        self._size = size_for_grid(
+            family, self.cols.value(), self.rows.value(), border_mm=self._border_override
+        )
+        self._load(family, self._size)
         self._redraw.start()
 
     def _changed(self, *_args: object) -> None:
@@ -1234,7 +1375,12 @@ class BoardDesigner(QDialog):
         family = self._current_family()
         for label in self._problems.values():
             label.hide()
-        problem = self._unreadable_runs() or family_problem(family)
+        checked_family = (
+            dataclasses.replace(family, sizes=(self._size,))
+            if not is_pattern(family) and self._size not in family.sizes
+            else family
+        )
+        problem = self._unreadable_runs() or family_problem(checked_family) or family_problem(family)
         self.use.setEnabled(problem is None)
         self.save.setEnabled(problem is None)
         if problem is not None:

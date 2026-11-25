@@ -38,10 +38,14 @@ closed without a bump.
   as the addresses do. Left out of a board file and a saved board family at its default, so
   every board and family keeps its bytes;
   the guide and the MCP server's board info say it (#16).
+  as the addresses do. Left out of the file at its default, so every board keeps its bytes;
+  the Board Designer now offers an "after Z" choice (AA, AB, AC… / AA, BB, CC…) and a
+  Letters across / Numbers across switch, and the guide and MCP server's board info say it (#16).
 - **A custom board takes the border you ask for.** `boardfamily.size_for_grid` and
   `size_for_mm` take a border (across, down), and `FIT_TO_GRID` cuts the board flush, half a
   pitch past its outermost holes. Typed in millimetres with a border, the board is cut to the
-  grid that fits and that border, rather than the leftover widening the margin (#16).
+  grid that fits and that border, rather than the leftover widening the margin; the Board
+  Designer exposes Border fields and a "Fit board to hole grid" option (#16).
 - **An LED's colour is read from its value.** "green", "LED 5mm yellow", "warm white" or
   "kırmızı": `ledcolour.led_colour` names the colour a part's value gives, by whole words in
   English and Turkish, so "infrared" is not red, and a value naming two colours names none.

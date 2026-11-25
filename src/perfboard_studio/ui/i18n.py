@@ -7113,6 +7113,31 @@ TURKISH: Mapping[str, str] = {
     "Body": "Gövde",
     "Span": "Açıklık",
     "{count} holes": "{count} delik",
+    "Fit board to hole grid": "Kartı delik ızgarasına oturt",
+    "Cut the board flush round its outermost holes, with no extra margin.": (
+        "Kartı en dıştaki deliklerin hemen çevresinden, fazladan kenar boşluğu bırakmadan keser."
+    ),
+    "Border": "Kenar boşluğu",
+    "Axes": "Eksenler",
+    "Letters across": "Yatayda harfler",
+    "Numbers across": "Yatayda sayılar",
+    "Standard numbering: letters across the columns, numbers down the rows.": (
+        "Standart numaralandırma: sütunlarda harfler, satırlarda sayılar."
+    ),
+    "Swapped numbering: numbers across the columns, letters down the rows.": (
+        "Ters numaralandırma: sütunlarda sayılar, satırlarda harfler."
+    ),
+    "How lettered runs carry on past Z: spreadsheet (AA, AB…) or doubled (AA, BB…).": (
+        "Harfli dizilerin Z'den sonra nasıl devam ettiği: tablo (AA, AB…) ya da ikili (AA, BB…)."
+    ),
+    "after Z": "Z sonrası",
+    "{first}–{last} cannot be printed: in doubled letters a label is one letter repeated (A, BB, CCC).": (
+        "{first}–{last} basılamaz: ikili harflerde etiket tek bir harfin tekrarıdır (A, BB, CCC)."
+    ),
+    "A printed {axis} legend's letters go on past Z as one of: spreadsheet, doubled; not {letters}.": (
+        "Basılı {axis} ekseninin harfleri Z'den sonra yalnızca şu biçimlerden biriyle devam eder: "
+        "spreadsheet, doubled; {letters} değil."
+    ),
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

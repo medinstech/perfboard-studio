@@ -189,3 +189,103 @@ def _set(board: object):  # type: ignore[no-untyped-def]
     from perfboard_studio.commands import SetBoardPayload
 
     return SetBoardPayload(board=board)  # type: ignore[arg-type]
+
+
+def test_designer_custom_border_and_fit_to_grid_and_edge_strip_refusal() -> None:
+    """Custom border fields and Fit board to hole grid cut the board to the grid plus
+    requested border, and family_problem refuses flush on an edge-strip family."""
+    dialog = designer_on(BOARD)
+    choose_family(dialog, "double-sided-fr4")
+    dialog.cols.setValue(20)
+    dialog.rows.setValue(10)
+    dialog._on_grid()
+
+    # Fit board to hole grid cuts flush (0 mm border -> exact pitch * holes).
+    # Without corner mounting holes or edge-connector strips, flush is valid; with edge
+    # strips, family_problem refuses flush.
+    dialog.holes_on.setChecked(False)
+    dialog.strip_on.setChecked(False)
+    dialog.fit_to_grid.setChecked(True)
+    assert dialog.custom_border_x.value() == 0.0
+    assert dialog.custom_border_y.value() == 0.0
+    assert not dialog.custom_border_x.isEnabled()
+    assert dialog.width_mm.value() == pytest.approx(20 * 2.54, abs=0.02)
+    assert dialog.height_mm.value() == pytest.approx(10 * 2.54, abs=0.02)
+    dialog._show()
+    assert dialog.use.isEnabled()
+
+    # Unchecking restores default border; typing custom border trims mm cleanly.
+    dialog.fit_to_grid.setChecked(False)
+    assert dialog.custom_border_x.isEnabled()
+    dialog.custom_border_x.setValue(3.5)
+    dialog.custom_border_y.setValue(4.0)
+    dialog._on_custom_border()
+    assert dialog.width_mm.value() == pytest.approx(20 * 2.54 + 7.0, abs=0.02)
+    assert dialog.height_mm.value() == pytest.approx(10 * 2.54 + 8.0, abs=0.02)
+
+    # Flush border on a family with edge-connector strips is refused by family_problem.
+    dialog.strip_on.setChecked(True)
+    dialog.fit_to_grid.setChecked(True)
+    dialog._show()
+    assert not dialog.use.isEnabled()
+
+
+def test_designer_round_trips_doubled_letters_without_dropping_style() -> None:
+    """Opening and re-saving a board with doubled letters past Z preserves letters='doubled'
+    so hole 27 prints BB rather than silently reverting to AB."""
+    doubled_board = dataclasses.replace(
+        BOARD,
+        labels=BoardLabels(
+            row_digits=2,
+            columns=AxisLegend(runs=(("A", "PP"),), letters="doubled"),
+            rows=AxisLegend(runs=(("A", "DD"),), letters="doubled"),
+        ),
+    )
+    dialog = designer_on(doubled_board)
+    assert dialog.legend_columns.letters.currentData() == "doubled"
+    assert dialog.legend_rows.letters.currentData() == "doubled"
+    dialog._show()
+    assert dialog.use.isEnabled()
+    kept = dialog.design().board.labels
+    assert kept is not None
+    assert kept.columns is not None and kept.columns.letters == "doubled"
+    assert kept.rows is not None and kept.rows.letters == "doubled"
+
+
+def test_designer_legend_axes_switch_and_doubled_letters_past_z() -> None:
+    """Numbers across / Letters across populates the run fields directly; after Z picks
+    between spreadsheet (AA, AB) and doubled (AA, BB) and validates in that style."""
+    from perfboard_studio.ui.i18n import set_language
+
+    dialog = designer_on(dataclasses.replace(BOARD, labels=BoardLabels(row_digits=2)))
+    dialog.legend_numbers_across.click()
+    assert dialog.legend_columns.runs.text() == f"1-{dialog.cols.value()}"
+    assert dialog.legend_rows.runs.text().startswith("A-")
+    labels = dialog.design().board.labels
+    assert labels is not None and labels.columns is not None and labels.rows is not None
+
+    # Switch to doubled letters past Z and verify both valid and invalid runs.
+    doubled_idx = dialog.legend_rows.letters.findData("doubled")
+    assert doubled_idx >= 0
+    dialog.legend_rows.letters.setCurrentIndex(doubled_idx)
+    dialog.legend_rows.runs.setText("A-DD")
+    dialog._show()
+    assert dialog.use.isEnabled()
+    labels_doubled = dialog.design().board.labels
+    assert labels_doubled is not None and labels_doubled.rows is not None
+    assert labels_doubled.rows.letters == "doubled"
+
+    # Non-doubled label like AB is refused in doubled mode, and translates in Turkish.
+    set_language("tr")
+    try:
+        dialog.legend_rows.runs.setText("A-AB")
+        dialog._show()
+        assert not dialog.use.isEnabled()
+        assert "ikili harflerde" in dialog._problems["legend.rows"].text()
+    finally:
+        set_language("en")
+
+    # Letters across resets to default addresses.
+    dialog.legend_letters_across.click()
+    assert dialog.legend_columns.runs.text() == ""
+    assert dialog.legend_rows.runs.text() == ""
