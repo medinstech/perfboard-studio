@@ -792,3 +792,86 @@ def test_a_custom_part_can_actually_be_built() -> None:
     steps = [step for phase in guide.phases for step in phase.steps]
     assert any("M1" in step.title for step in steps), [s.title for s in steps]
     assert any("M1" in line.ref_designators for line in guide.bom)
+
+
+# --- An axial resistor's body is not its span (#16) ---------------------------------------
+
+
+def test_the_registry_resistors_are_the_bodies_the_table_says() -> None:
+    from perfboard_studio.footprints import (
+        AXIAL_RESISTOR_BODIES,
+        REGISTRY_AXIAL_RESISTOR_BODIES,
+        axial_resistor_id,
+    )
+
+    for span, body in REGISTRY_AXIAL_RESISTOR_BODIES.items():
+        footprint = REGISTRY[f"r-axial-{span}"]
+        assert (footprint.body.dims["length"], footprint.body.dims["diameter"]) == (
+            AXIAL_RESISTOR_BODIES[body]
+        )
+        assert axial_resistor_id(span, body) == footprint.id
+
+
+@pytest.mark.parametrize(
+    ("span", "body", "expected"),
+    [
+        (2, "0204", "axial-2h-3.6x1.6"),
+        (4, "0204", "axial-4h-3.6x1.6"),
+        (3, "0207", "r-axial-3"),
+        (5, "0207", "r-axial-5"),
+        (6, "0207", "axial-6h-6.5x2.5"),
+        (8, "0207", "axial-8h-6.5x2.5"),
+        (4, "0309", "axial-4h-9x3.6"),
+        (6, "0309", "r-axial-6"),
+    ],
+)
+def test_axial_resistor_id_is_the_body_on_the_span(span: int, body: str, expected: str) -> None:
+    from perfboard_studio.footprints import (
+        AXIAL_RESISTOR_BODIES,
+        axial_resistor_body,
+        axial_resistor_id,
+        get_footprint,
+    )
+
+    assert axial_resistor_id(span, body) == expected
+    # The id the generator rebuilds, never a second spelling of the same part.
+    footprint = get_footprint(expected)
+    assert footprint is not None and footprint.id == expected
+    assert (footprint.body.dims["length"], footprint.body.dims["diameter"]) == (
+        AXIAL_RESISTOR_BODIES[body]
+    )
+    assert footprint.pins[1].d_col - footprint.pins[0].d_col == span
+    assert axial_resistor_body(expected) == (span, body)
+
+
+@pytest.mark.parametrize(("span", "body"), [(1, "0204"), (2, "0207"), (3, "0309"), (0, "0207")])
+def test_a_span_shorter_than_the_body_is_refused(span: int, body: str) -> None:
+    from perfboard_studio.footprints import axial_resistor_id
+
+    with pytest.raises(ValueError):
+        axial_resistor_id(span, body)
+
+
+def test_every_span_offered_is_a_span_the_id_accepts() -> None:
+    from perfboard_studio.footprints import (
+        AXIAL_RESISTOR_BODIES,
+        axial_resistor_id,
+        axial_resistor_spans,
+    )
+
+    assert axial_resistor_spans("0204")[0] == 2
+    assert axial_resistor_spans("0207")[0] == 3
+    assert axial_resistor_spans("0309")[0] == 4
+    for body in AXIAL_RESISTOR_BODIES:
+        for span in axial_resistor_spans(body):
+            axial_resistor_id(span, body)
+
+
+@pytest.mark.parametrize(
+    "footprint_id",
+    ["d-do41", "axial-4h-5.2x2.7-pol", "axial-4h-6.5x2.5-v", "axial-8h-11.9x4.5", "dip-8", "r-axial-9"],
+)
+def test_a_footprint_that_is_no_known_resistor_body_has_none(footprint_id: str) -> None:
+    from perfboard_studio.footprints import axial_resistor_body
+
+    assert axial_resistor_body(footprint_id) is None

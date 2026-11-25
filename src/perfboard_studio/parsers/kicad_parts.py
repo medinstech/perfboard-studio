@@ -39,6 +39,7 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from ..catalog import CATALOG, CatalogPart
+from ..footprints import AXIAL_RESISTOR_BODIES, axial_resistor_id
 from ..model import (
     ComponentInstance,
     Footprint,
@@ -145,9 +146,18 @@ def _axial_resistor(m: re.Match[str]) -> list[str]:
     holes = _holes(float(m["pitch"]))
     if holes is None:
         return []
-    # The registry's own resistor for that span first: it is the one with a borrowed model.
     exact = f"axial-{holes}h-{float(m['length']):g}x{float(m['diameter']):g}"
-    return [f"r-axial-{holes}", exact]
+    # A DIN size the library knows is that body on that span, which is the registry's
+    # resistor only where the registry's body IS that size. The registry's own resistor for
+    # the span used to come first whatever the size, so a 1/8 W 0204 arrived as a 1/4 W 0207
+    # and a 0207 on six holes as a 0309, each body bigger than the part and DRC measuring it.
+    din = m["din"]
+    if din in AXIAL_RESISTOR_BODIES:
+        try:
+            return [axial_resistor_id(holes, din)]
+        except ValueError:
+            pass
+    return [exact]
 
 
 def _diode(m: re.Match[str]) -> list[str]:
@@ -250,7 +260,7 @@ def _solder_wire(m: re.Match[str]) -> list[str]:
 _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]], ...] = (
     (
         re.compile(
-            r"^R_Axial_DIN\d{4}_L(?P<length>[\d.]+)mm_D(?P<diameter>[\d.]+)mm_"
+            r"^R_Axial_DIN(?P<din>\d{4})_L(?P<length>[\d.]+)mm_D(?P<diameter>[\d.]+)mm_"
             r"P(?P<pitch>[\d.]+)mm_Horizontal"
         ),
         _axial_resistor,

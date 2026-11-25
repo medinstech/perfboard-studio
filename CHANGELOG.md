@@ -200,6 +200,12 @@ closed without a bump.
 
 ### Fixed
 
+- **A resistor's body is no longer its span.** A KiCad `R_Axial_DIN0204` (1/8 W) arrived as
+  the library's 1/4 W 0207 on every span, and a 0207 on six holes as its 1/2 W 0309, each body
+  bigger than the part and measured so by DRC. The DIN size now picks the body and the span
+  picks the holes: `footprints.axial_resistor_id(span, body)` spells any of 0204, 0207 and
+  0309 on any span it lies flat in, as the library's own resistor where that is exactly the
+  body (#16).
 - **The sheet drawn for you puts a dot on every join again.** It lays each connection
   pin to pin and lets one net's wires share a line, and a dot went only where three wire
   ENDS met, so a wire leaving a shared line was a join with no dot, drawn like a crossing:

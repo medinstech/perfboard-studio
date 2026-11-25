@@ -40,6 +40,15 @@ def _first(kicad_footprint: str) -> str | None:
         ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal", "r-axial-4"),
         ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal", "r-axial-3"),
         ("Resistor_THT:R_Axial_DIN0414_L11.9mm_D4.5mm_P20.32mm_Horizontal", "axial-8h-11.9x4.5"),
+        # The body is the DIN size, not the span (#16): a 1/8 W 0204 is not the registry's
+        # 0207 on any span, and a 0207 on six holes is not the registry's 0309.
+        ("Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal", "axial-2h-3.6x1.6"),
+        ("Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P7.62mm_Horizontal", "axial-3h-3.6x1.6"),
+        ("Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P10.16mm_Horizontal", "axial-4h-3.6x1.6"),
+        ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P15.24mm_Horizontal", "axial-6h-6.5x2.5"),
+        ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P12.70mm_Horizontal", "r-axial-5"),
+        ("Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P15.24mm_Horizontal", "r-axial-6"),
+        ("Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P12.70mm_Horizontal", "axial-5h-9x3.6"),
         ("Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal", "d-do41"),
         ("Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal", "d-do35"),
         ("Diode_THT:D_DO-201AD_P15.24mm_Horizontal", "axial-6h-9.5x5.3-pol"),

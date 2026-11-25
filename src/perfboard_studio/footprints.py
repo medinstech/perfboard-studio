@@ -280,6 +280,96 @@ def axial_footprint(
     )
 
 
+
+# AN AXIAL RESISTOR'S BODY IS NOT ITS SPAN. A 1/8 W resistor is a 0204, a 1/4 W one a 0207
+# and a 1/2 W one a 0309, and each is bent to whatever span the board has room for; the
+# registry ties a body to each of its four spans, so a 1/4 W resistor moved to six holes
+# became a 1/2 W one (#16). Every other pairing is the generated ``axial-<span>h-<L>x<D>``,
+# and ``axial_resistor_id`` is the one place that spells it, so a resistor chosen by its
+# body and one imported from KiCad by its DIN size are the same part.
+
+AxialResistorBody = Literal["0204", "0207", "0309"]
+
+#: Body length x diameter (mm) by DIN size, at the maker's largest. 0204: Vishay MBA/SMA
+#: 0204 (doc 28766), 3.6 x 1.6; 0207: MBB/SMA 0207, same document, 6.5 x 2.5; 0309: the
+#: registry's long resistor as it always was, 9.0 x 3.6.
+AXIAL_RESISTOR_BODIES: dict[AxialResistorBody, tuple[Mm, Mm]] = {
+    "0204": (3.6, 1.6),
+    "0207": (6.5, 2.5),
+    "0309": (9.0, 3.6),
+}
+
+#: The rating each body is sold as, for a choice that names it the way a shop does.
+AXIAL_RESISTOR_WATTS: dict[AxialResistorBody, str] = {
+    "0204": "1/8 W",
+    "0207": "1/4 W",
+    "0309": "1/2 W",
+}
+
+#: The body each registry resistor ``r-axial-<span>`` has, by span.
+REGISTRY_AXIAL_RESISTOR_BODIES: dict[int, AxialResistorBody] = {
+    3: "0207",
+    4: "0207",
+    5: "0207",
+    6: "0309",
+}
+
+
+def axial_resistor_spans(body: AxialResistorBody, *, longest: int = 12) -> tuple[int, ...]:
+    """The lead spans, in holes, a body lies flat in: the shortest is the first whose hole
+    centres are as far apart as the body is long, so the leads leave its ends and go
+    straight down (a 0207 lies in three holes, which is ``r-axial-3``; a 0309 needs four)."""
+    length = AXIAL_RESISTOR_BODIES[body][0]
+    shortest = max(math.ceil(length / STANDARD_PITCH_MM - 1e-9), 1)
+    return tuple(range(shortest, longest + 1))
+
+
+def axial_resistor_id(span_holes: int, body: AxialResistorBody) -> str:
+    """The footprint id of an axial resistor with ``body`` lying across ``span_holes``.
+
+    The registry's ``r-axial-<span>`` where that is exactly this body -- it is the one with a
+    borrowed model -- and the generated id otherwise, spelled by the generator itself so the
+    two cannot disagree. A span shorter than the body is a ``ValueError``: the leads would
+    have to leave the body's ends going inwards.
+    """
+    if span_holes not in axial_resistor_spans(body, longest=max(span_holes, 1)):
+        raise ValueError(f"a {body} resistor does not lie in a {span_holes}-hole span")
+    if REGISTRY_AXIAL_RESISTOR_BODIES.get(span_holes) == body:
+        return f"r-axial-{span_holes}"
+    length, diameter = AXIAL_RESISTOR_BODIES[body]
+    return axial_footprint(
+        span_holes=span_holes, body_length_mm=length, body_diameter_mm=diameter
+    ).id
+
+
+_GENERATED_AXIAL = re.compile(r"^axial-(\d+)h-([\d.]+)x([\d.]+)$")
+
+
+def axial_resistor_body(footprint_id: str) -> tuple[int, AxialResistorBody] | None:
+    """The span and body of a resistor footprint ``axial_resistor_id`` spells, or ``None``.
+
+    The inverse, for a choice that shows what a part already is: a registry resistor, or a
+    flat, unpolarised generated axial whose body is one of ``AXIAL_RESISTOR_BODIES``. A
+    diode's ``-pol``, an upright ``-v`` and a body of any other size are not a resistor
+    body this table knows, and answer ``None``.
+    """
+    registry = re.fullmatch(r"r-axial-(\d+)", footprint_id)
+    if registry is not None:
+        span = int(registry[1])
+        body = REGISTRY_AXIAL_RESISTOR_BODIES.get(span)
+        return None if body is None else (span, body)
+    generated = _GENERATED_AXIAL.match(footprint_id)
+    if generated is None:
+        return None
+    span = int(generated[1])
+    for body in AXIAL_RESISTOR_BODIES:
+        try:
+            if axial_resistor_id(span, body) == footprint_id:
+                return span, body
+        except ValueError:
+            continue
+    return None
+
 # STOOD ON END. Where a board has no room to lay a resistor down, it is stood up over one
 # of its holes and its far lead is bent back over the top and down into the next: one hole
 # of board instead of four, and a part three or four times as tall. The two are the same
@@ -2141,15 +2231,10 @@ def _build_standard_footprints() -> dict[str, Footprint]:
     footprint_list: list[Footprint] = []
 
     # Resistors: axial, 4 standard lead spans. The three shortest are one package, the 1/4 W
-    # 0207, at its largest (Vishay MBB/SMA 0207, doc 28766: 6.5 mm long, 2.5 across); the
-    # longest is a 0309.
-    resistor_spans = (
-        (3, 6.5, 2.5),
-        (4, 6.5, 2.5),
-        (5, 6.5, 2.5),
-        (6, 9.0, 3.6),
-    )
-    for span, length, diameter in resistor_spans:
+    # 0207, and the longest is a 0309 (``AXIAL_RESISTOR_BODIES`` has their sizes). Any other
+    # span with any of those bodies is a generated id: ``axial_resistor_id``.
+    for span, body in REGISTRY_AXIAL_RESISTOR_BODIES.items():
+        length, diameter = AXIAL_RESISTOR_BODIES[body]
         footprint_list.append(
             axial_footprint(
                 span_holes=span,
