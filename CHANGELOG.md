@@ -33,6 +33,10 @@ closed without a bump.
 - **Who makes it.** The Medinstech mark and name sit in Home's corner, under the version, and
   in Help ▸ About, each a link to www.medinstech.com. The dark theme has its own white mark, with the figure cut out of it.
   The logo files are the company's trademark and not under the Apache licence (NOTICE).
+  Each is drawn as what it is, in 2D, in 3D and in the parts list: a socket all plastic
+  with a dark mouth over every pin; a right-angle strip its gold legs bent over, the
+  moulding on its side and, for a header, the pins on out past it -- rather than one
+  black block over every hole its body reaches (#16).
 - **A printed legend can go on past Z in doubled letters.** `AxisLegend.letters = "doubled"`
   prints A..Z, then AA, BB, .. ZZ, as some boards do, where the default carries on AA, AB, ..
   as the addresses do. Left out of a board file and a saved board family at its default, so

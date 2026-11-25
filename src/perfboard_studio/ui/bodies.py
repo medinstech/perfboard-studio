@@ -38,7 +38,7 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from perfboard_studio.drc import placed_body_box, placed_entry
-from perfboard_studio.footprints import MIN_BODY_MM, body_extent, wire_entry
+from perfboard_studio.footprints import MIN_BODY_MM, RIGHT_ANGLE_REACH_MM, body_extent, wire_entry
 from perfboard_studio.geometry import (
     SubstrateEdges,
     board_note_centre_mm,
@@ -456,6 +456,65 @@ def placement_for(footprint: Footprint, pitch: float) -> BodyPlacement:
         height=max(height, 0.6),
         axis=extent.axis,
         polarized=footprint.polarized,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Right-angle headers and sockets
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class RightAngle:
+    """A right-angle header or socket from above, in mm in the footprint's own frame.
+
+    Its legs stand in their holes and bend over towards increasing row; the moulding lies
+    flat past the last row, and a header's pins go on through it to their tips. That
+    is one rectangle to DRC (``footprints.body_extent``: nothing else can stand on any of
+    it), but three things to the eye -- bent legs over the board, a black block, and bare
+    pins in the air -- and a view that fills the whole rectangle black shows a block six
+    holes deep where the part is one hole of plastic and two rows of gold.
+    """
+
+    #: The moulding's two ends along the pin row.
+    left: float
+    right: float
+    #: Each row of legs, as a y, the farthest from the moulding first.
+    rows: tuple[float, ...]
+    #: The moulding's near and far faces.
+    near: float
+    far: float
+    #: Where the pins end: the far face for a socket, whose contacts end inside it.
+    reach: float
+    #: A female header: its mouths are on the far face, and no pin comes out of it.
+    socket: bool
+
+
+def right_angle_for(footprint: Footprint, pitch: float) -> RightAngle | None:
+    """How a right-angle header or socket lies, or None for every other part.
+
+    From the footprint's pins at THIS pitch and its reach in millimetres, as
+    ``body_extent`` measures it, so the drawing and the body DRC measures agree.
+    """
+    archetype = footprint.body.archetype
+    if archetype not in RIGHT_ANGLE_REACH_MM or not footprint.pins:
+        return None
+    body_from, body_to, pin_reach = RIGHT_ANGLE_REACH_MM[archetype]
+    dims = footprint.body.dims
+    body_from = dims.get("bodyFrom", body_from)
+    body_to = dims.get("bodyTo", body_to)
+    pin_reach = dims.get("pinReach", pin_reach)
+    xs = [pin.d_col * pitch for pin in footprint.pins]
+    rows = sorted({pin.d_row * pitch for pin in footprint.pins})
+    last = rows[-1]
+    return RightAngle(
+        left=min(xs) - pitch / 2,
+        right=max(xs) + pitch / 2,
+        rows=tuple(rows),
+        near=last + body_from,
+        far=last + body_to,
+        reach=last + pin_reach,
+        socket=archetype == "pin-socket-ra",
     )
 
 

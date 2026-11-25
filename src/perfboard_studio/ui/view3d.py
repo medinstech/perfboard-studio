@@ -63,6 +63,7 @@ from perfboard_studio.footprints import (
     MODULE_PCB_MM,
     MODULE_SEAT_SOCKETED_MM,
     MODULE_SEAT_SOLDERED_MM,
+    RIGHT_ANGLE_REACH_MM,
     upright_body_span,
     wire_entry,
 )
@@ -3047,6 +3048,153 @@ def _header_pieces(body: _WorldBody) -> list[_Piece]:
     ]
 
 
+#: A female header's mouth, and the depth its black is drawn at on the face it opens in.
+SOCKET_MOUTH_MM = 1.0
+_MOUTH_SKIN_MM = 0.06
+#: A header's pin, square, as stamped.
+_HEADER_PIN_MM = 0.64
+
+
+def _socket_pieces(body: _WorldBody) -> list[_Piece]:
+    """A female header standing: all moulding, the whole height, with a square mouth over
+    every pin and the contact a glint of gold down in it. Built as a pin header, it was a
+    third of the plastic with gold pins standing out of it -- the one thing a socket is not.
+    """
+    top = body.height + _LIFT
+    glint = SOCKET_MOUTH_MM * 0.34
+    return [
+        _Piece(
+            source=_moulded_box(body.size_x, body.size_y, body.height),
+            rgb=_rgb(body.style.fill),
+            position=(body.x, body.y, body.height / 2 + _LIFT),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=_box(SOCKET_MOUTH_MM, SOCKET_MOUTH_MM, _MOUTH_SKIN_MM),
+            rgb=(0.02, 0.02, 0.025),
+            position=(0.0, 0.0, 0.0),
+            material=MOULDED,
+            instances=tuple((x, y, top + _MOUTH_SKIN_MM / 2) for x, y in body.pins),
+        ),
+        _Piece(
+            source=_box(glint, glint, _MOUTH_SKIN_MM),
+            rgb=_rgb(body.style.accent),
+            position=(0.0, 0.0, 0.0),
+            material=PLATED,
+            instances=tuple((x, y, top + _MOUTH_SKIN_MM * 1.5) for x, y in body.pins),
+        ),
+        *_through_hole_pieces(body, _LIFT + 0.15, blade=(_HEADER_PIN_MM, _HEADER_PIN_MM)),
+    ]
+
+
+def right_angle_direction(body: _WorldBody) -> tuple[float, float]:
+    """Which way a right-angle part lies, as a world axis: from its pins towards its body.
+
+    Read off the body rather than the part's rotation, because ``body_extent`` already put
+    the body past the last row however the part is turned or mirrored -- the same box DRC
+    measures -- so the direction from the pins' middle to the body's middle is the answer
+    for every placement, on either face.
+    """
+    if not body.pins:
+        return (0.0, -1.0)
+    mid_x = sum(x for x, _ in body.pins) / len(body.pins)
+    mid_y = sum(y for _, y in body.pins) / len(body.pins)
+    dx, dy = body.x - mid_x, body.y - mid_y
+    if abs(dx) >= abs(dy):
+        return (1.0 if dx >= 0 else -1.0, 0.0)
+    return (0.0, 1.0 if dy >= 0 else -1.0)
+
+
+def _right_angle_pieces(body: _WorldBody, *, female: bool) -> list[_Piece]:
+    """A right-angle header or socket: its legs up out of their holes and bent over, the
+    moulding lying on its side past the last row, and a header's pins on through it.
+
+    Each row of legs bends at its own level -- the row nearest the moulding lowest, a
+    pitch apart, as the strip is moulded -- so a 2-row part's back row arches over the
+    front one. The lengths come from ``RIGHT_ANGLE_REACH_MM``, the numbers DRC's body is
+    made of, so the solid and the box agree.
+    """
+    if not body.pins:
+        return []
+    body_from, body_to, pin_reach = RIGHT_ANGLE_REACH_MM["pin-socket-ra" if female else "pin-header-ra"]
+    ux, uy = right_angle_direction(body)
+
+    def along(x: float, y: float) -> float:
+        return x * ux + y * uy
+
+    along_x = ux != 0.0
+    last = max(along(x, y) for x, y in body.pins)
+    rows = sorted({round(along(x, y), 6) for x, y in body.pins}, reverse=True)
+    level_h = body.height / len(rows)
+    across_size = body.size_y if along_x else body.size_x
+    across_centre = body.y if along_x else body.x
+
+    def at(along_at: float, across_at: float, z: float) -> tuple[float, float, float]:
+        sign = ux if along_x else uy
+        a = along_at * sign
+        return (a, across_at, z) if along_x else (across_at, a, z)
+
+    def sized(along_len: float, across_len: float, height: float) -> Any:
+        return _box(along_len, across_len, height) if along_x else _box(across_len, along_len, height)
+
+    moulding_len = body_to - body_from
+    moulding = _moulded_box(
+        moulding_len if along_x else across_size,
+        across_size if along_x else moulding_len,
+        body.height,
+    )
+    pieces = [
+        _Piece(
+            source=moulding,
+            rgb=_rgb(body.style.fill),
+            position=at(last + (body_from + body_to) / 2, across_centre, body.height / 2 + _LIFT),
+            material=MOULDED,
+        )
+    ]
+    pin = _HEADER_PIN_MM
+    gold = _rgb(body.style.accent)
+    end = last + (pin_reach if not female else body_from + pin)
+    for level, row in enumerate(rows):
+        z = (level + 0.5) * level_h
+        here = [(x, y) for x, y in body.pins if abs(along(x, y) - row) < 1e-3]
+        acrosses = [y if along_x else x for x, y in here]
+        # Up out of the hole to the bend.
+        pieces.append(
+            _Piece(
+                source=_box(pin, pin, z + pin / 2),
+                rgb=gold,
+                position=(0.0, 0.0, 0.0),
+                material=PLATED,
+                instances=tuple((x, y, (z + pin / 2) / 2 + _LIFT) for x, y in here),
+            )
+        )
+        # Over from the bend, into the moulding -- and, for a header, out the far side.
+        length = end - (row - pin / 2)
+        centre = (row - pin / 2 + end) / 2
+        pieces.append(
+            _Piece(
+                source=sized(length, pin, pin),
+                rgb=gold,
+                position=(0.0, 0.0, 0.0),
+                material=PLATED,
+                instances=tuple(at(centre, a, z + _LIFT) for a in acrosses),
+            )
+        )
+        if female:
+            face = last + body_to + _MOUTH_SKIN_MM / 2
+            pieces.append(
+                _Piece(
+                    source=sized(_MOUTH_SKIN_MM, SOCKET_MOUTH_MM, SOCKET_MOUTH_MM),
+                    rgb=(0.02, 0.02, 0.025),
+                    position=(0.0, 0.0, 0.0),
+                    material=MOULDED,
+                    instances=tuple(at(face, a, z + _LIFT) for a in acrosses),
+                )
+            )
+    pieces.extend(_through_hole_pieces(body, _LIFT + 0.15, blade=(pin, pin)))
+    return pieces
+
+
 def _box_header_pieces(body: _WorldBody) -> list[_Piece]:
     """A shroud of four walls on a floor, gold pins standing in it, and the key slot.
 
@@ -3817,10 +3965,9 @@ _BUILDERS: dict[str, Any] = {
     "to220": _to220_pieces,
     "led-round": _led_pieces,
     "pin-header": _header_pieces,
-    # Built as the pin header until their own pieces are built.
-    "pin-socket": _header_pieces,
-    "pin-header-ra": _header_pieces,
-    "pin-socket-ra": _header_pieces,
+    "pin-socket": _socket_pieces,
+    "pin-header-ra": lambda body: _right_angle_pieces(body, female=False),
+    "pin-socket-ra": lambda body: _right_angle_pieces(body, female=True),
     "screw-terminal": _screw_terminal_pieces,
     "potentiometer": _pot_pieces,
     "tactile-switch": _switch_pieces,

@@ -943,6 +943,48 @@ def _pin_header(p: QPainter, style: Any) -> None:
     p.drawRect(QRectF(16, 40, 68, 28))
 
 
+def _pin_socket(p: QPainter, style: Any) -> None:
+    """A female header from the front: all plastic, tall, its mouths along the top and
+    only the legs below -- no pin stands out of it."""
+    p.setPen(_pen(style.accent, 7))
+    for x in (26, 42, 58, 74):
+        p.drawLine(QPointF(x, 74), QPointF(x, 94))
+    _fill(p, style)
+    p.drawRect(QRectF(16, 14, 68, 62))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(0, 0, 0))
+    for x in (26, 42, 58, 74):
+        p.drawRect(QRectF(x - 5, 20, 10, 10))
+
+
+def _right_angle(p: QPainter, style: Any, female: bool) -> None:
+    """A right-angle strip from the side: the leg up out of the board and bent over, the
+    moulding lying on it, and a header's pin on out the far side."""
+    p.setPen(_pen(style.accent, 7))
+    reach = 50 if female else 92
+    path = QPainterPath(QPointF(22, 94))
+    path.lineTo(QPointF(22, 56))
+    path.lineTo(QPointF(reach, 56))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(path)
+    _fill(p, style)
+    if female:
+        p.drawRect(QRectF(40, 34, 52, 44))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0))
+        p.drawRect(QRectF(82, 50, 7, 12))
+    else:
+        p.drawRect(QRectF(40, 38, 20, 36))
+
+
+def _pin_header_ra(p: QPainter, style: Any) -> None:
+    _right_angle(p, style, female=False)
+
+
+def _pin_socket_ra(p: QPainter, style: Any) -> None:
+    _right_angle(p, style, female=True)
+
+
 def _box_header(p: QPainter, style: Any) -> None:
     """The header's pins inside a shroud, with the key slot cut in the near wall."""
     _fill(p, style)
@@ -1076,10 +1118,9 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
     "to220": _to220,
     "led-round": _led,
     "pin-header": _pin_header,
-    # Drawn as the pin header until their own pictures are drawn.
-    "pin-socket": _pin_header,
-    "pin-header-ra": _pin_header,
-    "pin-socket-ra": _pin_header,
+    "pin-socket": _pin_socket,
+    "pin-header-ra": _pin_header_ra,
+    "pin-socket-ra": _pin_socket_ra,
     "screw-terminal": _screw_terminal,
     "potentiometer": _potentiometer,
     "tactile-switch": _tactile,

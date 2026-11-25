@@ -216,6 +216,7 @@ from .bodies import (
     BodyPlacement,
     BodyStyle,
     PinLabel,
+    RightAngle,
     flat_face_profile,
     lay_out_pin_names,
     leads_for,
@@ -224,6 +225,7 @@ from .bodies import (
     plus_mark,
     polarity_pin_offset,
     resistor_bands,
+    right_angle_for,
     style_for,
     surface_for,
 )
@@ -3216,6 +3218,14 @@ def _body_path(
     """
     rect = _body_rect(placement)
     path = QPainterPath()
+    angle = right_angle_for(footprint, pitch)
+    if angle is not None:
+        # Only the moulding: the legs and the pins are drawn as what they are, gold, by
+        # ``_paint_right_angle_pins`` -- see ``bodies.RightAngle``.
+        moulding = QRectF(angle.left, angle.near, angle.right - angle.left, angle.far - angle.near)
+        radius = min(moulding.width(), moulding.height()) * 0.12
+        path.addRoundedRect(moulding, radius, radius)
+        return path
     if placement.silhouette == "circle":
         path.addEllipse(rect)
         return path
@@ -3823,6 +3833,9 @@ def _paint_body(
     on_screen = not _on_paper(painter)
     if on_screen:
         _paint_contact_shadow(painter, path)
+    angle = right_angle_for(footprint, pitch)
+    if angle is not None:
+        _paint_right_angle_pins(painter, footprint, angle, pitch, QColor(style.accent))
 
     painter.setBrush(QBrush(QColor(style.fill)))
     painter.setPen(QPen(QColor(SELECTED if selected else style.edge), 0.2))
@@ -3947,6 +3960,20 @@ def _paint_body(
 
     elif archetype == "pin-header":
         _paint_pin_marks(painter, footprint, pitch, accent, square=True)
+
+    elif archetype == "pin-socket":
+        _paint_socket_mouths(painter, footprint, pitch, accent)
+
+    elif archetype == "pin-socket-ra" and angle is not None:
+        # The mouths are on the far face, where this view cannot look into them: a notch
+        # in the far edge over each column says which side a header goes in from.
+        painter.setClipPath(path)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(0, 0, 0, 170)))
+        depth = min(0.45, (angle.far - angle.near) * 0.12)
+        for x in sorted({pin.d_col * pitch for pin in footprint.pins}):
+            painter.drawRect(QRectF(x - SOCKET_MOUTH_MM / 2, angle.far - depth, SOCKET_MOUTH_MM, depth))
+        painter.setClipping(False)
 
     elif archetype == "box-header":
         # The cavity the socket goes into, and the key slot through the wall on the pin-1
@@ -4537,6 +4564,50 @@ def _paint_wire_entries(
         else:
             opening = QRectF(rect.left(), y - width / 2, depth, width)
         painter.drawRect(opening)
+
+
+#: A female header's mouth, from above: the square a pin goes into.
+SOCKET_MOUTH_MM = 1.0
+#: A header's pin, square, as stamped.
+HEADER_PIN_MM = 0.64
+
+
+def _paint_socket_mouths(painter: QPainter, footprint: Footprint, pitch: float, accent: QColor) -> None:
+    """A female header from above: a dark mouth over each pin, the contact a glint of
+    gold down in it. A plain black strip read as a header with its pins cut off."""
+    painter.setPen(QPen(QColor(255, 255, 255, 0x30), 0.08))
+    painter.setBrush(QBrush(QColor(0, 0, 0, 210)))
+    mouth = SOCKET_MOUTH_MM
+    for pin in footprint.pins:
+        x, y = pin.d_col * pitch, pin.d_row * pitch
+        painter.drawRect(QRectF(x - mouth / 2, y - mouth / 2, mouth, mouth))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(accent.darker(170)))
+    glint = mouth * 0.34
+    for pin in footprint.pins:
+        x, y = pin.d_col * pitch, pin.d_row * pitch
+        painter.drawRect(QRectF(x - glint / 2, y - glint / 2, glint, glint))
+
+
+def _paint_right_angle_pins(
+    painter: QPainter,
+    footprint: Footprint,
+    angle: RightAngle,
+    pitch: float,
+    accent: QColor,
+) -> None:
+    """A right-angle part's gold, under its moulding: each leg from its hole over to the
+    moulding's near face, and a header's pins on from the far face to their tips."""
+    painter.setPen(QPen(QColor(0, 0, 0, 0x60), 0.1))
+    painter.setBrush(QBrush(accent))
+    half = HEADER_PIN_MM / 2
+    for pin in footprint.pins:
+        x, y = pin.d_col * pitch, pin.d_row * pitch
+        painter.drawRect(QRectF(x - half, y - half, HEADER_PIN_MM, angle.near - y + half))
+    if angle.socket:
+        return
+    for x in sorted({pin.d_col * pitch for pin in footprint.pins}):
+        painter.drawRect(QRectF(x - half, angle.far - half, HEADER_PIN_MM, angle.reach - angle.far + half))
 
 
 def _paint_pin_marks(
