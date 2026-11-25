@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **An LED's colour is read from its value.** "green", "LED 5mm yellow", "warm white" or
+  "kırmızı": `ledcolour.led_colour` names the colour a part's value gives, by whole words in
+  English and Turkish, so "infrared" is not red, and a value naming two colours names none.
+  It is a name, not a shade, for the views and exports to draw the dome in (#16).
 - **What a part off the board is, drawn beside it.** A battery on its clip, a pot or a
   button on the panel, an e-stop, a motor, a display or a relay module down a cable: the
   board holds only the pads their wires land in, and the 2D view now draws each one as the
