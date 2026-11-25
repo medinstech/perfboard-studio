@@ -478,6 +478,7 @@ from .view2d import (
     BoardScene,
     BoardView,
     copper_shape,
+    gone_copper,
     hole_to_screen,
     next_reference,
     picture_beside_the_pointer,
@@ -6349,6 +6350,14 @@ class MainWindow(QMainWindow):
               "pins.")
         )
         self.act_clear_strays.triggered.connect(self.on_clear_strays)
+        self.act_remove_all_wiring = route_menu.addAction(t("Remo&ve All Wiring…"))
+        self.act_remove_all_wiring.setToolTip(
+            t(
+                "Take up all wiring on the board's nets, leaving hand-drawn copper with no "
+                "net untouched. Asked first; one Ctrl+Z puts it back."
+            )
+        )
+        self.act_remove_all_wiring.triggered.connect(self.on_remove_all_wiring)
         route_menu.addSeparator()
         # What the last route changed, without taking it away to see: Ctrl+Z was the only
         # comparison there was.
@@ -11874,7 +11883,7 @@ class MainWindow(QMainWindow):
         label = (
             f"Remove the wiring of {self._net_name(net_ids[0])}"
             if len(net_ids) == 1
-            else f"Delete {len(ids)} conductor(s)"
+            else f"Remove the wiring of {len(net_ids)} nets"
         )
         result = self.bus.dispatch(
             "conductor.deleteMany", DeleteConductorsPayload(ids=ids, label=label)
@@ -11884,6 +11893,43 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage(
             t("Removed the wiring of {net} · Ctrl+Z brings it back").format(net=names), 8000
+        )
+
+    def on_remove_all_wiring(self) -> None:
+        """Take up all copper that claims a net, as one undo step, leaving hand-drawn
+        copper with no net alone. Asked first through ``_confirm`` (Cancel as default)."""
+        ids = tuple(c.id for c in self.bus.document.conductors if c.net_id is not None)
+        if not ids:
+            self.statusBar().showMessage(t("There is no wiring to remove."), 6000)
+            return
+        body = (
+            "<p>"
+            + counted(
+                len(ids),
+                t(
+                    "{count} conductor on the board's nets will be removed. Hand-drawn "
+                    "copper with no net assigned is left alone."
+                ),
+                t(
+                    "{count} conductors on the board's nets will be removed. Hand-drawn "
+                    "copper with no net assigned is left alone."
+                ),
+            )
+            + "</p><p>"
+            + t("One Ctrl+Z puts it all back.")
+            + "</p>"
+        )
+        if not self._confirm(t("Remove all wiring?"), body, t("Remove All Wiring")):
+            return
+        result = self.bus.dispatch(
+            "conductor.deleteMany",
+            DeleteConductorsPayload(ids=ids, label="Remove all wiring"),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self.statusBar().showMessage(
+            t("Removed all wiring · Ctrl+Z brings it back"), 8000
         )
 
     def _on_drc_context_menu(self, pos: QPoint) -> None:
@@ -14582,12 +14628,17 @@ class MainWindow(QMainWindow):
             )
 
     def _remember_wiring_before(self, conductors: tuple[Conductor, ...]) -> None:
-        """The copper a route started from, for Compare With Before; shown again at once
-        when the comparison is already on, so it compares with THIS route."""
-        self._wiring_before = conductors
-        self.act_compare_before.setEnabled(True)
-        if self.act_compare_before.isChecked():
-            self.scene.set_before_copper(conductors)
+        """Freeze the copper a route replaced, for Compare With Before; shown again at once
+        when the comparison is already on, so it compares with THIS route and later manual
+        deletions never sprout dashed ghosts."""
+        gone = gone_copper(conductors, self.bus.document.conductors)
+        self._wiring_before = gone or None
+        has_gone = bool(gone)
+        self.act_compare_before.setEnabled(has_gone)
+        if not has_gone and self.act_compare_before.isChecked():
+            self.act_compare_before.setChecked(False)
+        elif self.act_compare_before.isChecked():
+            self.scene.set_before_copper(gone)
 
     def _on_compare_before(self, on: bool) -> None:
         before = self._wiring_before if on else None

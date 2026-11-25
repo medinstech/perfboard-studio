@@ -234,6 +234,8 @@ TEMPLATES: tuple[str, ...] = (
     "Delete {kind} {id}",
     "Delete {count} conductor",
     "Delete {count} conductors",
+    "Remove all wiring",
+    "Remove the wiring of {count} nets",
     "Remove the wiring of {name}",
     "Remove {count} stale conductor",
     "Remove {count} stale conductors",

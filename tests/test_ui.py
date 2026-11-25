@@ -20910,6 +20910,66 @@ def test_remove_wiring_takes_up_one_nets_copper_as_one_step() -> None:
         _close(window)
 
 
+def test_remove_wiring_for_multiple_nets_names_the_net_count() -> None:
+    window = _window_on(_ne555_as_shipped())
+    try:
+        nets = tuple(
+            net.id
+            for net in window.bus.document.nets
+            if any(c.net_id == net.id for c in window.bus.document.conductors)
+        )[:2]
+        assert len(nets) == 2
+        window._remove_wiring(nets)
+        assert window.bus.history()[-1] == "Remove the wiring of 2 nets"
+    finally:
+        _close(window)
+
+
+def test_remove_all_wiring_removes_net_copper_keeps_hand_copper_and_confirms(
+    monkeypatch,
+) -> None:
+    base = _ne555_as_shipped()
+    hand = WireConductor(
+        id="hand-1",
+        path=(HoleCoord(0, 0), HoleCoord(0, 2)),
+        kind="insulated-wire",
+        side="bottom",
+        net_id=None,
+    )
+    doc = dataclasses.replace(base, conductors=(*base.conductors, hand))
+    window = _window_on(doc)
+    try:
+        asked: list[tuple[str, str, str]] = []
+
+        def decline(self, title: str, body: str, verb: str) -> bool:
+            asked.append((title, body, verb))
+            return False
+
+        monkeypatch.setattr(type(window), "_confirm", decline)
+        window.act_remove_all_wiring.trigger()
+        assert len(asked) == 1
+        assert asked[0][2] == "Remove All Wiring"
+        assert len(window.bus.document.conductors) == len(doc.conductors)
+
+        monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
+        window.act_remove_all_wiring.trigger()
+        assert [c.id for c in window.bus.document.conductors] == ["hand-1"]
+        assert window.bus.history()[-1] == "Remove all wiring"
+
+        # Nothing left to remove: reports quietly without asking again.
+        asked.clear()
+        monkeypatch.setattr(type(window), "_confirm", decline)
+        window.act_remove_all_wiring.trigger()
+        assert asked == []
+        assert "no wiring" in window.statusBar().currentMessage().lower()
+
+        # One Ctrl+Z puts every removed conductor back.
+        window.bus.undo()
+        assert len(window.bus.document.conductors) == len(doc.conductors)
+    finally:
+        _close(window)
+
+
 def test_redo_wiring_of_the_selection_takes_a_selected_conductors_net() -> None:
     window = _window_on(_ne555_as_shipped())
     asked: list[tuple[str, ...] | None] = []
@@ -21680,6 +21740,33 @@ def test_the_wiring_before_a_redo_is_drawn_over_todays_and_survives_a_flip(
         assert not window.act_compare_before.isEnabled()
         assert not window.act_compare_before.isChecked()
         assert not window.scene.showing_before
+    finally:
+        _close(window)
+
+
+def test_compare_with_before_freezes_what_the_route_replaced(monkeypatch) -> None:
+    """Deleting a wire by hand (or removing all wiring) after a route must not turn that
+    unrelated wire into a dashed ghost of the earlier route."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        thresh = next(net.id for net in window.bus.document.nets if net.name == "THRESH")
+        monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
+        window.on_reroute((thresh,), style="solder")
+        window.act_compare_before.trigger()
+        assert window.scene._before_item is not None
+        before_count = window.scene._before_item.path().elementCount()
+        assert before_count > 0
+
+        # Delete an unrelated wire on another net by hand: the frozen ghost stays identical.
+        other = next(c for c in window.bus.document.conductors if c.net_id != thresh)
+        window.bus.dispatch("conductor.delete", {"id": other.id})
+        assert window.scene._before_item is not None
+        assert window.scene._before_item.path().elementCount() == before_count
+
+        # Removing all wiring also leaves the frozen ghost untouched.
+        window.act_remove_all_wiring.trigger()
+        assert window.scene._before_item is not None
+        assert window.scene._before_item.path().elementCount() == before_count
     finally:
         _close(window)
 

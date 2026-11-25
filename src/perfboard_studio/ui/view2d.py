@@ -6540,15 +6540,11 @@ class BoardScene(QGraphicsScene):
         if not self._before_copper or self.document is None:
             return
         board = self.document.board
-        # Only what is gone: copper laid back exactly where it was is today's copper too,
-        # and drawing all of it dashed after one net was redone hid the one that moved.
-        now = Counter(copper_shape(c) for c in self.document.conductors)
+        # ``_before_copper`` is already frozen to what the route replaced (``gone_copper``):
+        # diffing against the current document here turned wires deleted later by hand into
+        # dashed ghosts of a route that never touched them.
         outline = QPainterPath()
         for conductor in self._before_copper:
-            shape = copper_shape(conductor)
-            if now[shape]:
-                now[shape] -= 1
-                continue
             points = [hole_to_screen(hole, board, self.side) for hole in conductor.path]
             if len(points) < 2:
                 continue
@@ -9497,3 +9493,23 @@ def copper_shape(conductor: Conductor) -> tuple[str, str, tuple[tuple[int, int],
     out, and what Redo Wiring counts as kept (``main._copper_change``)."""
     holes = tuple((hole.col, hole.row) for hole in conductor.path)
     return (conductor.kind, conductor.side, min(holes, holes[::-1]))
+
+
+def gone_copper(
+    before: Sequence[Conductor], after: Sequence[Conductor]
+) -> tuple[Conductor, ...]:
+    """Conductors in ``before`` whose shape is no longer in ``after``.
+
+    Computed once when a route commits rather than on every repaint, so copper removed
+    later by hand or by Remove All Wiring does not turn into dashed ghosts from an earlier
+    route.
+    """
+    kept = Counter(copper_shape(c) for c in after)
+    gone: list[Conductor] = []
+    for conductor in before:
+        shape = copper_shape(conductor)
+        if kept[shape]:
+            kept[shape] -= 1
+            continue
+        gone.append(conductor)
+    return tuple(gone)

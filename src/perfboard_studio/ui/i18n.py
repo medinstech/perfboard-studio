@@ -268,6 +268,28 @@ TURKISH: Mapping[str, str] = {
     "Redo All &Wiring": "Bütün Kablolamayı &Yeniden Yap",
     "Redo Wiring of the Se&lection": "Seçilenin Kablolamasını Yeniden Y&ap",
     "Remove Ou&t-of-Date Wiring": "Eski&miş Kablolamayı Kaldır",
+    "Remo&ve All Wiring…": "Bütün Kablolamayı Kal&dır…",
+    "Take up all wiring on the board's nets, leaving hand-drawn copper with no net "
+    "untouched. Asked first; one Ctrl+Z puts it back.": (
+        "Karttaki netlerin bütün kablolamasını kaldırır; netsiz elle çizilmiş bakıra "
+        "dokunmaz. Önce onay ister; tek Ctrl+Z geri getirir."
+    ),
+    "There is no wiring to remove.": "Kaldırılacak kablolama yok.",
+    "Remove all wiring?": "Bütün kablolama kaldırılsın mı?",
+    "Remove All Wiring": "Bütün Kablolamayı Kaldır",
+    "{count} conductor on the board's nets will be removed. Hand-drawn copper with no "
+    "net assigned is left alone.": (
+        "Karttaki netlere ait {count} iletken kaldırılacak. Neti olmayan elle çizilmiş "
+        "bakıra dokunulmayacak."
+    ),
+    "{count} conductors on the board's nets will be removed. Hand-drawn copper with no "
+    "net assigned is left alone.": (
+        "Karttaki netlere ait {count} iletken kaldırılacak. Neti olmayan elle çizilmiş "
+        "bakıra dokunulmayacak."
+    ),
+    "Removed all wiring · Ctrl+Z brings it back": (
+        "Bütün kablolama kaldırıldı · Ctrl+Z ile geri getirebilirsiniz"
+    ),
     "Wiring St&yle": "Kablolama Ta&rzı",
     "&Try each and keep the best": "&Hepsini dene, en iyisini tut",
     "&Solder trace where possible": "Mümkün olan her yerde &lehim yolu",
@@ -6468,6 +6490,8 @@ TURKISH: Mapping[str, str] = {
     "Delete {kind} {id}": "{id} iletkenini ({kind}) sil",
     "Delete {count} conductor": "{count} iletkeni sil",
     "Delete {count} conductors": "{count} iletkeni sil",
+    "Remove all wiring": "Bütün kablolamayı kaldır",
+    "Remove the wiring of {count} nets": "{count} netin kablolamasını kaldır",
     "Remove the wiring of {name}": "{name} netinin kablolamasını kaldır",
     "Remove {count} stale conductor": "Eskimiş {count} iletkeni kaldır",
     "Remove {count} stale conductors": "Eskimiş {count} iletkeni kaldır",

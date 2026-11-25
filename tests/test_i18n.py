@@ -408,7 +408,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                    "Wiring St&yle", "When a Trace Must &Cross", "Lay Wires Along the &Grid",
                    "Wire on Both &Faces",
                    "Redo All &Wiring", "Redo Wiring of the Se&lection",
-                   "Remove Ou&t-of-Date Wiring", "Co&mpare With Before"],
+                   "Remove Ou&t-of-Date Wiring", "Remo&ve All Wiring…", "Co&mpare With Before"],
         # View is the longest menu and the one the three panel toggles joined; it had a
         # clash in each language before it was listed here.
         "view": ["Show &Board", "Show &Schematic", "Show &3D View", "Show B&uild Guide",
