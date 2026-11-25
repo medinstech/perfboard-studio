@@ -79,9 +79,6 @@ class BrandLink(QToolButton):
         self.setAccessibleName("Medinstech")
         self.setIconSize(size)
         self.setFixedSize(size.width() + 6, size.height() + 4)
-        self.setStyleSheet(
-            "QToolButton#brandLink { background: transparent; border: none; padding: 0px; }"
-        )
         self.clicked.connect(open_home_page)
 
     @property

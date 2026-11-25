@@ -486,6 +486,12 @@ QToolButton {{
 }}
 QToolButton:hover {{ background: {k.bg_hover}; }}
 QToolButton:pressed {{ background: {k.bg_pressed}; }}
+/* The Medinstech mark on Home and in About: a picture that is a link, so no hover plate. */
+QToolButton#brandLink, QToolButton#brandLink:hover, QToolButton#brandLink:pressed {{
+    background: transparent;
+    border: none;
+    padding: 0px;
+}}
 /* One choice of a row in Properties -- a net's Class and Face, a part's rotation: the chosen
    one is marked, or the row the Face note explains showed no face at all. */
 QToolButton[segment="true"]:checked {{
