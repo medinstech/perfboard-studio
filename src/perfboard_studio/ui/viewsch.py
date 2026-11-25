@@ -2309,9 +2309,18 @@ class SchematicView(QGraphicsView):
     def current_scale(self) -> float:
         return float(self.transform().m11())
 
+    def _clamped_scale(self, base: float, factor: float) -> float:
+        """``base * factor`` within the zoom range -- whose floor is never above ``base``.
+
+        A fit is not clamped (``fit``): a sheet wider than its panel lands below
+        ``MIN_SCALE``, and a floor above it would turn a zoom OUT from there into a jump IN.
+        From below the floor, out does nothing and in works."""
+        floor = min(self.MIN_SCALE, base)
+        return min(self.MAX_SCALE, max(floor, base * factor))
+
     def _clamped_factor(self, factor: float) -> float:
         current = self.current_scale()
-        target = min(self.MAX_SCALE, max(self.MIN_SCALE, current * factor))
+        target = self._clamped_scale(current, factor)
         return target / current if current else 1.0
 
     def wheelEvent(self, event: QWheelEvent) -> None:
@@ -2353,7 +2362,7 @@ class SchematicView(QGraphicsView):
             if self._camera.is_running
             else self.mapToScene(self.viewport().rect().center())
         )
-        target_scale = min(self.MAX_SCALE, max(self.MIN_SCALE, base_scale * factor))
+        target_scale = self._clamped_scale(base_scale, factor)
         if abs(target_scale - self.current_scale()) < 1e-4:
             return
         self._fitted = True
