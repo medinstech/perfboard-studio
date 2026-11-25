@@ -173,3 +173,16 @@ def test_home_s_quick_actions_send_home_s_own_signals(monkeypatch) -> None:
         assert sent == ["newCircuit", "openFile", "startTour"]
     finally:
         _close(window)
+
+
+def test_homes_quick_actions_and_the_theme_switch_ease_their_hover_like_the_rest(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from perfboard_studio.ui import hover
+
+    window = _home_window(monkeypatch, 1380)
+    try:
+        header = window.header
+        for button in (*header.quick_buttons, header.theme_button, header.home_button):
+            assert button.property("fade") is True, button.objectName()
+            assert button.findChild(hover._Fade) is not None
+    finally:
+        _close(window)
