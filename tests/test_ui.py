@@ -12218,7 +12218,13 @@ def test_the_part_list_counts_sizes_as_numbers() -> None:
     dialog.filter.setText("LED")
     assert dialog.chosen_footprint_id() == "led-3mm"
     dialog.filter.setText("header, 1x")
-    ids = [leaf.data(0, ROLE_FOOTPRINT_ID) for leaf in dialog._leaves()]
+    # The pin headers among them: a female header's catalog row says "header, 1x" too.
+    ids = [
+        found
+        for leaf in dialog._leaves()
+        if (found := leaf.data(0, ROLE_FOOTPRINT_ID)).startswith("hdr-1x")
+        and not found.endswith("-ra")
+    ]
     assert ids[:3] == ["hdr-1x1", "hdr-1x2", "hdr-1x3"]
     assert ids.index("hdr-1x9") < ids.index("hdr-1x10")
     dialog.deleteLater()
