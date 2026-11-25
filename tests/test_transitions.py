@@ -154,3 +154,98 @@ def test_the_problems_drawer_slides_to_the_heights_the_still_one_takes(monkeypat
     finally:
         motion.reset()
         _close(window)
+
+
+# -- the copper an Auto-wire lays ------------------------------------------------------
+
+
+def _wired_window(monkeypatch):
+    """A window on screen, on a board with copper on it, the 3D panel stubbed."""
+    from perfboard_studio.ui.main import MainWindow
+
+    from .test_ui import _load_dense, _settle_events, _window_on
+
+    monkeypatch.setattr(MainWindow, "_create_3d_widget", lambda self: None)
+    window = _window_on(_load_dense())
+    window.resize(1600, 950)
+    window.show()
+    _settle_events(QApplication)
+    assert window.view.isVisible()
+    return window
+
+
+def _opacities(scene, ids) -> list[float]:
+    return [scene.conductor_items[cid].opacity() for cid in ids]
+
+
+def test_new_copper_fades_in_one_conductor_after_another(monkeypatch, moving) -> None:
+    from .test_ui import _close
+
+    window = _wired_window(monkeypatch)
+    try:
+        scene = window.scene
+        conductors = window.bus.document.conductors
+        assert len(conductors) >= 3
+        # What a route that laid the last three looks like to the window.
+        laid = [c.id for c in conductors[-3:]]
+        window._remember_wiring_before(conductors[:-3])
+        assert scene.revealing
+        assert scene._reveal_ids == tuple(laid)
+        # The copper that was there already is not touched.
+        assert all(o == 1.0 for o in _opacities(scene, [c.id for c in conductors[:-3]]))
+        assert _opacities(scene, laid) == [0.0, 0.0, 0.0]
+        # Partway: the first is further in than the last, in the plan's order.
+        scene._reveal_at(scene._reveal_step_ms * 2 + 60)
+        first, middle, last = _opacities(scene, laid)
+        assert 1.0 >= first > middle > last >= 0.0
+        # A rebuild in the middle keeps the reveal where it is, on the NEW items.
+        assert scene._reveal is not None
+        scene._reveal.setCurrentTime(100)
+        before = _opacities(scene, laid)
+        scene.set_document(window.bus.document)
+        assert scene.revealing
+        assert _opacities(scene, laid) == pytest.approx(before)
+        # Over: every conductor at full strength, as the still window draws it.
+        scene.stop_reveal()
+        assert not scene.revealing
+        assert all(o == 1.0 for o in _opacities(scene, [c.id for c in conductors]))
+    finally:
+        _close(window)
+
+
+def test_new_copper_is_simply_there_when_motion_is_reduced(monkeypatch) -> None:
+    from .test_ui import _close
+
+    window = _wired_window(monkeypatch)
+    try:
+        conductors = window.bus.document.conductors
+        window._remember_wiring_before(conductors[:-3])
+        assert not window.scene.revealing
+        assert all(o == 1.0 for o in _opacities(window.scene, [c.id for c in conductors]))
+    finally:
+        _close(window)
+
+
+def test_the_reveal_runs_out_and_leaves_the_copper_whole(monkeypatch, moving) -> None:
+    from PySide6.QtCore import QElapsedTimer
+
+    from perfboard_studio.ui.view2d import REVEAL_SPAN_MS
+
+    from .test_ui import _close
+
+    window = _wired_window(monkeypatch)
+    try:
+        scene = window.scene
+        conductors = window.bus.document.conductors
+        window.scene.reveal_conductors([c.id for c in conductors])
+        assert scene.revealing
+        # However many conductors, the whole thing is over within the span.
+        assert scene._reveal is not None and scene._reveal.duration() <= REVEAL_SPAN_MS
+        clock = QElapsedTimer()
+        clock.start()
+        while scene.revealing and clock.elapsed() < REVEAL_SPAN_MS + 2000:
+            QApplication.processEvents()
+        assert not scene.revealing
+        assert all(o == 1.0 for o in _opacities(scene, [c.id for c in conductors]))
+    finally:
+        _close(window)

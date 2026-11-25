@@ -5800,6 +5800,14 @@ class NetNameLayerItem(QGraphicsItem):
             )
 
 
+#: How long one conductor takes to fade in after an Auto-wire, how far apart two start,
+#: and the most the whole reveal takes however many there are -- see
+#: ``BoardScene.reveal_conductors``.
+REVEAL_FADE_MS = 220
+REVEAL_STEP_MS = 45.0
+REVEAL_SPAN_MS = 1200
+
+
 class BoardScene(QGraphicsScene):
     """The 2D board, rebuilt from a ``PerfDocument`` snapshot each time it changes.
 
@@ -5934,6 +5942,11 @@ class BoardScene(QGraphicsScene):
         self.highlighted_nets: tuple[str, ...] = ()
         #: The conductors on the board, by id, so lighting a net touches only them.
         self.conductor_items: dict[str, ConductorItem] = {}
+        #: Copper an Auto-wire just laid, fading in one conductor after another, by id --
+        #: see ``reveal_conductors``. None when nothing is fading in.
+        self._reveal: QVariantAnimation | None = None
+        self._reveal_ids: tuple[str, ...] = ()
+        self._reveal_step_ms = 0.0
         #: The physical nets of the document last asked about -- see _conductors_on.
         self._physical_nets: tuple[PerfDocument, list[PhysicalNet]] | None = None
         self._risk_item: RiskRingsItem | None = None
@@ -6060,6 +6073,72 @@ class BoardScene(QGraphicsScene):
     def set_document(self, document: PerfDocument) -> None:
         self.document = document
         self._build()
+
+    # -- newly laid copper -------------------------------------------------
+
+    def reveal_conductors(self, ids: Sequence[str]) -> None:
+        """Fade the copper ``ids`` names in, one conductor after another, in that order.
+
+        What an Auto-wire laid then reads as laid, in the planner's order, rather than
+        appearing all at once. The whole thing is short (``REVEAL_SPAN_MS`` at most, however
+        many conductors), and it is decoration only: every conductor is in the document,
+        hit-testable and selectable from the first frame, and with motion reduced or the
+        view hidden nothing fades at all.
+
+        Kept by id, not by item: a rebuild in the middle (every command makes one) draws
+        the new items at the opacity the reveal has reached, so it neither restarts nor
+        touches an item ``clear()`` destroyed.
+        """
+        self.stop_reveal()
+        present = tuple(cid for cid in ids if cid in self.conductor_items)
+        if not present or not any(view.isVisible() for view in self.views()):
+            return
+        count = len(present)
+        step = (
+            min(REVEAL_STEP_MS, (REVEAL_SPAN_MS - REVEAL_FADE_MS) / (count - 1))
+            if count > 1
+            else 0.0
+        )
+        total = motion.duration(round(REVEAL_FADE_MS + step * (count - 1)))
+        if total <= 0:
+            return
+        self._reveal_ids = present
+        self._reveal_step_ms = step
+        anim = QVariantAnimation(self)
+        anim.setDuration(total)
+        anim.setStartValue(0.0)
+        anim.setEndValue(float(total))
+        anim.valueChanged.connect(lambda value: self._reveal_at(float(cast(float, value))))
+        anim.finished.connect(self.stop_reveal)
+        self._reveal = anim
+        self._reveal_at(0.0)
+        anim.start()
+
+    @property
+    def revealing(self) -> bool:
+        """True while newly laid copper is still fading in."""
+        return self._reveal is not None
+
+    def _reveal_at(self, elapsed_ms: float) -> None:
+        for index, conductor_id in enumerate(self._reveal_ids):
+            item = self.conductor_items.get(conductor_id)
+            if item is None:
+                continue
+            local = (elapsed_ms - index * self._reveal_step_ms) / REVEAL_FADE_MS
+            local = min(1.0, max(0.0, local))
+            item.setOpacity(1.0 - (1.0 - local) ** 3)
+
+    def stop_reveal(self) -> None:
+        """Show every conductor the reveal was fading in at full strength, at once."""
+        anim, self._reveal = self._reveal, None
+        if anim is not None:
+            anim.stop()
+            anim.deleteLater()
+        for conductor_id in self._reveal_ids:
+            item = self.conductor_items.get(conductor_id)
+            if item is not None:
+                item.setOpacity(1.0)
+        self._reveal_ids = ()
 
     def set_side(self, side: BoardSide) -> None:
         """Look at the board from ``side``. What is drawn next goes on that face too: a flip
@@ -6483,6 +6562,10 @@ class BoardScene(QGraphicsScene):
             self.conductor_items[conductor.id] = conductor_item
             if conductor.id in previously_selected_conductors:
                 conductor_item.setSelected(True)
+        if self._reveal is not None:
+            # A rebuild while copper fades in: the new items pick up where the old left off.
+            current = self._reveal.currentValue()
+            self._reveal_at(float(cast(float, current)) if current is not None else 0.0)
         self._light_net_copper()
         self.via_items = []
         if self.show_vias:

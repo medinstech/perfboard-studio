@@ -14968,6 +14968,12 @@ class MainWindow(QMainWindow):
             self.act_compare_before.setChecked(False)
         elif self.act_compare_before.isChecked():
             self.scene.set_before_copper(gone)
+        # Every route that lands comes through here, so this is where what it laid is shown
+        # being laid: the conductors that were not on the board before, in the plan's order.
+        had = {conductor.id for conductor in conductors}
+        self.scene.reveal_conductors(
+            [c.id for c in self.bus.document.conductors if c.id not in had]
+        )
 
     def _on_compare_before(self, on: bool) -> None:
         before = self._wiring_before if on else None

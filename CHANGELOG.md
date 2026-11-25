@@ -188,6 +188,10 @@ closed without a bump.
   menu's choice. A narrow window sheds the labels to icons, which keep them as tooltips,
   and then the search's width, before anything overlaps. Over a board the row keeps only
   the icon, since the steps hold the middle.
+- **Auto-wire is seen laying its copper.** When a route lands, the conductors it laid fade
+  in one after another in the order the planner laid them, about a second in all however many
+  there are, and the copper that was already there stays as it is. Every conductor is on the
+  board and can be clicked from the first frame; with View ▸ Reduce Motion it is simply there.
 - **The command palette and the Problems drawer move.** Ctrl+K's palette drops the last few
   pixels into place as its shadow deepens, with the keyboard in the field from the first frame;
   the Problems drawer slides open from its bar and back down to it, the list in view the whole
