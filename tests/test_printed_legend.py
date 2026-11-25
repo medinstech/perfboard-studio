@@ -24,6 +24,7 @@ from perfboard_studio.commands import (
 )
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.geometry import (
+    LEGEND_LETTER_STYLES,
     column_label,
     legend_label,
     legend_problem,
@@ -339,3 +340,94 @@ def test_an_agent_is_told_what_the_board_prints() -> None:
     info = BoardSession(document=_doc(PROTOPATCH, cols=60, rows=40)).get_board_info()
     assert info["printed_legend"]["columns"] == {"printed": "1–60", "every": 5, "digits": 2}
     assert info["top_left_hole"] == "A1"  # the addresses are still the tool's own
+
+
+# -- doubled letters past Z (#16) --------------------------------------------------------
+
+#: A board that prints A..Z and then AA, BB, .. along its long edge.
+DOUBLED = BoardLabels(columns=AxisLegend(runs=(("A", "ZZ"),), letters="doubled"))
+
+
+def test_doubled_letters_go_on_past_z_one_letter_repeated() -> None:
+    printed = [legend_label("columns", i, DOUBLED) for i in range(60)]
+    assert printed[:3] == ["A", "B", "C"]
+    assert printed[25:29] == ["Z", "AA", "BB", "CC"]
+    assert printed[51] == "ZZ"
+    assert printed[52:] == [None] * 8  # past the run's end
+    # The addresses are still the tool's own: the 28th column is AB, printed BB.
+    assert column_label(27) == "AB"
+
+
+def test_doubled_letters_carry_on_to_three_and_are_read_back_as_written() -> None:
+    labels = BoardLabels(columns=AxisLegend(runs=(("AA", "CCC"),), letters="doubled"))
+    printed = [legend_label("columns", i, labels) for i in range(56)]
+    assert printed[0] == "AA" and printed[25] == "ZZ" and printed[26] == "AAA"
+    assert printed[28] == "CCC" and printed[29] is None
+
+
+def test_one_run_means_different_holes_in_each_style() -> None:
+    spreadsheet = AxisLegend(runs=(("AA", "ZZ"),))
+    doubled = dataclasses.replace(spreadsheet, letters="doubled")
+    assert legend_run_spans(spreadsheet, 1000) == ((0, 675),)
+    assert legend_run_spans(doubled, 1000) == ((0, 25),)
+
+
+def test_parse_reads_runs_in_the_style_asked_for() -> None:
+    assert parse_legend_runs("A-Z, AA-PP", "doubled") == (("A", "Z"), ("AA", "PP"))
+    assert parse_legend_runs("AB-CC") == (("AB", "CC"),)
+    with pytest.raises(ValueError, match="one letter repeated"):
+        parse_legend_runs("AB-CC", "doubled")
+    with pytest.raises(ValueError, match="backwards"):
+        parse_legend_runs("BB-AA", "doubled")
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        BoardLabels(columns=AxisLegend(runs=(("AB", "CC"),), letters="doubled")),
+        BoardLabels(rows=AxisLegend(runs=(("A", "Z"),), letters="tripled")),  # type: ignore[arg-type]
+    ],
+)
+def test_board_set_and_the_file_refuse_a_doubled_legend_in_the_same_words(labels: BoardLabels) -> None:
+    test_board_set_and_the_file_refuse_the_same_legend_in_the_same_words(labels)
+
+
+def test_the_file_carries_doubled_and_leaves_the_default_out() -> None:
+    doc = _doc(DOUBLED, cols=60)
+    data = json.loads(persist.serialize_document(doc))
+    assert data["board"]["labels"]["columns"] == {"runs": [["A", "ZZ"]], "letters": "doubled"}
+    again = persist.deserialize_document(persist.serialize_document(doc))
+    assert again.ok and again.document == doc
+    assert "letters" not in json.loads(persist.serialize_document(_doc(EIGHT_BY_TWELVE)))["board"][
+        "labels"
+    ]["columns"]
+    assert LEGEND_LETTER_STYLES == ("spreadsheet", "doubled")
+
+
+def test_the_guide_says_the_doubled_letters_the_board_prints() -> None:
+    """Thirty columns: the guide's A..AD are the board's A..Z, AA, BB, CC, DD."""
+    summary = _preparation(_doc(DOUBLED, cols=30, rows=10))
+    assert "A–AD are printed A–DD" in summary, summary
+
+
+def test_an_agent_is_told_the_letters_go_on_doubled() -> None:
+    info = BoardSession(document=_doc(DOUBLED, cols=60, rows=10)).get_board_info()
+    assert info["printed_legend"]["columns"] == {
+        "printed": "A–ZZ", "every": 1, "digits": 1, "letters": "doubled",
+    }
+
+
+def test_a_board_family_saved_with_doubled_letters_comes_back_with_them() -> None:
+    from perfboard_studio.boardfamily import (
+        GREEN_DOUBLE_SIDED,
+        family_from_json,
+        family_to_json,
+    )
+
+    legend = GREEN_DOUBLE_SIDED.legend
+    assert legend is not None
+    family = dataclasses.replace(
+        GREEN_DOUBLE_SIDED,
+        legend=dataclasses.replace(legend, columns=DOUBLED.columns),
+    )
+    assert family_from_json(family_to_json(family)) == family

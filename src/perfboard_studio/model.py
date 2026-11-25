@@ -121,6 +121,11 @@ BoardFinish: TypeAlias = Literal["hasl", "lf-hasl", "bare-copper", "enig"]  # no
 LetterEdges: TypeAlias = Literal["top", "bottom", "both", "none"]  # noqa: UP040
 NumberEdges: TypeAlias = Literal["left", "right", "both", "none"]  # noqa: UP040
 
+#: How a printed run of letters goes on past Z. ``TypeAlias`` for ``get_args``, as above:
+#: "spreadsheet" counts the way this tool's addresses do (Z, AA, AB, ... AZ, BA), "doubled"
+#: the way some boards print (Z, AA, BB, ... ZZ, AAA), one letter repeated.
+LegendLetters: TypeAlias = Literal["spreadsheet", "doubled"]  # noqa: UP040
+
 #: An edge finger's outline: a rectangle with softened corners (what every finger was
 #: drawn as), a stadium with fully rounded ends (the green boards' strips), or square
 #: (the phenolic boards'). ``TypeAlias`` for ``get_args``.
@@ -169,6 +174,11 @@ class AxisLegend:
     #: Zero-pad a NUMBER to this many digits, so 2 prints 5 as "05". Letters are never
     #: padded.
     digits: int = 1
+    #: How this axis's letter runs count past Z (``LegendLetters``): AA, AB, ... as the
+    #: addresses do, or AA, BB, ... ZZ. It is how a run's labels are READ too, so
+    #: ``AA-ZZ`` is 676 holes in one and 26 in the other. Left out of the file at its
+    #: default. Number runs ignore it.
+    letters: LegendLetters = "spreadsheet"
 
 
 @dataclass(frozen=True, slots=True)

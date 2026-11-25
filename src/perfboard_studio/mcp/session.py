@@ -505,6 +505,10 @@ class BoardSession:
                         "every": printed.every,
                         "digits": printed.digits,
                     }
+                    # Only when it is not the addresses' own way past Z, where "AA-ZZ" means
+                    # something else.
+                    if printed.letters != "spreadsheet":
+                        legend[axis]["letters"] = printed.letters
             info["printed_legend"] = legend
         if self.document.mounting_holes:
             info["mounting_holes"] = [

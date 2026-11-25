@@ -20,7 +20,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
-from typing import Literal
+from typing import Literal, get_args
 
 from .breadboard import has_breadboard_pattern, hole_name, missing_holes, parse_hole_name
 from .model import (
@@ -43,6 +43,7 @@ from .model import (
     HoleCoord,
     HoleRef,
     LegendAxis,
+    LegendLetters,
     Mm,
     MountingHole,
     PadAxis,
@@ -145,14 +146,33 @@ _NUMBER_RUN = re.compile(r"[0-9]{1,4}")
 MAX_LEGEND_DIGITS = 4
 
 
-def _run_span(first: str, last: str) -> tuple[bool, int, int]:
+#: Every way a letter run can count past Z, in the order a choice offers them.
+LEGEND_LETTER_STYLES: tuple[LegendLetters, ...] = get_args(LegendLetters)
+
+
+def _doubled_letters(value: int) -> str:
+    """The ``value``-th label (0-indexed) of a doubled run: A..Z, AA, BB, .. ZZ, AAA, .."""
+    return chr(65 + value % 26) * (value // 26 + 1)
+
+
+def _doubled_index(letters: str) -> int:
+    """Inverse of :func:`_doubled_letters`, for one letter repeated."""
+    return (len(letters) - 1) * 26 + ord(letters[0]) - 65
+
+
+def _legend_letters(value: int, style: LegendLetters) -> str:
+    return _doubled_letters(value) if style == "doubled" else _column_letters(value)
+
+
+def _run_span(first: str, last: str, style: LegendLetters = "spreadsheet") -> tuple[bool, int, int]:
     """(letters?, first value, last value) of a run :func:`legend_problem` has passed."""
     if _LETTER_RUN.fullmatch(first):
-        return True, _column_index(first), _column_index(last)
+        index = _doubled_index if style == "doubled" else _column_index
+        return True, index(first), index(last)
     return False, int(first), int(last)
 
 
-def _run_problem(first: str, last: str) -> str | None:
+def _run_problem(first: str, last: str, style: LegendLetters = "spreadsheet") -> str | None:
     letters = bool(_LETTER_RUN.fullmatch(first)) and bool(_LETTER_RUN.fullmatch(last))
     numbers = bool(_NUMBER_RUN.fullmatch(first)) and bool(_NUMBER_RUN.fullmatch(last))
     if not (letters or numbers):
@@ -160,7 +180,9 @@ def _run_problem(first: str, last: str) -> str | None:
             "a run is capital letters to capital letters (A–Z) or a number to a number "
             "(1–60), one kind to a run"
         )
-    _, start, end = _run_span(first, last)
+    if letters and style == "doubled" and (len(set(first)) > 1 or len(set(last)) > 1):
+        return "in doubled letters a label is one letter repeated (A, BB, CCC)"
+    _, start, end = _run_span(first, last, style)
     if end < start:
         return "it counts backwards"
     return None
@@ -194,8 +216,13 @@ def legend_problem(labels: BoardLabels) -> str | None:
             continue
         if not legend.runs:
             return f"A printed {axis} legend needs at least one run to print."
+        if legend.letters not in LEGEND_LETTER_STYLES:
+            return (
+                f"A printed {axis} legend's letters go on past Z as one of: "
+                f"{', '.join(LEGEND_LETTER_STYLES)}; not {legend.letters!r}."
+            )
         for first, last in legend.runs:
-            if (problem := _run_problem(first, last)) is not None:
+            if (problem := _run_problem(first, last, legend.letters)) is not None:
                 return f"The printed {axis} legend's run {first}–{last} cannot be printed: {problem}."
         if legend.every < 1:
             return (
@@ -231,11 +258,11 @@ def legend_label(axis: LegendAxis, index: int, labels: BoardLabels) -> str | Non
         return column_label(index) if axis == "columns" else printed_row_label(index, labels)
     remaining = index
     for first, last in legend.runs:
-        letters, start, end = _run_span(first, last)
+        letters, start, end = _run_span(first, last, legend.letters)
         if remaining <= end - start:
             value = start + remaining
             if letters:
-                return _column_letters(value)
+                return _legend_letters(value, legend.letters)
             return str(value).rjust(legend.digits, "0")
         remaining -= end - start + 1
     return None
@@ -262,7 +289,7 @@ def legend_run_spans(legend: AxisLegend, count: int) -> tuple[tuple[int, int], .
     spans: list[tuple[int, int]] = []
     start = 0
     for first, last in legend.runs:
-        _, low, high = _run_span(first, last)
+        _, low, high = _run_span(first, last, legend.letters)
         if start >= count:
             break
         end = min(count - 1, start + high - low)
@@ -276,11 +303,15 @@ def legend_runs_text(runs: Sequence[tuple[str, str]]) -> str:
     return ", ".join(first if first == last else f"{first}–{last}" for first, last in runs)
 
 
-def parse_legend_runs(text: str) -> tuple[tuple[str, str], ...]:
+def parse_legend_runs(
+    text: str, letters: LegendLetters = "spreadsheet"
+) -> tuple[tuple[str, str], ...]:
     """Read ``A-Z, A-P`` (or ``A–Z A–P``, any case, either dash) back into runs.
 
     A single label is a run of one. Raises ``ValueError`` with a sentence a person can act
     on, which is :func:`legend_problem`'s for anything that parses but cannot be printed.
+    ``letters`` is how the legend counts past Z, because that decides what a run of letters
+    means: ``AB-CC`` is a run in spreadsheet letters and none in doubled ones.
     """
     runs: list[tuple[str, str]] = []
     dashed = re.sub(r"\s*[-–—]\s*", "-", text.strip().upper())
@@ -294,7 +325,7 @@ def parse_legend_runs(text: str) -> tuple[tuple[str, str], ...]:
     if not runs:
         raise ValueError("A printed legend needs at least one run, such as A-Z or 1-60.")
     for first, last in runs:
-        if (problem := _run_problem(first, last)) is not None:
+        if (problem := _run_problem(first, last, letters)) is not None:
             raise ValueError(f"{first}–{last} cannot be printed: {problem}.")
     return tuple(runs)
 

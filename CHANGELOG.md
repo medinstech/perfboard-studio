@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **A printed legend can go on past Z in doubled letters.** `AxisLegend.letters = "doubled"`
+  prints A..Z, then AA, BB, .. ZZ, as some boards do, where the default carries on AA, AB, ..
+  as the addresses do. Left out of the file at its default, so every board keeps its bytes;
+  the guide and the MCP server's board info say it (#16).
 - **A custom board takes the border you ask for.** `boardfamily.size_for_grid` and
   `size_for_mm` take a border (across, down), and `FIT_TO_GRID` cuts the board flush, half a
   pitch past its outermost holes. Typed in millimetres with a border, the board is cut to the

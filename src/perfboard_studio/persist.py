@@ -69,6 +69,7 @@ from .model import (
     FingerShape,
     HoleCoord,
     LeadBendConductor,
+    LegendLetters,
     LetterEdges,
     LooseWire,
     MountingHole,
@@ -308,7 +309,7 @@ BOARD_TEXT_KEY_ORDER: tuple[str, ...] = ("text", "edge", "along", "heightMm", "f
 BOARD_LABELS_KEY_ORDER: tuple[str, ...] = (
     "face", "rowDigits", "allEdges", "columns", "rows", "letterEdges", "numberEdges"
 )
-AXIS_LEGEND_KEY_ORDER: tuple[str, ...] = ("runs", "every", "digits")
+AXIS_LEGEND_KEY_ORDER: tuple[str, ...] = ("runs", "every", "digits", "letters")
 MOUNTING_HOLE_KEY_ORDER: tuple[str, ...] = (
     "id",
     "at",
@@ -477,6 +478,8 @@ def _axis_legend_json(legend: AxisLegend) -> JsonObj:
         values["every"] = legend.every
     if legend.digits != 1:
         values["digits"] = legend.digits
+    if legend.letters != "spreadsheet":
+        values["letters"] = legend.letters
     return _build_ordered(AXIS_LEGEND_KEY_ORDER, values)
 
 
@@ -1478,10 +1481,18 @@ def _parse_axis_legend(raw: object, path: str, warnings: list[str]) -> AxisLegen
         )
     every_raw = obj.get("every")
     digits_raw = obj.get("digits")
+    letters_raw = obj.get("letters")
     return AxisLegend(
         runs=tuple(runs),
         every=1 if every_raw is None else _expect_integer(every_raw, _field_path(path, "every")),
         digits=1 if digits_raw is None else _expect_integer(digits_raw, _field_path(path, "digits")),
+        # Not checked against the styles here: ``legend_problem`` refuses an unknown one in
+        # the same words ``board.set`` uses.
+        letters=(
+            "spreadsheet"
+            if letters_raw is None
+            else cast("LegendLetters", _expect_string(letters_raw, _field_path(path, "letters")))
+        ),
     )
 
 

@@ -898,6 +898,7 @@ def _legend_from(raw: dict[str, Any]) -> Legend:
             runs=tuple((str(a), str(b)) for a, b in value["runs"]),
             every=int(value.get("every", 1)),
             digits=int(value.get("digits", 1)),
+            letters=str(value.get("letters", "spreadsheet")),  # type: ignore[arg-type]
         )
 
     return Legend(

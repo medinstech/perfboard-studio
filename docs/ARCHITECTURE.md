@@ -756,7 +756,11 @@ then A..P again along its long edge, and a Protopatch numbers both axes and mark
 fifth hole. That is what is DRAWN and nothing else. Every address stays the tool's own
 (`C7`, `AA12`), because a printed run that repeats cannot name a hole by itself;
 `hole_ref_to_coord` refuses anything printed, the guide says once how the board's print
-maps to the addresses, and the hover names a hole both ways. `geometry.printed_label` is
+maps to the addresses, and the hover names a hole both ways. A run of letters counts on past Z
+the way the addresses do (AA, AB, ..) unless its axis says `letters="doubled"` (AA, BB, .. ZZ,
+as some boards print, #16); the style is how a run is READ as well as printed, so
+`parse_legend_runs`, `legend_run_spans` and `legend_problem` all take it -- `AA-ZZ` is 676
+holes in one and 26 in the other, and `AB-CC` is no run at all in doubled letters. `geometry.printed_label` is
 the one function the 2D legend, the 3D legend and the 1:1 print draw from;
 `legend_problem` is the one refusal, asked by `board.set` and by `persist` alike; and
 `view2d.legend_is_readable` is true only for a legend of the addresses, so the ruler
