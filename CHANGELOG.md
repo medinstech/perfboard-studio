@@ -191,14 +191,10 @@ closed without a bump.
   insulated hop beside a pin and solder the last hole: a jumper to cut, strip and solder,
   then one more pad to bridge. The hop now carries on to the end when it is in line and
   still within `max_hop_holes`, so the link is one jumper; on the tour's board that is what
-  sent the supply round the long way. It makes roomy boards a little cheaper to route than
-  tight ones, and the board chooser compares the two at a 1.20 cost cut, so two examples
-  move up a size: `ne555-astable`'s suggested board goes from 2 x 8 to 3 x 7 cm (its 2 x 8
-  routes at 1.22 times the 5 x 7 reference at seed 0, where it was 1.18), and
-  `relay-and-supply`'s Supply board from 6 x 8 to 7 x 9 cm (1.21, was 1.16).
-  `arduino-io-shield` loses a conductor and its one warning. The cut was re-measured and
-  left where it is: there is no clean gap around 1.22 to move it into (see "Which board to
-  buy is tried, not estimated" in `docs/ARCHITECTURE.md`).
+  sent the supply round the long way. A link that folds into a single hop end to end is the
+  insulated wire it is, offered once at the wire's price, never a second time as a "hopped
+  solder trace" at the hop's. Every example keeps its suggested board;
+  `arduino-io-shield` loses a conductor and its one warning.
 - **Over Home the top row says what the application is.** The icon and "Perfboard Studio"
   at the left, the search in the middle of the window, and Home's own doors at the right:
   New Circuit, Open, Tour, and a sun or a moon that switches the theme through the View

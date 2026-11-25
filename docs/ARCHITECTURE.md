@@ -731,19 +731,21 @@ Four things about it are load-bearing:
   9 x 15 reference at seed 0 and 1.23 at seeds 1 and 2, so at those seeds the question stops
   there and recommends the reference, where it used to go on to 6 x 8 (the 35 x 27 7 x 9 routed
   at 1.03). ne555-astable's 4 x 6 at seed 1 is the same, at 1.23. Seed 0, which the window
-  asks, is unaffected: 6 x 8 and 2 x 8. Going on past one dearer board would settle it and is a
+  asks, was unaffected (measured 2026-11-03, before the hop fold): 6 x 8 and 2 x 8. The next
+  bullet says what the fold did to it. Going on past one dearer board would settle it and is a
   change to the question, to be measured on its own -- not done.
 - **The cut was re-measured after the router's hop fold (2026-11-25) and left at 1.20.**
-  Folding a hop that lands one hole short of an end into the end makes the 5 x 7 reference of
-  ne555-astable cheaper (175.8 to 167.8) while its 2 x 8 stays where it was (206.6, 205.2), so
-  the ratio goes from 1.18 to 1.22 and seed 0 now stops at 3 x 7; main's own 2 x 8 placement
-  under the new router is 1.23, so no placement brings it back. At seeds 0-3 the highest
-  accepted ratios are 1.17 (nano-relay 7 x 9, s0) and 1.16; the lowest dearer are 1.21
-  (nano-relay 7 x 9 at s1 and s2, and the Supply board's 6 x 8 in its example), 1.22
-  (ne555-astable 2 x 8, s0), 1.24 and 1.25. A cut that keeps 2 x 8 would sit 0.01 from a
-  measured board on either side and accept nano-relay's 7 x 9 at s1 and s2 too, so the
-  examples moved up a size instead (2 x 8 to 3 x 7, and the Supply's 6 x 8 to 7 x 9). The
-  same 2 x 8 is accepted at 1.10 on seeds 1-3: one anneal is the edge, again.
+  The fold first also offered a link folded into ONE hop as a "hopped solder trace" at the
+  hop's price, beside the insulated wire it is -- one jumper at two prices. That made
+  ne555-astable's 5 x 7 reference cheaper (175.8 to 167.8) while its 2 x 8 stayed put, so the
+  ratio went from 1.18 to 1.22 and two examples moved up a size (ne555-astable to 3 x 7, the
+  Supply board to 7 x 9). No cut fitted the gap: the highest accepted ratios at seeds 0-3 were
+  1.17 and 1.16, the lowest dearer 1.21 and 1.22, and a cut that kept 2 x 8 would have accepted
+  nano-relay's 7 x 9 at seeds 1 and 2 too. Pricing that jumper once, as the wire, put both
+  boards back: ne555-astable's 2 x 8 at 1.18 and the Supply's 6 x 8 at 1.16, its 5 x 7 dearer
+  at 1.22. A link the search finds as one hop on its own still gets both prices, as the
+  original engine gave it: that survives only for the differential proof, whose golden routes
+  record it. 2 x 8 at 1.18 is 0.02 under the cut; one anneal is the edge, again.
 
 `placer.placement_inputs(doc)` is the key a placement worked out earlier is reused by — blind to
 the sheet and to what a save changes, and to nothing else, so a field added later counts until

@@ -775,6 +775,26 @@ def test_a_hop_beside_a_pin_goes_on_into_it() -> None:
     assert hopped.conductors[-1].path == (h(7, 4), h(10, 4))
 
 
+def test_a_link_that_folds_into_one_hop_is_the_insulated_wire_at_its_price() -> None:
+    """A wall one hole past the near pin and the far pin just beyond it: the step and the
+    hop fold into one jumper from pin to pin, with no solder left in the link. That is the
+    insulated-wire candidate -- the same piece of wire in the same holes -- so it is offered
+    once, as that, at the wire's price. It used to be offered a second time as a "hopped
+    solder trace" at the hop's (11.52 against 19.52), and filed as solder."""
+    wall = crossing_wire("t-wall", 4)
+    board = doc((comp("c1", "A", h(2, 4)), comp("c2", "B", h(5, 4))), (wall,))
+
+    result = route_connection(board, _FOOTPRINT_LOOKUP, RouteRequest(from_=h(2, 4), to=h(5, 4)))
+
+    strategies = [a.strategy for a in result.alternatives]
+    assert "solder-trace-hopped" not in strategies, strategies
+    wire = next(a for a in result.alternatives if a.strategy == "insulated-wire")
+    assert [c.path for c in wire.conductors] == [(h(2, 4), h(5, 4))]
+    costs = DEFAULT_ROUTER_COSTS
+    assert wire.cost == pytest.approx(costs.insulated_wire_fixed + 3 * 2.54 * costs.insulated_wire_per_mm)
+    assert result.best is not None and result.best.strategy == "insulated-wire"
+
+
 def test_a_hop_is_carried_on_only_in_line_and_only_as_far_as_a_hop_goes() -> None:
     """A step and a hop to the far end fold into one hop end to end -- the tour board's
     +9V link, a jumper over a wire beside the pin. A hop that would fly over more than

@@ -1342,7 +1342,16 @@ def _hopping_trace_candidate(
         return None
     if not any(step.hopped for step in steps):
         return None  # No obstacle: the plain solder-trace candidate already covers this.
-    steps = _fold_end_steps(steps, ctx.opts.max_hop_holes)
+    folded = _fold_end_steps(steps, ctx.opts.max_hop_holes)
+    if len(folded) == 2 and len(steps) > 2:
+        # The fold left one hop end to end and no solder at all: a short insulated wire from
+        # pin to pin, which the insulated-wire candidate already is. Offered here too it
+        # would be the same jumper at a second, cheaper price, and filed as solder, so a
+        # builder who prefers solder would be handed a wire as if it were a trace. A link
+        # the search found as one hop on its own is left as the original engine priced it:
+        # the golden routes record it, and the fold is ours.
+        return None
+    steps = folded
 
     costs = ctx.opts.costs
     conductors: list[NewConductor] = []
@@ -1387,7 +1396,7 @@ def _hopping_trace_candidate(
         f"solder trace {ends} in {trace_count} run(s), "
         f"with {hops} insulated hop(s) over conductors it may not cross"
         if trace_count
-        else f"one insulated hop {ends} over conductors a solder trace may not cross"
+        else f"{hops} insulated hops {ends} over conductors a solder trace may not cross"
     ]
     if risk_holes:
         holes_text = ", ".join(format_hole(hole, ctx.doc.board) for hole in risk_holes)
@@ -1414,7 +1423,11 @@ def _fold_end_steps(steps: list[_Step], max_hop_holes: int) -> list[_Step]:
     Carrying the hop the one hole further is the same wire a hole longer. Only at the two
     ends, only in a straight line, and only while the hop still flies over no more than
     ``max_hop_holes``. A link that folds into one hop end to end is a short jumper over
-    what is in the way, and is priced as the hop it is.
+    what is in the way: ``_hopping_trace_candidate`` then offers nothing, and the link is
+    the insulated-wire candidate, priced as the wire it is. A link the search finds as one
+    hop without folding is still offered at the hop's price as well, as the original engine
+    offered it: that double price survives only for the differential proof, whose golden
+    routes record it.
     """
 
     def reaches(a: HoleCoord, b: HoleCoord, via: HoleCoord) -> bool:

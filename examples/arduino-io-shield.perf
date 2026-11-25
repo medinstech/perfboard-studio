@@ -203,6 +203,68 @@
     },
     {
       "id": "cond-10",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 2
+        },
+        {
+          "col": 14,
+          "row": 2
+        },
+        {
+          "col": 14,
+          "row": 3
+        },
+        {
+          "col": 16,
+          "row": 3
+        },
+        {
+          "col": 16,
+          "row": 2
+        },
+        {
+          "col": 21,
+          "row": 2
+        },
+        {
+          "col": 21,
+          "row": 4
+        },
+        {
+          "col": 20,
+          "row": 4
+        },
+        {
+          "col": 20,
+          "row": 5
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-11",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 11,
+          "row": 5
+        },
+        {
+          "col": 11,
+          "row": 2
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-9",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-12",
       "kind": "solder-trace",
       "path": [
         {
@@ -224,7 +286,7 @@
       "buildup": "normal"
     },
     {
-      "id": "cond-11",
+      "id": "cond-13",
       "kind": "bare-wire",
       "path": [
         {
@@ -249,24 +311,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-12",
-      "kind": "insulated-wire",
-      "path": [
-        {
-          "col": 13,
-          "row": 0
-        },
-        {
-          "col": 17,
-          "row": 0
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-3",
-      "layerZ": 1
-    },
-    {
-      "id": "cond-13",
+      "id": "cond-14",
       "kind": "bare-wire",
       "path": [
         {
@@ -287,7 +332,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-14",
+      "id": "cond-15",
       "kind": "bare-wire",
       "path": [
         {
@@ -302,23 +347,6 @@
       "side": "bottom",
       "netId": "net-8",
       "layerZ": 0
-    },
-    {
-      "id": "cond-15",
-      "kind": "insulated-wire",
-      "path": [
-        {
-          "col": 11,
-          "row": 5
-        },
-        {
-          "col": 11,
-          "row": 2
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-9",
-      "layerZ": 1
     },
     {
       "id": "cond-2",
@@ -350,6 +378,23 @@
       "kind": "insulated-wire",
       "path": [
         {
+          "col": 13,
+          "row": 0
+        },
+        {
+          "col": 17,
+          "row": 0
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-3",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-4",
+      "kind": "insulated-wire",
+      "path": [
+        {
           "col": 12,
           "row": 0
         },
@@ -371,7 +416,7 @@
       "layerZ": 1
     },
     {
-      "id": "cond-4",
+      "id": "cond-5",
       "kind": "insulated-wire",
       "path": [
         {
@@ -400,7 +445,7 @@
       "layerZ": 1
     },
     {
-      "id": "cond-5",
+      "id": "cond-6",
       "kind": "bare-wire",
       "path": [
         {
@@ -421,7 +466,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-6",
+      "id": "cond-7",
       "kind": "bare-wire",
       "path": [
         {
@@ -438,7 +483,7 @@
       "layerZ": 0
     },
     {
-      "id": "cond-7",
+      "id": "cond-8",
       "kind": "bare-wire",
       "path": [
         {
@@ -452,31 +497,6 @@
         {
           "col": 23,
           "row": 4
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-1",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-8",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 10,
-          "row": 5
-        },
-        {
-          "col": 10,
-          "row": 3
-        },
-        {
-          "col": 13,
-          "row": 3
-        },
-        {
-          "col": 13,
-          "row": 2
         }
       ],
       "side": "bottom",
@@ -488,40 +508,20 @@
       "kind": "bare-wire",
       "path": [
         {
+          "col": 10,
+          "row": 5
+        },
+        {
+          "col": 10,
+          "row": 3
+        },
+        {
+          "col": 13,
+          "row": 3
+        },
+        {
           "col": 13,
           "row": 2
-        },
-        {
-          "col": 14,
-          "row": 2
-        },
-        {
-          "col": 14,
-          "row": 3
-        },
-        {
-          "col": 16,
-          "row": 3
-        },
-        {
-          "col": 16,
-          "row": 2
-        },
-        {
-          "col": 21,
-          "row": 2
-        },
-        {
-          "col": 21,
-          "row": 4
-        },
-        {
-          "col": 20,
-          "row": 4
-        },
-        {
-          "col": 20,
-          "row": 5
         }
       ],
       "side": "bottom",

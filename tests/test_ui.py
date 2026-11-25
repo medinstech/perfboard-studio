@@ -18613,12 +18613,14 @@ def test_the_wiring_step_offers_auto_wire_and_does_nothing_by_itself(monkeypatch
         assert routed == []
         offer = window._wire_offer
         [wire] = offer.actions()
-        # How many the move left depends on where the example's first part sits; the
-        # label counts them, in the singular for one.
-        import re
+        # The label counts the connections the window has left to wire -- how many the move
+        # left depends on where the example's first part sits -- in the singular for one.
+        from perfboard_studio.ratsnest import summarize
 
-        assert re.fullmatch(r"Auto-wire (1 Connection|([2-9]|\d\d+) Connections)", wire.text()), (
-            wire.text()
+        left = summarize(window._last_ratsnest).links
+        assert left >= 1
+        assert wire.text() == (
+            "Auto-wire 1 Connection" if left == 1 else f"Auto-wire {left} Connections"
         )
         wire.trigger()
         assert routed == [None]
@@ -22456,8 +22458,10 @@ def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_
     what Balanced found -- so the card offers it where it can matter: under the counts of
     what is worth a look. Taken, the best of them replaces the nets' copper as one undo
     step, asked first; taken again, it says the wiring is already the best and asks
-    nothing. It needs a board where Balanced is not the best style: ne555-astable on its
-    3 x 7 board, where Wire lays no hole to measure and Balanced lays one."""
+    nothing. It needs a board where Balanced is not the best style: ne555-astable on the
+    3 x 7 board it was given for a while, where Wire lays no hole to measure and Balanced
+    lays one. Frozen in ``board_fixtures``, because the example went back to 2 x 8, where
+    Balanced is the best, as it is on every example board now."""
     from perfboard_studio.commands import DeleteConductorsPayload
 
     asked: list[str] = []
@@ -22466,7 +22470,10 @@ def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_
         asked.append(title)
         return True
 
-    window = _window_on(_example_document("ne555-astable"))
+    path = pathlib.Path(__file__).resolve().parent / "board_fixtures" / "ne555-astable-3x7.perf"
+    frozen = persist.deserialize_document(path.read_text(encoding="utf-8"))
+    assert frozen.ok
+    window = _window_on(frozen.document)
     monkeypatch.setattr(type(window), "_confirm", answer)
     try:
         ids = tuple(c.id for c in window.bus.document.conductors)
