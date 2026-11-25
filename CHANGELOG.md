@@ -188,6 +188,10 @@ closed without a bump.
   menu's choice. A narrow window sheds the labels to icons, which keep them as tooltips,
   and then the search's width, before anything overlaps. Over a board the row keeps only
   the icon, since the steps hold the middle.
+- **The command palette and the Problems drawer move.** Ctrl+K's palette drops the last few
+  pixels into place as its shadow deepens, with the keyboard in the field from the first frame;
+  the Problems drawer slides open from its bar and back down to it, the list in view the whole
+  way. Both are still under View ▸ Reduce Motion, and closing the palette is never animated.
 - **The panels are cards.** Every panel stands on the window's gutter as a card with round
   corners instead of a region ruled off by hairlines, and the gutter between two panels is
   what is dragged to resize them. A group's tabs (Library, Parts, Nets; Board, Schematic,

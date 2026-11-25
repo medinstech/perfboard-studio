@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import shiboken6
 from PySide6.QtCore import (
     QByteArray,
+    QEasingCurve,
     QEvent,
     QEventLoop,
     QFileSystemWatcher,
@@ -65,6 +66,7 @@ from PySide6.QtCore import (
     QTimer,
     QTranslator,
     QUrl,
+    QVariantAnimation,
     qVersion,
 )
 from PySide6.QtGui import (
@@ -4786,6 +4788,8 @@ class MainWindow(QMainWindow):
     LAYOUT_LEFT_WIDTH = 300
     LAYOUT_RIGHT_WIDTH = 460
     LAYOUT_DRC_HEIGHT = 200
+    #: How long the Problems drawer takes to slide open or fold, when motion is on.
+    DRAWER_MS = 200
 
     def _arrange_docks(self) -> None:
         """The layout a window opens on the first time, before anyone has rearranged it.
@@ -10987,6 +10991,8 @@ class MainWindow(QMainWindow):
         # quarter of the window tall to show them, taken off the board. Its bar is its
         # title bar, so it is the dock's one handle; and it is neither closed nor floated
         # nor moved -- a drawer that can be put away is a count nobody sees.
+        #: The drawer's slide open or folded, while one runs (``_slide_the_drawer``).
+        self._drawer_motion: QVariantAnimation | None = None
         self.problems_bar = ProblemsBar(dock)
         self.problems_bar.toggled.connect(self._open_problems_by_hand)
         self.problems_bar.wire_requested.connect(self._wire_from_the_drawer)
@@ -11004,18 +11010,23 @@ class MainWindow(QMainWindow):
         height the findings opened at before it was a drawer, once the list is laid out.
         """
         self.problems_bar.set_expanded(on)
+        self._stop_the_drawer()
         # Squeezed to nothing rather than HIDDEN. A dock whose contents are hidden reports a
         # maximum width of its title bar's, and the column it shares with the views took
         # that as its own: the board stood 544 px wide in a 1600 px window, beside an empty
         # gap where the rest of the column should have been.
         self.drc_panel.setMinimumHeight(0)
-        self.drc_panel.setMaximumHeight(self.UNCAPPED if on else 0)
         dock = self.dock_drc
         if on:
+            self.drc_panel.setMaximumHeight(self.UNCAPPED)
             dock.setMaximumHeight(self.UNCAPPED)
             QTimer.singleShot(0, self._give_the_drawer_its_height)
+        elif motion.enabled() and dock.isVisible() and dock.height() > PROBLEMS_BAR_HEIGHT:
+            # Folded by sliding down to its bar, the list in view the whole way; the caps
+            # go on as it lands (``_cap_the_drawer``).
+            self._slide_the_drawer(dock.height(), PROBLEMS_BAR_HEIGHT, self._cap_the_drawer)
         else:
-            dock.setMaximumHeight(PROBLEMS_BAR_HEIGHT)
+            self._cap_the_drawer()
         if hasattr(self, "act_drc_panel") and self.act_drc_panel.isChecked() != on:
             self.act_drc_panel.setChecked(on)
         # Check's Next reads whether the drawer is open: Show Problems, then Next Problem.
@@ -12292,7 +12303,60 @@ class MainWindow(QMainWindow):
         self._wire_offer = menu
         menu.popup(where)
 
-    def _give_the_drawer_its_height(self) -> None:
+    def _cap_the_drawer(self) -> None:
+        """Folded: the list squeezed to nothing and the dock capped to the bar."""
+        self.drc_panel.setMaximumHeight(0)
+        self.dock_drc.setMaximumHeight(PROBLEMS_BAR_HEIGHT)
+
+    def _slide_the_drawer(self, start: int, end: int, landed: Callable[[], None]) -> None:
+        """The drawer's height eased from ``start`` to ``end``, then ``landed``: the dock
+        resized through the window, as a drag on its edge would, a frame at a time."""
+        animation = QVariantAnimation(self)
+        animation.setStartValue(start)
+        animation.setEndValue(end)
+        animation.setDuration(motion.duration(self.DRAWER_MS))
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.valueChanged.connect(
+            lambda value: self.resizeDocks(
+                [self.dock_drc], [int(cast(int, value))], Qt.Orientation.Vertical
+            )
+        )
+
+        def land() -> None:
+            if self._drawer_motion is animation:
+                self._drawer_motion = None
+                landed()
+
+        animation.finished.connect(land)
+        self._drawer_motion = animation
+        animation.start()
+
+    def _stop_the_drawer(self) -> None:
+        """Opened or folded again mid-slide: the slide under way is dropped where it is,
+        and what was asked now takes over from that height."""
+        animation, self._drawer_motion = self._drawer_motion, None
+        if animation is not None:
+            animation.stop()
+
+    def _give_the_drawer_its_height(self, *, slid: bool = False) -> None:
+        if not self.problems_bar.expanded:
+            return
+        dock = self.dock_drc
+        if (
+            not slid
+            and self._drawer_motion is None
+            and motion.enabled()
+            and dock.isVisible()
+            and dock.height() < self.LAYOUT_DRC_HEIGHT
+        ):
+            # Slid open from the bar, and given its height exactly as it lands: what was
+            # gone to while it slid is framed again at the height it is shown at.
+            self._slide_the_drawer(
+                dock.height(),
+                self.LAYOUT_DRC_HEIGHT,
+                lambda: self._give_the_drawer_its_height(slid=True),
+            )
+            return
         self.resizeDocks([self.dock_drc], [self.LAYOUT_DRC_HEIGHT], Qt.Orientation.Vertical)
         # Laid out now rather than on the next layout pass, so what runs after it in this
         # turn of the loop -- going to the first problem -- scrolls the list at the height
@@ -12301,6 +12365,9 @@ class MainWindow(QMainWindow):
         layout = self.layout()
         if layout is not None:
             layout.activate()
+        current = self.drc_tree.currentItem()
+        if slid and current is not None and current.childCount() == 0:
+            self._reveal_finding_row(current)
 
     def _open_problems_by_hand(self, on: bool) -> None:
         """The bar clicked: the drawer opens, and goes to the first problem it counts."""

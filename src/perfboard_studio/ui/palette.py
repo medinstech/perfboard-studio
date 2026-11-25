@@ -17,12 +17,23 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import cast
 
-from PySide6.QtCore import QEvent, QModelIndex, QObject, QPersistentModelIndex, QPoint, Qt
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QPoint,
+    Qt,
+    QVariantAnimation,
+)
 from PySide6.QtGui import QColor, QIcon, QKeyEvent, QPainter
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGraphicsDropShadowEffect,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -33,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import theme
+from . import motion, theme
 from .i18n import t
 
 #: How many rows the list shows before it scrolls, and how wide the palette stands.
@@ -43,6 +54,11 @@ WIDTH = 620
 #: The QAction property holding more words a command is found by, comma-separated, in the
 #: window's language: what people call it that its name does not say.
 ALSO = "paletteAlso"
+
+#: The palette drops into place as it opens: this far, this long. Closing is immediate --
+#: whatever was asked for runs at once, and nothing should stand between Enter and it.
+DROP_PX = 10
+OPEN_MS = 160
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +173,7 @@ class CommandPalette(QFrame):
         self.list.itemClicked.connect(self._run_item)
         layout.addWidget(self.list)
         self.setFixedWidth(WIDTH)
+        self._opening: QVariantAnimation | None = None
         self.hide()
 
     # -- opening and closing ---------------------------------------------------
@@ -179,8 +196,49 @@ class CommandPalette(QFrame):
         self.show()
         self.raise_()
         self.field.setFocus()
+        self._drop_in()
+
+    def _drop_in(self) -> None:
+        """Come down the last few pixels into place as the shadow under it deepens: the
+        palette arrives over the canvas rather than appearing on it. The field has the
+        keyboard from the first frame, so typing never waits on it."""
+        self._stop_opening()
+        ms = motion.duration(OPEN_MS)
+        if ms <= 0:
+            return
+        landing = self.pos()
+        shadow = self.graphicsEffect()
+        full = shadow.color().alpha() if isinstance(shadow, QGraphicsDropShadowEffect) else 0
+        animation = QVariantAnimation(self)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.setDuration(ms)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        def step(value: object) -> None:
+            progress = float(cast(float, value))
+            self.move(landing.x(), landing.y() - round(DROP_PX * (1.0 - progress)))
+            if isinstance(shadow, QGraphicsDropShadowEffect):
+                colour = shadow.color()
+                colour.setAlpha(round(full * progress))
+                shadow.setColor(colour)
+
+        animation.valueChanged.connect(step)
+        animation.finished.connect(self._stop_opening)
+        self._opening = animation
+        step(0.0)
+        animation.start()
+
+    def _stop_opening(self) -> None:
+        """Land at once, wherever the drop was: closed mid-way, opened again, or done."""
+        animation, self._opening = self._opening, None
+        if animation is None:
+            return
+        animation.stop()
+        animation.setCurrentTime(animation.duration())
 
     def close_palette(self) -> None:
+        self._stop_opening()
         self.hide()
         parent = self.parentWidget()
         if parent is not None:
