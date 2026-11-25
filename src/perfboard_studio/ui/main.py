@@ -34,6 +34,7 @@ import os
 import re
 import sys
 import time
+import weakref
 from collections import Counter
 from collections.abc import Callable, Sequence
 from functools import partial
@@ -3565,6 +3566,47 @@ class MainWindow(QMainWindow):
             action_label=action_label,
             action=action,
         )
+
+    def _undo_from_toast(self) -> Callable[[], None]:
+        """A toast's Undo: take back the command the toast reports, and only that one.
+
+        Called as the toast is made, right after the command, so it remembers which
+        command that was. A toast stays up for seconds -- longer while the pointer rests
+        on it -- and a bare ``bus.undo`` took back whatever was last by the time it was
+        clicked: a part nudged after Auto-wire was undone by the button under "Wired 12
+        links", and after a Ctrl+Z the button took back a second command. When the
+        command is no longer the last one (or the window has opened another file since)
+        the button says so and changes nothing; when it is, it goes through ``on_undo``,
+        which also says what was taken back.
+        """
+        bus = self.bus
+        document = bus.system_document
+        history = bus.history()
+        depth = len(history)
+        top = history[-1] if history else None
+        # Weak: a closure holding the window keeps it alive past close, which is what
+        # crashed CI runs at exit.
+        window_ref = weakref.ref(self)
+
+        def undo_that() -> None:
+            window = window_ref()
+            if window is None:
+                return
+            now = window.bus.history()
+            if (
+                window.bus is bus
+                and bus.system_document is document
+                and len(now) == depth
+                and top is not None
+                and now[-1] == top
+            ):
+                window.on_undo()
+                return
+            window.statusBar().showMessage(
+                t("That change is no longer the last one, so nothing was undone."), 6000
+            )
+
+        return undo_that
 
     def start_tour(self) -> None:
         """The getting-started tour (ui/tour.py), on the example that is drawn and not built.
@@ -8957,7 +8999,7 @@ class MainWindow(QMainWindow):
             did(result.description),
             kind="success",
             action_label=_plain(t("&Undo")),
-            action=self.bus.undo,
+            action=self._undo_from_toast(),
             status_ms=6000,
         )
 
@@ -9442,7 +9484,7 @@ class MainWindow(QMainWindow):
             did(result.description),
             kind="success",
             action_label=_plain(t("&Undo")),
-            action=self.bus.undo,
+            action=self._undo_from_toast(),
             status_ms=6000,
         )
 
@@ -14212,7 +14254,7 @@ class MainWindow(QMainWindow):
             said,
             kind="success",
             action_label=_plain(t("&Undo")),
-            action=self.bus.undo,
+            action=self._undo_from_toast(),
             status_ms=0,
         )
 
@@ -14424,7 +14466,7 @@ class MainWindow(QMainWindow):
             action=(
                 (lambda: self.set_problems_open(True))
                 if plan.summary.links_unrouted
-                else self.bus.undo
+                else self._undo_from_toast()
             ),
             status_ms=0,
         )
@@ -14831,7 +14873,7 @@ class MainWindow(QMainWindow):
             action=(
                 (lambda: self.set_problems_open(True))
                 if plan.summary.links_unrouted
-                else self.bus.undo
+                else self._undo_from_toast()
             ),
             status_ms=0,
         )
@@ -15070,7 +15112,7 @@ class MainWindow(QMainWindow):
             kind="warning" if plan.problems else "success",
             action_label=t("Show Problems") if plan.problems else _plain(t("&Undo")),
             action=(
-                (lambda: self.set_problems_open(True)) if plan.problems else self.bus.undo
+                (lambda: self.set_problems_open(True)) if plan.problems else self._undo_from_toast()
             ),
             status_ms=0,
         )

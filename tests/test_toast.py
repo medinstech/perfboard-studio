@@ -127,3 +127,104 @@ def test_main_window_notify_mirrors_status_bar_and_triggers_undo_action(tmp_path
     finally:
         window.toasts.clear()
         window.close()
+
+
+def _discard(window) -> None:  # type: ignore[no-untyped-def]
+    """Close without the unsaved-work question, which waits forever offscreen."""
+    window._saved_document = window.bus.system_document
+    window.close()
+
+
+def _window_with_a_toast_undo():  # type: ignore[no-untyped-def]
+    """A window on the astable example, its sheet just arranged and the toast up."""
+    from pathlib import Path
+
+    from perfboard_studio import persist
+    from perfboard_studio.ui.main import MainWindow
+
+    _app()
+    root = Path(__file__).resolve().parents[1]
+    loaded = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    window = MainWindow(loaded)
+    window.on_schematic_auto_layout()
+    card = window.toasts.cards[-1]
+    assert card.action_button is not None
+    return window, card
+
+
+def _nudge_a_part(window) -> None:  # type: ignore[no-untyped-def]
+    from perfboard_studio.commands import MoveComponentPayload
+    from perfboard_studio.model import HoleCoord
+
+    for part in window.bus.document.components:
+        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            anchor = HoleCoord(part.anchor.col + dc, part.anchor.row + dr)
+            if window.bus.dispatch(
+                "component.move", MoveComponentPayload(id=part.id, anchor=anchor)
+            ).ok:
+                return
+    raise AssertionError("no part on the example could be nudged one hole")
+
+
+def test_a_toast_undo_takes_back_what_it_names_and_says_so() -> None:
+    window, card = _window_with_a_toast_undo()
+    try:
+        arranged = window.bus.history()[-1]
+        card.action_button.click()
+        assert arranged not in window.bus.history()[-1:]
+        assert window.bus.can_redo() and window.bus.redo_history()[-1] == arranged
+        from perfboard_studio.ui.main import undone
+
+        assert window.statusBar().currentMessage() == undone(arranged)
+    finally:
+        window.toasts.clear()
+        _discard(window)
+
+
+def test_a_toast_undo_after_a_later_change_undoes_nothing() -> None:
+    """The toast stays up for seconds; a part nudged meanwhile is not what its Undo
+    takes back."""
+    window, card = _window_with_a_toast_undo()
+    try:
+        _nudge_a_part(window)
+        nudged = window.bus.document
+        depth = len(window.bus.history())
+        card.action_button.click()
+        assert window.bus.document is nudged
+        assert len(window.bus.history()) == depth
+        assert "no longer the last" in window.statusBar().currentMessage()
+    finally:
+        window.toasts.clear()
+        _discard(window)
+
+
+def test_a_toast_undo_after_ctrl_z_does_not_undo_a_second_time() -> None:
+    window, card = _window_with_a_toast_undo()
+    try:
+        # A command under the arrangement, so a second undo would have something to take.
+        window.on_undo()
+        _nudge_a_part(window)
+        window.on_schematic_auto_layout()
+        card = window.toasts.cards[-1]
+        window.on_undo()
+        after_ctrl_z = window.bus.document
+        card.action_button.click()
+        assert window.bus.document is after_ctrl_z
+    finally:
+        window.toasts.clear()
+        _discard(window)
+
+
+def test_a_toast_undo_still_works_after_undo_and_redo_bring_its_change_back() -> None:
+    window, card = _window_with_a_toast_undo()
+    try:
+        arranged = window.bus.history()[-1]
+        window.on_undo()
+        window.on_redo()
+        card.action_button.click()
+        assert window.bus.redo_history()[-1] == arranged
+    finally:
+        window.toasts.clear()
+        _discard(window)

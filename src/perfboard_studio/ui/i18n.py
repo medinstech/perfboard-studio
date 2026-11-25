@@ -190,6 +190,9 @@ TURKISH: Mapping[str, str] = {
     "&Quit": "&Çıkış",
     # -- edit ----------------------------------------------------------------
     "&Undo": "&Geri Al",
+    "That change is no longer the last one, so nothing was undone.": (
+        "Bu değişiklik artık en son yapılan değil, bu yüzden hiçbir şey geri alınmadı."
+    ),
     "&Redo": "&Yinele",
     # Kopyala takes p and Yapıştır takes r: G, Y, D, T, A, K and S are all spoken for in
     # this menu already, and an item whose accelerator is claimed cannot be reached from
