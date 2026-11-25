@@ -79,6 +79,38 @@ closed without a bump.
   undo step. Try Other Arrangements adds cards instead of replacing them, and Rearrange on an
   unchanged board brings the same cards back at once. With every part placed, clicking the
   Placement step opens them too.
+- **A wire on the sheet may end on nothing.** A wire you stop drawing before it reaches a
+  pin stays as you drew it, ending in an open square: press Enter, or double-click bare
+  sheet. It may start on a pin, on another wire or on a port, or on nothing at all, and it
+  joins nothing: the circuit, the board check and the guide are exactly as they were. Pick
+  the wire tool at its open end and carry on, and the moment it reaches a pin, a wire or a
+  port it becomes the wire that joins them, in one undo step. In Select a free wire is
+  dragged by a corner, a run or its end, and Delete takes it away. Press G on selected (or
+  pointed-at) symbols or a port and they follow the pointer with every wire on them
+  stretching, square to the sheet, free wires and port links included, as KiCad's G does; a
+  click or Enter puts them down, Escape puts them back, and the whole move is one undo step.
+  Free wires are saved as `sheetLooseWires`, left out of the file when there are none, so
+  every board saved before this opens and saves byte for byte as it did.
+- **Copy, cut, paste and duplicate on the sheet.** Ctrl+C, Ctrl+X, Ctrl+V and Ctrl+D take
+  the selected symbols with the wires between them, the ports, the free wires and the notes,
+  as text on the system clipboard, so a block goes into another document or another window.
+  A paste lands two grid squares down and right of where it came from, and each part takes
+  the next free reference of its own kind (R7 becomes R8), its pins' names and roles and its
+  note going with it. One undo step. X and Y (and M, which is X) mirror the selected symbols
+  horizontally or vertically. A symbol's reference and value can be dragged off where the
+  layout put them, and stay there (`refOffset` and `valueOffset`, left out of the file while
+  unmoved). Behind it are two more commands, `sheet.align` (left, right, top, bottom, and
+  spread evenly across or down, from three symbols) and `part.renumber` (references taken
+  left to right, top to bottom); the window has no menu entry for either yet.
+- **The sheet leaves on paper whatever the window wears, on a frame if asked.** An export is
+  drawn in the white paper ink even when the sheet panel is in its dark look, so a PDF no
+  longer depends on the theme it was made in. `drawing_to_svg` takes an ISO `page_size`
+  (`"A4"` or `"A3"`, landscape or portrait by the drawing's shape): the sheet is framed at
+  true 1 mm to the mm and scaled down only when it would not fit, and the PDF carries the
+  page with no margin added. A `TitleBlock` (title, revision, date, sheet number) is drawn
+  in the bottom right corner; the host passes every value in, and the revision falls back to
+  the application's version. Both are off by default, and nothing in the window or the
+  headless run asks for them yet, so every export is as it was.
 - **MCP: `merge_nets`** joins one net into another in one undo step, the way a wire or a
   label between two nets does on the sheet. The net named `into` keeps its name and class
   and takes the other net's pins, and any current, voltage or face it does not declare
@@ -121,6 +153,22 @@ closed without a bump.
   A tie used to go to whichever path the search happened to try first. Over the
   scoreboard's 23 boards, each wired from bare: wires lying across a pin 22 → 17, wire
   5372 → 5309 mm, bends 332 → 336, the tallest stack still 4. The costs are unchanged.
+- **The sheet is laid out by what belongs together, and Arrange does it on request.** The
+  sheet drawn for you put each part in whichever cell of a grid was free, so a crystal, its
+  two capacitors and the reset network ended up wherever there was room, tied to the chip by
+  net names: 30 of atmega328-relay's 35 printed names were such pairs at U1's pins, and it
+  prints 13 now. The chips are now the centres. The parts that hang off a chip's pins go
+  beside it, on the side those pins are on, in columns by how far each is from the chip;
+  connectors stand at the edges; a part no chip reaches flows left to right in a band above
+  it. Every part is turned so its supply pin points up, its ground pin down and its signal
+  pins towards the part they connect to. A net inside a block is a wire, a net from one
+  block to another is a name, and a wire far longer than the gap it crosses is left to its
+  name. The result is an ordinary sheet, so every symbol and wire in it can be moved,
+  turned and redrawn like one you drew. The sheet's Arrange button now does that
+  (`sheet.arrange`) in one undo step, on the whole sheet or, with two or more symbols
+  selected, on those; it used to hand the sheet back to the old grid. `tools/schematic_scoreboard.py`
+  counts the result per example (printed names, wires, crossings, bends, length, area and
+  overlaps, which must stay 0) and takes `--before` a saved run to show the change.
 - **The sheet names a wire only where its name tells you something.** Every wired net's
   name was printed over its longest run, so the relay example printed 39 names, most of
   them saying nothing the wire did not. A net drawn as a wire is now named where it

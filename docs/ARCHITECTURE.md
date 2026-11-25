@@ -1502,10 +1502,13 @@ below: nothing downstream of `doc.nets` changed by a line.
 
 So `build_schematic` has two paths, chosen by whether `doc.sheet` is empty:
 
-- **Derived** (`_derived_sheet`): everything above. Symbols in cells, wires only in the
-  channels between them, no wire able to cross a symbol as a consequence of where the
-  tracks may be. This is what every imported netlist, every fresh document and every press
-  of `Arrange` produces, and it is what keeps "open it and look at it" free.
+- **Derived**: everything above. This is what every imported netlist and every fresh
+  document produces, and it is what keeps "open it and look at it" free. Since 0.26 it is
+  `schlayout.arrange_sheet` run over the whole document and drawn by `_hand_drawn_sheet`
+  with `derived=True` ("The sheet is arranged by blocks", below). It used to be symbols in
+  cells with wires only in the channels between them, no wire able to cross a symbol as a
+  consequence of where the tracks may be; `_derived_sheet` is that first design, and
+  nothing calls it any more.
 - **Hand-drawn** (`_hand_drawn_sheet`): every symbol where it was put, turned how it was
   turned, joined by the wires somebody drew. Nothing is arranged.
 
@@ -2027,6 +2030,134 @@ run one; those were chosen from that NE555 rendered at several settings, and the
 sheet now has 0 mm on another net and 2.5 mm beside one, for 28 crossings instead of 22.
 `test_an_example_wired_pin_to_pin_has_no_join_that_is_not_there` wires every example net
 by net, the way a person does, and looks for a false join on the result.
+
+**The sheet is arranged by blocks, and the arrangement is an ordinary hand-drawn sheet**
+(`schlayout.py`). The cells-and-channels layout had a property nobody wanted: it knew nothing
+about what belongs next to what. A microcontroller's crystal, its reset parts and its driver
+went wherever a cell was free and were tied to the chip by a pair of net names: 30 of
+atmega328-relay's 35 printed names were such pairs at U1's pins. `schlayout` asks the
+question a person asks before drawing. The **hubs** are the chips (an IC, or a box of
+`HUB_MIN_PINS` pins or more). Every other part is grouped by the signal nets it shares with
+other non-hubs into a cluster, attached to the hub pins its nets reach, and a cluster sits on
+the side of its hub those pins are on, in columns by how many parts away from the chip each
+part is. A cluster no hub reaches flows left to right in a band above the hub from its
+connector. Every part is turned to the one of its eight orientations that points a supply pin
+up, a ground pin down and a signal pin towards the part it connects to. A net inside a block
+is drawn as a wire (`route_sheet_wire`, shortest nets first) and a net between blocks is left
+to its name, as is one whose route comes out far longer than the gap it crosses. Three things
+hold it together:
+
+- **It writes a sheet; it does not draw one.** The module returns a `SymbolPlacement` per part,
+  a `SheetWire` per short connection and the ports, which is exactly what somebody drawing by
+  hand would have stored. So there is no third kind of sheet and no half-arranged one: what
+  `build_schematic` draws for an empty `doc.sheet` is the arrangement stored in a document
+  that is thrown away, and everything the arrangement produced can be moved, turned and
+  rewired like anything drawn. The first edit still freezes the sheet, and it freezes the
+  same drawing that was on screen.
+- **Same document in, same arrangement out**, ties broken by reference, snapped to the grid,
+  with no clock and no RNG, like the rest of the engine below `ui/`. A drawing that changed
+  between two runs would make the freeze jump.
+- **It is measured, not eyeballed.** `tools/schematic_scoreboard.py` prints, per example,
+  the printed net names, drawn wires, crossings, bends, wire length, sheet area and overlaps
+  (symbol over symbol, label over label, a reference or value over a body: these must be 0),
+  and `test_schematic_scoreboard_does_no_worse_than_its_ceiling` holds a ceiling per column.
+  `--before` a saved run prints before and after, which is what a change to a spacing
+  constant is judged by; the goldens in `tests/schematic_golden/` are re-blessed only after
+  reading that diff.
+
+**`sheet.arrange` is an action, and `symbol.auto` is not what the button does any more.**
+The Arrange button used to dispatch `symbol.auto`, which hands the sheet back to the layout
+by forgetting every stored position, wire, port and free wire (the notes stay). It now
+dispatches `sheet.arrange`, which stores the arrangement (`doc.sheet`, `sheet_wires` and
+`sheet_ports` replaced together) in one undo step, so the result is a drawn sheet from the
+first moment and one Ctrl+Z puts the old sheet back, positions, wires and ports. The window
+sends the selected references when two or more symbols are selected, and then only those are
+arranged and the rest stays where it was (`schlayout._arrange_subset`); with none or one
+selected it arranges the whole sheet. The command refuses a document with no parts and a
+reference the sheet does not know. `symbol.auto` is still a command. A sheet that is
+hand-wired and would come out much shorter arranged is offered Arrange once per document, in
+a line over the sheet (`_consider_arrange_hint`).
+
+**A wire may end on nothing, and then it joins nothing** (`model.LooseWire`,
+`doc.sheet_loose_wires`, saved as `sheetLooseWires`). A `SheetWire` joins two pins and stores
+the line that says so, in one command; a `PortLink` joins a pin to a port's net. A line
+somebody stopped drawing has nothing to join, so it is neither: `doc.nets` never hears of it,
+and LVS, the router and the guide are exactly as they were. That is the same discipline as
+for notes. Its first point is on at most one thing, a pin (`pin`), another wire (`on`, named
+by that wire's two pins, as a T names the wire it lands on) or a port (`port`), and is free
+when it is on none; its last point is the free end, drawn as an open square and said in the
+sheet's notes. A pin, wire or port it starts on that has since gone is drawn as a free
+start rather than refused, because nothing it names can be wrong about the circuit.
+`sheet.loose.add`, `.reshape`, `.delete` and `.extend` are the commands. **Extending a wire
+onto a pin, a wire or a port is the one place a loose wire stops being one**: `.extend`
+removes the loose wire and dispatches `sheet.wire` or `sheet.port.link` in the same command
+(through the `ctx` it was given), so the join and the line are one undo step and the join
+has every check `sheet.wire` has, including that two nets are merged and a supply and its
+ground are refused. A wire that starts on a wire or a port may only end on a pin. The
+field is left out of the file when empty, so the fifteen goldens keep their bytes; the test
+is `test_loose_wire_round_trip_and_omission_when_empty`.
+
+**G carries every wire on a moved symbol, and it is the same gesture as a drag**
+(`viewsch._grabbing`; `MoveSymbolsPayload` carries the loose wires and port links it
+stretched). Pressing G on the selection, or on the symbol under the pointer, picks it up; it
+follows the pointer with every attached wire stretching square to the sheet until a click or
+Enter puts it down, and Escape puts it back). It commits as one `symbol.move`, whose payload
+carries the drawn wires, the T's, the port links and the loose wires it stretched
+(`MoveSymbolsPayload.wires`, `.loose_wires`, `.ports`), so one undo takes back the symbols and
+every wire they pulled. A drag and a G share one live preview (`MainWindow._live_drawing`), so
+the picture while moving is the picture after.
+`test_moving_symbol_stretches_wires_tees_loose_wires_and_port_links_in_one_step` is the
+measurement.
+
+**The sheet has a clipboard, and it is the system's** (`ui/sheet_clipboard.py`,
+`sheet.paste`). Copy and cut write the selection as JSON text tagged
+`SHEET_CLIPBOARD_MARKER` ("perfboard-studio-sheet-block", version 1) to the system
+clipboard, so a block goes between documents and windows and a stranger's text on the
+clipboard is not a paste. The module is pure Qt-free serialisation; the window offers the
+text to `sheet_block_from_json`, which turns it into a `PasteSheetPayload`. What goes in is
+what the selection reaches: the parts, the wires with both ends in it, the ports, the loose
+wires and the notes. A paste (Ctrl+V) and a duplicate (Ctrl+D) are one command, offset by two
+grid squares, and the command does the bookkeeping the text cannot know: each part gets the
+next unused reference of its own prefix (R7 becomes R8, never one taken), a new id, and its
+pin names, roles and note copied through the checks any part's go through; and the wires,
+ports and loose wires are remapped onto the new references. It is refused when it carries
+nothing. Cut is a copy followed by the delete the selection would have had. Alongside:
+`sheet.align` moves symbols and ports to a shared left, right, top or bottom, or spreads
+three or more evenly, snapped to the grid, in one undo step; `part.renumber` takes a mapping
+of references computed by `plan_sheet_renumber` (left to right, top to bottom) and applies
+it all at once, so a swap of two references is not refused on the way; and a symbol's
+reference and value can be dragged off the place the layout gave them (`refOffset` and
+`valueOffset` on `SymbolPlacement`, left out of the file at zero, the `stripAxis` rule).
+The window has handlers for align and renumber (`on_sheet_align`, `on_sheet_renumber`) and
+no menu entry or key for either yet.
+
+**The sheet's look is the window's; the paper's is not** (`schematic_export.PAPER`, `NIGHT`).
+A `SheetInk` is every colour and every line weight an exported sheet is drawn with, and the
+panel's dark look has an ink of its own, `NIGHT`, whose background is the panel's
+(`theme.DARK.sheet_paper`, held equal by `test_night_ink_and_paper_default_on_dark_window`).
+The decision is that **a file is never in the window's theme**: `on_export_schematic` and
+the headless run pass `PAPER` explicitly, and `drawing_to_svg`'s default is `PAPER`, so a PDF
+printed from a dark window is white paper with dark ink and two machines on two themes make
+the same file. `NIGHT` is the ink that matches the dark panel, for a render meant for a
+screen; nothing in the window draws with it yet. The quiet net
+names (a wire's name shown only while its net is lit) are set in italics, which is how a
+reader tells a live name from a label somebody put there, and `scenetext.label_font` takes
+`italic` for it.
+
+**A page is a frame, and a title block is the host's** (`schematic_export.PAGE_DIMENSIONS_MM`,
+`TitleBlock`, `_framed_svg`). `drawing_to_svg(page_size="A4" | "A3")` puts the sheet on an ISO
+page, landscape unless the drawing is taller than it is wide, inside a `FRAME_MARGIN_MM`
+frame, at true 1 mm to the mm: scaled down, uniformly, only when it would not fit, so a
+sheet that fits prints at the size it says. `"auto"` with no title block (the default) leaves
+the export as it always was, unframed, and `"auto"` with one frames a page that fits the
+drawing. The PDF writer asks whether the SVG
+already spans the ISO page (`_matches_iso_page`) and adds no margin if so, because a margin on
+top of a frame would shrink the 1:1. A `TitleBlock` carries a title, a revision, a date and a
+sheet number, and **every value is passed in**: the module has no clock and no filesystem, so
+the date is the host's, and the revision falls back to the application's version. It is drawn
+in the bottom right corner, SVG Tiny 1.2 only, with the drawing and the notes kept clear of
+it. Neither the window nor `--headless` passes either yet, so every export is as it was
+(`test_a4_and_a3_true_scale_svg_and_pdf_with_title_block`).
 
 ## The window walks through six steps
 
