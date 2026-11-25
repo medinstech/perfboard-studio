@@ -84,7 +84,7 @@ from perfboard_studio.schematic import build_schematic
 from perfboard_studio.system import board_document, board_ids
 from perfboard_studio.version import __version__
 
-from . import theme
+from . import hover, theme
 from .boardpreview import render_board
 from .brand import BrandLink
 from .i18n import t
@@ -463,6 +463,8 @@ class _Card(QPushButton):
 
     def finish(self) -> None:
         self.content.addStretch(1)
+        # Under the pointer the card rises off the page (``ui/hover.py``).
+        hover.lift(self)
         for child in self.findChildren(QLabel):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 

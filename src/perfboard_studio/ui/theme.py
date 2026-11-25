@@ -492,6 +492,10 @@ QToolButton#brandLink, QToolButton#brandLink:hover, QToolButton#brandLink:presse
     border: none;
     padding: 0px;
 }}
+/* A button whose hover wash eases in and out (ui/hover.py) paints the wash itself, under
+   its own drawing, so the sheet stands its hover down. Pressed and checked stay here. */
+QToolButton[fade="true"]:hover {{ background: transparent; }}
+QToolButton[fade="true"]:pressed {{ background: {k.bg_pressed}; }}
 /* One choice of a row in Properties -- a net's Class and Face, a part's rotation: the chosen
    one is marked, or the row the Face note explains showed no face at all. */
 QToolButton[segment="true"]:checked {{
@@ -627,6 +631,9 @@ QPushButton:default:hover, QPushButton[variant="primary"]:hover {{
 }}
 QPushButton:default:pressed, QPushButton[variant="primary"]:pressed {{
     background: {k.accent_pressed};
+    /* Pressed in: the label sinks a pixel, and the button keeps its size. */
+    padding-top: {s["sm"] + 1}px;
+    padding-bottom: {s["sm"] - 1}px;
 }}
 /* A destructive answer (mark_destructive): outlined in the danger colour, never filled,
    so the safe default beside it keeps the one accent. */
@@ -656,6 +663,10 @@ QWidget#headerGap {{ background: transparent; }}
 QWidget[clear="true"] {{ background: transparent; }}
 QFrame#homeSide {{ background: {k.bg_surface}; border: none; border-right: 1px solid {k.border}; }}
 QPushButton#homeDoor {{ text-align: left; padding: {s["sm"]}px {s["lg"]}px; }}
+QPushButton#homeDoor[variant="primary"]:pressed {{
+    padding-top: {s["sm"] + 1}px;
+    padding-bottom: {s["sm"] - 1}px;
+}}
 QPushButton#homeNav {{
     background: transparent;
     border: 1px solid transparent;

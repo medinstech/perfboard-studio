@@ -119,7 +119,7 @@ from perfboard_studio.system import (
 )
 from perfboard_studio.wirecolour import COLOR_BY_NET_CLASS, SIGNAL_COLORS, net_colours
 
-from . import theme
+from . import hover, theme
 from .boardfeatures import FeatureEditor, FeaturesGroup
 from .engine_text import say
 from .i18n import counted, hole_grid, language, t
@@ -2505,6 +2505,7 @@ class _WireColourRow(QWidget):
             button.setAccessibleName(labels.get(name, name))
             button.clicked.connect(lambda _checked=False, n=name: self._on_choose(n))
             grid.addWidget(button, index // 5, index % 5)
+            hover.fade(button)
             self.swatches[name] = button
         grid.setColumnStretch(5, 1)
         outer.addLayout(grid)
@@ -2531,6 +2532,8 @@ class _WireColourRow(QWidget):
         self.by_net.setProperty("segment", True)
         self.by_net.clicked.connect(lambda _checked=False: self._on_choose(None))
         actions.addWidget(self.by_net)
+        hover.fade(self.custom)
+        hover.fade(self.by_net)
         actions.addStretch(1)
         outer.addLayout(actions)
 

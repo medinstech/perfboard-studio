@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import icons, theme
+from . import hover, icons, theme
 from .i18n import t
 from .workflow import WorkflowBar
 
@@ -257,6 +257,10 @@ class HeaderBar(QWidget):
 
         # Styled by name in the one sheet (``theme.stylesheet``): #header, #headerTitle,
         # #headerUnsaved, and the steps as #workflowBar's buttons by their status.
+        # The header's own buttons ease their hover in (``ui/hover.py``) -- not the
+        # steps, which are the step bar's, nor "Not saved", which is a link.
+        for button in (self.menu_button, self.home_button, self.undo_button, self.redo_button):
+            hover.fade(button)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)

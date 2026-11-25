@@ -188,6 +188,10 @@ closed without a bump.
   menu's choice. A narrow window sheds the labels to icons, which keep them as tooltips,
   and then the search's width, before anything overlaps. Over a board the row keeps only
   the icon, since the steps hold the middle.
+- **Hover eases in.** A Home card rises two pixels off the page on a soft shadow while
+  the pointer is on it, the header's buttons and the wire-colour swatches fade their hover
+  in and out over 120 ms instead of switching, and a primary button sinks a pixel as it is
+  pressed. With Reduce Motion on, hover is the plain switch it was.
 - **The 3D camera swings back instead of jumping.** Reset View, and the turn-over with
   the board, carry the camera round what it looks at to the standard view in about
   0.4 s, so the board is seen turning back rather than replaced; turning it over tumbles
