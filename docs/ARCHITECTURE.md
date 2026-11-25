@@ -2154,7 +2154,10 @@ The decision is that **a file is never in the window's theme**: `on_export_schem
 the headless run pass `PAPER` explicitly, and `drawing_to_svg`'s default is `PAPER`, so a PDF
 printed from a dark window is white paper with dark ink and two machines on two themes make
 the same file. `NIGHT` is the ink that matches the dark panel, for a render meant for a
-screen; nothing in the window draws with it yet. The quiet net
+screen, and the panel itself now draws with it: `ui/viewsch.py`'s `ACTIVE_INK` is `NIGHT` in
+the dark theme and a `SheetInk` built from the light theme's tokens otherwise, so the colours
+of the sheet on screen and of a Night render are one table rather than two kept equal by a
+test. Nothing on screen moved, because `NIGHT` was already the dark theme's values. The quiet net
 names (a wire's name shown only while its net is lit) are set in italics, which is how a
 reader tells a live name from a label somebody put there, and `scenetext.label_font` takes
 `italic` for it.
@@ -2171,8 +2174,16 @@ top of a frame would shrink the 1:1. A `TitleBlock` carries a title, a revision,
 sheet number, and **every value is passed in**: the module has no clock and no filesystem, so
 the date is the host's, and the revision falls back to the application's version. It is drawn
 in the bottom right corner, SVG Tiny 1.2 only, with the drawing and the notes kept clear of
-it. Neither the window nor `--headless` passes either yet, so every export is as it was
-(`test_a4_and_a3_true_scale_svg_and_pdf_with_title_block`).
+it. The two hosts that ask are the window and `--headless`, and both default to "auto" and
+no title block, so an export nobody asked a frame of is as it always was. The window asks in
+`SchematicExportDialog` (File ▸ Export ▸ the schematic): the page, and a title block whose
+fields are the document's name, `v<version>`, today's date and "1 / 1", which ticks itself
+when a page is chosen unless it has been clicked by hand. `--headless` takes `--page-size
+auto|A4|A3` and `--title-block` (`headless._parse_schematic_flags`), the same defaults, and
+`main._document_arguments` skips `--page-size`'s value so it is never read as the document.
+The date is read in those two hosts and nowhere below them
+(`test_a4_and_a3_true_scale_svg_and_pdf_with_title_block`,
+`test_sheet_night_ink_align_renumber_menus_and_framed_export`).
 
 ## The window walks through six steps
 

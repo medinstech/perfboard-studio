@@ -429,6 +429,14 @@ a rendering change did not crash:
 python -m perfboard_studio.ui.main --headless tools/diffcheck/golden/dense.perf
 ```
 
+The schematic is written on a sheet cut to the drawing. `--page-size A4` (or `A3`) frames it
+on that ISO page at true scale instead, and `--title-block` adds a title block with the
+document's name, the application's version and today's date:
+
+```sh
+python -m perfboard_studio.ui.main --headless --page-size A4 --title-block board.perf
+```
+
 ## How it is built
 
 The document is **immutable** and every mutation is a command dispatched through one

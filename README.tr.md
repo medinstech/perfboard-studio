@@ -430,6 +430,14 @@ ve montaj rehberini yazar; DRC ve LVS çalıştırır, süreleri yazdırır — 
 python -m perfboard_studio.ui.main --headless tools/diffcheck/golden/dense.perf
 ```
 
+Şema, çizime göre kesilmiş bir sayfaya yazılır. `--page-size A4` (ya da `A3`) onu bunun yerine
+o ISO sayfasına gerçek ölçekte çerçeveler; `--title-block` ise belgenin adını, uygulamanın
+sürümünü ve bugünün tarihini taşıyan bir başlık bloğu ekler:
+
+```sh
+python -m perfboard_studio.ui.main --headless --page-size A4 --title-block board.perf
+```
+
 ## Nasıl kurulmuş
 
 Doküman **değişmezdir (immutable)** ve her mutasyon tek bir veri yolundan geçen bir

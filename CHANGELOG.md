@@ -128,7 +128,8 @@ closed without a bump.
   layout put them, and stay there (`refOffset` and `valueOffset`, left out of the file while
   unmoved). Behind it are two more commands, `sheet.align` (left, right, top, bottom, and
   spread evenly across or down, from three symbols) and `part.renumber` (references taken
-  left to right, top to bottom); the window has no menu entry for either yet.
+  left to right, top to bottom); the Circuit menu has both, Align and Distribute (Ctrl+Alt
+  with an arrow, H or V) and Renumber Parts (Ctrl+Alt+N), each one undo step.
 - **The sheet leaves on paper whatever the window wears, on a frame if asked.** An export is
   drawn in the white paper ink even when the sheet panel is in its dark look, so a PDF no
   longer depends on the theme it was made in. `drawing_to_svg` takes an ISO `page_size`
@@ -136,8 +137,22 @@ closed without a bump.
   true 1 mm to the mm and scaled down only when it would not fit, and the PDF carries the
   page with no margin added. A `TitleBlock` (title, revision, date, sheet number) is drawn
   in the bottom right corner; the host passes every value in, and the revision falls back to
-  the application's version. Both are off by default, and nothing in the window or the
-  headless run asks for them yet, so every export is as it was.
+  the application's version. Both are off by default, so an export nobody asked a frame of
+  is as it was. File ▸ Export ▸ Schematic… now asks: the page (Auto, A4 or A3) and a title
+  block whose fields start as the document's name, the version, today's date and "1 / 1",
+  ticked for you once a page is chosen. `--headless` takes the same with `--page-size`
+  (`auto`, `A4` or `A3`) and `--title-block`.
+- **Remove All Wiring.** Wiring ▸ Remove All Wiring… takes up every conductor that belongs
+  to a net, in one undo step, after asking (the button says what it does, and Cancel is the
+  default). Hand-drawn copper with no net is left alone.
+- **A wire's colour is picked in Properties.** A selected wire shows the ten stocked
+  insulation colours, Custom… for any other, and By net, which hands it back to its net's own
+  colour and leaves `color` out of the file again. Several wires selected change together in
+  one undo step; a solder trace in the same selection is not a wire and keeps what it has.
+- **Reduce Motion.** View ▸ Reduce Motion lands every animation (a part dropping into the 3D
+  view, a wire drawing itself, the board turning over) on its final state at once, live and
+  remembered. `PERFBOARD_STUDIO_REDUCE_MOTION=1` (or `0`) pins it for one run, and the test
+  suite pins it on so renders and tests stay deterministic.
 - **MCP: `merge_nets`** joins one net into another in one undo step, the way a wire or a
   label between two nets does on the sheet. The net named `into` keeps its name and class
   and takes the other net's pins, and any current, voltage or face it does not declare
@@ -220,9 +235,22 @@ closed without a bump.
 - **A ring or a part drawn in error explains itself.** Hovering a ringed hole, or a part
   drawn red, shows its findings and what to do. A click on a ring opens the drawer to its
   row and selects what the row selects, so Properties shows the copper the finding is about.
+- **The sheet in the dark theme is drawn with the engine's Night ink.** The panel and a
+  Night render now read one table (`schematic_export.NIGHT`) instead of two kept equal by a
+  test. The values are the dark theme's own, so nothing on screen moves.
+- **Compare With Before shows what the route replaced, and keeps showing it.** The dashed
+  ghosts are the copper the last route took up, fixed when the route lands: a wire you delete
+  by hand afterwards, or Remove All Wiring, no longer turns into a ghost of a route that never
+  touched it. A route that replaced nothing leaves the comparison off.
 
 ### Fixed
 
+- **Arrange This Symbol lays out that symbol only.** It used to take the symbol's entry out
+  of a hand-drawn sheet, which parked it in the overflow column at the right edge. It now
+  re-lays it beside its neighbours (`sheet.arrange` for the one reference) and every other
+  symbol stays where it was, in one undo step.
+- **Removing the wiring of several nets says so.** The undo entry read "Delete 5
+  conductor(s)"; it now reads "Remove the wiring of 5 nets", in Turkish too.
 - **A resistor's body is no longer its span.** A KiCad `R_Axial_DIN0204` (1/8 W) arrived as
   the library's 1/4 W 0207 on every span, and a 0207 on six holes as its 1/2 W 0309, each body
   bigger than the part and measured so by DRC. The DIN size now picks the body and the span
