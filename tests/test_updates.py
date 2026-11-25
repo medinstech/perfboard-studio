@@ -28,7 +28,11 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from perfboard_studio.updates import (
+    FIRST_SIGNED_VERSION,
+    PUBLISHER_NAME,
+    PUBLISHER_THUMBPRINTS,
     RELEASES_PAGE_URL,
+    UNSIGNED_STATUSES,
     Asset,
     Release,
     asset_for,
@@ -38,6 +42,8 @@ from perfboard_studio.updates import (
     newer_release,
     parse_releases,
     parse_version,
+    requires_signature,
+    signature_verdict,
 )
 
 # The shape GitHub actually serves, trimmed to the fields this module reads. Kept as text
@@ -406,3 +412,70 @@ def test_only_web_links_in_release_notes_may_be_opened() -> None:
     assert is_web_link("HTTP://example.org")
     for refused in ("file:///C:/x", "javascript:alert(1)", "ms-settings:", "", "//evil.example"):
         assert not is_web_link(refused), refused
+
+
+# ---------------------------------------------------------------------------
+# The installer's signature: whose it is, and from which release on it is asked for
+# ---------------------------------------------------------------------------
+
+THUMBPRINT = next(iter(PUBLISHER_THUMBPRINTS))
+
+
+def test_a_release_before_the_first_signed_one_is_installed_on_its_checksum_alone() -> None:
+    assert not requires_signature("0.25.0")
+    assert not requires_signature("0.8.0")
+    assert requires_signature(FIRST_SIGNED_VERSION)
+    assert requires_signature("0.26.1")
+    assert requires_signature("1.0.0")
+
+
+def test_a_development_build_of_the_first_signed_release_is_not_held_to_it() -> None:
+    """A ``.devN`` sorts below its release here, and nobody signs a dev build."""
+    assert not requires_signature(FIRST_SIGNED_VERSION + ".dev3")
+
+
+def test_a_version_nobody_can_read_is_held_to_the_signature() -> None:
+    for unreadable in ("", "latest", "v0.26", "0.26.0-rc1"):
+        assert requires_signature(unreadable), unreadable
+
+
+def test_every_release_this_source_becomes_is_signed() -> None:
+    """The release this tree is heading for is at or past the first signed one, so the
+    check cannot be shipped switched off by a constant nobody moved."""
+    from perfboard_studio.version import __version__
+
+    release = __version__.split(".dev")[0]
+    assert requires_signature(release)
+
+
+def test_the_publisher_is_trusted_by_its_name_or_its_thumbprint() -> None:
+    assert signature_verdict(0, PUBLISHER_NAME, "00" * 20) == "trusted", "a renewed certificate"
+    assert signature_verdict(0, "", THUMBPRINT) == "trusted"
+    assert signature_verdict(0, "", THUMBPRINT.lower()) == "trusted"
+    assert signature_verdict(0, "  " + PUBLISHER_NAME + " ", "") == "trusted"
+
+
+def test_the_name_is_compared_as_text_not_as_bytes() -> None:
+    """"ü" and "Ş" can each be written as one code point or two; a certificate decoded either
+    way is the same name."""
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFD", PUBLISHER_NAME)
+    assert decomposed != PUBLISHER_NAME
+    assert signature_verdict(0, decomposed, "") == "trusted"
+
+
+def test_a_good_signature_by_somebody_else_is_a_stranger() -> None:
+    assert signature_verdict(0, "Python Software Foundation", "AB" * 20) == "stranger"
+    assert signature_verdict(0, "Medinstech", "") == "stranger", "a name is all of it or nothing"
+    assert signature_verdict(0, "", "") == "stranger"
+
+
+def test_no_signature_and_a_broken_one_are_told_apart() -> None:
+    for status in UNSIGNED_STATUSES:
+        assert signature_verdict(status, PUBLISHER_NAME, THUMBPRINT) == "unsigned"
+    # TRUST_E_BAD_DIGEST (changed after signing), CERT_E_UNTRUSTEDROOT, CERT_E_REVOKED,
+    # given signed as ctypes' c_long hands them over and unsigned as written down.
+    for status in (0x80096010, 0x800B0109, -0x7FF4FEF4, 0x800B010C):
+        assert signature_verdict(status, PUBLISHER_NAME, THUMBPRINT) == "invalid", hex(status)
+

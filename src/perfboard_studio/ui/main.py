@@ -19312,7 +19312,10 @@ class MainWindow(QMainWindow):
             return
         if not self._offer_to_save():
             return
-        attempt = updater.start_install(path, checker.verified_digest)
+        # The release being installed, which decides whether its signature is required; a
+        # window that no longer knows it holds the installer to the signature.
+        installing = self._update_release.version if self._update_release is not None else ""
+        attempt = updater.start_install(path, checker.verified_digest, version=installing)
         if not attempt.started:
             if attempt.discarded:
                 self._downloaded_update = None

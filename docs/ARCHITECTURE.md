@@ -3779,10 +3779,24 @@ said "installs nothing at all", and why that changed is what follows.
   `/UPDATE` every new branch is skipped. A PowerShell helper that waited, copied and relaunched
   was the other option; an installer that replaces itself through a script is what antivirus
   products look for, and copying the Qt bundle while it is loaded fails on the locked files.
-- **The checksum is worth exactly what it is worth.** Same host, same connection: it proves the
-  download arrived intact, not who built it. An unsigned installer shows "Unknown publisher" at
-  the prompt (PLAN.md §12) -- which is the user's one chance to say no, and the reason the
-  prompt is Windows' own and is never suppressed.
+- **The checksum is worth exactly what it is worth, and the signature is the rest.** Same host,
+  same connection: the checksum proves the download arrived intact, not who built it -- a
+  replaced release replaces its `SHA256SUMS` too. So from `updates.FIRST_SIGNED_VERSION` on,
+  `start_install` also asks Windows whose signature the installer carries, after the second
+  hash and before anything runs: intact, chained to a root the machine trusts, and the signer
+  is `PUBLISHER_NAME` (or one of `PUBLISHER_THUMBPRINTS`). Unsigned, broken or somebody else's,
+  it is deleted like a swapped file. The verdict is `updates.signature_verdict`, pure, so the
+  cases are tested on every platform; reading the signature is `ui/authenticode.py`, which is
+  `WinVerifyTrust` through `ctypes`, loaded on the click and never at start-up. Not
+  `Get-AuthenticodeSignature`: that is the same call behind half a second of PowerShell, and
+  this module starts no process but the installer. **The name is what is pinned, and the
+  thumbprint is the second door**, because a thumbprint changes with every renewal and a copy
+  that pinned only it would refuse every update after the certificate's next one -- with no
+  way to be told otherwise, since the update is what would tell it. Revocation is not checked
+  there (a CA server that is down would stop every update); the elevation prompt that follows
+  is Windows' own, checks it with its own cache, and is never suppressed. An update to a release
+  before the first signed one -- reachable only through the feed override -- keeps the
+  checksum alone, as `requires_signature` says.
 
 **The feed can be pointed elsewhere to try the whole flow.** `PERFBOARD_STUDIO_RELEASES_URL`
 (`updater.releases_url`) replaces GitHub's releases URL for the check, so a release nobody

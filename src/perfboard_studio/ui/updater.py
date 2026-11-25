@@ -12,7 +12,8 @@ IT INSTALLS ON ONE PLATFORM, AND ONLY ON A CLICK. The downloaded file is verifie
 the published checksum and put in the user's Downloads folder. On a Windows Setup.exe
 build whose checksum matched, the strip then offers "Install and Restart": on that click
 the window asks about unsaved work as it always does, the file is hashed AGAIN (it has
-been sitting in a folder that anything the user runs can write to), and the installer is
+been sitting in a folder that anything the user runs can write to), its signature is
+checked to be this project's publisher's (``ui/authenticode.py``), and the installer is
 run through Windows' own elevation prompt with ``/S /UPDATE=<pid>`` -- see
 ``start_install``. The installer waits for this process to end and opens the new version
 itself. Everywhere else it still stops at the download and the last click is the user's:
@@ -74,6 +75,8 @@ from ..updates import (
     is_web_link,
     newer_release,
     parse_releases,
+    requires_signature,
+    signature_verdict,
 )
 from ..version import __version__
 from .i18n import t
@@ -242,25 +245,68 @@ def _run_elevated(path: str, arguments: str) -> None:
     """Ask Windows to run ``path`` with administrator rights. The ONE call that runs it.
 
     ``os.startfile`` with the ``runas`` verb is ShellExecute: the elevation prompt is
-    Windows' own, shows the installer's publisher (or "Unknown", while it is unsigned) and
-    can be refused. A function on its own so that a test replaces exactly this and nothing
-    else -- no suite should ever run an installer.
+    Windows' own, shows the verified publisher (releases from ``FIRST_SIGNED_VERSION`` on
+    are signed) and can be refused. A function on its own so that a test replaces exactly
+    this and nothing else -- no suite should ever run an installer.
     """
     if sys.platform != "win32":
         raise OSError("Install and Restart is for the Windows installer only.")
     os.startfile(path, "runas", arguments)
 
 
-def start_install(path: str, expected: str, *, pid: int | None = None) -> InstallAttempt:
+def _read_signature(path: str) -> tuple[int, str, str]:
+    """``WinVerifyTrust``'s status for ``path``, and its signer's common name and thumbprint.
+
+    On its own so that a test replaces exactly this: no suite signs anything, and the
+    ``ctypes`` behind it is loaded here, on the click, and never at start-up.
+    """
+    from .authenticode import read_signature
+
+    found = read_signature(path)
+    return found.status, found.common_name, found.thumbprint
+
+
+def _signature_refusal(path: str) -> tuple[str, bool] | None:
+    """Why the installer at ``path`` may not run, and whether it is deleted; ``None`` if it may."""
+    try:
+        status, name, thumbprint = _read_signature(path)
+    except OSError as err:
+        return t("The installer's signature could not be checked: {error}").format(error=err), False
+    verdict = signature_verdict(status, name, thumbprint)
+    if verdict == "trusted":
+        return None
+    if verdict == "unsigned":
+        return t("The installer is not signed, so it was deleted and nothing was installed."), True
+    if verdict == "stranger":
+        return (
+            t(
+                "The installer is signed by {signer}, not by this program's publisher, so it "
+                "was deleted and nothing was installed."
+            ).format(signer=name or thumbprint),
+            True,
+        )
+    return (
+        t("The installer's signature does not hold, so it was deleted and nothing was installed."),
+        True,
+    )
+
+
+def start_install(
+    path: str, expected: str, *, version: str, pid: int | None = None
+) -> InstallAttempt:
     """Run the verified installer, as the last thing this process does.
 
-    Three refusals before anything runs, each one a thing that cannot be taken back:
+    Four refusals before anything runs, each one a thing that cannot be taken back:
 
     * The file is no longer there.
     * The file does not hash to what was verified when it was downloaded. It has been in
       the Downloads folder since, where anything the user ran could have replaced it; the
       checksum worth anything is the one taken just before it is run. It is DELETED, for
       the reason a failed download is.
+    * From ``FIRST_SIGNED_VERSION`` on (``version`` is the release being installed), the
+      file is not signed, or its signature does not hold, or it holds and is somebody
+      else's. The checksum came from the same host as the file, so it proves the transfer
+      and not who built it; the signature is the half that does. DELETED as well.
     * Windows says no. The prompt is refused and nothing is installed -- the window stays
       open, because this returns before anything closed it.
 
@@ -284,6 +330,14 @@ def start_install(path: str, expected: str, *, pid: int | None = None) -> Instal
             ),
             True,
         )
+    if requires_signature(version):
+        refusal = _signature_refusal(str(target))
+        if refusal is not None:
+            message, discard = refusal
+            if discard:
+                with contextlib.suppress(OSError):
+                    target.unlink(missing_ok=True)
+            return InstallAttempt(False, message, discard)
     try:
         _run_elevated(str(target), installer_arguments(os.getpid() if pid is None else pid))
     except OSError as err:

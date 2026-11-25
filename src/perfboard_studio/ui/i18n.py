@@ -523,6 +523,16 @@ TURKISH: Mapping[str, str] = {
         "Windows izin vermedi, o yüzden hiçbir şey kurulmadı.",
     "The installer could not be started: {error}":
         "Kurulum dosyası başlatılamadı: {error}",
+    "The installer's signature could not be checked: {error}":
+        "Kurulum dosyasının imzası denetlenemedi: {error}",
+    "The installer is not signed, so it was deleted and nothing was installed.":
+        "Kurulum dosyası imzalı değil, o yüzden silindi ve hiçbir şey kurulmadı.",
+    "The installer is signed by {signer}, not by this program's publisher, so it "
+    "was deleted and nothing was installed.":
+        "Kurulum dosyasını bu programın yayıncısı değil {signer} imzalamış, o yüzden "
+        "silindi ve hiçbir şey kurulmadı.",
+    "The installer's signature does not hold, so it was deleted and nothing was installed.":
+        "Kurulum dosyasının imzası geçerli değil, o yüzden silindi ve hiçbir şey kurulmadı.",
     "Show the File": "Dosyayı Göster",
     "Open the folder the installer was saved in.":
         "Kurulum dosyasının kaydedildiği klasörü açar.",

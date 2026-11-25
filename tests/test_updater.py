@@ -30,6 +30,7 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QEvent, QEventLoop
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from perfboard_studio import updates as updater_updates
 from perfboard_studio.commands import create_starter_document
 from perfboard_studio.model import DocumentMeta
 from perfboard_studio.ui import updater
@@ -563,6 +564,11 @@ def elevated(monkeypatch):
     return calls
 
 
+#: The version every installer fixture here is: from before the first signed release, so
+#: the checksum alone decides -- the signature has its own tests below.
+OLD = "0.8.0"
+
+
 def a_downloaded_installer(tmp_path) -> tuple[str, str]:
     installer = tmp_path / "PerfboardStudio_0.8.0_Setup.exe"
     installer.write_bytes(PAYLOAD)
@@ -573,7 +579,7 @@ def test_the_installer_is_run_with_the_silent_switch_and_this_processs_id(
     tmp_path, elevated
 ) -> None:
     path, digest = a_downloaded_installer(tmp_path)
-    attempt = updater.start_install(path, digest, pid=4242)
+    attempt = updater.start_install(path, digest, version=OLD, pid=4242)
     assert attempt.started
     assert elevated == [(path, "/S /UPDATE=4242")]
 
@@ -589,7 +595,7 @@ def test_a_file_that_changed_since_it_was_checked_is_deleted_and_never_run(
     """
     path, digest = a_downloaded_installer(tmp_path)
     pathlib.Path(path).write_bytes(PAYLOAD + b" and something else")
-    attempt = updater.start_install(path, digest, pid=1)
+    attempt = updater.start_install(path, digest, version=OLD, pid=1)
     assert not attempt.started and attempt.discarded
     assert "deleted" in attempt.message
     assert not pathlib.Path(path).exists()
@@ -597,7 +603,7 @@ def test_a_file_that_changed_since_it_was_checked_is_deleted_and_never_run(
 
 
 def test_an_installer_that_is_gone_is_reported_not_run(tmp_path, elevated) -> None:
-    attempt = updater.start_install(str(tmp_path / "gone.exe"), "0" * 64, pid=1)
+    attempt = updater.start_install(str(tmp_path / "gone.exe"), "0" * 64, version=OLD, pid=1)
     assert not attempt.started and attempt.discarded
     assert elevated == []
 
@@ -616,7 +622,7 @@ def test_a_refused_elevation_prompt_installs_nothing_and_keeps_the_file(
         raise err
 
     monkeypatch.setattr(updater, "_run_elevated", refused)
-    attempt = updater.start_install(path, digest, pid=1)
+    attempt = updater.start_install(path, digest, version=OLD, pid=1)
     assert not attempt.started and not attempt.discarded
     assert "permission" in attempt.message
     assert pathlib.Path(path).exists(), "a No at the prompt is not a reason to lose the download"
@@ -629,9 +635,143 @@ def test_any_other_failure_to_start_is_said_not_swallowed(tmp_path, monkeypatch)
         raise OSError("The file is not a valid Win32 application")
 
     monkeypatch.setattr(updater, "_run_elevated", broken)
-    attempt = updater.start_install(path, digest, pid=1)
+    attempt = updater.start_install(path, digest, version=OLD, pid=1)
     assert not attempt.started
     assert "valid Win32" in attempt.message
+
+
+#: A release at or past the first signed one: its installer must be signed to run.
+SIGNED = updater_updates.FIRST_SIGNED_VERSION
+
+
+@pytest.fixture
+def signed_by(monkeypatch):
+    """Stands in for WinVerifyTrust: nothing in this suite is signed, nor signs anything."""
+    asked: list[str] = []
+
+    def install(status: int, name: str = "", thumbprint: str = "") -> list[str]:
+        def read(path: str) -> tuple[int, str, str]:
+            asked.append(path)
+            return status, name, thumbprint
+
+        monkeypatch.setattr(updater, "_read_signature", read)
+        return asked
+
+    return install
+
+
+def test_an_installer_signed_by_the_publisher_is_run(tmp_path, elevated, signed_by) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+    asked = signed_by(0, updater_updates.PUBLISHER_NAME, "00" * 20)
+    attempt = updater.start_install(path, digest, version=SIGNED, pid=7)
+    assert attempt.started
+    assert asked == [path]
+    assert elevated == [(path, "/S /UPDATE=7")]
+
+
+@pytest.mark.parametrize(
+    ("status", "name", "said"),
+    [
+        (0x800B0100, "", "not signed"),
+        (0, "Somebody Else Ltd", "Somebody Else Ltd"),
+        (0x80096010, updater_updates.PUBLISHER_NAME, "does not hold"),
+    ],
+    ids=["unsigned", "stranger", "tampered"],
+)
+def test_an_installer_that_is_not_the_publishers_is_deleted_and_never_run(
+    tmp_path, elevated, signed_by, status, name, said
+) -> None:
+    """Its checksum matched: the sums file and the installer came from the same host, so a
+    replaced release replaces both. The signature is what says who built it."""
+    path, digest = a_downloaded_installer(tmp_path)
+    signed_by(status, name)
+    attempt = updater.start_install(path, digest, version=SIGNED, pid=7)
+    assert not attempt.started and attempt.discarded
+    assert said in attempt.message and "deleted" in attempt.message
+    assert not pathlib.Path(path).exists()
+    assert elevated == []
+
+
+def test_a_signature_that_cannot_be_read_keeps_the_file_and_runs_nothing(
+    tmp_path, elevated, monkeypatch
+) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+
+    def unreadable(path: str) -> tuple[int, str, str]:
+        raise OSError("wintrust.dll could not be loaded")
+
+    monkeypatch.setattr(updater, "_read_signature", unreadable)
+    attempt = updater.start_install(path, digest, version=SIGNED, pid=7)
+    assert not attempt.started and not attempt.discarded
+    assert "wintrust" in attempt.message
+    assert pathlib.Path(path).exists()
+    assert elevated == []
+
+
+def test_the_signature_is_read_after_the_checksum_not_instead_of_it(
+    tmp_path, elevated, signed_by
+) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+    pathlib.Path(path).write_bytes(PAYLOAD + b" swapped")
+    asked = signed_by(0, updater_updates.PUBLISHER_NAME)
+    attempt = updater.start_install(path, digest, version=SIGNED, pid=7)
+    assert not attempt.started and "changed after it was checked" in attempt.message
+    assert asked == []
+
+
+def test_a_release_before_the_first_signed_one_never_has_its_signature_read(
+    tmp_path, elevated, monkeypatch
+) -> None:
+    path, digest = a_downloaded_installer(tmp_path)
+    monkeypatch.setattr(updater, "_read_signature", lambda p: pytest.fail("read a signature"))
+    assert updater.start_install(path, digest, version=OLD, pid=7).started
+
+
+def test_the_window_installs_naming_the_release_it_announced(window, tmp_path, monkeypatch) -> None:
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    seen: list[str] = []
+    monkeypatch.setattr(window, "_offer_to_save", lambda: True)
+    monkeypatch.setattr(
+        updater,
+        "start_install",
+        lambda p, d, *, version: seen.append(version) or updater.InstallAttempt(False, "no"),
+    )
+    window._on_update_install()
+    assert seen == [NEXT_RELEASE.version]
+
+
+def test_the_signature_check_is_not_loaded_at_start_up() -> None:
+    """ctypes and the two DLLs are for the click that installs, not for every start."""
+    import subprocess
+
+    src = pathlib.Path(__file__).resolve().parents[1] / "src"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys, perfboard_studio.ui.main\n"
+            "print('perfboard_studio.ui.authenticode' in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(src), "QT_QPA_PLATFORM": "offscreen"},
+        timeout=120,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "False"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="WinVerifyTrust is Windows'")
+def test_the_real_check_calls_a_file_with_no_signature_unsigned(tmp_path) -> None:
+    """The one test that reaches WinVerifyTrust: on a file nobody signed, so the structures
+    handed to it are read the way Windows lays them out, and the answer is the unsigned one."""
+    from perfboard_studio.ui.authenticode import read_signature
+
+    plain = tmp_path / "PerfboardStudio_9.9.9_Setup.exe"
+    plain.write_bytes(PAYLOAD)
+    found = read_signature(str(plain))
+    assert updater_updates.signature_verdict(found.status, "", "") == "unsigned"
+    assert found.common_name == "" and found.thumbprint == ""
 
 
 def test_the_one_call_that_runs_an_installer_is_called_from_nowhere_else() -> None:
@@ -877,7 +1017,7 @@ def test_over_home_the_card_is_the_one_notice_from_download_to_a_refused_install
     monkeypatch.setattr(window, "_offer_to_save", lambda: True)
     monkeypatch.setattr(window, "close", lambda: pytest.fail("closed on a refusal"))
     refusal = "Windows did not give permission, so nothing was installed."
-    monkeypatch.setattr(updater, "start_install", lambda p, d: updater.InstallAttempt(False, refusal))
+    monkeypatch.setattr(updater, "start_install", lambda p, d, **_: updater.InstallAttempt(False, refusal))
     window._on_update_install()
     assert window.update_strip.isHidden(), "no second notice over Home"
     assert home.update_status.text() == "The update was not installed."
@@ -933,7 +1073,7 @@ def test_install_and_restart_asks_about_unsaved_work_then_runs_then_closes(
     monkeypatch.setattr(
         updater,
         "start_install",
-        lambda p, d: order.append(f"install {p == path} {d == digest}") or updater.InstallAttempt(True),
+        lambda p, d, **_: order.append(f"install {p == path} {d == digest}") or updater.InstallAttempt(True),
     )
     monkeypatch.setattr(
         window, "close", lambda: order.append(f"close flag={window._closing_for_update}")
@@ -949,7 +1089,7 @@ def test_cancelling_the_unsaved_work_question_installs_nothing(
     a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
     ran: list[str] = []
     monkeypatch.setattr(window, "_offer_to_save", lambda: False)
-    monkeypatch.setattr(updater, "start_install", lambda p, d: ran.append("install"))
+    monkeypatch.setattr(updater, "start_install", lambda p, d, **_: ran.append("install"))
     monkeypatch.setattr(window, "close", lambda: ran.append("close"))
     window._on_update_install()
     assert ran == []
@@ -963,7 +1103,7 @@ def test_a_refused_elevation_prompt_leaves_the_window_open(window, tmp_path, mon
     monkeypatch.setattr(
         updater,
         "start_install",
-        lambda p, d: updater.InstallAttempt(False, "Windows did not give permission."),
+        lambda p, d, **_: updater.InstallAttempt(False, "Windows did not give permission."),
     )
     window._on_update_install()
     assert closed == []
@@ -990,7 +1130,7 @@ def test_install_waits_while_the_planner_runs(window, tmp_path, monkeypatch) -> 
     window._planner_running = True
     try:
         monkeypatch.setattr(window, "_offer_to_save", lambda: pytest.fail("asked mid-plan"))
-        monkeypatch.setattr(updater, "start_install", lambda p, d: pytest.fail("ran mid-plan"))
+        monkeypatch.setattr(updater, "start_install", lambda p, d, **_: pytest.fail("ran mid-plan"))
         window._on_update_install()
     finally:
         window._planner_running = False

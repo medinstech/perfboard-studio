@@ -33,10 +33,11 @@ downloading three hundred megabytes that cannot run on their machine:
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from json import JSONDecodeError, loads
-from typing import Any
+from typing import Any, Literal
 
 #: Where the releases live. The API host and the human one are different machines and
 #: neither is derivable from the other, so both are written down.
@@ -227,7 +228,8 @@ def expected_digest(sums: str, asset_name: str) -> str | None:
     What the check is worth is worth being honest about: the sums file arrives from the
     same host over the same TLS connection as the installer, so it proves the download
     arrived intact, not that GitHub handed out the file this project built. The second
-    claim needs the code signing PLAN.md §12 has not bought yet.
+    claim is the installer's signature (:func:`signature_verdict`), from
+    :data:`FIRST_SIGNED_VERSION` on.
     """
     wanted = asset_name.strip().lower()
     for line in sums.splitlines():
@@ -282,6 +284,75 @@ def installer_arguments(pid: int) -> str:
     if pid <= 0:
         raise ValueError(f"not a process id: {pid}")
     return f"/S /UPDATE={pid}"
+
+
+#: The first release whose Windows installer is signed. An update to an older release (only
+#: reachable through ``PERFBOARD_STUDIO_RELEASES_URL``, or a prerelease feed) is checked
+#: against ``SHA256SUMS`` alone, as every update was before; from this one on, an installer
+#: that is not signed by :data:`PUBLISHER_NAME` is refused. A constant rather than a field in
+#: the feed, because the feed is exactly what the signature exists not to trust.
+FIRST_SIGNED_VERSION = "0.26.0"
+
+#: The subject's common name on the certificate the installer is signed with, exactly as the
+#: certificate says it. Certum validated the organisation before issuing it, so a chain to a
+#: trusted root that ends in this name is this company and nobody else.
+PUBLISHER_NAME = "Medinstech Mühendislik ve Teknoloji Anonim Şirketi"
+
+#: SHA-1 thumbprints of the certificates the installer has been signed with. The name alone
+#: is what lets a renewed certificate through -- a thumbprint changes on every renewal, and
+#: a copy that pinned only the thumbprint would refuse every update after the next one. The
+#: thumbprint is the second door, for a certificate whose name a CA spells differently.
+PUBLISHER_THUMBPRINTS = frozenset({"015B943D4A9B839FD8B5051D1CEAAD17E76754D8"})
+
+#: What ``WinVerifyTrust`` answers for a file that carries no signature at all, as unsigned
+#: HRESULTs: TRUST_E_NOSIGNATURE, TRUST_E_SUBJECT_FORM_UNKNOWN (not a signable file) and
+#: TRUST_E_PROVIDER_UNKNOWN. Every other failure is a signature that is there and is wrong.
+UNSIGNED_STATUSES = frozenset({0x800B0100, 0x800B0003, 0x800B0001})
+
+SignatureVerdict = Literal["trusted", "unsigned", "invalid", "stranger"]
+
+
+def requires_signature(version: str) -> bool:
+    """Whether an installer of ``version`` must be signed before it is run.
+
+    A version this module cannot read is held to the signature: being unable to tell is
+    not a reason to trust less.
+    """
+    try:
+        return parse_version(version) >= parse_version(FIRST_SIGNED_VERSION)
+    except ValueError:
+        return True
+
+
+def _same_name(first: str, second: str) -> bool:
+    return unicodedata.normalize("NFC", first.strip()) == unicodedata.normalize(
+        "NFC", second.strip()
+    )
+
+
+def signature_verdict(status: int, common_name: str, thumbprint: str) -> SignatureVerdict:
+    """What a signature check on an installer came to.
+
+    ``status`` is ``WinVerifyTrust``'s answer (0 when the signature is intact and chains to a
+    root this machine trusts), ``common_name`` and ``thumbprint`` the signer's certificate.
+
+    * ``"trusted"`` -- intact, trusted, and the signer is this project's publisher.
+    * ``"unsigned"`` -- no signature at all.
+    * ``"invalid"`` -- a signature that does not hold: the file was changed after signing,
+      or the chain ends in a root nobody trusts, or it was revoked.
+    * ``"stranger"`` -- a good signature by somebody else, which is how a malicious
+      installer that someone paid for a certificate would arrive.
+    """
+    status &= 0xFFFFFFFF
+    if status in UNSIGNED_STATUSES:
+        return "unsigned"
+    if status != 0:
+        return "invalid"
+    if thumbprint.strip().upper() in PUBLISHER_THUMBPRINTS:
+        return "trusted"
+    if _same_name(common_name, PUBLISHER_NAME):
+        return "trusted"
+    return "stranger"
 
 
 def _same_folder(first: str, second: str) -> bool:

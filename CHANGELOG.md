@@ -182,6 +182,11 @@ closed without a bump.
 
 ### Changed
 
+- **Install and Restart runs only an installer this project signed.** Besides the checksum,
+  the downloaded `Setup.exe` must carry an intact Authenticode signature that Windows trusts,
+  made by the project's publisher; an unsigned installer, one changed after signing, or one
+  signed by anybody else is deleted and nothing is installed. Releases from 0.26.0 on are
+  signed, so the publisher shown at Windows' permission prompt is no longer "Unknown".
 - **Over Home the top row says what the application is.** The icon and "Perfboard Studio"
   at the left, the search in the middle of the window, and Home's own doors at the right:
   New Circuit, Open, Tour, and a sun or a moon that switches the theme through the View
