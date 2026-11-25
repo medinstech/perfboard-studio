@@ -8388,8 +8388,9 @@ def _sockets(
 ) -> tuple[str, dict[str, _Socket]] | None:
     """The reference of the part a cable end is fitted to, and where a wire leaves each of its
     pins: out of a DuPont shell over a pin header's pin, out of a side-entry terminal's mouth
-    where ``_wire_entry_pieces`` draws it, and out of the top of anything else. ``lift`` is
-    the exploded view's, which the part rises by."""
+    where ``_wire_entry_pieces`` draws it, sideways out of a right-angle part
+    (:func:`_right_angle_socket`), and out of the top of anything else. ``lift`` is the
+    exploded view's, which the part rises by."""
     part = connector_of(doc, end)
     footprint = lookup(part.footprint_id) if part is not None else None
     if part is None or footprint is None:
@@ -8421,9 +8422,57 @@ def _sockets(
                 material=MOULDED,
             )
             sockets[pin.number] = _Socket((x, y, seat + DUPONT_SHELL_LENGTH_MM), up, shell)
+        elif archetype in ("pin-header-ra", "pin-socket-ra"):
+            sockets[pin.number] = _right_angle_socket(
+                body, (x - dx, y - dy), (dx, dy), female=archetype == "pin-socket-ra", lift=lift
+            )
         else:
             sockets[pin.number] = _Socket((x, y, body.height + _LIFT + lift), up)
     return part.ref, sockets
+
+
+def _right_angle_socket(
+    body: _WorldBody,
+    pin: tuple[float, float],
+    offset: tuple[float, float],
+    *,
+    female: bool,
+    lift: float,
+) -> _Socket:
+    """Where a cable leaves one pin of a right-angle part: sideways, the way the part points.
+
+    A right-angle part lies on its side (:func:`_right_angle_pieces`), so the top of its
+    body is no place for a wire: a header's pin comes out of the moulding's far face and
+    takes a DuPont shell lying along it, and a socket's mouth is in that face. Each at the
+    level its row bends at -- the row nearest the moulding lowest -- so a two-row part's
+    wires leave one above the other, as the pins they are on do. ``pin`` is in the board's
+    own frame, as ``body`` is, and ``offset`` moves the result to the board's place in the
+    row.
+    """
+    _body_from, body_to, _pin_reach = RIGHT_ANGLE_REACH_MM["pin-socket-ra" if female else "pin-header-ra"]
+    ux, uy = right_angle_direction(body)
+    alongs = sorted({round(px * ux + py * uy, 6) for px, py in body.pins}, reverse=True)
+    here = pin[0] * ux + pin[1] * uy
+    level = min(range(len(alongs)), key=lambda i: abs(alongs[i] - here))
+    z = (level + 0.5) * body.height / len(alongs) + _LIFT + lift
+    reach = alongs[0] + body_to - here
+    fx, fy = pin[0] + ux * reach + offset[0], pin[1] + uy * reach + offset[1]
+    out = (ux, uy, 0.0)
+    if female:
+        return _Socket((fx, fy, z), out)
+    length = DUPONT_SHELL_LENGTH_MM
+    along_x = ux != 0.0
+    shell = _Piece(
+        source=_moulded_box(
+            length if along_x else DUPONT_SHELL_MM,
+            DUPONT_SHELL_MM if along_x else length,
+            DUPONT_SHELL_MM,
+        ),
+        rgb=DUPONT_RGB,
+        position=(fx + ux * length / 2, fy + uy * length / 2, z),
+        material=MOULDED,
+    )
+    return _Socket((fx + ux * length, fy + uy * length, z), out, shell)
 
 
 #: Nodes of a wire's free span, between its two lead-outs, and of each lead-out: enough that

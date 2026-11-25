@@ -226,3 +226,63 @@ def test_a_socket_and_the_right_angle_strips_each_have_their_own_picture() -> No
     for a in range(len(ids)):
         for b in range(a + 1, len(ids)):
             assert images[a] != images[b], (ids[a], ids[b])
+
+
+# --- a cable on a right-angle part ------------------------------------------------------
+
+
+def _cabled(a: str, b: str):  # type: ignore[no-untyped-def]
+    """The System of ``test_system_readers``, its two headers swapped for ``a`` and ``b``."""
+    import dataclasses
+
+    from .test_system_readers import _system
+
+    doc = _system()
+    ja = dataclasses.replace(doc.components[0], footprint_id=a)
+    remote = doc.boards[0]
+    jb = dataclasses.replace(remote.components[0], footprint_id=b)
+    return dataclasses.replace(
+        doc,
+        components=(ja, *doc.components[1:]),
+        boards=(dataclasses.replace(remote, components=(jb, *remote.components[1:])),),
+    )
+
+
+@pytest.mark.parametrize("rotation", (0, 90, 180, 270))
+def test_a_cable_leaves_a_right_angle_part_sideways_out_of_its_far_face(rotation: int) -> None:
+    pytest.importorskip("vtk")
+    import dataclasses
+
+    from perfboard_studio import system
+    from perfboard_studio.ui import view3d
+
+    doc = _cabled("hdr-1x2-ra", "skt-1x2-ra")
+    doc = dataclasses.replace(
+        doc, components=(dataclasses.replace(doc.components[0], rotation=rotation), *doc.components[1:])
+    )
+    lookup = footprint_lookup()
+    offsets = view3d._world_offsets(doc)
+    for end, female in ((doc.cables[0].a, False), (doc.cables[0].b, True)):
+        found = view3d._sockets(doc, lookup, end, offsets, 0.0)
+        assert found is not None
+        _ref, sockets = found
+        part = view3d.connector_of(doc, end)
+        assert part is not None
+        board = system.board_document(doc, end.board).board
+        body = view3d._world_body(lookup, part, board)
+        assert body is not None
+        ux, uy = view3d.right_angle_direction(body)
+        dx, dy = offsets[end.board]
+        edge = (body.x + dx) * ux + (body.y + dy) * uy + (body.size_x * abs(ux) + body.size_y * abs(uy)) / 2
+        assert len(sockets) == 2
+        for socket in sockets.values():
+            assert socket.out == (ux, uy, 0.0)
+            assert socket.at[2] < body.height + view3d._LIFT  # beside the moulding, not on it
+            along = socket.at[0] * ux + socket.at[1] * uy
+            if female:
+                assert socket.shell is None
+                assert along == pytest.approx(edge)  # in the mouth, on the far face
+            else:
+                assert socket.shell is not None
+                assert along > edge  # the shell lies over the pin, out past its tip
+    assert len(view3d.build_cables(doc, lookup)) == 2 + 2  # two wires, a shell on each header pin
