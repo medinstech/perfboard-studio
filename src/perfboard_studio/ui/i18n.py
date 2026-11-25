@@ -7110,6 +7110,9 @@ TURKISH: Mapping[str, str] = {
     "wired again: {wiring}": "yeniden kablolandı: {wiring}",
     # A finding on one board of a system, the board said before it.
     "On {board}: {finding}": "{board} üzerinde: {finding}",
+    "Body": "Gövde",
+    "Span": "Açıklık",
+    "{count} holes": "{count} delik",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

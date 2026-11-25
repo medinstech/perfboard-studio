@@ -79,7 +79,15 @@ from perfboard_studio.commands import (
     wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.footprints import SUPERSEDED_FOOTPRINTS
+from perfboard_studio.footprints import (
+    AXIAL_RESISTOR_BODIES,
+    AXIAL_RESISTOR_WATTS,
+    SUPERSEDED_FOOTPRINTS,
+    AxialResistorBody,
+    axial_resistor_body,
+    axial_resistor_id,
+    axial_resistor_spans,
+)
 from perfboard_studio.geometry import format_hole, parse_hole
 from perfboard_studio.guide import CABLED_MODULE, plugs_in_on_a_cable
 from perfboard_studio.model import (
@@ -1045,6 +1053,123 @@ class _CableEditor(QWidget):
 # -- one part on the board ------------------------------------------------------------------
 
 
+class _ResistorSizeControls:
+    """Body rating (1/8 W, 1/4 W, 1/2 W) and lead span controls for axial resistors.
+
+    Shown directly under Package in both ``_PartEditor`` and ``_DesignPartEditor``
+    whenever ``footprints.axial_resistor_body(footprint_id)`` matches an axial resistor.
+    Switching to a larger body widens the span to the shortest span that body fits in;
+    switching either control dispatches one ``component.update`` / ``part.update`` with the
+    resolved ``axial_resistor_id(span, body)``.
+    """
+
+    BODIES: tuple[AxialResistorBody, ...] = ("0204", "0207", "0309")
+
+    def __init__(
+        self,
+        parent: QWidget,
+        form: QFormLayout,
+        commit: Callable[[str], str | None],
+    ) -> None:
+        self._form = form
+        self._commit = commit
+        self._loading = False
+        self._footprint_id = ""
+        self._current_body: AxialResistorBody = "0207"
+        self._current_span = 3
+
+        self.body_widget = QWidget(parent)
+        body_row = QHBoxLayout(self.body_widget)
+        body_row.setContentsMargins(0, 0, 0, 0)
+        body_row.setSpacing(2)
+        self.body_group = QButtonGroup(parent)
+        self.body_group.setExclusive(True)
+        self.body_buttons: dict[AxialResistorBody, QToolButton] = {}
+        for code in self.BODIES:
+            button = QToolButton(self.body_widget)
+            button.setText(AXIAL_RESISTOR_WATTS[code])
+            length, diameter = AXIAL_RESISTOR_BODIES[code]
+            button.setToolTip(f"DIN {code} · {length:g} × {diameter:g} mm")
+            button.setCheckable(True)
+            button.setProperty("segment", True)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _checked=False, c=code: self._on_body_clicked(c))
+            self.body_group.addButton(button)
+            body_row.addWidget(button)
+            self.body_buttons[code] = button
+
+        self.span_combo = QComboBox(parent)
+        _narrow(self.span_combo)
+        self.span_combo.currentIndexChanged.connect(self._on_span_changed)
+        self.problem = _Problem()
+
+        form.addRow(t("Body"), self.body_widget)
+        _add_field(form, t("Span"), self.span_combo, self.problem)
+        self._set_visible(False)
+
+    def _set_visible(self, shown: bool) -> None:
+        self._form.setRowVisible(self.body_widget, shown)
+        span_host = self.span_combo.parentWidget()
+        if span_host is not None and span_host is not self.body_widget.parentWidget():
+            self._form.setRowVisible(span_host, shown)
+        else:
+            self._form.setRowVisible(self.span_combo, shown)
+
+    def load(self, footprint_id: str, *, enabled: bool = True, clear_problem: bool = False) -> bool:
+        parsed = axial_resistor_body(footprint_id)
+        if clear_problem:
+            self.problem.show_problem("")
+        if parsed is None:
+            self._footprint_id = ""
+            self._set_visible(False)
+            return False
+        span, body = parsed
+        self._footprint_id = footprint_id
+        self._current_span = span
+        self._current_body = body
+        self._loading = True
+        try:
+            self.body_buttons[body].setChecked(True)
+            for btn in self.body_buttons.values():
+                btn.setEnabled(enabled)
+            spans = axial_resistor_spans(body)
+            if span not in spans:
+                spans = tuple(sorted((*spans, span)))
+            self.span_combo.clear()
+            for holes in spans:
+                self.span_combo.addItem(t("{count} holes").format(count=holes), holes)
+            idx = self.span_combo.findData(span)
+            if idx >= 0:
+                self.span_combo.setCurrentIndex(idx)
+            self.span_combo.setEnabled(enabled)
+        finally:
+            self._loading = False
+        self._set_visible(True)
+        return True
+
+    def _apply(self, span: int, body: AxialResistorBody) -> None:
+        target = axial_resistor_id(span, body)
+        if target == self._footprint_id:
+            return
+        problem = self._commit(target)
+        self.problem.show_problem(problem or "")
+        if problem:
+            self.load(self._footprint_id, enabled=self.span_combo.isEnabled())
+
+    def _on_body_clicked(self, body: AxialResistorBody) -> None:
+        if self._loading or not self._footprint_id:
+            return
+        min_span = axial_resistor_spans(body)[0]
+        self._apply(max(self._current_span, min_span), body)
+
+    def _on_span_changed(self, index: int) -> None:
+        if self._loading or not self._footprint_id or index < 0:
+            return
+        holes = self.span_combo.itemData(index)
+        if isinstance(holes, int):
+            self._apply(holes, self._current_body)
+
+
 class _PartEditor(QWidget):
     """One placed part: what it is called, what it is, where it sits, what its leads are
     called and why it is there. Replaces Part Properties and Rename Part."""
@@ -1125,6 +1250,7 @@ class _PartEditor(QWidget):
         self.older_problem = _Problem()
         package_column.addWidget(self.older_problem)
         form.addRow(t("Package"), package)
+        self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
 
         self.pin1 = CommitLine(self._commit_pin1)
         self.pin1.setToolTip(t("The hole pin 1 is in. Type another to move the part there."))
@@ -1251,6 +1377,9 @@ class _PartEditor(QWidget):
             self.value.show_value(component.value)
             name = footprint_label(footprint.name) if footprint is not None else component.footprint_id
             self.package.setText(f"{name}  ({component.footprint_id})")
+            self.resistor_size.load(
+                component.footprint_id, enabled=not component.locked, clear_problem=another
+            )
             self.change_part.setEnabled(not component.locked)
             self.locked_note.setVisible(component.locked)
             superseded = SUPERSEDED_FOOTPRINTS.get(component.footprint_id)
@@ -1299,6 +1428,12 @@ class _PartEditor(QWidget):
 
     def _update(self, payload: UpdateComponentPayload) -> str | None:
         return self._inspector.dispatch("component.update", payload)
+
+    def _commit_resistor_footprint(self, footprint_id: str) -> str | None:
+        component = self._component
+        if component is None:
+            return None
+        return self._update(UpdateComponentPayload(id=component.id, footprint_id=footprint_id))
 
     def _commit_ref(self, typed: str) -> str | None:
         component = self._component
@@ -1470,6 +1605,7 @@ class _DesignPartEditor(QWidget):
         package_row.addWidget(self.package, 1)
         package_row.addWidget(self.change_part, 0, Qt.AlignmentFlag.AlignTop)
         form.addRow(t("Package"), package)
+        self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
         layout.addLayout(form)
 
         self.pinout = PinoutEditor()
@@ -1506,6 +1642,7 @@ class _DesignPartEditor(QWidget):
             self.value.show_value(part.value)
             name = footprint_label(footprint.name) if footprint is not None else part.footprint_id
             self.package.setText(f"{name}  ({part.footprint_id})")
+            self.resistor_size.load(part.footprint_id, enabled=True, clear_problem=another)
             if another:
                 self.pinout.say("")
                 for problem in (self.pinout_problem, self.note_problem):
@@ -1520,6 +1657,12 @@ class _DesignPartEditor(QWidget):
 
     def _update(self, payload: UpdatePartPayload) -> str | None:
         return self._inspector.dispatch("part.update", payload)
+
+    def _commit_resistor_footprint(self, footprint_id: str) -> str | None:
+        part = self._part
+        if part is None:
+            return None
+        return self._update(UpdatePartPayload(id=part.id, footprint_id=footprint_id))
 
     def _commit_ref(self, typed: str) -> str | None:
         part = self._part

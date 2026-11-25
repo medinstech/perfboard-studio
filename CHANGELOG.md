@@ -269,6 +269,8 @@ closed without a bump.
   0309 on any span it lies flat in, as the library's own resistor where that is exactly the
   body. A size longer than its span is not believed, and reads as the library's resistor
   for the span, as it did before (#16).
+  body, and Properties now offers Body (1/8 W, 1/4 W, 1/2 W) and Span controls for axial
+  resistors (#16).
 - **The sheet drawn for you puts a dot on every join again.** It lays each connection
   pin to pin and lets one net's wires share a line, and a dot went only where three wire
   ENDS met, so a wire leaving a shared line was a join with no dot, drawn like a crossing:

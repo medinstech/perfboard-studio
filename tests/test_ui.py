@@ -23353,3 +23353,66 @@ def test_home_passes_over_a_last_board_that_no_longer_opens(
         assert len(home.recent_cards) == 2
     finally:
         _close(window)
+
+
+def test_inspector_resistor_body_and_span_controls() -> None:
+    """Axial resistors expose Body (1/8 W, 1/4 W, 1/2 W) and Span controls in Properties,
+    hidden for other packages, widening the span when a larger body needs more holes."""
+    from perfboard_studio.commands import PlaceComponentPayload
+    from perfboard_studio.footprints import axial_resistor_body, axial_resistor_id
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    try:
+        window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(
+                ref="R1", value="10k", footprint_id="r-axial-3", anchor=HoleCoord(4, 4)
+            ),
+        )
+        window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(
+                ref="U1", value="NE555", footprint_id="dip-8", anchor=HoleCoord(12, 4)
+            ),
+        )
+        r1 = next(c for c in window.bus.document.components if c.ref == "R1")
+        u1 = next(c for c in window.bus.document.components if c.ref == "U1")
+
+        window.scene.select_components([u1.id])
+        part_ed = window.inspector.part_editor
+        assert part_ed.resistor_size.body_widget.isHidden()
+
+        window.scene.select_components([r1.id])
+        assert not part_ed.resistor_size.body_widget.isHidden()
+        assert part_ed.resistor_size.body_buttons["0207"].isChecked()
+        assert part_ed.resistor_size.span_combo.currentData() == 3
+
+        # Switching a 3-hole 1/4 W resistor to 1/2 W widens to its 4-hole minimum span.
+        part_ed.resistor_size.body_buttons["0309"].click()
+        r1_after = next(c for c in window.bus.document.components if c.ref == "R1")
+        assert r1_after.footprint_id == axial_resistor_id(4, "0309")
+        assert axial_resistor_body(r1_after.footprint_id) == (4, "0309")
+
+        # Switching to 1/8 W keeps the 4-hole span and uses the 0204 body.
+        part_ed.resistor_size.body_buttons["0204"].click()
+        r1_small = next(c for c in window.bus.document.components if c.ref == "R1")
+        assert r1_small.footprint_id == axial_resistor_id(4, "0204")
+
+        # Changing span to 2 holes works on the 1/8 W body.
+        idx_2 = part_ed.resistor_size.span_combo.findData(2)
+        assert idx_2 >= 0
+        part_ed.resistor_size.span_combo.setCurrentIndex(idx_2)
+        r1_short = next(c for c in window.bus.document.components if c.ref == "R1")
+        assert r1_short.footprint_id == axial_resistor_id(2, "0204")
+
+        # Unplaced design part also exposes the controls via part.update.
+        _add(window, "R2", "r-axial-3", "4.7k")
+        window._on_schematic_part_activated("R2")
+        design_ed = window.inspector.design_part_editor
+        assert not design_ed.resistor_size.body_widget.isHidden()
+        design_ed.resistor_size.body_buttons["0204"].click()
+        r2 = next(p for p in window.bus.document.parts if p.ref == "R2")
+        assert r2.footprint_id == axial_resistor_id(3, "0204")
+    finally:
+        _close(window)
