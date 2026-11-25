@@ -384,23 +384,55 @@ def family_border_mm(family: BoardFamily) -> tuple[Mm, Mm]:
     )
 
 
-def size_for_grid(family: BoardFamily, cols: int, rows: int) -> BoardSize:
-    """A board of this family with this grid, its border the family's. Raises
-    ``ValueError`` for a breadboard, which comes in its own sizes."""
-    border_x, border_y = family_border_mm(family)
+#: The border that cuts a board flush, half a pitch past its outermost hole centres: the
+#: board is exactly its hole grid. Pass it as ``border_mm`` to ``size_for_grid`` or
+#: ``size_for_mm``.
+FIT_TO_GRID: tuple[Mm, Mm] = (0.0, 0.0)
+
+
+def _border_of(family: BoardFamily, border_mm: tuple[Mm, Mm] | None) -> tuple[Mm, Mm]:
+    if border_mm is None:
+        return family_border_mm(family)
+    _not_made_to_measure(family)
+    border_x, border_y = border_mm
+    if not (border_x >= 0 and border_y >= 0 and math.isfinite(border_x) and math.isfinite(border_y)):
+        raise ValueError(f"A border is 0 mm or more, not {border_x:g} x {border_y:g} mm.")
+    return border_x, border_y
+
+
+def size_for_grid(
+    family: BoardFamily, cols: int, rows: int, *, border_mm: tuple[Mm, Mm] | None = None
+) -> BoardSize:
+    """A board of this family with this grid, its border the family's, or ``border_mm``
+    (across, down) when given -- ``FIT_TO_GRID`` cuts it flush. Raises ``ValueError`` for a
+    breadboard, which comes in its own sizes, and for a negative border."""
+    border_x, border_y = _border_of(family, border_mm)
     width = round(cols * family.pitch_mm + 2 * border_x, 2)
     height = round(rows * family.pitch_mm + 2 * border_y, 2)
     return BoardSize(f"{_cm(width)} x {_cm(height)} cm", width, height, cols, rows)
 
 
-def size_for_mm(family: BoardFamily, width_mm: Mm, height_mm: Mm) -> BoardSize:
+def size_for_mm(
+    family: BoardFamily, width_mm: Mm, height_mm: Mm, *, border_mm: tuple[Mm, Mm] | None = None
+) -> BoardSize:
     """A board of this family cut to this size: the largest grid that keeps the family's
     border, the border then solved from what is left. Raises ``ValueError`` for a
-    breadboard, which comes in its own sizes."""
-    border_x, border_y = family_border_mm(family)
+    breadboard, which comes in its own sizes.
+
+    With ``border_mm`` (across, down) the border is the one asked for and the SIZE gives
+    way instead: the largest grid that fits with that border, the board then cut to the
+    grid and the border, so what is left over is trimmed off rather than added to the
+    margin (#16). ``FIT_TO_GRID`` is the board cut flush round the grid that fits.
+    """
+    if border_mm is None:
+        border_x, border_y = family_border_mm(family)
+        cols = max(1, math.floor((width_mm - 2 * border_x) / family.pitch_mm + 1e-9))
+        rows = max(1, math.floor((height_mm - 2 * border_y) / family.pitch_mm + 1e-9))
+        return BoardSize(f"{_cm(width_mm)} x {_cm(height_mm)} cm", width_mm, height_mm, cols, rows)
+    border_x, border_y = _border_of(family, border_mm)
     cols = max(1, math.floor((width_mm - 2 * border_x) / family.pitch_mm + 1e-9))
     rows = max(1, math.floor((height_mm - 2 * border_y) / family.pitch_mm + 1e-9))
-    return BoardSize(f"{_cm(width_mm)} x {_cm(height_mm)} cm", width_mm, height_mm, cols, rows)
+    return size_for_grid(family, cols, rows, border_mm=(border_x, border_y))
 
 
 # ---------------------------------------------------------------------------
@@ -883,6 +915,7 @@ __all__ = [
     "FAMILY_BOARD_TYPES",
     "FAMILY_FORMAT",
     "FINISHES",
+    "FIT_TO_GRID",
     "GREEN_DOUBLE_SIDED",
     "LETTER_EDGES",
     "MASKS",

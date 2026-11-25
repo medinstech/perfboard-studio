@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **A custom board takes the border you ask for.** `boardfamily.size_for_grid` and
+  `size_for_mm` take a border (across, down), and `FIT_TO_GRID` cuts the board flush, half a
+  pitch past its outermost holes. Typed in millimetres with a border, the board is cut to the
+  grid that fits and that border, rather than the leftover widening the margin (#16).
 - **An LED's colour is read from its value.** "green", "LED 5mm yellow", "warm white" or
   "kırmızı": `ledcolour.led_colour` names the colour a part's value gives, by whole words in
   English and Turkish, so "infrared" is not red, and a value naming two colours names none.

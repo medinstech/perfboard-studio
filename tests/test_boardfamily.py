@@ -22,6 +22,7 @@ from perfboard_studio import boardfamily
 from perfboard_studio.boardfamily import (
     FAMILIES,
     FAMILY_FORMAT,
+    FIT_TO_GRID,
     GREEN_DOUBLE_SIDED,
     PHENOLIC_SINGLE_SIDED,
     BoardFamily,
@@ -45,6 +46,7 @@ from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.geometry import (
     board_size_mm,
     edge_finger_rect,
+    hole_span_mm,
     mounting_hole_centre_mm,
     surviving_finger_holes,
 )
@@ -128,6 +130,73 @@ def test_a_custom_size_keeps_the_familys_border_and_round_trips() -> None:
     by_mm = size_for_mm(GREEN_DOUBLE_SIDED, by_grid.width_mm, by_grid.height_mm)
     assert (by_mm.cols, by_mm.rows) == (30, 20)
     assert family_problem(dataclasses.replace(GREEN_DOUBLE_SIDED, sizes=(by_grid,))) is None
+
+
+# --- A border asked for, and a board cut flush round its grid (#16) -----------------------
+
+#: A family with nothing in its border -- no strip, no corner holes -- so a board of it may
+#: be cut flush.
+PLAIN = dataclasses.replace(GREEN_DOUBLE_SIDED, id="plain", strip=None, corner_holes=None)
+
+
+def test_fit_to_grid_is_the_hole_grid_and_half_a_pitch_round_it() -> None:
+    size = size_for_grid(PLAIN, 30, 20, border_mm=FIT_TO_GRID)
+    assert (size.width_mm, size.height_mm) == (round(30 * 2.54, 2), round(20 * 2.54, 2))
+    board = board_for(PLAIN, size, DEFAULT_BOARD).board
+    assert (board.border_x_mm, board.border_y_mm) == (0.0, 0.0)
+    span_x, span_y = hole_span_mm(board)
+    width, height = board_size_mm(board)
+    # The substrate stops half a pitch past the outermost hole centres, on every side.
+    assert width - span_x == pytest.approx(2.54) and height - span_y == pytest.approx(2.54)
+    assert family_problem(dataclasses.replace(PLAIN, sizes=(size,))) is None
+
+
+def test_a_border_asked_for_is_the_border_the_board_gets() -> None:
+    size = size_for_grid(PLAIN, 30, 20, border_mm=(2.0, 3.5))
+    assert (size.width_mm, size.height_mm) == (round(30 * 2.54 + 4.0, 2), round(20 * 2.54 + 7.0, 2))
+    board = board_for(PLAIN, size, DEFAULT_BOARD).board
+    assert (board.border_x_mm, board.border_y_mm) == pytest.approx((2.0, 3.5))
+
+
+def test_a_size_in_mm_with_a_border_trims_the_rest_off_rather_than_widening_the_margin() -> None:
+    """100 x 80 mm with no border asked for keeps the size and puts what the grid does not
+    use into the margin; with one asked for, the board is cut to the grid and that border."""
+    kept = size_for_mm(PLAIN, 100.0, 80.0)
+    assert (kept.width_mm, kept.height_mm) == (100.0, 80.0)
+    flush = size_for_mm(PLAIN, 100.0, 80.0, border_mm=FIT_TO_GRID)
+    assert (flush.cols, flush.rows) == (39, 31)
+    assert (flush.width_mm, flush.height_mm) == (round(39 * 2.54, 2), round(31 * 2.54, 2))
+    bordered = size_for_mm(PLAIN, 100.0, 80.0, border_mm=(2.0, 2.0))
+    assert (bordered.cols, bordered.rows) == (37, 29)
+    board = board_for(PLAIN, bordered, DEFAULT_BOARD).board
+    assert (board.border_x_mm, board.border_y_mm) == pytest.approx((2.0, 2.0))
+    assert bordered.width_mm <= 100.0 and bordered.height_mm <= 80.0
+
+
+def test_a_flush_board_goes_through_the_bus_unchanged() -> None:
+    size = size_for_mm(PLAIN, 60.0, 40.0, border_mm=FIT_TO_GRID)
+    design = board_for(PLAIN, size, DEFAULT_BOARD)
+    bus = CommandBus(
+        create_empty_document(META), create_standard_registry(), CommandContext(next_id=create_id_generator())
+    )
+    result = bus.dispatch("board.applyPreset", ApplyBoardPresetPayload(board=design.board))
+    assert result.ok, result.message
+    assert board_size_mm(bus.document.board) == pytest.approx((size.width_mm, size.height_mm))
+
+
+def test_a_flush_board_of_a_family_with_a_strip_is_refused_by_name() -> None:
+    """The strip lives in the border, so the family's own refusal says so under the size."""
+    size = size_for_grid(GREEN_DOUBLE_SIDED, 20, 10, border_mm=FIT_TO_GRID)
+    problem = family_problem(dataclasses.replace(GREEN_DOUBLE_SIDED, sizes=(size,)))
+    assert problem is not None and problem[0] == "sizes[0]", problem
+
+
+@pytest.mark.parametrize("border", [(-1.0, 0.0), (0.0, -0.1), (float("nan"), 0.0), (float("inf"), 1.0)])
+def test_a_border_that_is_no_border_is_refused(border: tuple[float, float]) -> None:
+    with pytest.raises(ValueError):
+        size_for_grid(PLAIN, 10, 10, border_mm=border)
+    with pytest.raises(ValueError):
+        size_for_mm(PLAIN, 50.0, 50.0, border_mm=border)
 
 
 def test_the_refusal_names_the_field_it_is_about() -> None:
