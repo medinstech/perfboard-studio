@@ -1087,9 +1087,12 @@ class _ResistorSizeControls:
         self.body_buttons: dict[AxialResistorBody, QToolButton] = {}
         for code in self.BODIES:
             button = QToolButton(self.body_widget)
-            button.setText(AXIAL_RESISTOR_WATTS[code])
+            # The fraction alone, so the row fits beside its label: "1/4" on a resistor's
+            # body is read as watts, and the tooltip says so in full.
+            watts = AXIAL_RESISTOR_WATTS[code]
+            button.setText(watts.removesuffix(" W"))
             length, diameter = AXIAL_RESISTOR_BODIES[code]
-            button.setToolTip(f"DIN {code} · {length:g} × {diameter:g} mm")
+            button.setToolTip(f"{watts} · DIN {code} · {length:g} × {diameter:g} mm")
             button.setCheckable(True)
             button.setProperty("segment", True)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -1098,22 +1101,25 @@ class _ResistorSizeControls:
             body_row.addWidget(button)
             self.body_buttons[code] = button
 
-        self.span_combo = QComboBox(parent)
+        # The span on the same row as the body, its entries saying "3 holes": a row of
+        # its own made a resistor's editor taller than Properties at 1280 x 720, with the
+        # Auto-wire and Delete row under the status bar.
+        self.span_combo = QComboBox(self.body_widget)
         _narrow(self.span_combo)
+        self.span_combo.setMinimumContentsLength(3)
+        self.span_combo.setAccessibleName(t("Span"))
+        self.span_combo.setToolTip(t("The lead span: how many holes apart the two leads go in."))
         self.span_combo.currentIndexChanged.connect(self._on_span_changed)
+        body_row.addSpacing(theme.SPACE["sm"])
+        body_row.addWidget(self.span_combo, 1)
         self.problem = _Problem()
 
-        form.addRow(t("Body"), self.body_widget)
-        _add_field(form, t("Span"), self.span_combo, self.problem)
+        self._row = _add_field(form, t("Body"), self.body_widget, self.problem)
         self._set_visible(False)
 
     def _set_visible(self, shown: bool) -> None:
-        self._form.setRowVisible(self.body_widget, shown)
-        span_host = self.span_combo.parentWidget()
-        if span_host is not None and span_host is not self.body_widget.parentWidget():
-            self._form.setRowVisible(span_host, shown)
-        else:
-            self._form.setRowVisible(self.span_combo, shown)
+        self._form.setRowVisible(self._row, shown)
+        self.body_widget.setVisible(shown)
 
     def load(self, footprint_id: str, *, enabled: bool = True, clear_problem: bool = False) -> bool:
         parsed = axial_resistor_body(footprint_id)
