@@ -116,6 +116,29 @@ def test_a_window_built_offscreen_with_no_variable_stays_still(monkeypatch) -> N
         main_module.app_settings().remove(motion.REDUCE_MOTION_KEY)
 
 
+def test_closing_an_offscreen_window_does_not_overwrite_stored_motion(monkeypatch) -> None:
+    """An offscreen window ticks Reduce Motion from the environment; closing it must not
+    write that forced True back to the stored setting and silently turn animations off on
+    the next normal launch."""
+    from perfboard_studio.ui import main as main_module
+
+    monkeypatch.delenv(motion.REDUCE_MOTION_VARIABLE, raising=False)
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    main_module.app_settings().setValue(motion.REDUCE_MOTION_KEY, False)
+    motion.reset()
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        assert motion.reduced() is True
+        assert window.act_reduce_motion.isChecked() is True
+        _close(window)
+        assert main_module.app_settings().value(motion.REDUCE_MOTION_KEY) in (False, "false")
+    finally:
+        if window.isVisible():
+            _close(window)
+        main_module.app_settings().remove(motion.REDUCE_MOTION_KEY)
+        motion.reset()
+
+
 #: What an interface animation is built from: Qt's animation classes, and the clock a
 #: hand-written, timer-driven tween reads (``arrival.ArrivalAnimation``).
 _ANIMATION_TYPES = (

@@ -18284,7 +18284,6 @@ class MainWindow(QMainWindow):
         settings.setValue(OFF_BOARD_KEY, self.act_off_board.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
-        settings.setValue(motion.REDUCE_MOTION_KEY, self.act_reduce_motion.isChecked())
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
         settings.setValue(GRID_WIRES_KEY, self._grid_wires)
         settings.setValue(BOTH_FACES_KEY, self._both_faces)
