@@ -1222,6 +1222,12 @@ TURKISH: Mapping[str, str] = {
     "Custom…": "Özel…",
     "By net": "Nete göre",
     "Choose a wire colour": "Tel rengi seçin",
+    "Applies to {count} wire; solder traces keep their copper colour.": (
+        "{count} tele uygulanır; lehim yolları bakır rengini korur."
+    ),
+    "Applies to {count} wires; solder traces keep their copper colour.": (
+        "{count} tele uygulanır; lehim yolları bakır rengini korur."
+    ),
     "Pick any wire colour": "İstediğiniz bir tel rengini seçin",
     "Use the net's own wire colour": "Netin kendi tel rengini kullanır",
     "Strip": "Şerit",

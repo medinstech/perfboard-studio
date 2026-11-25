@@ -2841,8 +2841,17 @@ class _ConductorsEditor(QWidget):
         layout.addWidget(self.title)
         form = _form()
         self.colour = _WireColourRow(self._commit_colour)
+        self.colour_note = _fact()
+        self.colour_note.hide()
         self.colour_problem = _Problem()
-        self._colour_row = _add_field(form, t("Colour"), self.colour, self.colour_problem)
+        colour_box = QWidget()
+        colour_col = QVBoxLayout(colour_box)
+        colour_col.setContentsMargins(0, 0, 0, 0)
+        colour_col.setSpacing(theme.SPACE["xs"])
+        colour_col.addWidget(self.colour)
+        colour_col.addWidget(self.colour_note)
+        colour_col.addWidget(self.colour_problem)
+        self._colour_row = _add_field(form, t("Colour"), colour_box, _Problem())
         self._form = form
         layout.addLayout(form)
         buttons = QHBoxLayout()
@@ -2858,11 +2867,21 @@ class _ConductorsEditor(QWidget):
         self._conductors = conductors
         self.title.setText(theme.heading(t("{count} selected").format(count=len(conductors))))
         wires = tuple(c for c in conductors if isinstance(c, WireConductor))
+        mixed = bool(wires) and len(wires) < len(conductors)
         self._loading = True
         try:
             self._form.setRowVisible(self._colour_row, bool(wires))
             if wires:
                 self.colour.show_colours(tuple(w.color for w in wires))
+            self.colour_note.setVisible(mixed)
+            if mixed:
+                self.colour_note.setText(
+                    counted(
+                        len(wires),
+                        t("Applies to {count} wire; solder traces keep their copper colour."),
+                        t("Applies to {count} wires; solder traces keep their copper colour."),
+                    )
+                )
             if another:
                 self.colour_problem.show_problem("")
         finally:

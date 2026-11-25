@@ -6699,11 +6699,15 @@ class BoardScene(QGraphicsScene):
         if not self._before_copper or self.document is None:
             return
         board = self.document.board
-        # ``_before_copper`` is already frozen to what the route replaced (``gone_copper``):
-        # diffing against the current document here turned wires deleted later by hand into
-        # dashed ghosts of a route that never touched them.
+        # ``_before_copper`` is frozen to what the last route replaced (``gone_copper``):
+        # later manual deletions never enter it, and filtering out shapes that are back in
+        # the current document keeps Ctrl+Z from leaving dashes over restored copper while
+        # letting Ctrl+Y bring the route's ghosts straight back.
+        shown = gone_copper(self._before_copper, self.document.conductors)
+        if not shown:
+            return
         outline = QPainterPath()
-        for conductor in self._before_copper:
+        for conductor in shown:
             points = [hole_to_screen(hole, board, self.side) for hole in conductor.path]
             if len(points) < 2:
                 continue

@@ -18177,6 +18177,33 @@ def test_several_wires_change_colour_in_one_command() -> None:
         by_id = {c.id: c for c in window.bus.document.conductors}
         assert by_id[w1.id].color is None
         assert by_id[w2.id].color is None
+
+        # Mixed selection (wires + solder trace) shows a note and recolours only the wires.
+        from perfboard_studio.commands import AddConductorPayload, NewSolderTraceConductor
+
+        add_res = window.bus.dispatch(
+            "conductor.add",
+            AddConductorPayload(
+                conductor=NewSolderTraceConductor(
+                    path=(
+                        HoleCoord(1, 6),
+                        HoleCoord(2, 6),
+                        HoleCoord(3, 6),
+                        HoleCoord(4, 6),
+                    ),
+                    side="bottom",
+                )
+            ),
+        )
+        assert add_res.ok
+        trace = next(c for c in window.bus.document.conductors if c.kind == "solder-trace")
+        window.scene.select_conductors([w1.id, trace.id])
+        window._refresh_properties()
+        assert not editor.colour_note.isHidden()
+        assert "1 wire" in editor.colour_note.text()
+        editor.colour.swatches["green"].click()
+        by_id = {c.id: c for c in window.bus.document.conductors}
+        assert by_id[w1.id].color == "green"
     finally:
         _close(window)
 
@@ -21909,6 +21936,31 @@ def test_compare_with_before_freezes_what_the_route_replaced(monkeypatch) -> Non
 
         # Removing all wiring also leaves the frozen ghost untouched.
         window.act_remove_all_wiring.trigger()
+        assert window.scene._before_item is not None
+        assert window.scene._before_item.path().elementCount() == before_count
+    finally:
+        _close(window)
+
+
+def test_compare_with_before_clears_ghosts_on_undo_and_restores_them_on_redo(monkeypatch) -> None:
+    """Undoing the route restores the original copper, so no dashed ghost sits over it;
+    redoing the route brings the route's ghosts straight back."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        thresh = next(net.id for net in window.bus.document.nets if net.name == "THRESH")
+        monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
+        window.on_reroute((thresh,), style="solder")
+        window.act_compare_before.trigger()
+        assert window.scene._before_item is not None
+        before_count = window.scene._before_item.path().elementCount()
+        assert before_count > 0
+
+        # Ctrl+Z undoes the route: the original copper is back, so no ghosts sit over it.
+        window.bus.undo()
+        assert window.scene._before_item is None
+
+        # Ctrl+Y redoes the route: the route's ghosts return cleanly.
+        window.bus.redo()
         assert window.scene._before_item is not None
         assert window.scene._before_item.path().elementCount() == before_count
     finally:
