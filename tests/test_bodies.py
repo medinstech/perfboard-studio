@@ -501,3 +501,41 @@ def test_the_relay_trimmer_and_rgb_led_are_the_colours_the_parts_are() -> None:
     # A relay nobody has a model of keeps the table's colour.
     plain = get_footprint("relay-spdt")
     assert plain is not None and style_for(plain).fill == BODY_STYLES["relay-box"].fill
+
+
+def test_led_colour_from_value_applies_to_round_leds_and_keeps_explicit_body_color() -> None:
+    """Round LEDs read their dome colour from their value in English or Turkish; an explicit
+    ``BodySpec.color`` (like the RGB LED's milky dome) always wins, and every named colour in
+    ``LED_COLOURS`` has a distinct lens style."""
+    from perfboard_studio.footprints import RGB_LED_DOME
+    from perfboard_studio.ledcolour import LED_COLOURS
+    from perfboard_studio.model import ComponentInstance, HoleCoord
+    from perfboard_studio.ui.bodies import LED_BODY_STYLES
+    from perfboard_studio.ui.export_step import _component_rgb
+
+    led = get_footprint("led-5mm")
+    rgb = get_footprint("led-5mm-rgb")
+    assert led is not None and rgb is not None
+
+    assert set(LED_BODY_STYLES) == set(LED_COLOURS)
+    assert all(s.lens for s in LED_BODY_STYLES.values())
+    assert style_for(led, None) == BODY_STYLES["led-round"]
+    assert style_for(led, "infrared") == BODY_STYLES["led-round"]
+    assert style_for(led, "red green") == BODY_STYLES["led-round"]
+
+    assert style_for(led, "5mm green") == LED_BODY_STYLES["green"]
+    assert style_for(led, "Yeşil LED") == LED_BODY_STYLES["green"]
+    assert style_for(led, "warm white") == LED_BODY_STYLES["warm-white"]
+    assert style_for(led, "mavi") == LED_BODY_STYLES["blue"]
+
+    # Explicit BodySpec.color (RGB milky dome) wins over any value text.
+    assert style_for(rgb, "green").fill == RGB_LED_DOME
+
+    # STEP export also picks up the tinted LED fill for round LEDs.
+    comp = ComponentInstance(
+        id="d1", ref="D1", value="green", footprint_id="led-5mm", anchor=HoleCoord(2, 2)
+    )
+    step_rgb = _component_rgb(PITCH)(comp, led)
+    assert step_rgb is not None
+    r, g, b = step_rgb
+    assert g > r and g > b

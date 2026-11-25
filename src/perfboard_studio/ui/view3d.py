@@ -2328,7 +2328,7 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         size_y=size_y,
         height=placement.height,
         axis=axis,
-        style=style_for(fp),
+        style=style_for(fp, comp.value),
         # On a breadboard a lead stops in its clip, inside the plastic, instead of coming
         # through to be trimmed on a solder side the board does not have.
         thickness=CLIP_DEPTH_MM if is_breadboard(board) else board.thickness,

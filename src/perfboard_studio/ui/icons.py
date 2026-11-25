@@ -1095,12 +1095,12 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
 }
 
 
-def part_icon(footprint: Any) -> QIcon:
+def part_icon(footprint: Any, value: str | None = None) -> QIcon:
     """A small colour picture of this part, in the colours the board draws it in."""
     from .bodies import style_for
 
     archetype = footprint.body.archetype
-    style = style_for(footprint)
+    style = style_for(footprint, value)
     key = f"{archetype}:{footprint.polarized}:{style.fill}:{TOKENS.icon_tile}"
     cached = _part_cache.get(key)
     if cached is not None:

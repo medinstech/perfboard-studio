@@ -52,6 +52,8 @@ closed without a bump.
   unused pins left off. The roles were stored and never reached the sheet, so every such part
   was still a box of numbered pins. Connectors keep the room their reference and value are
   printed in, so a value no longer sits on the rail below it.
+  The 2D view, 3D view, part icons and STEP export now draw round LED domes in that colour,
+  keeping explicit body colours (such as an RGB LED's milky dome) intact (#16).
 - **What a part off the board is, drawn beside it.** A battery on its clip, a pot or a
   button on the panel, an e-stop, a motor, a display or a relay module down a cable: the
   board holds only the pads their wires land in, and the 2D view now draws each one as the

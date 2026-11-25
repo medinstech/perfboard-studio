@@ -5047,7 +5047,7 @@ class ComponentItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         placement = placement_for(self.fp, self.board.pitch)
-        style = style_for(self.fp)
+        style = style_for(self.fp, self.comp.value)
         keyed = polarity_pin_offset(self.fp, self.board.pitch)
         if self.board_colour is not None:
             style = replace(
@@ -5171,7 +5171,7 @@ class ComponentItem(QGraphicsItem):
         # Under a round LED's dome the leads are what the lens shows of them: quiet marks.
         dome = not solder_side and self.fp.body.archetype == "led-round"
         radius = 0.62 if solder_side else (LED_LEAD_MARK_MM if dome else 0.5)
-        lead = QColor(style_for(self.fp).fill).darker(LED_LEAD_SHADE) if dome else PIN_MARKER
+        lead = QColor(style_for(self.fp, self.comp.value).fill).darker(LED_LEAD_SHADE) if dome else PIN_MARKER
         for pin in self.fp.pins:
             dx, dy = _local_offset(pin.d_col, pin.d_row, self.comp, self.side)
             centre = QPointF(dx * self.board.pitch, dy * self.board.pitch)

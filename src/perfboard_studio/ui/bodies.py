@@ -50,6 +50,7 @@ from perfboard_studio.geometry import (
     substrate_edges_mm,
     transform_offset,
 )
+from perfboard_studio.ledcolour import LedColour, led_colour
 from perfboard_studio.model import (
     Board,
     BodyArchetype,
@@ -249,12 +250,31 @@ def plus_mark(footprint: Footprint, pitch: float) -> tuple[float, float] | None:
 MODEL_COLOURED_ARCHETYPES: frozenset[str] = frozenset({"generic-box", "relay-box"})
 
 
-def style_for(footprint: Footprint) -> BodyStyle:
+#: Dome styles for each named LED colour ``ledcolour.led_colour`` can answer.
+#: ``red`` matches the default ``BODY_STYLES["led-round"]`` dome; every entry sets ``lens=True``
+#: so 2D and 3D render the translucent dome highlight consistently.
+LED_BODY_STYLES: dict[LedColour, BodyStyle] = {
+    "red": BodyStyle(fill="#d6392f", edge="#7d1f18", accent="#ffd9d5", lens=True),
+    "orange": BodyStyle(fill="#e86e1c", edge="#8a3c0c", accent="#ffe5cc", lens=True),
+    "amber": BodyStyle(fill="#e5941a", edge="#8a540b", accent="#fff0cc", lens=True),
+    "yellow": BodyStyle(fill="#e6c826", edge="#8a740e", accent="#fffad0", lens=True),
+    "green": BodyStyle(fill="#2fa84f", edge="#18602c", accent="#d5f7de", lens=True),
+    "blue": BodyStyle(fill="#2d74e0", edge="#164085", accent="#d4e6ff", lens=True),
+    "violet": BodyStyle(fill="#8a44d6", edge="#4c2080", accent="#ebd9ff", lens=True),
+    "white": BodyStyle(fill="#e8edf5", edge="#8d96a6", accent="#ffffff", lens=True),
+    "warm-white": BodyStyle(fill="#f3e6c8", edge="#998b6c", accent="#fffaf0", lens=True),
+}
+
+
+def style_for(footprint: Footprint, value: str | None = None) -> BodyStyle:
     """The style for a footprint, honouring an explicit ``BodySpec.color`` override.
 
     The override replaces the fill only. A caller setting a colour is saying "this part is
     green", not "work out a whole new palette" -- so the edge and accent, which exist to
     stay legible against the fill, are left to the archetype.
+
+    For ``led-round`` footprints without an explicit ``BodySpec.color`` (such as an RGB
+    LED's milky dome), ``ledcolour.led_colour(value)`` picks the matching dome palette.
 
     A GENERIC BOX WITH A MEASURED MODEL IS THE MODEL'S COLOUR, and so is a relay
     (``MODEL_COLOURED_ARCHETYPES``). The box's grey is what this table says about a part it
@@ -268,6 +288,10 @@ def style_for(footprint: Footprint) -> BodyStyle:
     else:
         base = BODY_STYLES.get(archetype, _FALLBACK_STYLE)
     override = footprint.body.color
+    if not override and archetype == "led-round":
+        colour = led_colour(value)
+        if colour is not None:
+            return LED_BODY_STYLES[colour]
     if not override and archetype in MODEL_COLOURED_ARCHETYPES:
         model = partmodels.model_for(footprint.id)
         override = model.body.color if model is not None and model.body is not None else None

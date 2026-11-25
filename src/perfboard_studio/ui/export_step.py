@@ -36,11 +36,18 @@ def _body_rgb(footprint: Footprint) -> Rgb:
 
 
 def _component_rgb(pitch: float) -> Callable[[ComponentInstance, Footprint], Rgb | None]:
-    """A part's own colour where it is not its kind's: a recognised module's board."""
+    """A part's own colour where it is not its kind's: a recognised module's board or a
+    coloured round LED."""
 
     def own(component: ComponentInstance, footprint: Footprint) -> Rgb | None:
         colour = board_colour_for(footprint, component, pitch)
-        return None if colour is None else _rgb(colour)
+        if colour is not None:
+            return _rgb(colour)
+        if footprint.body.archetype == "led-round" and not footprint.body.color:
+            tinted = style_for(footprint, component.value).fill
+            if tinted != style_for(footprint).fill:
+                return _rgb(tinted)
+        return None
 
     return own
 
