@@ -1527,15 +1527,10 @@ TURKISH: Mapping[str, str] = {
     ),
     # -- the schematic as a view of its own, not a panel down the side ---------
     # "Board" is already in this catalogue, as the Board Setup dialog's own label.
-    "Hand the whole sheet back to the layout: every symbol you moved and every "
-    "wire you drew. What is connected is not touched — only how it was drawn.": (
-        "Sayfanın tamamını düzene geri verir: taşıdığınız her sembol ve çizdiğiniz her tel. "
-        "Neyin bağlı olduğuna dokunulmaz — yalnızca nasıl çizildiğine."
-    ),
-    "Hand the whole sheet back to the layout: every symbol you moved and every "
-    "wire you drew. What is connected is not touched.": (
-        "Sayfanın tamamını düzene geri verir: taşıdığınız her sembol ve çizdiğiniz her tel. "
-        "Neyin bağlı olduğuna dokunulmaz."
+    "Arrange the selected symbols — or the whole sheet when fewer than two are selected — "
+    "into a clean layout. What is connected is not touched.": (
+        "Seçili sembolleri — ya da ikiden az seçiliyse sayfanın tamamını — temiz bir düzene "
+        "yerleştirir. Neyin bağlı olduğuna dokunulmaz."
     ),
     "Put the sheet in a window of its own, so it and the board can sit side by "
     "side. Dragging its title bar does the same, and so does dropping it back.": (
@@ -1562,8 +1557,8 @@ TURKISH: Mapping[str, str] = {
         "ait hiçbir bağlantı olmadan."
     ),
     "&Arrange This Symbol": "Bu Sembolü &Düzenle",
-    "Give this one symbol back to the layout, leaving the rest where you put them.": (
-        "Yalnızca bu sembolü yerleşime geri verir, diğerlerini koyduğunuz yerde bırakır."
+    "Arrange this symbol around its connections, leaving the rest where you put them.": (
+        "Bu sembolü bağlantılarına göre düzenler, diğerlerini koyduğunuz yerde bırakır."
     ),
     "Take &off the Board": "Karttan &Al",
     "Back into the design, with its wiring intact.": (
@@ -5554,6 +5549,44 @@ TURKISH: Mapping[str, str] = {
     ),
     "Not saved": "Kaydedilmedi",
     "Drawing &Tools": "Çi&zim Araçları",
+    "Align and Distri&bute": "&Hizala ve Dağıt",
+    "Align &Left": "&Sola Hizala",
+    "Align &Right": "Sa&ğa Hizala",
+    "Align &Top": "&Üste Hizala",
+    "Align &Bottom": "&Alta Hizala",
+    "Distribute &Horizontally": "&Yatay Dağıt",
+    "Distribute &Vertically": "&Dikey Dağıt",
+    "Line up the selected symbols' left edges on the sheet.": (
+        "Şemada seçili sembollerin sol kenarlarını hizalar."
+    ),
+    "Line up the selected symbols' right edges on the sheet.": (
+        "Şemada seçili sembollerin sağ kenarlarını hizalar."
+    ),
+    "Line up the selected symbols' top edges on the sheet.": (
+        "Şemada seçili sembollerin üst kenarlarını hizalar."
+    ),
+    "Line up the selected symbols' bottom edges on the sheet.": (
+        "Şemada seçili sembollerin alt kenarlarını hizalar."
+    ),
+    "Space the selected symbols evenly left to right on the sheet.": (
+        "Şemada seçili sembolleri soldan sağa eşit aralıklı dağıtır."
+    ),
+    "Space the selected symbols evenly top to bottom on the sheet.": (
+        "Şemada seçili sembolleri yukarıdan aşağıya eşit aralıklı dağıtır."
+    ),
+    "Ren&umber Parts": "Parçaları Yeniden N&umaralandır",
+    "Renumber every part left to right, top to bottom on the sheet in one undo step.": (
+        "Şemadaki bütün parçaları soldan sağa, yukarıdan aşağıya tek adımda yeniden numaralandırır."
+    ),
+    "Export Schematic": "Şemayı Dışa Aktar",
+    "Page size": "Sayfa boyutu",
+    "Auto (fit drawing)": "Otomatik (çizime sığdır)",
+    "Include title block": "Başlık bloğunu ekle",
+    "Title": "Başlık",
+    "Revision": "Sürüm",
+    "Date": "Tarih",
+    "Sheet": "Sayfa",
+    "Export…": "Dışa Aktar…",
     "R&otate": "Dö&ndür",
     "Fl&ip": "&Çevir",
     "&Place on the Board": "Karta &Yerleştir",

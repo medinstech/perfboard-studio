@@ -191,7 +191,6 @@ from perfboard_studio.commands import (
     AlignSheetPayload,
     ApplyBoardPresetPayload,
     ArrangeSheetPayload,
-    AutoSymbolsPayload,
     ConnectPinsPayload,
     CutSheetWiresPayload,
     DeleteBoardNotesPayload,
@@ -3059,6 +3058,88 @@ TOOL_INTRODUCTIONS: dict[str, Callable[[], str]] = {
 }
 
 
+class SchematicExportDialog(QDialog):
+    """Page frame (Auto / A4 / A3) and optional engineering title block for schematic export."""
+
+    def __init__(self, default_title: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        from datetime import date
+
+        self.setWindowTitle(t("Export Schematic"))
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.page_combo = QComboBox()
+        self.page_combo.addItem(t("Auto (fit drawing)"), "auto")
+        self.page_combo.addItem("A4 (297 × 210 mm)", "A4")
+        self.page_combo.addItem("A3 (420 × 297 mm)", "A3")
+        form.addRow(t("Page size"), self.page_combo)
+
+        self.include_block = QCheckBox(t("Include title block"))
+        form.addRow("", self.include_block)
+
+        self.title_edit = QLineEdit(default_title)
+        self.revision_edit = QLineEdit(f"v{__version__}")
+        self.date_edit = QLineEdit(date.today().isoformat())
+        self.sheet_edit = QLineEdit("1 / 1")
+        form.addRow(t("Title"), self.title_edit)
+        form.addRow(t("Revision"), self.revision_edit)
+        form.addRow(t("Date"), self.date_edit)
+        form.addRow(t("Sheet"), self.sheet_edit)
+        layout.addLayout(form)
+
+        self._block_fields = (
+            self.title_edit,
+            self.revision_edit,
+            self.date_edit,
+            self.sheet_edit,
+        )
+        self.include_block.toggled.connect(self._sync_block_fields)
+        self.page_combo.currentIndexChanged.connect(self._on_page_changed)
+        self._block_touched = False
+        self.include_block.clicked.connect(lambda: setattr(self, "_block_touched", True))
+        self._sync_block_fields(False)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Cancel, parent=self
+        )
+        export_btn = buttons.addButton(t("Export…"), QDialogButtonBox.ButtonRole.AcceptRole)
+        export_btn.setDefault(True)
+        theme.variant(export_btn, "primary")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_page_changed(self) -> None:
+        if not self._block_touched:
+            self.include_block.setChecked(self.page_size() != "auto")
+
+    def _sync_block_fields(self, on: bool) -> None:
+        for field in self._block_fields:
+            field.setEnabled(on)
+
+    def page_size(self) -> SheetPageSize:
+        return cast(SheetPageSize, self.page_combo.currentData())
+
+    def title_block(self) -> TitleBlock | None:
+        if not self.include_block.isChecked():
+            return None
+        return TitleBlock(
+            title=self.title_edit.text().strip(),
+            revision=self.revision_edit.text().strip(),
+            date=self.date_edit.text().strip(),
+            sheet=self.sheet_edit.text().strip() or "1 / 1",
+        )
+
+
+def _export_schematic_options_default(
+    parent: QWidget, default_title: str
+) -> tuple[SheetPageSize, TitleBlock | None] | None:
+    dialog = SchematicExportDialog(default_title, parent)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return None
+    return dialog.page_size(), dialog.title_block()
+
+
 class MainWindow(QMainWindow):
     #: Where the selection was last made, so Properties describes that one
     #: (``_current_selection``).
@@ -5857,7 +5938,7 @@ class MainWindow(QMainWindow):
                 "paste into a message asking somebody what is wrong with it."
             )
         )
-        act_sheet.triggered.connect(self.on_export_schematic)
+        act_sheet.triggered.connect(self.on_export_schematic_dialog)
         act_pdf = export_menu.addAction(t("1:1 &PDF (component side + solder side)…"))
         act_pdf.triggered.connect(self.on_export_pdf)
         act_png = export_menu.addAction(t("3D S&napshot…"))
@@ -6196,6 +6277,29 @@ class MainWindow(QMainWindow):
         schematic_menu.addAction(self.act_sch_rotate)
         schematic_menu.addAction(self.act_sch_mirror)
         schematic_menu.addAction(self.act_sch_delete)
+        align_menu = schematic_menu.addMenu(t("Align and Distri&bute"))
+        align_menu.setToolTipsVisible(True)
+        self.act_sheet_align: dict[SheetAlignMode, QAction] = {}
+        align_rows: tuple[tuple[SheetAlignMode, str, str, str], ...] = (
+            ("left", t("Align &Left"), "Ctrl+Alt+Left", t("Line up the selected symbols' left edges on the sheet.")),
+            ("right", t("Align &Right"), "Ctrl+Alt+Right", t("Line up the selected symbols' right edges on the sheet.")),
+            ("top", t("Align &Top"), "Ctrl+Alt+Up", t("Line up the selected symbols' top edges on the sheet.")),
+            ("bottom", t("Align &Bottom"), "Ctrl+Alt+Down", t("Line up the selected symbols' bottom edges on the sheet.")),
+            ("distribute-h", t("Distribute &Horizontally"), "Ctrl+Alt+H", t("Space the selected symbols evenly left to right on the sheet.")),
+            ("distribute-v", t("Distribute &Vertically"), "Ctrl+Alt+V", t("Space the selected symbols evenly top to bottom on the sheet.")),
+        )
+        for mode, label, shortcut, tip in align_rows:
+            action = align_menu.addAction(label)
+            action.setShortcut(QKeySequence(shortcut))
+            action.setToolTip(tip)
+            action.triggered.connect(lambda _checked=False, m=mode: self.on_sheet_align(m))
+            self.act_sheet_align[mode] = action
+        self.act_sheet_renumber = schematic_menu.addAction(t("Ren&umber Parts"))
+        self.act_sheet_renumber.setShortcut(QKeySequence("Ctrl+Alt+N"))
+        self.act_sheet_renumber.setToolTip(
+            t("Renumber every part left to right, top to bottom on the sheet in one undo step.")
+        )
+        self.act_sheet_renumber.triggered.connect(self.on_sheet_renumber)
         schematic_menu.addSeparator()
         schematic_menu.addAction(self.act_sch_auto)
         schematic_menu.addAction(self.act_sch_fit)
@@ -6705,8 +6809,8 @@ class MainWindow(QMainWindow):
         # shortcut card does, and found a destroyed QMenu on the first attempt.
         self._menus = [
             file_menu, self.menu_recent, export_menu, edit_menu, circuit_menu, sheet_tools,
-            board_menu, route_menu, style_menu, view_menu, shown_menu, language_menu,
-            colour_menu, help_menu, wheel_menu,
+            align_menu, board_menu, route_menu, style_menu, view_menu, shown_menu,
+            language_menu, colour_menu, help_menu, wheel_menu,
         ]
         #: The menu bar's own menus, in its order: what ☰ holds (``_build_header``).
         self._top_menus = (
@@ -8079,8 +8183,8 @@ class MainWindow(QMainWindow):
         self.act_sch_auto = QAction(icons.icon("autoplace"), t("Arran&ge the Sheet"), self)
         self.act_sch_auto.setToolTip(
             t(
-                "Hand the whole sheet back to the layout: every symbol you moved and every "
-                "wire you drew. What is connected is not touched — only how it was drawn."
+                "Arrange the selected symbols — or the whole sheet when fewer than two are "
+                "selected — into a clean layout. What is connected is not touched."
             )
         )
         self.act_sch_auto.triggered.connect(self.on_schematic_auto_layout)
@@ -9504,10 +9608,6 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().clearMessage()
 
-    def on_schematic_wire_mode(self, checked: bool) -> None:
-        """The Wire tool, by the name the panel's button used before there were tools."""
-        self.on_sheet_tool("wire" if checked else "select")
-
     def _on_sheet_footprint_dropped(self, footprint_id: str, x: float, y: float) -> None:
         """A row dragged out of the Parts panel and dropped on the sheet.
 
@@ -9745,14 +9845,15 @@ class MainWindow(QMainWindow):
         self._sync_schematic_highlight()
         self.statusBar().showMessage(did(result.description), 6000)
 
-    def _auto_one_symbol(self, part_id: str) -> None:
-        """Give one symbol back to the layout, leaving the rest where they were put.
+    def _auto_one_symbol(self, ref: str) -> None:
+        """Arrange one symbol around its connections, leaving the rest where they were put.
 
-        The single-symbol form of the Arrange the Sheet button, and it is worth having
-        separately for the reason ``_apply_pinned_cells`` only moves displaced symbols:
-        undoing one bad drag must not undo an afternoon of good ones.
+        Dispatches ``sheet.arrange`` for the single ref rather than ``symbol.auto``: removing
+        one entry from a frozen sheet parks that symbol in the overflow column at the right
+        edge, whereas ``sheet.arrange(refs=(ref,))`` re-lays it beside its neighbours while
+        keeping every other placement intact.
         """
-        result = self.bus.dispatch("symbol.auto", AutoSymbolsPayload(ids=(part_id,)))
+        result = self.bus.dispatch("sheet.arrange", ArrangeSheetPayload(refs=(ref,)))
         self.statusBar().showMessage(
             did(result.description) if result.ok else refused(result), 6000
         )
@@ -11248,8 +11349,8 @@ class MainWindow(QMainWindow):
         arrange = menu.addAction(t("Arran&ge the Sheet"))
         arrange.setToolTip(
             t(
-                "Hand the whole sheet back to the layout: every symbol you moved and every "
-                "wire you drew. What is connected is not touched."
+                "Arrange the selected symbols — or the whole sheet when fewer than two are "
+                "selected — into a clean layout. What is connected is not touched."
             )
         )
         arrange.triggered.connect(self.on_schematic_auto_layout)
@@ -11383,9 +11484,9 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
             back = menu.addAction(t("&Arrange This Symbol"))
             back.setToolTip(
-                t("Give this one symbol back to the layout, leaving the rest where you put them.")
+                t("Arrange this symbol around its connections, leaving the rest where you put them.")
             )
-            back.triggered.connect(lambda _checked=False, i=part_id: self._auto_one_symbol(i))
+            back.triggered.connect(lambda _checked=False, r=ref: self._auto_one_symbol(r))
 
         target = component if component is not None else part
         footprint = get_footprint(target.footprint_id) if target is not None else None
@@ -18423,6 +18524,20 @@ class MainWindow(QMainWindow):
         else:
             self._offer_to_open(written)
 
+    def on_export_schematic_dialog(self) -> None:
+        """Ask for page frame (Auto / A4 / A3) and optional title block, then export."""
+        drawing = build_schematic(self.bus.system_document, self.lookup)
+        if not drawing.symbols:
+            QMessageBox.information(
+                self, t("Nothing to export"), t("This document has no parts to draw yet.")
+            )
+            return
+        choice = _export_schematic_options_default(self, self.bus.system_document.meta.name)
+        if choice is None:
+            return
+        page_size, title_block = choice
+        self.on_export_schematic(page_size=page_size, title_block=title_block)
+
     def on_export_schematic(
         self,
         *,
@@ -18903,7 +19018,7 @@ def _document_arguments(argv: list[str]) -> list[str]:
         if skip_next:
             skip_next = False
             continue
-        if arg == "--lang":
+        if arg in ("--lang", "--page-size"):
             skip_next = True
             continue
         if not arg.startswith("--"):

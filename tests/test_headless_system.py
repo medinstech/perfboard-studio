@@ -139,3 +139,23 @@ def test_each_boards_guide_ends_with_the_systems_harness(tmp_path, monkeypatch, 
     assert f"cable        W1: Board 1 J1 -> Controller {other.ref}, 1 wire(s), cut to fit" in printed
     for folder in (out, out / "b2"):
         assert persist_json(folder / "guide.json").get("harness"), folder
+
+
+def test_headless_schematic_page_size_and_title_block(tmp_path, monkeypatch, capsys) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(view3d, "offscreen_gl_available", lambda: False)
+    doc = _example("ne555-astable")
+    path = tmp_path / "board.perf"
+    path.write_text(persist.serialize_document(doc), encoding="utf-8")
+
+    code = headless_module.headless(["--page-size", "A4", "--title-block", str(path)])
+    assert code == 0
+    svg = (tmp_path / "headless_out" / "schematic.svg").read_text(encoding="utf-8")
+    assert 'width="297mm"' in svg and 'height="210mm"' in svg
+    assert doc.meta.name in svg
+    assert "1 / 1" in svg
+    assert (tmp_path / "headless_out" / "schematic.pdf").is_file()
+
+    bad = headless_module.headless(["--page-size", "Letter", str(path)])
+    assert bad == 1
+    assert "page-size" in capsys.readouterr().out.lower()

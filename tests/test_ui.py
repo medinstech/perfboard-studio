@@ -2218,6 +2218,50 @@ def test_an_export_under_a_name_of_ones_own_writes_its_companions_beside_it(
     _close(window)
 
 
+def test_sheet_night_ink_align_renumber_menus_and_framed_export(tmp_path, monkeypatch) -> None:
+    from perfboard_studio.schematic_export import NIGHT
+    from perfboard_studio.ui import viewsch
+    from perfboard_studio.ui.main import SchematicExportDialog
+
+    # 1. Night ink is wired as the single source of truth on the dark theme.
+    assert viewsch.ACTIVE_INK is NIGHT
+    assert NIGHT.background == viewsch.SHEET
+    assert NIGHT.ink == viewsch.INK
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        # 2. Align/Distribute & Renumber are in the Circuit menu AND the Ctrl+K palette with keys.
+        assert set(window.act_sheet_align) == {
+            "left", "right", "top", "bottom", "distribute-h", "distribute-v",
+        }
+        assert window.act_sheet_renumber.shortcut().toString() == "Ctrl+Alt+N"
+        entries = {entry.label: entry for entry in window._palette_entries()}
+        assert "Align Left" in entries and entries["Align Left"].keys
+        assert "Distribute Horizontally" in entries and entries["Distribute Horizontally"].keys
+        assert "Renumber Parts" in entries and entries["Renumber Parts"].keys
+
+        # 3. SchematicExportDialog offers A4/A3 framing and TitleBlock, passed through to export.
+        dialog = SchematicExportDialog("NE555 Astable", window)
+        assert dialog.page_size() == "auto"
+        assert dialog.title_block() is None
+        dialog.page_combo.setCurrentIndex(dialog.page_combo.findData("A4"))
+        assert dialog.page_size() == "A4"
+        assert dialog.include_block.isChecked()
+        block = dialog.title_block()
+        assert block is not None and block.title == "NE555 Astable"
+
+        out_pdf = tmp_path / "framed.pdf"
+        monkeypatch.setattr(window, "_ask_where_to_export", lambda *a, **k: out_pdf)
+        monkeypatch.setattr(window, "_offer_to_open", lambda *a, **k: None)
+        window.on_export_schematic(page_size=dialog.page_size(), title_block=block)
+        svg_text = out_pdf.with_suffix(".svg").read_text(encoding="utf-8")
+        assert 'id="title-block"' in svg_text
+        assert "NE555 Astable" in svg_text
+        assert "297" in svg_text
+    finally:
+        _close(window)
+
+
 def test_the_export_offers_to_open_what_it_wrote(tmp_path, monkeypatch) -> None:
     """The export used to end at a line in the status bar naming a file in a directory
     the user then had to go and find."""
@@ -10256,7 +10300,7 @@ def test_a_missed_click_while_wiring_cancels_the_half_made_pair() -> None:
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
-    window.on_schematic_wire_mode(True)
+    window.on_sheet_tool("wire")
     window._on_schematic_pin_clicked("R1", "2")
 
     far_away = QPointF(window.schematic_view.mapFromScene(QPointF(-400.0, -400.0)))
@@ -11123,17 +11167,39 @@ def test_flipping_a_symbol_swaps_which_way_its_pins_face() -> None:
 
 
 def test_arranging_one_symbol_leaves_the_others_where_they_were_put() -> None:
-    """Undoing one bad drag must not undo an afternoon of good ones."""
+    """Undoing one bad drag must not undo an afternoon of good ones — and must arrange
+    the symbol via ``sheet.arrange`` rather than unpinning it into the overflow column."""
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
     _move_symbol(window, "R1", 50.8, 25.4)
     _move_symbol(window, "R2", 76.2, 25.4)
-    kept = next(p.id for p in window.bus.document.parts if p.ref == "R2")
+    r1_id = next(p.id for p in window.bus.document.parts if p.ref == "R1")
+    r2_id = next(p.id for p in window.bus.document.parts if p.ref == "R2")
 
     _entry(window.sheet_menu(_over(window, "R1")), "Arrange This Symbol").trigger()
 
-    assert [placement.id for placement in window.bus.document.sheet] == [kept]
+    by_id = {placement.id: placement for placement in window.bus.document.sheet}
+    assert r1_id in by_id and r2_id in by_id
+    assert (by_id[r2_id].at.x, by_id[r2_id].at.y) == (76.2, 25.4)
+    assert (by_id[r1_id].at.x, by_id[r1_id].at.y) != (50.8, 25.4)
+    _close(window)
+
+    # On a real frozen circuit, arranging one displaced resistor puts it back near its
+    # neighbours instead of parking it past the right edge of the sheet.
+    root = pathlib.Path(__file__).resolve().parents[1]
+    loaded = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    window = _window_on(loaded)
+    window.show_schematic()
+    before_x = {
+        s.ref: s.at.x for s in window.schematic_view.item.drawing.symbols if s.ref != "R1"
+    }
+    _move_symbol(window, "R1", 10.16, 10.16)
+    _entry(window.sheet_menu(_over(window, "R1")), "Arrange This Symbol").trigger()
+    r1 = next(s for s in window.schematic_view.item.drawing.symbols if s.ref == "R1")
+    assert r1.at.x <= max(before_x.values()) + 20.0
     _close(window)
 
 

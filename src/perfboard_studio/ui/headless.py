@@ -34,6 +34,7 @@ import dataclasses
 import os
 import sys
 import time
+from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QRectF
@@ -71,6 +72,7 @@ from perfboard_studio.system import (
     connector_of,
     merge_board,
 )
+from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
 from . import planner_pool, view3d
@@ -108,7 +110,40 @@ def _default_headless_platform() -> str:
     return "windows" if sys.platform == "win32" else "offscreen"
 
 
+def _parse_schematic_flags(argv: list[str]) -> tuple[SheetPageSize, bool] | None:
+    """Parse ``--page-size <auto|A4|A3>`` and ``--title-block`` for headless export."""
+    page_raw: str | None = None
+    want_title_block = False
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--title-block":
+            want_title_block = True
+        elif arg.startswith("--page-size="):
+            page_raw = arg.split("=", 1)[1]
+        elif arg == "--page-size":
+            if index + 1 >= len(argv):
+                print("INVALID FLAG  --page-size requires one of: auto, A4, A3")
+                return None
+            page_raw = argv[index + 1]
+            index += 1
+        index += 1
+    if page_raw is None:
+        return "auto", want_title_block
+    canonical: dict[str, SheetPageSize] = {"auto": "auto", "a4": "A4", "a3": "A3"}
+    chosen = canonical.get(page_raw.strip().lower())
+    if chosen is None:
+        print(f"INVALID FLAG  --page-size must be one of auto, A4, A3 (got {page_raw!r})")
+        return None
+    return chosen, want_title_block
+
+
 def headless(argv: list[str]) -> int:
+    parsed = _parse_schematic_flags(argv)
+    if parsed is None:
+        return 1
+    page_size, want_title_block = parsed
+
     os.environ.setdefault("QT_QPA_PLATFORM", _default_headless_platform())
     app = QApplication.instance() or QApplication(sys.argv[:1])
     lookup = footprint_lookup()
@@ -147,6 +182,16 @@ def headless(argv: list[str]) -> int:
         print(f"LOAD FAILED  [{result.code}] {result.message} (path={result.path})")
         return 1
     doc = result.document
+    title_block = (
+        TitleBlock(
+            title=doc.meta.name,
+            revision=f"v{__version__}",
+            date=date.today().isoformat(),
+            sheet="1 / 1",
+        )
+        if want_title_block
+        else None
+    )
     if result.warnings:
         print(f"warnings     {len(result.warnings)}")
         for w in result.warnings:
@@ -155,7 +200,9 @@ def headless(argv: list[str]) -> int:
     if not doc.boards and not doc.cables:
         # One board: the run it always was, line for line.
         _describe_board(doc)
-        status = _run_board(doc, lookup, out_dir, system=None)
+        status = _run_board(
+            doc, lookup, out_dir, system=None, page_size=page_size, title_block=title_block
+        )
         if status != 2:
             print(f"\noutputs written to {out_dir}")
         del app
@@ -181,7 +228,7 @@ def headless(argv: list[str]) -> int:
         )
 
     print("\nthe system's -- the circuit, across every board and cable:")
-    _write_schematic(doc, lookup, out_dir)
+    _write_schematic(doc, lookup, out_dir, page_size=page_size, title_block=title_block)
     _print_erc(doc, lookup)
     _print_lvs(doc, lookup)
 
@@ -196,7 +243,14 @@ def headless(argv: list[str]) -> int:
         print(f"\n=== {board_title(doc, board_id)} ({board_id}) -> {folder}")
         view = board_document(doc, board_id)
         _describe_board(view)
-        status = _run_board(view, lookup, folder, system=(doc, board_id))
+        status = _run_board(
+            view,
+            lookup,
+            folder,
+            system=(doc, board_id),
+            page_size=page_size,
+            title_block=title_block,
+        )
         worst = max(worst, status)
         if status == 2:
             break
@@ -283,6 +337,8 @@ def _run_board(
     out_dir: Path,
     *,
     system: tuple[PerfDocument, str] | None,
+    page_size: SheetPageSize = "auto",
+    title_block: TitleBlock | None = None,
 ) -> int:
     """Everything that is one board's, written into ``out_dir``: 0 when it all held, 1 when
     the 1:1 check failed, 2 when 3D failed outright (and the run stops).
@@ -351,7 +407,7 @@ def _run_board(
 
     # The schematic is the circuit's: with several boards it was drawn once, for the system.
     if system is None:
-        _write_schematic(doc, lookup, out_dir)
+        _write_schematic(doc, lookup, out_dir, page_size=page_size, title_block=title_block)
 
     # --- The board as STEP solids. Like the sheet, it needs no GL, so it is written on
     # every machine -- and it is the only place the writer meets a real board end to end.

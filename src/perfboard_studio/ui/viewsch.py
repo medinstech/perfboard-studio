@@ -110,6 +110,7 @@ from perfboard_studio.schematic import (
     route_sheet_wire,
     snap_to_grid,
 )
+from perfboard_studio.schematic_export import NIGHT, SheetInk
 
 from . import theme
 from .canvasinput import wheel_intent
@@ -139,11 +140,24 @@ type SheetTool = Literal[
 # is ink on paper, so it is drawn as ink on paper: one line weight for everything, colour
 # used only to separate the three net classes and to say what is selected.
 
-#: The paper and the ink are the theme's: dark ink on near-white in the light theme, light
-#: on the board's own near-black in the dark one.
-SHEET = theme.ACTIVE.sheet_paper
-INK = theme.ACTIVE.sheet_ink
-INK_DIM = theme.ACTIVE.sheet_ink_dim
+#: The dark theme draws with the engine's own ``NIGHT`` ink so the screen and the Night
+#: export palette share one table; the light theme draws with ``theme.ACTIVE``'s paper ink.
+ACTIVE_INK: SheetInk = (
+    NIGHT
+    if theme.ACTIVE.name == "dark"
+    else SheetInk(
+        background=theme.ACTIVE.sheet_paper,
+        ink=theme.ACTIVE.sheet_ink,
+        dim=theme.ACTIVE.sheet_ink_dim,
+        undefined=theme.ACTIVE.warning,
+        signal=theme.NET_COLOURS["signal"],
+        power=theme.NET_COLOURS["power"],
+        ground=theme.NET_COLOURS["ground"],
+    )
+)
+SHEET = ACTIVE_INK.background
+INK = ACTIVE_INK.ink
+INK_DIM = ACTIVE_INK.dim
 #: The grid, and the every-fifth line that lets you count squares without counting them.
 #:
 #: A schematic without one is a drawing floating in the dark: nothing says how big the
@@ -157,11 +171,11 @@ GRID_MAJOR = theme.ACTIVE.sheet_grid_major
 BODY_FILL = theme.ACTIVE.sheet_body
 #: The net classes in the ratsnest's colours, so a net is one colour on the board and on
 #: the sheet. They were two: amber power here and orange there, and two blues.
-SIGNAL = theme.NET_COLOURS["signal"]
-POWER = theme.NET_COLOURS["power"]
-GROUND = theme.NET_COLOURS["ground"]
+SIGNAL = ACTIVE_INK.signal
+POWER = ACTIVE_INK.power
+GROUND = ACTIVE_INK.ground
 HIGHLIGHT = theme.ACTIVE.accent
-UNDEFINED = theme.ACTIVE.warning
+UNDEFINED = ACTIVE_INK.undefined
 
 #: A NET THAT IS LIT KEEPS ITS OWN COLOUR, heavier, on a glow of the accent. It used to be
 #: redrawn IN the accent, a blue a shade off the signal colour: selecting the regulator lit
@@ -1283,8 +1297,6 @@ class SchematicView(QGraphicsView):
     #: A note was drawn: (kind, x0, y0, x1, y1). For text the two points are the same and
     #: the window asks what it should say.
     noteDrawn = Signal(str, float, float, float, float)
-    #: A note was dragged. Carries its index in ``drawing.annotations`` and the new corner.
-    noteMoved = Signal(int, float, float)
     #: Delete was pressed with something selected.
     deleteRequested = Signal()
     #: Delete was pressed with a drawn wire selected: a list of (ref a, pin a, ref b,

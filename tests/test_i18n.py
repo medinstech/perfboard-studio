@@ -397,8 +397,10 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "circuit": ["Add Pa&rt…", "&Connect Two Pins", "&New Net…", "&Add Pins to Net",
                     "&Finish Adding Pins", "&Edit Net…", "&Disconnect Selected Pins",
                     "De&lete Net", "Drawing &Tools", "R&otate", "Fl&ip",
-                    "Remo&ve from the Design", "Arran&ge the Sheet", "Fit the S&heet",
-                    "Float the &Panel"],
+                    "Remo&ve from the Design", "Align and Distri&bute", "Ren&umber Parts",
+                    "Arran&ge the Sheet", "Fit the S&heet", "Float the &Panel"],
+        "align": ["Align &Left", "Align &Right", "Align &Top", "Align &Bottom",
+                  "Distribute &Horizontally", "Distribute &Vertically"],
         "board": ["&Design the Board…", "&Add Board", "Board &Features…", "Rena&me Board…", "&Place on the Board",
                   "&Rearrange Parts", "&Try Another Arrangement"],
         # Drawing a connection by hand and having it drawn, in one menu.
