@@ -79,6 +79,11 @@ needs a tag ref, whatever `dry_run` says. **Read every job, not just the tick** 
 Windows, Linux, macOS and the checksums -- and try a bundle: `gh run download <run id>`
 fetches all of them.
 
+Then rehearse the signing on that run, from the same commit, with SimplySign logged in:
+`pwsh packaging/sign-release.ps1 -DryRun <run id>` signs the run's bundle and packs a
+signed installer into `releases/`, and uploads nothing. Install that one: it is the
+closest thing to the release there is before the tag.
+
 **Do not skip this.** The tag is the only other thing that runs those jobs, and a tag that fails
 halfway leaves a published release with some of its assets and a version number already
 spent. v0.4.0's first dry run failed on all three platforms — an unbounded `mcp>=1.0`
@@ -96,14 +101,27 @@ git push --tags
 ```
 
 Pushing the tag is what builds the installers: `.github/workflows/release.yml` refuses
-to publish unless the tag, `version.py` and `CHANGELOG.md` agree, then builds and
-smoke-tests a bundle on each of the three platforms and attaches them to the release.
-The release is created as a **draft**, which nobody outside the repository sees and no
-update check reads, and it goes public only in the last step of `attach-bundles`, once
-the Windows installer, the AppImage, the disk image and `SHA256SUMS` are all on it. If a
-build fails, the release stays a draft: re-run the failed job, or, once every file is
-there, publish it by hand with `gh release edit v0.4.0 --draft=false`.
-See [Packaging](#packaging) below.
+to go on unless the tag, `version.py` and `CHANGELOG.md` agree, then builds and
+smoke-tests a bundle on each of the three platforms. The release is created as a
+**draft**, which nobody outside the repository sees and no update check reads, with the
+notes and the AppImage and the disk image on it, and **the run ends there**. If a build
+fails, re-run the failed job.
+
+**5a. Sign the Windows installer and publish**, from a checkout of the tag, with SimplySign
+Desktop logged in (see [Signing](#signing) below):
+
+```powershell
+git checkout v0.4.0
+pwsh packaging/sign-release.ps1 v0.4.0            # sign, attach, check; still a draft
+pwsh packaging/sign-release.ps1 v0.4.0 -Publish   # the same, then public
+```
+
+It signs the bundle the tag's Windows job built, packs the installer from it, writes
+`SHA256SUMS` over the three files, attaches both to the draft, downloads them back to check
+them, and with `-Publish` makes the release public once all four files are on it. It
+prints the installer's SHA-256, which is what the winget and Scoop manifests need. The
+bundle artifact is kept for fourteen days, which is how long a tag has to be signed. See
+[Packaging](#packaging) below.
 
 **6. Open the next cycle.** Set `__version__` to the next `.dev0` (`0.5.0.dev0`) and add
 the empty `## [Unreleased]` heading if step 1 did not. Commit as `Open 0.5.0
@@ -114,9 +132,10 @@ until 0.4.0, which is the first release anybody ran this far.
 exist — see [PyPI](#pypi) below. A tag whose upload is refused has already spent its
 version number.
 
-**7. Install what you published**, on at least one machine, and uninstall it again.
-Nothing in CI does this: the jobs unpack the bundle and ask the binary its version, so
-the installer *around* it is only ever built. v0.4.0's — the first anyone ran — put its
+**7. Install what you published**, on at least one machine, and uninstall it again. Both
+UAC prompts, the installer's and the uninstaller's, should name Medinstech as the
+publisher. Nothing in CI does this: the jobs unpack the bundle and ask the binary its
+version, so the installer *around* it is only ever built. v0.4.0's — the first anyone ran — put its
 shortcuts in one profile on a machine-wide install and registered itself in the 32-bit
 registry view.
 
@@ -145,13 +164,14 @@ is the one that produces a confusing failure when it goes unanswered.
 
 ## Packaging
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds four distributions
-and publishes them:
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds four distributions.
+It publishes the PyPI one itself; the other three go onto a draft release, which
+[step 5a](#releasing) signs and publishes:
 
 | | artefact | built on |
 |---|---|---|
 | PyPI | `perfboard_studio-X.Y.Z-py3-none-any.whl` and the sdist | `ubuntu-latest` |
-| Windows | `PerfboardStudio_vX.Y.Z_Setup.exe`, an NSIS installer | `windows-latest` |
+| Windows | `PerfboardStudio_vX.Y.Z_Setup.exe`, an NSIS installer, signed | `windows-latest` |
 | Linux | `perfboard-studio-X.Y.Z-x86_64.AppImage` | `ubuntu-22.04`, deliberately |
 | macOS | `perfboard-studio-X.Y.Z-arm64.dmg` | `macos-15`, Apple silicon only |
 
@@ -240,15 +260,33 @@ against `[tool.setuptools.package-data]`, because that list is written out file 
 on purpose and a list nothing checks is a glob that stops matching when an icon is
 renamed.
 
-### Nothing is signed
+### Signing
 
-Both the Windows installer and the macOS bundle ship unsigned, and the release notes say
-so along with the click-through each platform requires. This is a cost, not an oversight:
-a Windows EV certificate is around $300/year and Apple notarization $99/year (PLAN.md
-§12). The hooks are already in place for when that changes — `packaging/perfboard-studio.nsi`
-takes a `/DSIGNCMD=...` and applies it to both the installer and the uninstaller, which
-matters because an unsigned uninstaller shows "Unknown Publisher" at the UAC prompt even
-when the installer is signed.
+**From 0.26.0 the Windows installer is signed by Medinstech**, with a Certum code-signing
+certificate. Its private key is held in Certum's cloud and reached through SimplySign
+Desktop with a token from a phone, so a signature can be made only on a maintainer's
+machine while SimplySign is logged in, never on a runner. That is why release.yml stops at
+a draft and `packaging/sign-release.ps1` finishes the release (step 5a above).
 
-The macOS bundle *is* signed ad-hoc, which is not a trust decision — it is the minimum
-Apple silicon will execute at all.
+- **What is signed:** the two executables in the bundle, the uninstaller the installer
+  embeds, and the installer. `packaging/sign.ps1` signs one file, timestamps it with
+  Certum's server and checks that Windows accepts the result. `packaging/perfboard-studio.nsi`
+  calls it through `/DSIGNCMD=...` for the uninstaller and the installer, and the build
+  stops if it fails: an unsigned uninstaller shows "Unknown Publisher" at the UAC prompt
+  even when the installer is signed.
+- **What is signed is what CI built.** The script downloads the bundle the tag's Windows
+  job built and smoke-tested (the artifact `perfboard-studio-windows-bundle`) instead of
+  building one locally, so nothing about this machine's Python or Qt reaches the release.
+- **Every signature is timestamped**, so it outlives the certificate. When the certificate
+  is renewed, its thumbprint changes in `packaging/sign.ps1` and is added to
+  `PUBLISHER_THUMBPRINTS` in `src/perfboard_studio/updates.py`.
+- **`SHA256SUMS` is written after signing**, because a signature changes the installer's
+  bytes. The script writes it in `sha256sum`'s format, in the order the `attach-bundles`
+  job rehearses on every run.
+- **When SimplySign has lapsed**, signtool does not ask for a login: it says "No
+  certificates were found that met all the given criteria", or it waits. The script signs
+  a scratch file first, so that is found in seconds, before the bundle downloads.
+
+The macOS disk image is signed ad-hoc, which is not a trust decision — it is the minimum
+Apple silicon will execute at all — and is not notarized; the AppImage is not signed. The
+release notes say so along with the click-through each platform requires.

@@ -85,7 +85,8 @@ extracting what is really connected, which for perfboard means the copper you la
 > comes out. What is missing is the dogfood test — nobody has yet built a real
 > board by following a generated guide, and the project plan says M5 does not
 > close until somebody has. Everything else runs, and every
-> release ships an installer for each of the three desktop platforms, none code-signed.
+> release ships an installer for each of the three desktop platforms, the Windows one
+> code-signed from 0.26.0.
 
 **Jump to** — [Running it](#running-it) ·
 [Connections](#connections-are-not-all-the-same-thing) ·
@@ -318,10 +319,10 @@ required.
 | **macOS** | a `.dmg`, Apple silicon |
 | **Linux** | an `.AppImage`, x86_64 |
 
-Each is built and smoke-tested by the tag that produced it. **None
-of them is code-signed**, so each warns on first run and the release notes say how to get
-past it — a Windows EV certificate is ~$300/year and Apple notarization $99/year, and
-neither is bought yet. See [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md).
+Each is built and smoke-tested by the tag that produced it. **From 0.26.0 the Windows
+installer is code-signed by Medinstech**, and an update installs itself only from a signed
+one. The macOS and Linux bundles are not signed yet, so they warn on first run and the
+release notes say how to get past it. See [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md).
 
 The interface speaks **English and Turkish** (`--lang tr`, or follow the system locale),
 and so does the build guide it writes — the steps, the checks, the cut list.
@@ -521,9 +522,9 @@ Next, in the order the project plan puts them:
   Until that has happened, every claim on this page is a claim about software rather than
   about a working circuit. It is also the one thing on this list that a stranger can do
   for the project — there is [an issue template for it](https://github.com/medinstech/perfboard-studio/blob/main/.github/ISSUE_TEMPLATE/board_i_could_not_build.yml).
-- **Code signing.** A Windows EV certificate is ~$300/year and Apple notarization
-  $99/year, so until then the installers warn on first run and the release notes say how
-  to get past it.
+- **Signing on macOS.** The Windows installer is signed from 0.26.0; the disk image is
+  not notarized yet, so it still warns on first run and the release notes say how to get
+  past it.
 
 ## Where everything else is written down
 

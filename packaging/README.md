@@ -9,6 +9,8 @@ ritual around it is in [docs/RELEASING.md](../docs/RELEASING.md).
 | `perfboard-studio.nsi` | The Windows installer (NSIS, English and Turkish). |
 | `appimage.sh` | The Linux AppImage. |
 | `macos.sh` | The macOS disk image. |
+| `sign.ps1` | Signs one file with Medinstech's certificate, timestamps it and checks that Windows accepts it. Needs SimplySign Desktop logged in. |
+| `sign-release.ps1` | Signs a tag's Windows bundle, packs and signs the installer, writes `SHA256SUMS`, attaches both to the draft release and, with `-Publish`, publishes it. See [Signing](../docs/RELEASING.md#signing). |
 | `check-bundle-models.sh` | Fails unless a built bundle carries every package mesh and its licence. Run by all three release jobs. |
 | `check-mcp-stdio.py` | Fails unless a command serves a whole MCP session over stdio with nothing else on stdout. Run on every built bundle's `--mcp`, and by `tests/test_mcp_stdio.py` on the source. |
 | `winget/` | A **draft** winget manifest for the current release. Not submitted. |

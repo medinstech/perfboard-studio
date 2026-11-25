@@ -463,9 +463,11 @@ SectionEnd
 
 ; --------------------------------------------------------------- signing ---
 ; Both hooks matter: an unsigned uninstaller shows "Unknown Publisher" at the UAC prompt
-; even when the installer itself is signed. Nothing passes SIGNCMD today - see
-; docs/RELEASING.md on what a signed build would need.
+; even when the installer itself is signed. packaging/sign-release.ps1 passes SIGNCMD; CI
+; does not, so the installer a run keeps as an artifact is unsigned. The `= 0` is what makes
+; a failed signature end the build: without it makensis reports the command's exit code and
+; carries on, and an unsigned uninstaller is packed inside a signed installer.
 !ifdef SIGNCMD
-  !finalize       '${SIGNCMD} "%1"'
-  !uninstfinalize '${SIGNCMD} "%1"'
+  !finalize       '${SIGNCMD} "%1"' = 0
+  !uninstfinalize '${SIGNCMD} "%1"' = 0
 !endif

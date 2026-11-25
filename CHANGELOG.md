@@ -286,6 +286,12 @@ closed without a bump.
   ghosts are the copper the last route took up, fixed when the route lands: a wire you delete
   by hand afterwards, or Remove All Wiring, no longer turns into a ghost of a route that never
   touched it. A route that replaced nothing leaves the comparison off.
+- **The Windows installer is signed by Medinstech.** The installer, the uninstaller it
+  carries and both executables are signed and timestamped, so the UAC prompt names the
+  publisher instead of "Unknown". The key cannot leave Certum's cloud, so a tag's run now
+  ends at a draft, and `packaging/sign-release.ps1` signs the bundle that run built, packs
+  the installer, writes `SHA256SUMS` over the signed file and publishes. The macOS disk image
+  and the AppImage are not signed yet.
 
 ### Fixed
 

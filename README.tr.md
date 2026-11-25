@@ -83,8 +83,8 @@ bir adımlar dizisidir. Kart da devreye karşı denetlenir: gerçekte neyin bağ
 > rehberi çıkıyor. Eksik olan tek şey dogfood testi — henüz kimse üretilen bir
 > rehberi takip ederek gerçek bir kart lehimlemedi ve proje planına göre bu
 > olmadan M5 kapanmıyor. Gerisi çalışıyor; her sürüm üç masaüstü
-> platformunun her biri için bir kurulum paketi yayınlıyor, hiçbiri kod imzalı
-> değil.
+> platformunun her biri için bir kurulum paketi yayınlıyor; Windows'unki 0.26.0'dan
+> itibaren kod imzalı.
 
 **Şuraya atla** — [Çalıştırmak](#çalıştırmak) ·
 [Bağlantılar](#her-bağlantı-aynı-şey-değildir) · [İki yüz](#her-iki-yüz-ve-üçüncü-boyut) ·
@@ -317,10 +317,11 @@ Python gerekmiyor.
 | **macOS** | `.dmg`, Apple silicon |
 | **Linux** | `.AppImage`, x86_64 |
 
-Üçü de kendilerini üreten etiket tarafından derlenip smoke-test ediliyor. **Hiçbiri kod
-imzalı değil**, o yüzden her biri ilk açılışta uyarı veriyor ve release notları uyarının
-nasıl geçileceğini yazıyor — Windows EV sertifikası yılda ~$300, Apple notarization $99,
-ve ikisi de henüz alınmadı. Bkz. [docs/RELEASING.md](./docs/RELEASING.md).
+Üçü de kendilerini üreten etiket tarafından derlenip smoke-test ediliyor. **0.26.0'dan
+itibaren Windows kurulum paketi Medinstech tarafından kod imzalı**; bir güncelleme de
+kendini yalnızca imzalı bir paketten kuruyor. macOS ve Linux paketleri henüz imzalı değil,
+o yüzden ilk açılışta uyarı veriyorlar ve release notları uyarının nasıl geçileceğini
+yazıyor. Bkz. [docs/RELEASING.md](./docs/RELEASING.md).
 
 Arayüz **İngilizce ve Türkçe** konuşur (`--lang tr`, ya da sistem diline göre otomatik);
 yazdığı montaj rehberi de öyle — adımlar, kontroller, kesim listesi.
@@ -525,8 +526,8 @@ Sırada, proje planının koyduğu sırayla:
   lehimlemesi gerekiyor. Bu olana kadar bu sayfadaki her iddia, çalışan bir devre
   hakkında değil, yazılım hakkında bir iddiadır. Bu liste içinde bir yabancının proje
   için yapabileceği tek şey de bu — [bunun için bir issue şablonu var](./.github/ISSUE_TEMPLATE/board_i_could_not_build.yml).
-- **Kod imzalama.** Windows EV sertifikası ~$300/yıl, Apple notarization $99/yıl; o zamana
-  kadar kurulum paketleri ilk açılışta uyarı veriyor ve release notları bunun nasıl
+- **macOS'ta imzalama.** Windows kurulum paketi 0.26.0'dan itibaren imzalı; disk görüntüsü
+  henüz notarize edilmedi, o yüzden ilk açılışta hâlâ uyarı veriyor ve release notları bunun nasıl
   aşılacağını yazıyor.
 
 ## Geri kalan her şeyin yazılı olduğu yer
