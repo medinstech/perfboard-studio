@@ -39,7 +39,7 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from ..catalog import CATALOG, CatalogPart
-from ..footprints import AXIAL_RESISTOR_BODIES, axial_resistor_id
+from ..footprints import AXIAL_RESISTOR_BODIES, axial_resistor_id, standard_footprints
 from ..model import (
     ComponentInstance,
     Footprint,
@@ -156,7 +156,12 @@ def _axial_resistor(m: re.Match[str]) -> list[str]:
         try:
             return [axial_resistor_id(holes, din)]
         except ValueError:
-            pass
+            # A body longer than its span cannot lie on it, so the size is not believed:
+            # the registry's resistor for the span is what this read before sizes were
+            # read, and the exact id would be a body hanging past both of its holes.
+            registry = f"r-axial-{holes}"
+            if registry in standard_footprints():
+                return [registry]
     return [exact]
 
 

@@ -49,6 +49,9 @@ def _first(kicad_footprint: str) -> str | None:
         ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P12.70mm_Horizontal", "r-axial-5"),
         ("Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P15.24mm_Horizontal", "r-axial-6"),
         ("Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P12.70mm_Horizontal", "axial-5h-9x3.6"),
+        # A 0309 on a span shorter than its body is not believed: the registry's resistor
+        # for the span, as before sizes were read, not a body past both holes.
+        ("Resistor_THT:R_Axial_DIN0309_L9.0mm_D3.2mm_P7.62mm_Horizontal", "r-axial-3"),
         ("Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal", "d-do41"),
         ("Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal", "d-do35"),
         ("Diode_THT:D_DO-201AD_P15.24mm_Horizontal", "axial-6h-9.5x5.3-pol"),
