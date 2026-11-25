@@ -428,7 +428,12 @@ def test_workflow_bar_animates_pill_connectors_and_done_halo_when_motion_enabled
         assert bar._pill_anim is not None
         assert "circuit" in bar._done_halos
 
-        QTest.qWait(70)
+        # Up to a second for the first frame rather than exactly 70 ms: under a loaded
+        # full-suite run the animation timer had not ticked once by then.
+        for _ in range(100):
+            QTest.qWait(10)
+            if bar.connector_progress[0] > 0.0:
+                break
         mid_progress = bar.connector_progress[0]
         assert 0.0 < mid_progress <= 1.0
 
