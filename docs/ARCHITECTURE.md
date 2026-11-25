@@ -1506,13 +1506,14 @@ below: nothing downstream of `doc.nets` changed by a line.
 
 So `build_schematic` has two paths, chosen by whether `doc.sheet` is empty:
 
-- **Derived**: everything above. This is what every imported netlist and every fresh
-  document produces, and it is what keeps "open it and look at it" free. Since 0.26 it is
-  `schlayout.arrange_sheet` run over the whole document and drawn by `_hand_drawn_sheet`
-  with `derived=True` ("The sheet is arranged by blocks", below). It used to be symbols in
-  cells with wires only in the channels between them, no wire able to cross a symbol as a
-  consequence of where the tracks may be; `_derived_sheet` is that first design, and
-  nothing calls it any more.
+- **Derived** (`schlayout.arrange_sheet`): the chips as hubs, the parts their pins reach
+  beside those pins, connectors at the edges, short wires laid round every symbol and the
+  rest said by name -- written as placements and wires and then drawn by `_hand_drawn_sheet`
+  with `derived=True` exactly as a hand-drawn sheet is ("The sheet is arranged by blocks",
+  below), which is why freezing it moves nothing. This is what every imported netlist, every
+  fresh document and every press of `Arrange` produces, and it is what keeps "open it and
+  look at it" free. (It replaced `_derived_sheet`, which put symbols in the cells of a grid
+  and wires in the channels between them, and is gone.)
 - **Hand-drawn** (`_hand_drawn_sheet`): every symbol where it was put, turned how it was
   turned, joined by the wires somebody drew. Nothing is arranged.
 

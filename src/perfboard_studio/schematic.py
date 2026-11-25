@@ -47,12 +47,14 @@ HAIRBALL.
   not know -- a TO-92 has no E/B/C in it, a tactile switch no pole -- the part is a
   labelled box with numbered pins. Drawing a transistor symbol would assert a lead
   assignment nothing in this codebase holds.
-- **Symbols sit in a column/row grid and wires run only in the channels between them**, so
-  no wire can cross a symbol -- not as a tuning parameter, as a consequence of where the
-  tracks are allowed to be. Verticals live in the channel between two columns, horizontal
-  trunks in the channel between two rows, and each channel widens to fit the tracks
-  assigned to it by a left-edge sweep. Wires still cross each other, which is what junction
-  dots are for; that is a schematic, not a defect.
+- **The sheet is arranged the way a person draws it, and a net between blocks is said by
+  name** (``schlayout.arrange_sheet``): the chips are hubs, the parts their pins reach sit
+  beside those pins, connectors at the edges, and each short connection is a wire laid by
+  ``route_sheet_wire`` round every symbol's box, so no wire crosses a symbol. The first
+  sheet put every symbol in a cell of a column/row grid and ran every wire in the channels
+  between them; nothing crossed a symbol there either, but a chip's crystal and reset parts
+  went wherever the grid had a free cell, joined to it by a pair of names. Wires still cross
+  each other, which is what junction dots are for; that is a schematic, not a defect.
 
 Everything is millimetres on a 2.54 mm grid, which is the grid schematics are drawn on and
 the same scene unit ``ui/view2d.py`` already uses, so the renderer needs no scale factor.
@@ -66,7 +68,7 @@ import heapq
 import itertools
 import math
 import re
-from collections import defaultdict, deque
+from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -129,9 +131,6 @@ from .system import circuit_parts, every_component
 #: One routing track. A channel carrying n of them is n of these wide, plus a margin.
 TRACK_PITCH_MM: Mm = GRID_MM
 
-#: The narrowest a channel gets, whatever it has to carry. Wide enough for a rail glyph to
-#: drop into and for two symbols not to touch.
-MIN_CHANNEL_MM: Mm = 4 * GRID_MM
 
 #: The room a rail glyph occupies at ``Rail.at``: half-width across the stub, and depth
 #: along it past the anchor.
@@ -1167,72 +1166,6 @@ class _Placed:
         return Point2(x=self.x + pin.at.x, y=self.y + pin.at.y)
 
 
-def _assign_tracks(intervals: Sequence[tuple[str, float, float]]) -> tuple[dict[str, int], int]:
-    """The fewest parallel lanes a set of intervals needs, by the left-edge sweep.
-
-    Two runs share a lane only when one finishes strictly before the other starts. Allowing
-    them to touch would put two wires end to end on the same line, which reads as one wire
-    and is the one mistake a schematic must not make.
-    """
-    ordered = sorted(intervals, key=lambda item: (item[1], item[2], item[0]))
-    last_end: list[float] = []
-    tracks: dict[str, int] = {}
-    for key, low, high in ordered:
-        for index, end in enumerate(last_end):
-            if end < low:
-                last_end[index] = high
-                tracks[key] = index
-                break
-        else:
-            tracks[key] = len(last_end)
-            last_end.append(high)
-    return tracks, len(last_end)
-
-
-
-def _facing_apart(
-    tracks: dict[str, int],
-    count: int,
-    runs: Sequence[tuple[str, float, float]],
-    stub_of: Mapping[str, tuple[bool, float]],
-) -> tuple[dict[str, int], int]:
-    """The lanes of one vertical channel, with no two pins facing across it on one line.
-
-    TWO PINS AT ONE HEIGHT ACROSS A CHANNEL ARE ONE STRAIGHT LINE if the left one's lane is
-    right of the right one's: each pin's stub runs out to its own lane, and the two stubs
-    lie along each other between the lanes. On the NE555 that drew R1's DISCH and R3's OUT
-    as one wire from pin to pin, with nothing to say they were two nets -- and five of the
-    seven examples had a pair. ``_assign_tracks`` sees only the vertical runs, so the pair
-    is put right here: a run coming in from the right that lies left of a run facing it is
-    moved to a lane past every lane the channel has, where nothing from the left reaches.
-    Lanes past the end are shared by the left-edge rule like any others.
-    """
-    out = dict(tracks)
-    span = {key: (low, high) for key, low, high in runs}
-    moved: list[str] = []
-    for key, (from_right, y) in stub_of.items():
-        if not from_right or key not in out:
-            continue
-        net = key.split("", 1)[0]
-        for other, (other_from_right, other_y) in stub_of.items():
-            if (
-                not other_from_right
-                and other in out
-                and abs(other_y - y) < _EPS
-                and other.split("", 1)[0] != net
-                and out[other] > out[key]
-            ):
-                moved.append(key)
-                break
-    if not moved:
-        return out, count
-    extra, extra_count = _assign_tracks(
-        [(key, *span[key]) for key in sorted(moved, key=lambda key: (span[key], key))]
-    )
-    for key in moved:
-        out[key] = count + extra[key]
-    return out, count + extra_count
-
 def _named_stub(name: str, side: PinSide) -> Mm:
     """How far a pin's stub runs when its net is said by name: under the whole name, when
     the name runs along the stub; a plain stub when the pin points up or down."""
@@ -1268,18 +1201,9 @@ def _said_at_pin(net: Net, anchor: Point2, side: PinSide) -> tuple[Wire, Label]:
     return wire, Label(text=net.name, at=at, kind="net", anchor=anchor_side)
 
 
-def _on_grid(at: Mm) -> Mm:
-    """The nearest grid line, as exactly the float ``snap_to_grid`` makes of it."""
-    return round(at / GRID_MM) * GRID_MM
-
-
 def _up_to_grid(length: Mm) -> Mm:
     """``length`` made a whole number of grid steps, never shorter."""
     return math.ceil(length / GRID_MM - 1e-9) * GRID_MM
-
-
-def _channel_size(track_count: int) -> Mm:
-    return max(MIN_CHANNEL_MM, 2 * GRID_MM + max(0, track_count - 1) * TRACK_PITCH_MM)
 
 
 def _is_rail(net: Net, options: SchematicOptions) -> bool:
@@ -1360,6 +1284,15 @@ def _collect_symbols(
             )
             if misfit is not None:
                 notes.append(f"{ref}: {roles_misfit_phrase(misfit)}, drawn as a numbered box")
+            elif owner is not None and owner.pin_roles:
+                # Roles for every pin and no other: what each pin does goes with its name,
+                # and an IC or a module is drawn as the functional symbol they describe
+                # (``schsymbols.functional_ic_body``). Stored since pinRoles and never handed
+                # on, so every part that had them was still drawn as a numbered box.
+                roles = dict(owner.pin_roles)
+                specs = tuple(
+                    dataclasses.replace(spec, role=roles[spec.number]) for spec in specs
+                )
         else:
             # No footprint to ask, so the netlist is the only account of what pins exist.
             specs = tuple(
@@ -1477,108 +1410,6 @@ def _merge_thin_columns(columns: list[list[str]], group_size: int) -> list[list[
         else:
             merged.append(list(column))
     return merged
-
-
-def _assign_cells(
-    symbols: dict[str, _Placed], adjacency: dict[str, set[str]]
-) -> tuple[int, int]:
-    """Put every symbol in a (column, row) cell and say how big the grid came out.
-
-    Columns come from a breadth-first layering away from the most connected part, which on
-    a perfboard circuit is almost always the IC everything hangs off; rows come from four
-    barycentre sweeps, the standard crossing-reduction heuristic. Neither is clever. Both
-    are deterministic, which is what a golden test needs and what stops the sheet
-    rearranging itself when an unrelated net is edited.
-    """
-    order = sorted(symbols, key=_ref_sort_key)
-    visited: set[str] = set()
-    columns: list[list[str]] = []
-    alone: list[str] = []
-
-    for seed in order:
-        if seed in visited:
-            continue
-        group: list[str] = []
-        queue = deque([seed])
-        visited.add(seed)
-        while queue:
-            ref = queue.popleft()
-            group.append(ref)
-            for neighbour in sorted(adjacency[ref], key=_ref_sort_key):
-                if neighbour not in visited:
-                    visited.add(neighbour)
-                    queue.append(neighbour)
-
-        if len(group) == 1:
-            # A part no signal net reaches -- a mounting pillar, a part only ground
-            # touches, a part nothing touches at all. One column each would draw sixteen
-            # of them as a sheet two feet wide, so they are gathered into a block below
-            # and the layering never sees them.
-            alone.append(group[0])
-            continue
-
-        root = min(group, key=lambda ref: (-len(adjacency[ref]), _ref_sort_key(ref)))
-        depth: dict[str, int] = {root: 0}
-        queue = deque([root])
-        while queue:
-            ref = queue.popleft()
-            for neighbour in sorted(adjacency[ref], key=_ref_sort_key):
-                if neighbour not in depth:
-                    depth[neighbour] = depth[ref] + 1
-                    queue.append(neighbour)
-
-        local: list[list[str]] = [[] for _ in range(max(depth.values()) + 1)]
-        for ref in sorted(group, key=_ref_sort_key):
-            local[depth[ref]].append(ref)
-        columns.extend(_split_tall_layers(local, len(group)))
-
-    columns = _merge_thin_columns(columns, len(visited) - len(alone))
-    _barycentre_sweeps(columns, adjacency)
-
-    if alone:
-        tall = max((len(column) for column in columns), default=0)
-        per_column = max(tall, column_cap(len(alone)))
-        for start in range(0, len(alone), per_column):
-            columns.append(alone[start : start + per_column])
-
-    rows = max((len(column) for column in columns), default=0)
-    for index, column in enumerate(columns):
-        offset = (rows - len(column)) // 2
-        for position, ref in enumerate(column):
-            symbols[ref].col = index
-            symbols[ref].row = offset + position
-    return len(columns), rows
-
-
-def _barycentre_sweeps(
-    columns: list[list[str]], adjacency: dict[str, set[str]], passes: int = 4
-) -> None:
-    """Reorder each column by the average position of its neighbours in the column beside
-    it, alternating direction. Sorted in place; ties broken by reference so the result does
-    not depend on sort stability alone."""
-    position: dict[str, int] = {}
-    for column in columns:
-        for index, ref in enumerate(column):
-            position[ref] = index
-
-    for sweep in range(passes):
-        forward = sweep % 2 == 0
-        indices = (
-            range(1, len(columns)) if forward else range(len(columns) - 2, -1, -1)
-        )
-        for index in indices:
-            beside = set(columns[index - 1] if forward else columns[index + 1])
-            if not beside:
-                continue
-
-            def barycentre(ref: str, beside: set[str] = beside) -> tuple[float, tuple[str, int, str]]:
-                near = [position[other] for other in adjacency[ref] if other in beside]
-                mean = sum(near) / len(near) if near else float(position[ref])
-                return (mean, _ref_sort_key(ref))
-
-            columns[index].sort(key=barycentre)
-            for place, ref in enumerate(columns[index]):
-                position[ref] = place
 
 
 # ---------------------------------------------------------------------------
@@ -1902,9 +1733,10 @@ def build_schematic(
     """Draw the netlist.
 
     TWO KINDS OF SHEET, AND THE DOCUMENT DECIDES WHICH. With ``doc.sheet`` empty the whole
-    drawing is derived, exactly as it always was: symbols laid out in a grid of cells and
-    wires routed in the channels between them, so no wire can cross a symbol and the same
-    document always produces the same picture. With positions stored, the sheet is a
+    drawing is derived: ``schlayout.arrange_sheet`` places every symbol and lays the short
+    wires the way a person would, and that arrangement is then drawn exactly as a stored one
+    is, so the same document always produces the same picture and freezing it moves nothing.
+    With positions stored, the sheet is a
     DRAWING somebody made -- every symbol sits where they put it, turned how they turned
     it, joined by the wires they drew, and what they did not draw a wire for is joined by
     NAME, with a label at the pin. That is not a fallback, it is what a schematic does with
@@ -3442,12 +3274,22 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
         # Well clear of the box rather than snug to it: a reference is drawn at a fixed
         # PIXEL size, so how many millimetres of sheet it occupies grows as the view zooms
         # out -- and the one symbol with anything near its top edge is the LED.
+        if top_lead and placed.kind == "ic":
+            # A chip drawn by what its pins do has its supply on a lead out of the middle of
+            # its top. Beyond the right-hand leads, where the LED's goes, the reference sat
+            # past the output stubs and read as nobody's; above the box's own left edge,
+            # level with the end of the supply lead, it is the chip's. Not lower: the lead's
+            # height belongs to the symbol, and a label there is on its body.
+            box_left = placed.x + (LEAD_MM if "left" in sides else 0.0)
+            ref_at = _p(box_left, placed.y - 0.75 * GRID_MM)
+        elif top_lead:
+            ref_at = _p(placed.x + placed.body.width + 0.5 * GRID_MM, placed.y - 0.25 * GRID_MM)
+        else:
+            ref_at = _p(centre, placed.y - 0.75 * GRID_MM)
         labels.append(
             Label(
                 text=placed.ref,
-                at=_p(placed.x + placed.body.width + 0.5 * GRID_MM, placed.y - 0.25 * GRID_MM)
-                if top_lead
-                else _p(centre, placed.y - 0.75 * GRID_MM),
+                at=ref_at,
                 kind="ref",
                 anchor="left" if top_lead else "centre",
             )
@@ -3623,342 +3465,3 @@ def _sheet_extent(
     # A label's own width is not known here -- it is drawn at a size the renderer picks --
     # so the margin doubles as the room for a net name written at the right-hand edge.
     return right + 2 * MARGIN_MM, bottom + MARGIN_MM
-
-
-def _derived_sheet(
-    symbols: dict[str, _Placed],
-    resolved: list[_ResolvedNet],
-    options: SchematicOptions,
-    notes: list[str],
-    annotations: tuple[Annotation, ...],
-) -> SchematicDrawing:
-    """The sheet nobody has drawn on: cells, channels, and a routed picture of the netlist.
-
-    This is the original ``build_schematic`` body, unchanged in what it produces. The three
-    decisions it rests on are in the module docstring, and the one that matters most here
-    is that symbols live in cells and wires live only in the channels between them -- which
-    is why no wire crosses a symbol, as a consequence of where the tracks may be rather
-    than as a tuning parameter.
-    """
-    # Rails are deliberately absent from the graph. A ground net touching every part would
-    # make every part adjacent to every other, and the layering below would put the whole
-    # circuit in two columns -- which is exactly the hairball the glyphs exist to prevent,
-    # arriving by the back door.
-    adjacency: dict[str, set[str]] = {ref: set() for ref in symbols}
-    for item in resolved:
-        if item.rail:
-            continue
-        touched = sorted({ref for ref, _ in item.pins}, key=_ref_sort_key)
-        for first in range(len(touched)):
-            for second in range(first + 1, len(touched)):
-                adjacency[touched[first]].add(touched[second])
-                adjacency[touched[second]].add(touched[first])
-
-    ncols, nrows = _assign_cells(symbols, adjacency)
-
-    named: set[NetId] = set()
-    if options.name_nets_at:
-        for item in resolved:
-            if item.rail or len(item.pins) < 2:
-                continue
-            if any(len(symbols[ref].body.pins) >= options.name_nets_at for ref, _ in item.pins):
-                named.add(item.net.id)
-
-    column_width = [0.0] * ncols
-    row_height = [0.0] * nrows
-    for placed in symbols.values():
-        # A value wider than its body ("Conn_01x02" under a two-pin connector) would hang
-        # into the channel beside it, where the verticals run -- so it widens the column.
-        column_width[placed.col] = max(
-            column_width[placed.col], placed.body.width, _part_text_width(placed, options)
-        )
-        row_height[placed.row] = max(row_height[placed.row], placed.body.height)
-
-    # -- which channel each run belongs in ----------------------------------
-    #
-    # A rail takes no lane. It is drawn at its pin, out into the vertical channel beside
-    # it the way the pin points and then turned upright (``_rail_at_pin``), in room the
-    # channel keeps for it as it keeps room for a name said at a pin -- below.
-    pin_channel: dict[tuple[NetId, str, str], int] = {}
-    trunk_channel: dict[NetId, int] = {}
-    horizontal_runs: dict[int, list[tuple[str, float, float]]] = defaultdict(list)
-    for item in resolved:
-        spanned: list[int] = []
-        for ref, pin in item.pins:
-            channel = symbols[ref].col if pin.side == "left" else symbols[ref].col + 1
-            pin_channel[(item.net.id, ref, pin.number)] = channel
-            spanned.append(channel)
-        if item.rail:
-            continue
-        if len(item.pins) < 2 or item.net.id in named:
-            continue
-        mean_row = sum(symbols[ref].row for ref, _ in item.pins) / len(item.pins)
-        channel = min(nrows, int(mean_row) + 1)
-        trunk_channel[item.net.id] = channel
-        horizontal_runs[channel].append(
-            (item.net.id, float(min(spanned)), float(max(spanned)))
-        )
-
-    horizontal_track: dict[str, int] = {}
-    horizontal_tracks = [0] * (nrows + 1)
-    for channel, runs in horizontal_runs.items():
-        assigned, count = _assign_tracks(runs)
-        horizontal_track.update(assigned)
-        horizontal_tracks[channel] = count
-
-    # -- y, which depends only on the horizontal channels -------------------
-    # In whole grid steps for the reason x is (below): a switch two and a half steps
-    # shorter than its row sat half a step off the grid and jumped on the first edit.
-    row_height = [_up_to_grid(room) for room in row_height]
-    horizontal_gap = [_channel_size(count) for count in horizontal_tracks]
-    cursor = MARGIN_MM
-    horizontal_channel_y = [0.0] * (nrows + 1)
-    row_y = [0.0] * nrows
-    for index in range(nrows):
-        horizontal_channel_y[index] = cursor
-        cursor += horizontal_gap[index]
-        row_y[index] = cursor + REF_BAND_MM
-        cursor += REF_BAND_MM + row_height[index] + VALUE_BAND_MM
-    horizontal_channel_y[nrows] = cursor
-    cursor += horizontal_gap[nrows]
-    height = cursor + MARGIN_MM
-
-    for placed in symbols.values():
-        slack = (row_height[placed.row] - placed.body.height) / 2
-        placed.y = _on_grid(row_y[placed.row] + slack)
-
-    def _lane_y(channel: int, key: str) -> Mm:
-        return horizontal_channel_y[channel] + GRID_MM + horizontal_track[key] * TRACK_PITCH_MM
-
-    trunk_y: dict[NetId, float] = {
-        net_id: _lane_y(channel, net_id) for net_id, channel in trunk_channel.items()
-    }
-
-    # -- x, which needs the y above to know which verticals overlap ---------
-    def _segment_key(net_id: NetId, ref: str, number: str) -> str:
-        return f"{net_id}\x1f{ref}\x1f{number}"
-
-    vertical_runs: dict[int, list[tuple[str, float, float]]] = defaultdict(list)
-    #: Which way each run's stub comes into its channel -- from the symbol on the channel's
-    #: right (True) or its left -- and at what height: see ``_facing_apart``.
-    stub_of: dict[str, tuple[bool, float]] = {}
-    for item in resolved:
-        for ref, pin in item.pins:
-            anchor_y = symbols[ref].anchor_of(pin).y
-            run_key = _segment_key(item.net.id, ref, pin.number)
-            if item.rail or item.net.id in named:
-                continue
-            elif len(item.pins) < 2:
-                low = high = anchor_y
-            else:
-                other = trunk_y[item.net.id]
-                low, high = min(anchor_y, other), max(anchor_y, other)
-            vertical_runs[pin_channel[(item.net.id, ref, pin.number)]].append(
-                (run_key, low, high)
-            )
-            stub_of[run_key] = (pin.side == "left", anchor_y)
-
-    vertical_track: dict[str, int] = {}
-    vertical_tracks = [0] * (ncols + 1)
-    for channel, runs in vertical_runs.items():
-        assigned, count = _facing_apart(*_assign_tracks(runs), runs, stub_of)
-        vertical_track.update(assigned)
-        vertical_tracks[channel] = count
-
-    # A named pin's label runs out from its pin into the channel beside it, and so does a
-    # rail's stub and glyph. The channel takes the widest from each side, and its tracks
-    # run between the two.
-    outs = _rail_outs(
-        symbols,
-        [(ref, pin, item.net.net_class) for item in resolved if item.rail for ref, pin in item.pins],
-        {
-            (ref, pin.number): item.net.name
-            for item in resolved
-            if item.net.id in named
-            for ref, pin in item.pins
-        },
-    )
-    name_room_left = [0.0] * (ncols + 1)
-    name_room_right = [0.0] * (ncols + 1)
-    for item in resolved:
-        if item.net.id not in named and not item.rail:
-            continue
-        reach = 0.0
-        for ref, pin in item.pins:
-            channel = pin_channel[(item.net.id, ref, pin.number)]
-            if item.rail:
-                out = outs.get((ref, pin.number), RAIL_STUB_MM)
-                reach = _rail_reach(item.net, out) + NET_LABEL_INSET_MM
-            else:
-                reach = _named_stub(item.net.name, pin.side) + NET_LABEL_INSET_MM
-            if pin.side == "left":
-                name_room_right[channel] = max(name_room_right[channel], reach)
-            elif pin.side == "right":
-                name_room_left[channel] = max(name_room_left[channel], reach)
-    # EVERY SYMBOL ON THE GRID, as the first edit puts it. The first edit freezes the sheet
-    # and snaps each symbol to the grid (``snap_to_grid``); a column as wide as its text, a
-    # name's reach and a narrow body centred in a wide column each left x a fraction of a
-    # step off, so on atmega328-relay all 24 symbols moved by up to a millimetre on the
-    # first click and 51 of its 79 runs were laid again. In whole steps, a freeze moves
-    # nothing: ``test_a_freeze_moves_no_symbol``.
-    name_room_left = [_up_to_grid(room) for room in name_room_left]
-    name_room_right = [_up_to_grid(room) for room in name_room_right]
-    column_width = [_up_to_grid(room) for room in column_width]
-    vertical_gap = [
-        name_room_left[index] + _channel_size(count) + name_room_right[index]
-        for index, count in enumerate(vertical_tracks)
-    ]
-    cursor = MARGIN_MM
-    vertical_channel_x = [0.0] * (ncols + 1)
-    column_x = [0.0] * ncols
-    for index in range(ncols):
-        vertical_channel_x[index] = cursor
-        cursor += vertical_gap[index]
-        column_x[index] = cursor
-        cursor += column_width[index]
-    vertical_channel_x[ncols] = cursor
-    cursor += vertical_gap[ncols]
-    width = cursor + MARGIN_MM
-
-    for placed in symbols.values():
-        slack = (column_width[placed.col] - placed.body.width) / 2
-        # Rounded as ``snap_to_grid`` rounds, to the same float: a sum of steps can come
-        # out at 142.23999999999998, and snapped to 142.24 the pins no longer met their
-        # wires' ends exactly and the freeze laid those wires again.
-        placed.x = _on_grid(column_x[placed.col] + slack)
-
-    def _track_x(net_id: NetId, ref: str, number: str) -> Mm:
-        key = _segment_key(net_id, ref, number)
-        channel = pin_channel[(net_id, ref, number)]
-        return (
-            vertical_channel_x[channel]
-            + name_room_left[channel]
-            + GRID_MM
-            + vertical_track[key] * TRACK_PITCH_MM
-        )
-
-    # -- emit ----------------------------------------------------------------
-    wires: list[Wire] = []
-    rails: list[Rail] = []
-    junctions: list[Junction] = []
-    net_labels: list[Label] = []
-    #: Names said at a pin, placed already: the stub and the channel make their room.
-    pin_names: list[Label] = []
-    #: The stubs those names are said at, which no second name goes over.
-    said_stubs: list[Wire] = []
-
-    for item in resolved:
-        net = item.net
-        if item.rail:
-            for ref, pin in item.pins:
-                out = outs.get((ref, pin.number), RAIL_STUB_MM)
-                rails.append(_rail_at_pin(net, symbols[ref].anchor_of(pin), pin.side, out))
-            continue
-
-        if net.id in named:
-            for ref, pin in item.pins:
-                stub, said = _said_at_pin(net, symbols[ref].anchor_of(pin), pin.side)
-                wires.append(stub)
-                said_stubs.append(stub)
-                pin_names.append(said)
-            continue
-
-        if len(item.pins) == 1:
-            ref, pin = item.pins[0]
-            anchor = symbols[ref].anchor_of(pin)
-            x = _track_x(net.id, ref, pin.number)
-            path = _tidy((anchor, Point2(x=x, y=anchor.y)))
-            if len(path) > 1:
-                wires.append(
-                    Wire(
-                        net_id=net.id, net_name=net.name, net_class=net.net_class, path=path
-                    )
-                )
-            continue
-
-        y = trunk_y[net.id]
-        branch_x: list[Mm] = []
-        for ref, pin in item.pins:
-            anchor = symbols[ref].anchor_of(pin)
-            x = _track_x(net.id, ref, pin.number)
-            branch_x.append(x)
-            path = _tidy((anchor, Point2(x=x, y=anchor.y), Point2(x=x, y=y)))
-            if len(path) > 1:
-                wires.append(
-                    Wire(
-                        net_id=net.id, net_name=net.name, net_class=net.net_class, path=path
-                    )
-                )
-        left, right = min(branch_x), max(branch_x)
-        wires.append(
-            Wire(
-                net_id=net.id,
-                net_name=net.name,
-                net_class=net.net_class,
-                path=(Point2(x=left, y=y), Point2(x=right, y=y)),
-            )
-        )
-        for x in branch_x:
-            if left < x < right:
-                junctions.append(Junction(net_id=net.id, at=Point2(x=x, y=y)))
-
-    # Every pin the netlist reaches, so the rest can be marked. Read off `resolved` rather
-    # than off `doc.nets`, because a node naming a pin the footprint does not have was
-    # already dropped with a note and must not count as a connection.
-    wired_pins = {(ref, pin.number) for item in resolved for ref, pin in item.pins}
-    no_connects: list[NoConnect] = []
-    for ref in sorted(symbols, key=_ref_sort_key):
-        placed = symbols[ref]
-        for pin in placed.body.pins:
-            if (ref, pin.number) not in wired_pins:
-                no_connects.append(
-                    NoConnect(ref=ref, pin=pin.number, at=placed.anchor_of(pin))
-                )
-
-    ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
-    # The same call the hand-drawn sheet makes. A reference sitting a different
-    # distance above its symbol depending on which kind of sheet it is on would be one
-    # fact with two answers, and the exporters read whichever they were given.
-    part_labels = _part_labels(ordered, options)
-
-    rail_names = _rail_names(rails)
-    net_labels.extend(pin_names)
-    pins_of = {item.net.id: item.pins for item in resolved}
-    printed, quiet_names = _name_nets(
-        [item.net for item in resolved if not item.rail],
-        [wire for wire in wires if not any(wire is stub for stub in said_stubs)],
-        _names_in_the_way(wires, rails, part_labels, rail_names, pin_names),
-        lambda net: _worth_naming(pins_of[net.id], symbols),
-    )
-    net_labels.extend(printed)
-
-    drawn = tuple(
-        Symbol(
-            ref=placed.ref,
-            value=placed.value,
-            kind=placed.kind,
-            footprint_id=placed.footprint_id,
-            at=Point2(x=placed.x, y=placed.y),
-            shapes=placed.body.shapes,
-            pins=placed.body.pins,
-            width=placed.body.width,
-            height=placed.body.height,
-            unplaced=placed.unplaced,
-            undefined=placed.undefined,
-        )
-        for placed in ordered
-    )
-
-    return SchematicDrawing(
-        symbols=drawn,
-        wires=tuple(wires),
-        rails=tuple(rails),
-        junctions=tuple(junctions),
-        no_connects=tuple(no_connects),
-        labels=(*part_labels, *rail_names, *net_labels),
-        quiet_names=tuple(quiet_names),
-        annotations=annotations,
-        width=width,
-        height=height,
-        notes=tuple(notes),
-    )

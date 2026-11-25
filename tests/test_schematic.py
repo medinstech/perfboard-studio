@@ -184,7 +184,7 @@ def test_no_two_nets_are_drawn_along_one_line(path: Path) -> None:
     reads as one wire. Two pins facing across a channel at one height each ran out to a
     lane of its own, the left pin's lane right of the right pin's, and the two stubs drew
     R1's DISCH and R3's OUT on the NE555 as one line from pin to pin -- on five of the seven
-    examples (``schematic._facing_apart``)."""
+    examples (the grid sheet's ``_facing_apart``, gone with it)."""
     drawing = drawing_for(path)
     runs = [
         (wire.net_id, start, end)

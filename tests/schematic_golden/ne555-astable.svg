@@ -1,83 +1,83 @@
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="214.805mm" height="119.441mm" viewBox="0 -7.68 214.805 119.441">
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="208.845mm" height="119.441mm" viewBox="0 -7.68 208.845 119.441">
 <title>ne555-astable</title>
 <desc>Perfboard Studio {VERSION}</desc>
-<rect x="0" y="-7.68" width="214.805" height="119.441" fill="#ffffff"/>
+<rect x="0" y="-7.68" width="208.845" height="119.441" fill="#ffffff"/>
 <text x="10.16" y="-4.48" font-size="3.2" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">ne555-astable</text>
 <g stroke-linecap="round" stroke-linejoin="round">
-<polyline points="152.4,35.56 152.4,45.72" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="152.4,76.2 152.4,66.04" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="91.44,63.5 66.04,63.5" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="20.32,68.58 20.32,63.5 45.72,63.5" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="121.92,63.5 144.78,63.5 144.78,68.58 152.4,68.58 152.4,66.04" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="91.44,58.42 88.9,58.42 88.9,60.96 78.74,60.96 78.74,78.74 127,78.74 127,63.5 121.92,63.5" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="121.92,58.42 144.78,58.42 144.78,43.18 152.4,43.18 152.4,45.72" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="121.92,68.58 142.24,68.58 142.24,71.12 182.88,71.12 182.88,73.66" fill="none" stroke="#111111" stroke-width="0.25"/>
-<polyline points="91.44,68.58 86.36,68.58 86.36,66.04" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="84.76" y1="66.04" x2="87.96" y2="66.04" stroke="#111111" stroke-width="0.35"/>
-<polyline points="121.92,53.34 127,53.34 127,50.8" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="125.4" y1="50.8" x2="128.6" y2="50.8" stroke="#111111" stroke-width="0.35"/>
-<polyline points="152.4,15.24 152.4,10.16" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="150.8" y1="10.16" x2="154" y2="10.16" stroke="#111111" stroke-width="0.35"/>
-<polyline points="35.56,33.02 40.64,33.02 40.64,30.48" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="39.04" y1="30.48" x2="42.24" y2="30.48" stroke="#111111" stroke-width="0.35"/>
-<polyline points="91.44,53.34 86.36,53.34 86.36,55.88" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="84.76" y1="55.88" x2="87.96" y2="55.88" stroke="#111111" stroke-width="0.35"/><line x1="85.4" y1="56.68" x2="87.32" y2="56.68" stroke="#111111" stroke-width="0.35"/><line x1="85.96" y1="57.48" x2="86.76" y2="57.48" stroke="#111111" stroke-width="0.35"/>
-<polyline points="152.4,96.52 152.4,101.6" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="150.8" y1="101.6" x2="154" y2="101.6" stroke="#111111" stroke-width="0.35"/><line x1="151.44" y1="102.4" x2="153.36" y2="102.4" stroke="#111111" stroke-width="0.35"/><line x1="152" y1="103.2" x2="152.8" y2="103.2" stroke="#111111" stroke-width="0.35"/>
-<polyline points="182.88,93.98 182.88,99.06" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="181.28" y1="99.06" x2="184.48" y2="99.06" stroke="#111111" stroke-width="0.35"/><line x1="181.92" y1="99.86" x2="183.84" y2="99.86" stroke="#111111" stroke-width="0.35"/><line x1="182.48" y1="100.66" x2="183.28" y2="100.66" stroke="#111111" stroke-width="0.35"/>
+<polyline points="50.8,35.56 50.8,45.72" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="50.8,76.2 50.8,66.04" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="81.28,53.34 68.58,53.34 68.58,68.58 81.28,68.58" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="106.68,53.34 132.08,53.34 132.08,53.34" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="177.8,58.42 177.8,53.34 152.4,53.34" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="81.28,68.58 50.8,68.58 50.8,66.04" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="81.28,63.5 58.42,63.5 58.42,71.12 27.94,71.12 27.94,66.04 20.32,66.04 20.32,68.58" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="106.68,58.42 111.76,58.42 111.76,33.02 58.42,33.02 58.42,43.18 50.8,43.18 50.8,45.72" fill="none" stroke="#111111" stroke-width="0.25"/>
+<polyline points="81.28,58.42 76.2,58.42 76.2,55.88" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="74.6" y1="55.88" x2="77.8" y2="55.88" stroke="#111111" stroke-width="0.35"/>
+<polyline points="93.98,43.18 93.98,38.1" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="92.38" y1="38.1" x2="95.58" y2="38.1" stroke="#111111" stroke-width="0.35"/>
+<polyline points="50.8,15.24 50.8,10.16" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="49.2" y1="10.16" x2="52.4" y2="10.16" stroke="#111111" stroke-width="0.35"/>
+<polyline points="35.56,43.18 40.64,43.18 40.64,40.64" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="39.04" y1="40.64" x2="42.24" y2="40.64" stroke="#111111" stroke-width="0.35"/>
+<polyline points="93.98,78.74 93.98,83.82" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="92.38" y1="83.82" x2="95.58" y2="83.82" stroke="#111111" stroke-width="0.35"/><line x1="93.02" y1="84.62" x2="94.94" y2="84.62" stroke="#111111" stroke-width="0.35"/><line x1="93.58" y1="85.42" x2="94.38" y2="85.42" stroke="#111111" stroke-width="0.35"/>
+<polyline points="50.8,96.52 50.8,101.6" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="49.2" y1="101.6" x2="52.4" y2="101.6" stroke="#111111" stroke-width="0.35"/><line x1="49.84" y1="102.4" x2="51.76" y2="102.4" stroke="#111111" stroke-width="0.35"/><line x1="50.4" y1="103.2" x2="51.2" y2="103.2" stroke="#111111" stroke-width="0.35"/>
 <polyline points="20.32,88.9 20.32,93.98" fill="none" stroke="#111111" stroke-width="0.25"/>
 <line x1="18.72" y1="93.98" x2="21.92" y2="93.98" stroke="#111111" stroke-width="0.35"/><line x1="19.36" y1="94.78" x2="21.28" y2="94.78" stroke="#111111" stroke-width="0.35"/><line x1="19.92" y1="95.58" x2="20.72" y2="95.58" stroke="#111111" stroke-width="0.35"/>
-<polyline points="35.56,38.1 40.64,38.1 40.64,40.64" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="39.04" y1="40.64" x2="42.24" y2="40.64" stroke="#111111" stroke-width="0.35"/><line x1="39.68" y1="41.44" x2="41.6" y2="41.44" stroke="#111111" stroke-width="0.35"/><line x1="40.24" y1="42.24" x2="41.04" y2="42.24" stroke="#111111" stroke-width="0.35"/>
-<circle cx="127" cy="63.5" r="0.6" fill="#111111"/>
-<circle cx="152.4" cy="68.58" r="0.6" fill="#111111"/>
-<circle cx="152.4" cy="43.18" r="0.6" fill="#111111"/>
-<g transform="translate(147.32,76.2)"><polyline points="5.08,0 5.08,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.684 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,8.89 1.778,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.684 7.556,12.24 6.731,12.636 5.905,12.875 5.08,12.954 4.255,12.875 3.429,12.636 2.604,12.24 1.778,11.684" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="9.906,5.207 9.906,6.985" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="10.795,6.096 9.017,6.096" fill="none" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(177.8,73.66)"><polyline points="5.08,0 5.08,9.144" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.176 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,9.144 1.778,9.144" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.176 1.778,11.176" fill="none" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(15.24,27.94)"><polygon points="15.24,2.54 0,2.54 0,12.7 15.24,12.7" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="20.32,5.08 15.24,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="20.32,10.16 15.24,10.16" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="11.684,2.54 11.684,12.7" fill="none" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(15.24,68.58)"><polyline points="5.08,20.32 5.08,11.176" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,7.112 5.08,0" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="1.778,11.176 8.382,11.176" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="1.778,7.112 8.382,7.112 5.08,11.176" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="2.286,10.16 0.762,8.636" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="0.762,8.636 1.219,10.16 2.286,9.093" fill="#111111" stroke="#111111" stroke-width="0.35"/><polyline points="2.286,7.874 0.762,6.35" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="0.762,6.35 1.219,7.874 2.286,6.807" fill="#111111" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(147.32,15.24)"><polyline points="5.08,0 5.08,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,15.24 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="6.985,5.08 6.985,15.24 3.175,15.24 3.175,5.08" fill="none" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(147.32,45.72)"><polyline points="5.08,0 5.08,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,15.24 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="6.985,5.08 6.985,15.24 3.175,15.24 3.175,5.08" fill="none" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(45.72,58.42)"><polyline points="20.32,5.08 15.24,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,5.08 0,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="15.24,6.985 5.08,6.985 5.08,3.175 15.24,3.175" fill="none" stroke="#111111" stroke-width="0.35"/></g>
-<g transform="translate(91.44,48.26)"><polygon points="5.08,2.54 25.4,2.54 25.4,22.86 5.08,22.86" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,5.08 5.08,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,10.16 5.08,10.16" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,15.24 5.08,15.24" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,20.32 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="25.4,5.08 30.48,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="25.4,10.16 30.48,10.16" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="25.4,15.24 30.48,15.24" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="25.4,20.32 30.48,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><circle cx="15.24" cy="2.54" r="1.27" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<polyline points="177.8,78.74 177.8,83.82" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="176.2" y1="83.82" x2="179.4" y2="83.82" stroke="#111111" stroke-width="0.35"/><line x1="176.84" y1="84.62" x2="178.76" y2="84.62" stroke="#111111" stroke-width="0.35"/><line x1="177.4" y1="85.42" x2="178.2" y2="85.42" stroke="#111111" stroke-width="0.35"/>
+<polyline points="35.56,48.26 40.64,48.26 40.64,50.8" fill="none" stroke="#111111" stroke-width="0.25"/>
+<line x1="39.04" y1="50.8" x2="42.24" y2="50.8" stroke="#111111" stroke-width="0.35"/><line x1="39.68" y1="51.6" x2="41.6" y2="51.6" stroke="#111111" stroke-width="0.35"/><line x1="40.24" y1="52.4" x2="41.04" y2="52.4" stroke="#111111" stroke-width="0.35"/>
+<circle cx="50.8" cy="68.58" r="0.6" fill="#111111"/>
+<circle cx="68.58" cy="68.58" r="0.6" fill="#111111"/>
+<circle cx="50.8" cy="43.18" r="0.6" fill="#111111"/>
+<g transform="translate(45.72,76.2)"><polyline points="5.08,0 5.08,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.684 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,8.89 1.778,8.89" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.684 7.556,12.24 6.731,12.636 5.905,12.875 5.08,12.954 4.255,12.875 3.429,12.636 2.604,12.24 1.778,11.684" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="9.906,5.207 9.906,6.985" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="10.795,6.096 9.017,6.096" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(15.24,68.58)"><polyline points="5.08,0 5.08,9.144" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,11.176 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,9.144 1.778,9.144" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="8.382,11.176 1.778,11.176" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(15.24,38.1)"><polygon points="15.24,2.54 0,2.54 0,12.7 15.24,12.7" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="20.32,5.08 15.24,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="20.32,10.16 15.24,10.16" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="11.684,2.54 11.684,12.7" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(172.72,58.42)"><polyline points="5.08,20.32 5.08,11.176" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,7.112 5.08,0" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="1.778,11.176 8.382,11.176" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="1.778,7.112 8.382,7.112 5.08,11.176" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="2.286,10.16 0.762,8.636" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="0.762,8.636 1.219,10.16 2.286,9.093" fill="#111111" stroke="#111111" stroke-width="0.35"/><polyline points="2.286,7.874 0.762,6.35" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="0.762,6.35 1.219,7.874 2.286,6.807" fill="#111111" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(45.72,15.24)"><polyline points="5.08,0 5.08,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,15.24 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="6.985,5.08 6.985,15.24 3.175,15.24 3.175,5.08" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(45.72,45.72)"><polyline points="5.08,0 5.08,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="5.08,15.24 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="6.985,5.08 6.985,15.24 3.175,15.24 3.175,5.08" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(132.08,48.26)"><polyline points="0,5.08 5.08,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="15.24,5.08 20.32,5.08" fill="none" stroke="#111111" stroke-width="0.35"/><polygon points="5.08,3.175 15.24,3.175 15.24,6.985 5.08,6.985" fill="none" stroke="#111111" stroke-width="0.35"/></g>
+<g transform="translate(81.28,43.18)"><polygon points="5.08,5.08 20.32,5.08 20.32,30.48 5.08,30.48" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,10.16 5.08,10.16" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,15.24 5.08,15.24" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,20.32 5.08,20.32" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="0,25.4 5.08,25.4" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="20.32,10.16 25.4,10.16" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="20.32,15.24 25.4,15.24" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="12.7,5.08 12.7,0" fill="none" stroke="#111111" stroke-width="0.35"/><polyline points="12.7,30.48 12.7,35.56" fill="none" stroke="#111111" stroke-width="0.35"/></g>
 </g>
-<text x="159.385" y="85.09" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">C1</text>
-<text x="159.385" y="88.75" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">10uF</text>
-<text x="189.865" y="82.55" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">C2</text>
-<text x="189.865" y="86.21" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">0.01uF</text>
-<text x="25.4" y="26.035" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">J1</text>
-<text x="25.4" y="45.316" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">DC IN</text>
-<text x="29.21" y="33.37" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">1</text>
-<text x="29.21" y="38.45" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">2</text>
-<text x="27.305" y="77.47" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">LED1</text>
-<text x="27.305" y="81.13" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">LED</text>
-<text x="159.385" y="24.13" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">R1</text>
-<text x="159.385" y="27.79" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">10k</text>
-<text x="159.385" y="54.61" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">R2</text>
-<text x="159.385" y="58.27" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">100k</text>
-<text x="55.88" y="56.515" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">R3</text>
-<text x="55.88" y="70.716" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">330</text>
-<text x="106.68" y="46.355" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">U1</text>
-<text x="106.68" y="75.796" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">NE555</text>
-<text x="97.79" y="53.69" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">GND</text>
-<text x="93.98" y="54.833" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">1</text>
-<text x="97.79" y="58.77" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">TRIG</text>
-<text x="93.98" y="59.913" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">2</text>
-<text x="97.79" y="63.85" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">OUT</text>
-<text x="93.98" y="64.993" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">3</text>
-<text x="97.79" y="68.93" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">RESET</text>
-<text x="93.98" y="70.073" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">4</text>
-<text x="115.57" y="53.69" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
-<text x="119.38" y="54.833" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">8</text>
-<text x="115.57" y="58.77" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">DIS</text>
-<text x="119.38" y="59.913" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">7</text>
-<text x="115.57" y="63.85" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">THR</text>
-<text x="119.38" y="64.993" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">6</text>
-<text x="115.57" y="68.93" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">CTRL</text>
-<text x="119.38" y="70.073" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">5</text>
-<text x="83.871" y="66.69" font-size="1.3" fill="#111111" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
-<text x="129.489" y="51.45" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
-<text x="152.4" y="9.271" font-size="1.3" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
-<text x="43.129" y="31.13" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
+<text x="57.785" y="85.09" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">C1</text>
+<text x="57.785" y="88.75" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">10uF</text>
+<text x="27.305" y="77.47" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">C2</text>
+<text x="27.305" y="81.13" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">0.01uF</text>
+<text x="25.4" y="36.195" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">J1</text>
+<text x="25.4" y="55.476" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">DC IN</text>
+<text x="29.21" y="43.53" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">1</text>
+<text x="29.21" y="48.61" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">2</text>
+<text x="184.785" y="67.31" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">LED1</text>
+<text x="184.785" y="70.97" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">LED</text>
+<text x="57.785" y="24.13" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">R1</text>
+<text x="57.785" y="27.79" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">10k</text>
+<text x="57.785" y="54.61" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">R2</text>
+<text x="57.785" y="58.27" font-size="1.4" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">100k</text>
+<text x="142.24" y="46.355" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">R3</text>
+<text x="142.24" y="60.556" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">330</text>
+<text x="86.36" y="41.275" font-size="1.7" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">U1</text>
+<text x="97.175" y="80.876" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">NE555</text>
+<text x="87.63" y="53.69" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">TRIG</text>
+<text x="83.82" y="54.833" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">2</text>
+<text x="87.63" y="58.77" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">RESET</text>
+<text x="83.82" y="59.913" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">4</text>
+<text x="87.63" y="63.85" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">CTRL</text>
+<text x="83.82" y="64.993" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">5</text>
+<text x="87.63" y="68.93" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">THR</text>
+<text x="83.82" y="70.073" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">6</text>
+<text x="100.33" y="53.69" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">OUT</text>
+<text x="104.14" y="54.833" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">3</text>
+<text x="100.33" y="58.77" font-size="1" fill="#444444" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">DIS</text>
+<text x="104.14" y="59.913" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">7</text>
+<text x="93.98" y="49.88" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
+<text x="95.123" y="46.07" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">8</text>
+<text x="93.98" y="72.74" font-size="1" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">GND</text>
+<text x="95.123" y="76.55" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">1</text>
+<text x="73.711" y="56.53" font-size="1.3" fill="#111111" text-anchor="end" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
+<text x="93.98" y="37.211" font-size="1.3" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
+<text x="50.8" y="9.271" font-size="1.3" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
+<text x="43.129" y="41.29" font-size="1.3" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">VCC</text>
 </svg>

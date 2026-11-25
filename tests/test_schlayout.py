@@ -55,13 +55,20 @@ def _tool() -> ModuleType:
 
 #: Per example, the most each scoreboard column may be. ``ov`` stays 0 everywhere; the rest
 #: are pinned to today's P6 numbers and move down with any layout improvement.
+#:
+#: Three moved UP, on purpose, when the chips started being drawn by what their pins do
+#: (``PinSpec.role``) and the column loop kept room for a rail's label: the NE555 drawn as
+#: its function puts CTRL and DIS where the R2/C1 line and OUT pass, so ne555-astable
+#: crosses 4 where it crossed 3, and atmega328-relay's +5V and 1N4148 no longer touch,
+#: which costs it one bend (47) and 40 mm of wire (1360). The totals went the other way:
+#: crossings 12 -> 11, bends 179 -> 176, area 4139 -> 4032.
 CEILINGS: dict[str, dict[str, float]] = {
     "arduino-io-shield": {"names": 4, "cross": 0, "bends": 19, "length": 405.0, "area": 330.0, "ov": 0},
-    "atmega328-relay": {"names": 13, "cross": 4, "bends": 46, "length": 1320.0, "area": 990.0, "ov": 0},
+    "atmega328-relay": {"names": 13, "cross": 4, "bends": 47, "length": 1365.0, "area": 990.0, "ov": 0},
     "lm317-supply": {"names": 2, "cross": 2, "bends": 31, "length": 655.0, "area": 290.0, "ov": 0},
     "lpb1-booster": {"names": 2, "cross": 1, "bends": 16, "length": 360.0, "area": 295.0, "ov": 0},
     "nano-relay": {"names": 3, "cross": 1, "bends": 17, "length": 400.0, "area": 770.0, "ov": 0},
-    "ne555-astable": {"names": 0, "cross": 3, "bends": 16, "length": 335.0, "area": 245.0, "ov": 0},
+    "ne555-astable": {"names": 0, "cross": 4, "bends": 16, "length": 335.0, "area": 245.0, "ov": 0},
     "relay-and-supply": {"names": 4, "cross": 1, "bends": 34, "length": 650.0, "area": 1260.0, "ov": 0},
 }
 

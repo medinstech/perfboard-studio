@@ -1,10 +1,10 @@
 """The sheet arranged the way a person draws it: blocks, flow, and short wires.
 
-The derived sheet (``schematic._derived_sheet``) lays symbols in a grid of cells and runs
-every wire in the channels between them. That never crosses a symbol, and it is also why a
-microcontroller's crystal, its reset parts and its driver end up wherever the grid had a
-free cell, joined to the chip by a pair of net names: 30 of atmega328-relay's 35 printed
-names were such pairs at U1's pins.
+The first derived sheet laid symbols in a grid of cells and ran every wire in the channels
+between them. That never crossed a symbol, and it was also why a microcontroller's
+crystal, its reset parts and its driver ended up wherever the grid had a free cell, joined
+to the chip by a pair of net names: 30 of atmega328-relay's 35 printed names were such
+pairs at U1's pins. This module replaced it.
 
 This module answers the question a person answers before drawing anything -- what belongs
 next to what -- and writes the answer as an ordinary hand-drawn sheet: a
@@ -100,6 +100,10 @@ LADDER_GAP = 4
 
 #: Grid steps a supply or ground glyph takes past the pin it hangs from.
 GLYPH_ROOM = 4
+#: Grid squares a supply's stub and name take beside a side pin.
+RAIL_LABEL_ROOM = 5
+#: Grid squares a connector's reference takes over it, and its value under it.
+CONNECTOR_TEXT_ROOM = 2
 
 #: A wire whose route is longer than this many times the gap between its pins, plus the
 #: slack, is not drawn: the net is named at the pin instead.
@@ -632,10 +636,22 @@ class _Layout:
             reach = reach - width - COLUMN_GAP * GRID_MM if side == "left" else (
                 reach + width + COLUMN_GAP * GRID_MM
             )
+        #: How far the last column's side labels run past its right edge.
+        overhang = 0.0
         for key in sorted(columns):
             column = columns[key]
             for part in column:
                 _orient(part, self.wants(part, inward), self.targets(part))
+            if side == "right" and any(
+                pin.side == "left" and self.rail_want(part.ref, pin.number) is not None
+                for part in column
+                for pin in part.shape.pins
+            ):
+                # A supply drawn off a left-hand pin points back at the last column, where a
+                # part stood on end prints its reference and value past its right edge: on
+                # atmega328-relay D2's "1N4148" was printed on the "+5V" at K1's coil once U1
+                # was drawn by what its pins do and the columns moved up against each other.
+                reach += max(0.0, overhang + RAIL_LABEL_ROOM * GRID_MM - COLUMN_GAP * GRID_MM)
             width = max(p.shape.width for p in column)
             x_of = {}
             for part in column:
@@ -643,6 +659,11 @@ class _Layout:
                 left = reach - width if side == "left" else reach
                 x_of[part.ref] = left + (width - part.shape.width) / 2
             self.stack(column, x_of, hub.y)
+            overhang = max(
+                (x_of[p.ref] + p.shape.width + self.side_label_room(p) - (reach + width)
+                 for p in column),
+                default=0.0,
+            )
             reach = reach - width - COLUMN_GAP * GRID_MM if side == "left" else (
                 reach + width + COLUMN_GAP * GRID_MM
             )
@@ -693,17 +714,42 @@ class _Layout:
         parts = [self.parts[r] for r in refs]
         for part in parts:
             self.orient_edge_inward(part, "right")
-        reach = max(p.shape.width for p in parts) + 6 * GRID_MM
-        below_y = [
-            p.y
+        reach = max(p.shape.width for p in parts) + 4 * GRID_MM
+        total_h = sum(p.shape.height for p in parts) + max(0, len(parts) - 1) * STACK_GAP * GRID_MM
+        # What is already in the strip the connectors stand in, with its glyphs and a gap.
+        # They take the free place nearest the hub's top, looking up and down a grid at a
+        # time: lifted above EVERYTHING in the strip, as they were, a column of parts left
+        # of a tall chip (the NE555 drawn by what its pins do) sent them to the sheet's
+        # top-left corner, alone, and made the sheet a fifth taller for it.
+        gap = 2 * GRID_MM
+        taken = [
+            (p.y - self.glyph_room(p)[0] - gap, p.y + p.shape.height + self.glyph_room(p)[1] + gap)
             for p in self.parts.values()
             if p.done and p.x < left + reach and p.x + p.shape.width > left - 2 * GRID_MM
         ]
-        total_h = sum(p.shape.height for p in parts) + max(0, len(parts) - 1) * STACK_GAP * GRID_MM
+        # A connector's reference is printed over it and its value under it, so the stack
+        # keeps that room too: measured to the body alone, the value sat a grid's width
+        # above whatever was below, and on ne555 with its two-pin parts turned over, LED1's
+        # ground glyph rose into J1's "Conn_01x02".
+        text = CONNECTOR_TEXT_ROOM * GRID_MM
+
+        def clear(top: float) -> bool:
+            return all(
+                top + total_h + text <= low or top - text >= high for low, high in taken
+            )
+
         y = hub.y
-        if below_y:
-            ceiling = min(below_y) - 6 * GRID_MM - total_h
-            y = min(y, ceiling)
+        if not clear(y):
+            step = 0
+            while True:
+                step += 1
+                up, down = hub.y - step * GRID_MM, hub.y + step * GRID_MM
+                if clear(up):
+                    y = up
+                    break
+                if clear(down):
+                    y = down
+                    break
         cursor = _grid(y)
         for part in parts:
             part.x, part.y, part.done = _grid(left), _grid(cursor), True

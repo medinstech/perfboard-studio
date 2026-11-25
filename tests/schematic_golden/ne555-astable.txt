@@ -1,94 +1,94 @@
-sheet 214.81 x 111.76
-symbol C1 polarised-capacitor c-elec-d5-p2 at 147.32,76.20 size 10.16x20.32 value='10uF'
+sheet 208.84 x 111.76
+symbol C1 polarised-capacitor c-elec-d5-p2 at 45.72,76.20 size 10.16x20.32 value='10uF'
     pin 1 name='+' top 5.08,0.00
     pin 2 name='-' bottom 5.08,20.32
-symbol C2 capacitor c-disc-p2 at 177.80,73.66 size 10.16x20.32 value='0.01uF'
+symbol C2 capacitor c-disc-p2 at 15.24,68.58 size 10.16x20.32 value='0.01uF'
     pin 1 name=None top 5.08,0.00
     pin 2 name=None bottom 5.08,20.32
-symbol J1 connector hdr-1x2 at 15.24,27.94 size 20.32x15.24 value='DC IN'
+symbol J1 connector hdr-1x2 at 15.24,38.10 size 20.32x15.24 value='DC IN'
     pin 1 name=None right 20.32,5.08
     pin 2 name=None right 20.32,10.16
-symbol LED1 led led-5mm at 15.24,68.58 size 10.16x20.32 value='LED'
+symbol LED1 led led-5mm at 172.72,58.42 size 10.16x20.32 value='LED'
     pin 2 name='K' bottom 5.08,20.32
     pin 1 name='A' top 5.08,0.00
-symbol R1 resistor r-axial-3 at 147.32,15.24 size 10.16x20.32 value='10k'
+symbol R1 resistor r-axial-3 at 45.72,15.24 size 10.16x20.32 value='10k'
     pin 1 name=None top 5.08,0.00
     pin 2 name=None bottom 5.08,20.32
-symbol R2 resistor r-axial-3 at 147.32,45.72 size 10.16x20.32 value='100k'
+symbol R2 resistor r-axial-3 at 45.72,45.72 size 10.16x20.32 value='100k'
     pin 1 name=None top 5.08,0.00
     pin 2 name=None bottom 5.08,20.32
-symbol R3 resistor r-axial-3 at 45.72,58.42 size 20.32x10.16 value='330'
-    pin 1 name=None right 20.32,5.08
-    pin 2 name=None left 0.00,5.08
-symbol U1 ic dip-8 at 91.44,48.26 size 30.48x25.40 value='NE555'
-    pin 1 name='GND' left 0.00,5.08
+symbol R3 resistor r-axial-3 at 132.08,48.26 size 20.32x10.16 value='330'
+    pin 1 name=None left 0.00,5.08
+    pin 2 name=None right 20.32,5.08
+symbol U1 ic dip-8 at 81.28,43.18 size 25.40x35.56 value='NE555'
     pin 2 name='TRIG' left 0.00,10.16
-    pin 3 name='OUT' left 0.00,15.24
-    pin 4 name='RESET' left 0.00,20.32
-    pin 8 name='VCC' right 30.48,5.08
-    pin 7 name='DIS' right 30.48,10.16
-    pin 6 name='THR' right 30.48,15.24
-    pin 5 name='CTRL' right 30.48,20.32
-wire DISCH [signal] 152.40,35.56 -> 152.40,45.72
-wire THRESH [signal] 152.40,76.20 -> 152.40,66.04
-wire OUT [signal] 91.44,63.50 -> 66.04,63.50
-wire LED_A [signal] 20.32,68.58 -> 20.32,63.50 -> 45.72,63.50
-wire THRESH [signal] 121.92,63.50 -> 144.78,63.50 -> 144.78,68.58 -> 152.40,68.58 -> 152.40,66.04
-wire THRESH [signal] 91.44,58.42 -> 88.90,58.42 -> 88.90,60.96 -> 78.74,60.96 -> 78.74,78.74 -> 127.00,78.74 -> 127.00,63.50 -> 121.92,63.50
-wire DISCH [signal] 121.92,58.42 -> 144.78,58.42 -> 144.78,43.18 -> 152.40,43.18 -> 152.40,45.72
-wire CTRL [signal] 121.92,68.58 -> 142.24,68.58 -> 142.24,71.12 -> 182.88,71.12 -> 182.88,73.66
-rail VCC [power] up 91.44,68.58 -> 86.36,68.58 -> 86.36,66.04
-rail VCC [power] up 121.92,53.34 -> 127.00,53.34 -> 127.00,50.80
-rail VCC [power] up 152.40,15.24 -> 152.40,10.16
-rail VCC [power] up 35.56,33.02 -> 40.64,33.02 -> 40.64,30.48
-rail GND [ground] down 91.44,53.34 -> 86.36,53.34 -> 86.36,55.88
-rail GND [ground] down 152.40,96.52 -> 152.40,101.60
-rail GND [ground] down 182.88,93.98 -> 182.88,99.06
+    pin 4 name='RESET' left 0.00,15.24
+    pin 5 name='CTRL' left 0.00,20.32
+    pin 6 name='THR' left 0.00,25.40
+    pin 3 name='OUT' right 25.40,10.16
+    pin 7 name='DIS' right 25.40,15.24
+    pin 8 name='VCC' top 12.70,0.00
+    pin 1 name='GND' bottom 12.70,35.56
+wire DISCH [signal] 50.80,35.56 -> 50.80,45.72
+wire THRESH [signal] 50.80,76.20 -> 50.80,66.04
+wire THRESH [signal] 81.28,53.34 -> 68.58,53.34 -> 68.58,68.58 -> 81.28,68.58
+wire OUT [signal] 106.68,53.34 -> 132.08,53.34 -> 132.08,53.34
+wire LED_A [signal] 177.80,58.42 -> 177.80,53.34 -> 152.40,53.34
+wire THRESH [signal] 81.28,68.58 -> 50.80,68.58 -> 50.80,66.04
+wire CTRL [signal] 81.28,63.50 -> 58.42,63.50 -> 58.42,71.12 -> 27.94,71.12 -> 27.94,66.04 -> 20.32,66.04 -> 20.32,68.58
+wire DISCH [signal] 106.68,58.42 -> 111.76,58.42 -> 111.76,33.02 -> 58.42,33.02 -> 58.42,43.18 -> 50.80,43.18 -> 50.80,45.72
+rail VCC [power] up 81.28,58.42 -> 76.20,58.42 -> 76.20,55.88
+rail VCC [power] up 93.98,43.18 -> 93.98,38.10
+rail VCC [power] up 50.80,15.24 -> 50.80,10.16
+rail VCC [power] up 35.56,43.18 -> 40.64,43.18 -> 40.64,40.64
+rail GND [ground] down 93.98,78.74 -> 93.98,83.82
+rail GND [ground] down 50.80,96.52 -> 50.80,101.60
 rail GND [ground] down 20.32,88.90 -> 20.32,93.98
-rail GND [ground] down 35.56,38.10 -> 40.64,38.10 -> 40.64,40.64
-junction net-5 127.00,63.50
-junction net-5 152.40,68.58
-junction net-6 152.40,43.18
-label [ref/left] 159.38,85.09 C1
-label [value/left] 159.38,87.63 10uF
-label [ref/left] 189.87,82.55 C2
-label [value/left] 189.87,85.09 0.01uF
-label [ref/centre] 25.40,26.04 J1
-label [value/centre] 25.40,44.20 DC IN
-label [pin/right] 29.21,33.02 1
-label [pin/right] 29.21,38.10 2
-label [ref/left] 27.30,77.47 LED1
-label [value/left] 27.30,80.01 LED
-label [ref/left] 159.38,24.13 R1
-label [value/left] 159.38,26.67 10k
-label [ref/left] 159.38,54.61 R2
-label [value/left] 159.38,57.15 100k
-label [ref/centre] 55.88,56.52 R3
-label [value/centre] 55.88,69.60 330
-label [ref/centre] 106.68,46.35 U1
-label [value/centre] 106.68,74.68 NE555
-label [pin/left] 97.79,53.34 GND
-label [pin/centre] 93.98,54.48 1
-label [pin/left] 97.79,58.42 TRIG
-label [pin/centre] 93.98,59.56 2
-label [pin/left] 97.79,63.50 OUT
-label [pin/centre] 93.98,64.64 3
-label [pin/left] 97.79,68.58 RESET
-label [pin/centre] 93.98,69.72 4
-label [pin/right] 115.57,53.34 VCC
-label [pin/centre] 119.38,54.48 8
-label [pin/right] 115.57,58.42 DIS
-label [pin/centre] 119.38,59.56 7
-label [pin/right] 115.57,63.50 THR
-label [pin/centre] 119.38,64.64 6
-label [pin/right] 115.57,68.58 CTRL
-label [pin/centre] 119.38,69.72 5
-label [rail/right] 83.87,66.69 VCC
-label [rail/left] 129.49,51.45 VCC
-label [rail/centre] 152.40,9.27 VCC
-label [rail/left] 43.13,31.13 VCC
-quiet net-2 66.80,62.61 OUT
-quiet net-4 21.08,62.61 LED_A
-quiet net-5 79.50,77.85 THRESH
-quiet net-6 122.68,57.53 DISCH
-quiet net-7 143.00,70.23 CTRL
+rail GND [ground] down 177.80,78.74 -> 177.80,83.82
+rail GND [ground] down 35.56,48.26 -> 40.64,48.26 -> 40.64,50.80
+junction net-5 50.80,68.58
+junction net-5 68.58,68.58
+junction net-6 50.80,43.18
+label [ref/left] 57.78,85.09 C1
+label [value/left] 57.78,87.63 10uF
+label [ref/left] 27.30,77.47 C2
+label [value/left] 27.30,80.01 0.01uF
+label [ref/centre] 25.40,36.20 J1
+label [value/centre] 25.40,54.36 DC IN
+label [pin/right] 29.21,43.18 1
+label [pin/right] 29.21,48.26 2
+label [ref/left] 184.78,67.31 LED1
+label [value/left] 184.78,69.85 LED
+label [ref/left] 57.78,24.13 R1
+label [value/left] 57.78,26.67 10k
+label [ref/left] 57.78,54.61 R2
+label [value/left] 57.78,57.15 100k
+label [ref/centre] 142.24,46.35 R3
+label [value/centre] 142.24,59.44 330
+label [ref/left] 86.36,41.27 U1
+label [value/centre] 97.17,79.76 NE555
+label [pin/left] 87.63,53.34 TRIG
+label [pin/centre] 83.82,54.48 2
+label [pin/left] 87.63,58.42 RESET
+label [pin/centre] 83.82,59.56 4
+label [pin/left] 87.63,63.50 CTRL
+label [pin/centre] 83.82,64.64 5
+label [pin/left] 87.63,68.58 THR
+label [pin/centre] 83.82,69.72 6
+label [pin/right] 100.33,53.34 OUT
+label [pin/centre] 104.14,54.48 3
+label [pin/right] 100.33,58.42 DIS
+label [pin/centre] 104.14,59.56 7
+label [pin/centre] 93.98,49.53 VCC
+label [pin/left] 95.12,45.72 8
+label [pin/centre] 93.98,72.39 GND
+label [pin/left] 95.12,76.20 1
+label [rail/right] 73.71,56.53 VCC
+label [rail/centre] 93.98,37.21 VCC
+label [rail/centre] 50.80,9.27 VCC
+label [rail/left] 43.13,41.29 VCC
+quiet net-2 107.44,52.45 OUT
+quiet net-4 153.16,52.45 LED_A
+quiet net-5 51.56,67.69 THRESH
+quiet net-6 59.18,32.13 DISCH
+quiet net-7 28.70,70.23 CTRL

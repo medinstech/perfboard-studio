@@ -34,6 +34,12 @@ closed without a bump.
   "kırmızı": `ledcolour.led_colour` names the colour a part's value gives, by whole words in
   English and Turkish, so "infrared" is not red, and a value naming two colours names none.
   It is a name, not a shade, for the views and exports to draw the dome in (#16).
+- **A chip on the sheet is drawn by what its pins do.** A part whose pins declare their roles
+  -- the NE555, a regulator, a module from the catalogue -- is drawn as its functional
+  symbol: inputs on the left, outputs on the right, the supply on top and ground underneath,
+  unused pins left off. The roles were stored and never reached the sheet, so every such part
+  was still a box of numbered pins. Connectors keep the room their reference and value are
+  printed in, so a value no longer sits on the rail below it.
 - **What a part off the board is, drawn beside it.** A battery on its clip, a pot or a
   button on the panel, an e-stop, a motor, a display or a relay module down a cable: the
   board holds only the pads their wires land in, and the 2D view now draws each one as the
