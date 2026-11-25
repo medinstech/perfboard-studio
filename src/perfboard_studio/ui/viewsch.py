@@ -2174,8 +2174,9 @@ class SchematicView(QGraphicsView):
             self._fitted = True
             self._user_framed = False
             return
+        # Not clamped to the zoom limits: a fit shows the whole sheet, however small that makes
+        # it, or a sheet that grew while fitted runs off the edge with nothing to scroll it by.
         scale = min((room.width() - 4) / sheet.width(), (room.height() - 4) / sheet.height())
-        scale = min(self.MAX_SCALE, max(self.MIN_SCALE, scale))
         if animate and not motion.reduced() and self.isVisible():
             self._user_framed = True
 
