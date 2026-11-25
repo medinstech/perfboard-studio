@@ -8776,13 +8776,31 @@ class SpotlightPulse(QObject):
     def active(self) -> bool:
         return self._center is not None and self._anim is not None
 
+    def _invalidate(self) -> None:
+        if self._center is not None:
+            reach = self._base_radius + 8.0
+            dirty = QRectF(
+                self._center.x() - reach,
+                self._center.y() - reach,
+                reach * 2.0,
+                reach * 2.0,
+            )
+            self._view.invalidateScene(dirty, QGraphicsScene.SceneLayer.ForegroundLayer)
+        else:
+            self._view.invalidateScene(QRectF(), QGraphicsScene.SceneLayer.ForegroundLayer)
+        self._view.viewport().update()
+
     def clear(self) -> None:
         if self._anim is not None:
             self._anim.stop()
             self._anim = None
+        had = self._center is not None
+        if had:
+            self._invalidate()
         self._center = None
         self._progress = 0.0
-        self._view.viewport().update()
+        if had:
+            self._view.viewport().update()
 
     def trigger(
         self,
@@ -8811,10 +8829,11 @@ class SpotlightPulse(QObject):
         anim.finished.connect(self.clear)
         self._anim = anim
         anim.start()
+        self._invalidate()
 
     def _step(self, value: object) -> None:
         self._progress = float(value) if isinstance(value, (int, float)) else 1.0
-        self._view.viewport().update()
+        self._invalidate()
 
     def paint(self, painter: QPainter) -> None:
         if self._center is None or self._anim is None or _on_paper(painter):
@@ -8826,28 +8845,36 @@ class SpotlightPulse(QObject):
 
         # Soft radial wash inside the target area.
         wash = QColor(base)
-        wash.setAlphaF((1.0 - p) * 0.16)
+        wash.setAlphaF((1.0 - p) * 0.22)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(wash)
         painter.drawEllipse(self._center, self._base_radius, self._base_radius)
 
-        # Leading expanding ring.
-        r1 = self._base_radius + 6.5 * p
+        # Leading expanding ring with subtle bright core so it reads over green/blue boards.
+        r1 = self._base_radius + 4.2 * p
+        alpha1 = ((1.0 - p) ** 1.25) * 0.94
         c1 = QColor(base)
-        c1.setAlphaF(((1.0 - p) ** 1.35) * 0.88)
-        pen1 = QPen(c1, 2.2)
+        c1.setAlphaF(alpha1)
+        pen1 = QPen(c1, 3.0)
         pen1.setCosmetic(True)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(pen1)
         painter.drawEllipse(self._center, r1, r1)
 
+        core = QColor("#ffffff")
+        core.setAlphaF(alpha1 * 0.65)
+        pen_core = QPen(core, 1.2)
+        pen_core.setCosmetic(True)
+        painter.setPen(pen_core)
+        painter.drawEllipse(self._center, r1, r1)
+
         # Trailing inner ring for subtle depth.
-        if p > 0.20:
-            p2 = (p - 0.20) / 0.80
-            r2 = self._base_radius * 0.65 + 4.4 * p2
+        if p > 0.16:
+            p2 = (p - 0.16) / 0.84
+            r2 = self._base_radius * 0.60 + 3.0 * p2
             c2 = QColor(base)
-            c2.setAlphaF(((1.0 - p2) ** 1.35) * 0.56)
-            pen2 = QPen(c2, 1.5)
+            c2.setAlphaF(((1.0 - p2) ** 1.25) * 0.72)
+            pen2 = QPen(c2, 1.8)
             pen2.setCosmetic(True)
             painter.setPen(pen2)
             painter.drawEllipse(self._center, r2, r2)
@@ -9692,6 +9719,7 @@ class BoardView(QGraphicsView):
         if not holes:
             return
         self._navigated()
+        tight = self._holes_rect(holes, board, side, 1.5)
         rect = self._holes_rect(holes, board, side, 6.0)
         least = FINDING_FRAME_PITCHES * board.pitch
         grow_x = max(0.0, least - rect.width()) / 2
@@ -9714,8 +9742,8 @@ class BoardView(QGraphicsView):
                 self.scale(factor, factor)
                 self.centerOn(rect.center())
             self._clamp_scale()
-        radius = max(2.6, min(rect.width(), rect.height()) * 0.25)
-        self._pulse.trigger(rect.center(), radius_mm=radius)
+        radius = min(4.2, max(1.8, max(tight.width(), tight.height()) * 0.45))
+        self._pulse.trigger(tight.center(), radius_mm=radius)
 
     def reveal_holes(self, holes: Sequence[HoleCoord], board: Board, side: BoardSide) -> None:
         """Bring the given holes into view WITHOUT changing zoom, unless they cannot fit.

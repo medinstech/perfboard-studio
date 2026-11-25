@@ -143,7 +143,12 @@ class ToastCard(QWidget):
         self.label = QLabel(message, self)
         self.label.setObjectName("toastMessage")
         self.label.setWordWrap(True)
-        self.label.setMaximumWidth(320)
+        max_text_w = 240 if (action_label and action is not None) else 280
+        text_w = self.label.fontMetrics().horizontalAdvance(message)
+        if text_w <= max_text_w:
+            self.label.setWordWrap(False)
+        else:
+            self.label.setFixedWidth(max_text_w)
         self.label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         layout.addWidget(self.label, 1, Qt.AlignmentFlag.AlignVCenter)
 
