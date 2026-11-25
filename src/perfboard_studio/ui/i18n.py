@@ -730,7 +730,7 @@ TURKISH: Mapping[str, str] = {
     "First hole": "İlk delik",
     "Fingers": "Parmak sayısı",
     "That inset does not fit on this board.": "Bu kaçıklık bu karta sığmıyor.",
-    "&Exploded View": "&Patlatılmış Görünüm",
+    "E&xploded View": "&Patlatılmış Görünüm",
     "Play": "Oynat",
     "Pause": "Duraklat",
     "Play the build from here, one step at a time.": (
@@ -2035,7 +2035,7 @@ TURKISH: Mapping[str, str] = {
     "Language changed": "Dil değişti",
     # -- the theme: dark or light, also from the next start ----------------------
     "&Theme": "&Tema",
-    "Reduce Motion": "Hareketi A&zalt",
+    "R&educe Motion": "Hareketi A&zalt",
     "Dismiss": "Kapat",
     "Reduce Motion turned on.": "Hareketi Azalt açıldı.",
     "Reduce Motion turned off.": "Hareketi Azalt kapatıldı.",

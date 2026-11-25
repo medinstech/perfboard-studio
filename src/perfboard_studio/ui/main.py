@@ -16,6 +16,9 @@ document.
         non-zero if the pipeline itself failed (bad file, a scale check that doesn't
         pass, a 3D render exception) -- NOT merely because DRC/LVS found violations,
         which is the normal, expected output of checking a real board.
+        --page-size auto|A4|A3   the schematic's PDF and PNG on a drawing sheet
+                                 (auto, the default, fits the page to the drawing)
+        --title-block            and with a framed title block at its foot
     python -m perfboard_studio.ui.main --mcp [path]
         be the MCP server on stdio instead of the window -- what an MCP client is pointed
         at on an install with no Python of its own (docs/MCP.md)
@@ -6459,6 +6462,12 @@ class MainWindow(QMainWindow):
         align_menu = schematic_menu.addMenu(t("Align and Distri&bute"))
         align_menu.setToolTipsVisible(True)
         self.act_sheet_align: dict[SheetAlignMode, QAction] = {}
+        # Ctrl+Alt, the family Save Project (Ctrl+Alt+S) and Redo Wiring of the Selection
+        # (Ctrl+Alt+R) already use, because the Ctrl+Shift letters are Qt's standard keys.
+        # Two things can take one away and both leave the menu item working: on a layout
+        # with AltGr, Windows reads Ctrl+Alt as AltGr, so a letter that types a character
+        # there (none of H, V or N on the Turkish or US-International layouts) types it;
+        # and some graphics drivers keep Ctrl+Alt+arrows to rotate the screen.
         align_rows: tuple[tuple[SheetAlignMode, str, str, str], ...] = (
             ("left", t("Align &Left"), "Ctrl+Alt+Left", t("Line up the selected symbols' left edges on the sheet.")),
             ("right", t("Align &Right"), "Ctrl+Alt+Right", t("Line up the selected symbols' right edges on the sheet.")),
@@ -6914,7 +6923,7 @@ class MainWindow(QMainWindow):
         act_go_to.triggered.connect(self.on_go_to_part)
         view_menu.addSeparator()
 
-        self.act_exploded = view_menu.addAction(icons.icon("exploded"), t("&Exploded View"))
+        self.act_exploded = view_menu.addAction(icons.icon("exploded"), t("E&xploded View"))
         self.act_exploded.setCheckable(True)
         self.act_exploded.setToolTip(
             t("Lift every part off the board, with a line down to the holes it goes in.")
@@ -6947,7 +6956,7 @@ class MainWindow(QMainWindow):
             action.setChecked(name == theme.ACTIVE.name)
             action.triggered.connect(lambda _checked, n=name: self.on_theme(n))
             self.act_theme[name] = action
-        self.act_reduce_motion = view_menu.addAction(t("Reduce Motion"))
+        self.act_reduce_motion = view_menu.addAction(t("R&educe Motion"))
         self.act_reduce_motion.setCheckable(True)
         self.act_reduce_motion.setChecked(motion.reduced())
         self.act_reduce_motion.setToolTip(
@@ -18331,18 +18340,25 @@ class MainWindow(QMainWindow):
         self.act_off_board.setChecked(_stored_bool(settings, OFF_BOARD_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
         self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
-        # When the environment variable explicitly pins motion (the test suite), reflect it
-        # without clobbering it from stored user settings.
-        if motion.REDUCE_MOTION_VARIABLE in os.environ:
-            self.act_reduce_motion.blockSignals(True)
-            self.act_reduce_motion.setChecked(motion.reduced())
-            self.act_reduce_motion.blockSignals(False)
+        # The precedence motion.reduced() itself uses -- the environment variable, then an
+        # offscreen platform, then the stored choice. Installing the stored choice alone beat
+        # the offscreen default, so every screenshot script on a fresh profile captured its
+        # windows mid-animation. When the environment decides, the window only reflects
+        # motion.reduced() and installs nothing: installing would overwrite a live choice
+        # made before the window was built, which is how a test asks for motion.
+        environment_decides = motion.chosen_reduced(os.environ, None) or (
+            motion.REDUCE_MOTION_VARIABLE in os.environ
+        )
+        if environment_decides:
+            reduce_motion = motion.reduced()
         else:
-            stored_reduced = _stored_bool(settings, motion.REDUCE_MOTION_KEY, False)
-            self.act_reduce_motion.blockSignals(True)
-            self.act_reduce_motion.setChecked(stored_reduced)
-            self.act_reduce_motion.blockSignals(False)
-            motion.set_reduced(stored_reduced)
+            reduce_motion = motion.chosen_reduced(
+                os.environ, settings.value(motion.REDUCE_MOTION_KEY)
+            )
+            motion.set_reduced(reduce_motion)
+        self.act_reduce_motion.blockSignals(True)
+        self.act_reduce_motion.setChecked(reduce_motion)
+        self.act_reduce_motion.blockSignals(False)
 
         style = settings.value(ROUTING_STYLE_KEY, self._routing_style)
         if isinstance(style, str) and style in self.act_style:
