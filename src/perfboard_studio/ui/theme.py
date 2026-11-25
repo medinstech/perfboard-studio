@@ -731,7 +731,8 @@ QFrame#commandPalette QListView::item:selected {{ background: {k.accent_subtle};
 QWidget#workflowBar QToolButton {{
     background: transparent;
     border: none;
-    border-radius: {RADIUS_SM}px;
+    border-radius: 13px;
+    padding: 3px 8px;
     color: {k.text_secondary};
 }}
 QWidget#workflowBar QToolButton:hover {{ background: {k.bg_hover}; }}

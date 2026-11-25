@@ -372,3 +372,73 @@ def test_a_part_on_nothing_is_still_to_join_until_somebody_goes_on_without_it() 
     joined = dataclasses.replace(left, to_join=())
     assert statuses(joined)["circuit"] == "current"
     assert workflow_steps(joined)[0].action == "Set the Values"
+
+
+def test_workflow_bar_connectors_and_pill_snap_under_reduced_motion() -> None:
+    """Under Reduce Motion (the test default) advancing steps snaps connectors and the
+    sliding active pill immediately to the new target button."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui import motion
+    from perfboard_studio.ui.workflow import WorkflowBar
+
+    QApplication.instance() or QApplication([])
+    assert motion.reduced() is True
+
+    bar = WorkflowBar()
+    bar.resize(900, 36)
+    bar.show()
+    try:
+        bar.set_steps(workflow_steps(EMPTY))
+        assert bar.connector_progress == (0.0, 0.0, 0.0, 0.0, 0.0)
+        assert bar.pill_rect == QRectF(bar.buttons["circuit"].geometry())
+
+        wired = dataclasses.replace(EMPTY, parts_on_board=8, nets=7, unrouted=5)
+        bar.set_steps(workflow_steps(wired))
+        assert bar.connector_progress == (1.0, 1.0, 1.0, 0.0, 0.0)
+        assert bar.pill_rect == QRectF(bar.buttons["route"].geometry())
+        assert bar._pill_anim is None
+    finally:
+        bar.close()
+
+
+def test_workflow_bar_animates_pill_connectors_and_done_halo_when_motion_enabled() -> None:
+    """With motion enabled, advancing a step animates the active pill across the bar,
+    fills the completed step's connector, and triggers the brief emerald halo."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui import motion
+    from perfboard_studio.ui.workflow import WorkflowBar
+
+    QApplication.instance() or QApplication([])
+    motion.set_reduced(False)
+    bar = WorkflowBar()
+    bar.resize(900, 36)
+    bar.show()
+    try:
+        bar.set_steps(workflow_steps(EMPTY))
+        start_rect = bar.pill_rect
+        assert not start_rect.isEmpty()
+
+        drawn = dataclasses.replace(EMPTY, parts_off_board=8, nets=7)
+        bar.set_steps(workflow_steps(drawn))
+        assert bar._pill_anim is not None
+        assert "circuit" in bar._done_halos
+
+        QTest.qWait(70)
+        mid_progress = bar.connector_progress[0]
+        assert 0.0 < mid_progress <= 1.0
+
+        for _ in range(30):
+            QTest.qWait(20)
+            if bar._pill_anim is None and bar._connectors[0]._anim is None:
+                break
+        assert bar.connector_progress[0] == 1.0
+        assert bar.pill_rect == QRectF(bar.buttons["board"].geometry())
+        assert bar.pill_rect.left() > start_rect.left()
+    finally:
+        bar.close()
+        motion.reset()

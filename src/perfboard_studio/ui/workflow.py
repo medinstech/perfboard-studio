@@ -23,10 +23,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QResizeEvent
+from PySide6.QtCore import (
+    Property,
+    QEasingCurve,
+    QPointF,
+    QPropertyAnimation,
+    QRectF,
+    QSize,
+    Qt,
+    QVariantAnimation,
+    Signal,
+)
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QIcon,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QPixmap,
+    QResizeEvent,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLayout,
     QPushButton,
@@ -35,7 +54,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import theme
+from . import motion, theme
 from .i18n import t
 
 type StepKey = Literal["circuit", "board", "place", "route", "check", "build"]
@@ -549,6 +568,79 @@ def step_dot(number: int, status: StepStatus) -> QIcon:
 #: The step dots' size, in logical pixels.
 DOT_SIZE = 20
 
+#: Motion timings for the step bar (ms), scaled to 0 under Reduce Motion.
+_CONNECTOR_MS = 240
+_PILL_MS = 220
+_HALO_MS = 260
+
+
+class _StepConnector(QWidget):
+    """The short progress track joining two adjacent steps in ``WorkflowBar``.
+
+    Draws a muted track and fills left-to-right in ``theme.ACTIVE.success`` as the preceding
+    step completes. Under Reduce Motion (or before the bar is visible) it snaps immediately.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(16, 12)
+        self._progress: float = 0.0
+        self._anim: QPropertyAnimation | None = None
+
+    def _get_progress(self) -> float:
+        return self._progress
+
+    def _set_progress(self, value: float) -> None:
+        clamped = max(0.0, min(1.0, float(value)))
+        if clamped != self._progress:
+            self._progress = clamped
+            self.update()
+
+    progress = Property(float, _get_progress, _set_progress)
+
+    def set_filled(self, filled: bool, *, animate: bool) -> None:
+        target = 1.0 if filled else 0.0
+        if self._anim is not None:
+            self._anim.stop()
+            self._anim = None
+        dur = motion.duration(_CONNECTOR_MS) if animate else 0
+        if dur <= 0 or abs(target - self._progress) < 1e-3:
+            self._progress = target
+            self.update()
+            return
+        anim = QPropertyAnimation(self, b"progress", self)
+        anim.setDuration(dur)
+        anim.setStartValue(self._progress)
+        anim.setEndValue(target)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        def _done() -> None:
+            self._progress = target
+            self._anim = None
+            self.update()
+
+        anim.finished.connect(_done)
+        anim.start()
+        self._anim = anim
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        tokens = theme.ACTIVE
+        y = self.height() / 2.0
+        x0 = 1.0
+        x1 = float(self.width() - 1)
+        track_pen = QPen(QColor(tokens.border_strong), 2.0)
+        track_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(track_pen)
+        painter.drawLine(QPointF(x0, y), QPointF(x1, y))
+        if self._progress > 1e-3:
+            fill_pen = QPen(QColor(tokens.success), 2.2)
+            fill_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(fill_pen)
+            painter.drawLine(QPointF(x0, y), QPointF(x0 + (x1 - x0) * self._progress, y))
+        painter.end()
+
 
 class WorkflowBar(QWidget):
     """The steps across the header, one line: a dot and a name each, and the step to do
@@ -573,8 +665,8 @@ class WorkflowBar(QWidget):
         # it is given (``_fit``), and centres what it says in it.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(4)
         # The bar decides how much it says from the width it is GIVEN (``_fit``), so the
         # layout must not turn the width of its fullest wording into a minimum for the
         # whole window: with it, a 1100 px window could not be made.
@@ -585,13 +677,12 @@ class WorkflowBar(QWidget):
         self._mode: FitMode = "full"
         self._fitting = False
         self.buttons: dict[StepKey, QToolButton] = {}
+        self._connectors: list[_StepConnector] = []
         for index, key in enumerate(STEP_ORDER):
             if index:
-                line = QFrame()
-                line.setFrameShape(QFrame.Shape.HLine)
-                line.setFrameShadow(QFrame.Shadow.Plain)
-                line.setFixedSize(14, 1)
-                layout.addWidget(line)
+                connector = _StepConnector(self)
+                layout.addWidget(connector, 0, Qt.AlignmentFlag.AlignVCenter)
+                self._connectors.append(connector)
             button = QToolButton()
             button.setObjectName(f"workflowStep_{key}")
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -610,6 +701,13 @@ class WorkflowBar(QWidget):
         self.next_button.clicked.connect(lambda: self.nextClicked.emit(self._next))
         self._next: StepKey = "circuit"
         self.steps: tuple[StepState, ...] = ()
+        self._pill_rect: QRectF = QRectF()
+        self._pill_key: StepKey | None = None
+        self._pill_status: StepStatus = "current"
+        self._pill_anim: QVariantAnimation | None = None
+        self._prev_statuses: dict[StepKey, StepStatus] = {}
+        self._done_halos: dict[StepKey, float] = {}
+        self._halo_anims: dict[StepKey, QVariantAnimation] = {}
         # The one accent button in the window: what the next step is, done when pressed.
         # Warning-filled while a problem outranks the next step (``[problem="true"]``).
         theme.variant(self.next_button, "primary")
@@ -664,11 +762,145 @@ class WorkflowBar(QWidget):
         finally:
             self._fitting = False
 
+    def _active_pill_target(self) -> tuple[StepKey | None, StepStatus, QRectF]:
+        if not self.steps:
+            return None, "current", QRectF()
+        active = next((s for s in self.steps if s.key == self._next), self.steps[0])
+        button = self.buttons[active.key]
+        return active.key, active.status, QRectF(button.geometry())
+
+    def _update_pill(self, *, animate: bool) -> None:
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+        key, status, target = self._active_pill_target()
+        prev_key = self._pill_key
+        self._pill_key = key
+        self._pill_status = status
+        if target.isEmpty():
+            if self._pill_anim is not None:
+                self._pill_anim.stop()
+                self._pill_anim = None
+            self._pill_rect = QRectF()
+            self.update()
+            return
+        dur = motion.duration(_PILL_MS) if animate else 0
+        if (
+            dur <= 0
+            or self._pill_rect.isEmpty()
+            or not self.isVisible()
+            or prev_key is None
+            or prev_key == key
+        ):
+            if self._pill_anim is not None:
+                self._pill_anim.stop()
+                self._pill_anim = None
+            self._pill_rect = target
+            self.update()
+            return
+        if self._pill_anim is not None:
+            self._pill_anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setDuration(dur)
+        anim.setStartValue(QRectF(self._pill_rect))
+        anim.setEndValue(QRectF(target))
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        def _on_value(val: object) -> None:
+            if isinstance(val, QRectF):
+                self._pill_rect = val
+                self.update()
+
+        def _on_finished() -> None:
+            _, _, final_rect = self._active_pill_target()
+            if not final_rect.isEmpty():
+                self._pill_rect = final_rect
+            self._pill_anim = None
+            self.update()
+
+        anim.valueChanged.connect(_on_value)
+        anim.finished.connect(_on_finished)
+        anim.start()
+        self._pill_anim = anim
+
+    def _trigger_done_halo(self, key: StepKey) -> None:
+        dur = motion.duration(_HALO_MS)
+        if dur <= 0 or not self.isVisible():
+            return
+        existing = self._halo_anims.pop(key, None)
+        if existing is not None:
+            existing.stop()
+        anim = QVariantAnimation(self)
+        anim.setDuration(dur)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        def _on_value(val: object, k: StepKey = key) -> None:
+            self._done_halos[k] = float(val) if isinstance(val, (int, float)) else 1.0
+            self.update()
+
+        def _on_finished(k: StepKey = key) -> None:
+            self._done_halos.pop(k, None)
+            self._halo_anims.pop(k, None)
+            self.update()
+
+        anim.valueChanged.connect(_on_value)
+        anim.finished.connect(_on_finished)
+        self._done_halos[key] = 0.0
+        self._halo_anims[key] = anim
+        anim.start()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        if self._pill_rect.isEmpty() and not self._done_halos:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        tokens = theme.ACTIVE
+        if not self._pill_rect.isEmpty():
+            if self._pill_status == "problem":
+                fill_hex, stroke_hex = tokens.danger_subtle, tokens.danger
+            elif self._pill_status == "done":
+                fill_hex, stroke_hex = tokens.success_subtle, tokens.success
+            else:
+                fill_hex, stroke_hex = tokens.accent_subtle, tokens.accent
+            rect = self._pill_rect.adjusted(0.5, 0.5, -0.5, -0.5)
+            radius = min(rect.height() / 2.0, 14.0)
+            stroke = QColor(stroke_hex)
+            stroke.setAlphaF(0.32)
+            painter.setBrush(QColor(fill_hex))
+            painter.setPen(QPen(stroke, 1.0))
+            painter.drawRoundedRect(rect, radius, radius)
+        for key, progress in list(self._done_halos.items()):
+            button = self.buttons.get(key)
+            if button is None:
+                continue
+            geom = button.geometry()
+            if geom.isEmpty():
+                continue
+            cx = geom.left() + 8.0 + DOT_SIZE / 2.0 if button.text() else geom.center().x()
+            cy = geom.center().y()
+            radius = DOT_SIZE * (0.46 + 0.42 * progress)
+            halo = QColor(tokens.success)
+            halo.setAlphaF(max(0.0, (1.0 - progress) * 0.65))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(halo, 1.8))
+            painter.drawEllipse(QPointF(cx, cy), radius, radius)
+        painter.end()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._fit()
+        self._update_pill(animate=False)
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._fit()
+        self._update_pill(animate=False)
 
     def set_steps(self, steps: tuple[StepState, ...]) -> None:
+        had_steps = bool(self.steps)
+        prev_statuses = dict(self._prev_statuses)
         self.steps = steps
         self._next = next_step(steps)
         for number, step in enumerate(steps, start=1):
@@ -682,12 +914,19 @@ class WorkflowBar(QWidget):
             # Its look is the sheet's, by status (``#workflowBar QToolButton[status=...]``).
             button.setProperty("status", step.status)
             theme.restyle(button)
+            if had_steps and prev_statuses.get(step.key) != "done" and step.status == "done":
+                self._trigger_done_halo(step.key)
+            self._prev_statuses[step.key] = step.status
+        animate = had_steps and self.isVisible()
+        for index, connector in enumerate(self._connectors):
+            connector.set_filled(steps[index].status == "done", animate=animate)
         label = next(step.action for step in steps if step.key == self._next)
         problem = any(step.status == "problem" for step in steps)
         self.next_button.setText(("⚠ " if problem else "") + label)
         self.next_button.setProperty("problem", problem)
         theme.restyle(self.next_button)
         self._fit()
+        self._update_pill(animate=animate)
 
     @property
     def next_key(self) -> StepKey:
@@ -697,4 +936,14 @@ class WorkflowBar(QWidget):
     def fit_mode(self) -> FitMode:
         """How much the bar says at its width now (``_fit``)."""
         return self._mode
+
+    @property
+    def pill_rect(self) -> QRectF:
+        """Current painted rect of the active-step highlight pill."""
+        return QRectF(self._pill_rect)
+
+    @property
+    def connector_progress(self) -> tuple[float, ...]:
+        """Fill progress (0..1) of each connector between adjacent steps."""
+        return tuple(c._get_progress() for c in self._connectors)
 
