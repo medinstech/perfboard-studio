@@ -55,22 +55,42 @@ def test_every_lockup_is_on_disk_at_its_size_and_twice_it(place, dark) -> None:
 
 
 def test_the_light_lockup_is_the_brand_blue_and_the_dark_one_is_white() -> None:
-    """The pick, pinned: the blue lockup as printed on light, and D1 on dark -- a white
-    mark and a white name, not the blue one put on a dark panel."""
+    """The pick, pinned: the blue lockup as printed on light, and on dark a white mark and a
+    white name -- not the blue one put on a dark panel."""
     light = _opaque_colours(QImage(str(asset_paths("about", False)[1])))
     dark = _opaque_colours(QImage(str(asset_paths("about", True)[1])))
     assert light and dark
     blue = [c for c in light if c.blue() > 200 and c.red() < 60 and c.green() < 60]
-    assert len(blue) > len(light) // 2
+    assert len(blue) > len(light) // 3
     assert all(c.red() > 240 and c.green() > 240 and c.blue() > 240 for c in dark)
-    # D1's figure is let through at 28%: the dark mark has pixels that are white but faint.
-    image = QImage(str(asset_paths("about", True)[1])).convertToFormat(QImage.Format.Format_ARGB32)
-    faint = [
-        image.pixelColor(x, y).alpha()
-        for y in range(image.height())
-        for x in range(image.height())  # the mark is the square at the left
-    ]
-    assert any(60 <= alpha <= 85 for alpha in faint)
+
+
+def test_the_dark_mark_has_its_figure_cut_out() -> None:
+    """Where the printed mark has its pale figure, the dark one has nothing: the panel shows
+    through. A figure let through at 28% white read as a grey blob, and was replaced."""
+    light = QImage(str(asset_paths("about", False)[1])).convertToFormat(QImage.Format.Format_ARGB32)
+    dark = QImage(str(asset_paths("about", True)[1])).convertToFormat(QImage.Format.Format_ARGB32)
+    side = light.height()  # the mark is the square at the left
+    figure, piece = [], []
+    for y in range(side):
+        for x in range(side):
+            colour = light.pixelColor(x, y)
+            if colour.alpha() <= 200:
+                continue
+            seen = dark.pixelColor(x, y).alpha()
+            if colour.green() > 200:
+                figure.append(seen)
+            elif colour.green() < 60 and colour.blue() > 200:
+                piece.append(seen)
+    assert len(figure) > len(piece)  # the figure is most of the mark
+    assert sum(alpha < 40 for alpha in figure) > 0.95 * len(figure)
+    assert sum(alpha > 200 for alpha in piece) > 0.9 * len(piece)
+
+
+def test_the_mark_is_large_enough_to_be_seen() -> None:
+    """At 18-22 px no version of the mark was recognisable; 32 in Home and 40 in About."""
+    assert SIZES["home"].height() == 32
+    assert SIZES["about"].height() == 40
 
 
 def test_the_picture_is_read_after_the_button_shows_and_follows_the_palette(opened) -> None:

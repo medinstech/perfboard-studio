@@ -2,9 +2,15 @@
 
 ONE PICTURE PER THEME, BAKED. The lockup (the mark and the wordmark side by side) is a
 file per place and theme in ``assets/``, at 1x and 2x, rather than one drawing tinted at
-run time: the dark one is not the light one recoloured but a white mark whose figure is
-let through at 28%, the one picked from four rendered candidates, and the light one is the
-blue lockup as it is printed. Home's is a size smaller and a shade quieter than About's.
+run time. The light one is the blue lockup as it is printed; the dark one is a white piece
+with the kneeling figure CUT OUT of it, so the panel shows through where the figure is. The
+first dark lockup let the figure through at 28% white, and at 18 px it read as a grey blob:
+the piece is a thin outline round the figure, and a figure filled in is a piece filled in.
+
+The mark is 32 px tall in Home's corner and 40 px in About (picked from six rendered
+candidates; at 18-22 px no version of it was recognisable), drawn from the vector artwork at
+exactly those sizes rather than shrunk from a raster. The artwork stays out of the
+repository; only the pictures baked from it are here. Home's is a shade quieter than About's.
 
 The files are the company's trademark, not Apache-licensed code (NOTICE, "Trademarks"):
 they are here so the application can say who makes it, and that is all they are for.
@@ -38,7 +44,7 @@ ASSETS = Path(__file__).resolve().parent / "assets"
 type Place = Literal["home", "about"]
 
 #: The lockup's size in logical pixels, per place: the files are exactly this at 1x.
-SIZES: dict[Place, QSize] = {"home": QSize(114, 18), "about": QSize(133, 22)}
+SIZES: dict[Place, QSize] = {"home": QSize(154, 32), "about": QSize(187, 40)}
 
 
 def asset_paths(place: Place, dark: bool) -> tuple[Path, Path]:
