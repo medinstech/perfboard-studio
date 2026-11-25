@@ -415,7 +415,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Show &Library", "Show &Nets", "Show &Problems", "Show P&arts",
                  "&Reset the Panel Layout", "&Fit Board", "Zoom &In", "Zoom &Out",
                  "Sho&w on the Board", "Measure &Distance", "&Exploded View",
-                 "Reset 3D Ca&mera", "Lan&guage", "&Theme", "Board &Colour"],
+                 "Reset 3D Ca&mera", "Lan&guage", "&Theme", "Reduce Motion", "Board &Colour"],
         "show on the board": ["Show &Missing Connections", "Show Hole &Addresses",
                               "Sho&w Pin Names", "Show Part Val&ues",
                               "Show Labels on &the Board", "&Copper on the Far Side",

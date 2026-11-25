@@ -28,6 +28,8 @@ from typing import Any
 
 from PySide6.QtCore import QElapsedTimer, QObject, QTimer, Signal
 
+from . import motion
+
 #: How long one drop takes. Noticeable on purpose: a drop a third of this read as a part
 #: that was merely there.
 ARRIVAL_MS = 700
@@ -123,7 +125,7 @@ class ArrivalAnimation(QObject):
         """Set the part at the top of its drop and begin. False -- and nothing runs -- when
         there is nothing to lower."""
         self.cancel()
-        if not actors or lift_mm <= 0 or self.duration_ms <= 0:
+        if motion.reduced() or not actors or lift_mm <= 0 or self.duration_ms <= 0:
             return False
         self._actors = list(actors)
         self._base = [actor.GetPosition() for actor in self._actors]
@@ -149,7 +151,7 @@ class ArrivalAnimation(QObject):
         self.cancel()
         length = float(drawing.length_mm)
         span = draw_duration_ms(length) if duration_ms is None else duration_ms
-        if length <= 0 or span <= 0:
+        if motion.reduced() or length <= 0 or span <= 0:
             return False
         for actor in drawing.actors:
             ren.RemoveActor(actor)

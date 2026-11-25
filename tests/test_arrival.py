@@ -15,11 +15,21 @@ from PySide6.QtWidgets import QApplication
 
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.guide import PartStep
-from perfboard_studio.ui import arrival
+from perfboard_studio.ui import arrival, motion
 
 from .test_ui import _close, _load_dense, _window_on
 
 vtk = pytest.importorskip("vtk")
+
+
+@pytest.fixture(autouse=True)
+def _enable_motion():
+    """This file tests the arrival animation itself, so keep motion on here."""
+    motion.set_reduced(False)
+    try:
+        yield
+    finally:
+        motion.reset()
 
 
 @pytest.fixture(scope="session", autouse=True)

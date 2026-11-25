@@ -199,6 +199,7 @@ from perfboard_studio.wirecolour import (
 )
 from perfboard_studio.wiringstats import vias
 
+from . import motion
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
     AXIAL_ARCHETYPES,
@@ -8932,7 +8933,12 @@ class BoardView(QGraphicsView):
         if curtain is not None:
             curtain.finish()
         viewport = self.viewport()
-        if curtain is not None or not viewport.isVisible() or viewport.width() < 2:
+        if (
+            curtain is not None
+            or motion.reduced()
+            or not viewport.isVisible()
+            or viewport.width() < 2
+        ):
             turn()
             return
         before = self._frame()

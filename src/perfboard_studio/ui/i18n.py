@@ -2026,6 +2026,10 @@ TURKISH: Mapping[str, str] = {
     "Language changed": "Dil değişti",
     # -- the theme: dark or light, also from the next start ----------------------
     "&Theme": "&Tema",
+    "Reduce Motion": "Hareketi A&zalt",
+    "Turn off interface animations so changes land immediately.": (
+        "Arayüz animasyonlarını kapatarak değişikliklerin anında görünmesini sağlar."
+    ),
     "&Dark": "&Koyu",
     "&Light": "&Açık",
     "Theme changed": "Tema değişti",

@@ -19,6 +19,10 @@ os.environ["PERFBOARD_STUDIO_PLANNER_WORKERS"] = "0"
 # their window must not run the suite in it.
 os.environ["PERFBOARD_STUDIO_THEME"] = "dark"
 
+# Animations off by default across the suite for deterministic offscreen tests; tests that
+# exercise an animation itself override this explicitly via ``motion.set_reduced(False)``.
+os.environ["PERFBOARD_STUDIO_REDUCE_MOTION"] = "1"
+
 
 @pytest.fixture(autouse=True)
 def _settings_in_a_temp_file(tmp_path, monkeypatch):
@@ -38,10 +42,15 @@ def _settings_in_a_temp_file(tmp_path, monkeypatch):
     from PySide6.QtCore import QSettings
 
     from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui import motion
 
     store = QSettings(str(tmp_path / "recent.ini"), QSettings.Format.IniFormat)
     monkeypatch.setattr(main_module, "app_settings", lambda: store)
-    yield store
+    motion.reset()
+    try:
+        yield store
+    finally:
+        motion.reset()
 
 
 @pytest.fixture(autouse=True)

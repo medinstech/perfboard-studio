@@ -14130,8 +14130,10 @@ def test_ctrl_f_turns_the_board_over_where_it_can_be_seen(monkeypatch) -> None:
     from PySide6.QtCore import QElapsedTimer
     from PySide6.QtWidgets import QApplication
 
+    from perfboard_studio.ui import motion
     from perfboard_studio.ui.view2d import FlipCurtain
 
+    motion.set_reduced(False)
     window = _shown_window_without_3d(monkeypatch)
     try:
         view = window.view

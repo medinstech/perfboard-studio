@@ -418,7 +418,7 @@ from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 from perfboard_studio.wiringstats import WiringStats, wiring_stats
 
-from . import icons, planner_pool, theme, updater, whatsnew
+from . import icons, motion, planner_pool, theme, updater, whatsnew
 from .arrangements import (
     MAX_ARRANGEMENTS,
     PICTURE_SIZE,
@@ -6664,6 +6664,13 @@ class MainWindow(QMainWindow):
             action.setChecked(name == theme.ACTIVE.name)
             action.triggered.connect(lambda _checked, n=name: self.on_theme(n))
             self.act_theme[name] = action
+        self.act_reduce_motion = view_menu.addAction(t("Reduce Motion"))
+        self.act_reduce_motion.setCheckable(True)
+        self.act_reduce_motion.setChecked(motion.reduced())
+        self.act_reduce_motion.setToolTip(
+            t("Turn off interface animations so changes land immediately.")
+        )
+        self.act_reduce_motion.toggled.connect(self.on_reduce_motion)
 
         view_menu.addSeparator()
         # The board says its own mask and finish (Board.mask / Board.finish); this is the
@@ -17861,6 +17868,7 @@ class MainWindow(QMainWindow):
         settings.setValue(OFF_BOARD_KEY, self.act_off_board.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
+        settings.setValue(motion.REDUCE_MOTION_KEY, self.act_reduce_motion.isChecked())
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
         settings.setValue(GRID_WIRES_KEY, self._grid_wires)
         settings.setValue(BOTH_FACES_KEY, self._both_faces)
@@ -17916,6 +17924,18 @@ class MainWindow(QMainWindow):
         self.act_off_board.setChecked(_stored_bool(settings, OFF_BOARD_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
         self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
+        # When the environment variable explicitly pins motion (the test suite), reflect it
+        # without clobbering it from stored user settings.
+        if motion.REDUCE_MOTION_VARIABLE in os.environ:
+            self.act_reduce_motion.blockSignals(True)
+            self.act_reduce_motion.setChecked(motion.reduced())
+            self.act_reduce_motion.blockSignals(False)
+        else:
+            stored_reduced = _stored_bool(settings, motion.REDUCE_MOTION_KEY, False)
+            self.act_reduce_motion.blockSignals(True)
+            self.act_reduce_motion.setChecked(stored_reduced)
+            self.act_reduce_motion.blockSignals(False)
+            motion.set_reduced(stored_reduced)
 
         style = settings.value(ROUTING_STYLE_KEY, self._routing_style)
         if isinstance(style, str) and style in self.act_style:
@@ -18263,6 +18283,11 @@ class MainWindow(QMainWindow):
                 "next time Perfboard Studio starts."
             ),
         )
+
+    def on_reduce_motion(self, on: bool) -> None:
+        """Apply Reduce Motion live across every animation and remember it."""
+        motion.set_reduced(on)
+        app_settings().setValue(motion.REDUCE_MOTION_KEY, on)
 
     def _render_step_images(self, document: PerfDocument, guide: Guide) -> dict[str, bytes] | None:
         """One 3D picture per build step, counted out loud, with a way to do without them.
