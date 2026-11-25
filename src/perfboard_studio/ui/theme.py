@@ -758,6 +758,41 @@ QFrame[floating="true"] QToolButton {{
 }}
 QFrame[floating="true"] QToolButton:hover {{ background: {k.bg_hover}; }}
 QFrame[floating="true"] QToolButton:checked {{ background: {k.accent_subtle}; color: {k.accent_text}; }}
+QLabel#toastMessage {{
+    background: transparent;
+    color: {k.text};
+    font-size: 12px;
+}}
+QPushButton#toastAction {{
+    background: {k.accent_subtle};
+    color: {k.accent_text};
+    border: none;
+    border-radius: {RADIUS_SM}px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: {SEMIBOLD};
+}}
+QPushButton#toastAction[toastKind="success"] {{
+    background: {k.success_subtle};
+    color: {k.success};
+}}
+QPushButton#toastAction[toastKind="warning"] {{
+    background: {k.warning_subtle};
+    color: {k.warning};
+}}
+QPushButton#toastAction[toastKind="danger"] {{
+    background: {k.danger_subtle};
+    color: {k.danger};
+}}
+QPushButton#toastAction:hover {{ background: {k.bg_hover}; }}
+QToolButton#toastClose {{
+    background: transparent;
+    border: none;
+    color: {k.text_tertiary};
+    font-size: 14px;
+    border-radius: {RADIUS_SM}px;
+}}
+QToolButton#toastClose:hover {{ background: {k.bg_hover}; color: {k.text}; }}
 /* Two answers in one hairline frame on a canvas's bar (canvastools.TwoWaySwitch), the one
    in force marked as a segment is -- at the same weight, so the pill does not change width
    as it is switched. */

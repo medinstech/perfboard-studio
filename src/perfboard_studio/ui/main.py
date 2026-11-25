@@ -472,6 +472,7 @@ from .raildialog import RailDialog, rail_refusal
 from .selection import NOTHING, Selection, SelectionKind
 from .sheet_clipboard import sheet_block_from_json, sheet_block_to_json
 from .systemview import SystemView
+from .toast import ToastCard, ToastHost, ToastKind
 from .tour import Spotlight, Tour
 from .tour import Stop as TourStop
 from .view2d import (
@@ -3530,6 +3531,40 @@ class MainWindow(QMainWindow):
         ) and not _stored_bool(settings, whatsnew.MOVED_SHOWN_KEY, False)
         self.moved_card: whatsnew.MovedCard | None = None
         self._pointer: Spotlight | None = None
+        self.toasts = ToastHost(self, bottom_clearance=self._toast_bottom_clearance)
+
+    def _toast_bottom_clearance(self) -> int:
+        clearance = 16
+        bar = self.statusBar()
+        if bar is not None and bar.isVisible():
+            clearance += bar.height()
+        if hasattr(self, "problems_bar") and self.problems_bar.isVisible():
+            clearance += self.problems_bar.height()
+        return clearance
+
+    def notify(
+        self,
+        message: str,
+        *,
+        kind: ToastKind = "info",
+        duration_ms: int = 4200,
+        action_label: str | None = None,
+        action: Callable[[], object] | None = None,
+        status_message: str | None = None,
+        status_ms: int | None = None,
+    ) -> ToastCard:
+        """Show a non-blocking floating toast and mirror its message to the status bar."""
+        self.statusBar().showMessage(
+            status_message if status_message is not None else message,
+            duration_ms if status_ms is None else status_ms,
+        )
+        return self.toasts.show_toast(
+            message,
+            kind=kind,
+            duration_ms=duration_ms,
+            action_label=action_label,
+            action=action,
+        )
 
     def start_tour(self) -> None:
         """The getting-started tour (ui/tour.py), on the example that is drawn and not built.
@@ -8918,7 +8953,13 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(did(result.description), 6000)
+        self.notify(
+            did(result.description),
+            kind="success",
+            action_label=_plain(t("&Undo")),
+            action=self.bus.undo,
+            status_ms=6000,
+        )
 
     def _ref_of_id(self, part_id: str) -> str | None:
         found = next((p for p in circuit_parts(self.bus.system_document) if p.id == part_id), None)
@@ -9397,7 +9438,13 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 6000)
             return
-        self.statusBar().showMessage(did(result.description), 6000)
+        self.notify(
+            did(result.description),
+            kind="success",
+            action_label=_plain(t("&Undo")),
+            action=self.bus.undo,
+            status_ms=6000,
+        )
 
     def _on_part_dropped(self, ref: str, hole: object) -> None:
         """A symbol was dragged off the sheet and dropped on a hole.
@@ -14159,7 +14206,13 @@ class MainWindow(QMainWindow):
                 t("{count} conductor is now out of date; Ctrl+R clears and rewires it"),
                 t("{count} conductors are now out of date; Ctrl+R clears and rewires them"),
             )
-        self.statusBar().showMessage(said, 0)
+        self.notify(
+            said,
+            kind="success",
+            action_label=_plain(t("&Undo")),
+            action=self.bus.undo,
+            status_ms=0,
+        )
 
     # -- routing ------------------------------------------------------------
 
@@ -14355,11 +14408,23 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, t("Redoing the wiring was refused"), refused(result))
             return
         self._remember_wiring_before(document.conductors)
-        self.statusBar().showMessage(
-            beat + "  ·  " + t("{gone} taken up, {laid} laid, {kept} unchanged").format(
+        summary_msg = (
+            beat
+            + "  ·  "
+            + t("{gone} taken up, {laid} laid, {kept} unchanged").format(
                 gone=gone, laid=laid, kept=kept
+            )
+        )
+        self.notify(
+            summary_msg,
+            kind="warning" if plan.summary.links_unrouted else "success",
+            action_label=t("Show Problems") if plan.summary.links_unrouted else _plain(t("&Undo")),
+            action=(
+                (lambda: self.set_problems_open(True))
+                if plan.summary.links_unrouted
+                else self.bus.undo
             ),
-            0,
+            status_ms=0,
         )
         self._report_unrouted(plan)
 
@@ -14753,10 +14818,20 @@ class MainWindow(QMainWindow):
         # miss (PLAN.md Sec 13), so they go in the status line and, if there are any, into a
         # dialog that names each one.
         faces_said = self._say_face_notes(document, plan)
-        self.statusBar().showMessage(
+        wired_msg = (
             f"{self._wired_said(plan, before)}{cleared_note}{style_note}"
-            f"{self._far_side_note(before)}",
-            0,
+            f"{self._far_side_note(before)}"
+        )
+        self.notify(
+            wired_msg,
+            kind="warning" if plan.summary.links_unrouted else "success",
+            action_label=t("Show Problems") if plan.summary.links_unrouted else _plain(t("&Undo")),
+            action=(
+                (lambda: self.set_problems_open(True))
+                if plan.summary.links_unrouted
+                else self.bus.undo
+            ),
+            status_ms=0,
         )
         self._report_unrouted(plan)
         faces_said = faces_said or self._both_faces_unused(before)
@@ -14787,10 +14862,12 @@ class MainWindow(QMainWindow):
         before = self._wiring_before if on else None
         self.scene.set_before_copper(before or ())
         if on and before is not None:
-            self.statusBar().showMessage(
+            self.notify(
                 t("Dashed: the wiring before the last Auto-wire or Redo Wiring. "
                   "Wiring ▸ Compare With Before again hides it."),
-                0,
+                kind="info",
+                duration_ms=5200,
+                status_ms=0,
             )
 
     def _wired_said(self, plan: AutoroutePlan, before: set[str]) -> str:
@@ -14985,7 +15062,16 @@ class MainWindow(QMainWindow):
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
         self._nets_from_old_layout -= rerouted
-        self.statusBar().showMessage(say(describe_strip_plan(plan)), 0)
+        strip_msg = say(describe_strip_plan(plan))
+        self.notify(
+            strip_msg,
+            kind="warning" if plan.problems else "success",
+            action_label=t("Show Problems") if plan.problems else _plain(t("&Undo")),
+            action=(
+                (lambda: self.set_problems_open(True)) if plan.problems else self.bus.undo
+            ),
+            status_ms=0,
+        )
         self._report_strip_problems(plan)
 
     def _report_strip_problems(self, plan: StripboardPlan) -> None:
@@ -17635,6 +17721,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         if self._closing_for_update or self._offer_to_save():
+            self.toasts.clear()
             # AFTER the offer, never before: a close the user backed out of must not
             # record the layout as if they had left.
             self._save_session()
@@ -18199,7 +18286,12 @@ class MainWindow(QMainWindow):
         self._watch_current_path()
         # The record exists to say "there was unsaved work". There is not, now.
         self._autosave.clear()
-        self.statusBar().showMessage(t("Saved {path}").format(path=path), 8000)
+        self.notify(
+            t("Saved {path}").format(path=path.name),
+            kind="success",
+            status_message=t("Saved {path}").format(path=path),
+            status_ms=8000,
+        )
         return True
 
     def _ask_where_to_export(self, title: str, suggested: str, file_filter: str) -> Path | None:
@@ -18424,6 +18516,11 @@ class MainWindow(QMainWindow):
         """Apply Reduce Motion live across every animation and remember it."""
         motion.set_reduced(on)
         app_settings().setValue(motion.REDUCE_MOTION_KEY, on)
+        self.notify(
+            t("Reduce Motion turned on.") if on else t("Reduce Motion turned off."),
+            kind="info",
+            duration_ms=3000,
+        )
 
     def _render_step_images(self, document: PerfDocument, guide: Guide) -> dict[str, bytes] | None:
         """One 3D picture per build step, counted out loud, with a way to do without them.
