@@ -1396,7 +1396,8 @@ def _hopping_trace_candidate(
         f"solder trace {ends} in {trace_count} run(s), "
         f"with {hops} insulated hop(s) over conductors it may not cross"
         if trace_count
-        else f"{hops} insulated hops {ends} over conductors a solder trace may not cross"
+        else f"{'one insulated hop' if hops == 1 else f'{hops} insulated hops'} {ends} "
+        "over conductors a solder trace may not cross"
     ]
     if risk_holes:
         holes_text = ", ".join(format_hole(hole, ctx.doc.board) for hole in risk_holes)

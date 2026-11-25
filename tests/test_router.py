@@ -775,6 +775,21 @@ def test_a_hop_beside_a_pin_goes_on_into_it() -> None:
     assert hopped.conductors[-1].path == (h(7, 4), h(10, 4))
 
 
+def test_a_link_found_as_one_hop_says_one_hop() -> None:
+    """A link the search finds as a single hop on its own, end to end over a wall, is still
+    offered as a hopped candidate (the differential proof records it), and its explanation
+    counts the hop in words: "one insulated hop", never "1 insulated hops"."""
+    wall = crossing_wire("t-wall", 3)
+    board = doc((comp("c1", "A", h(2, 4)), comp("c2", "B", h(4, 4))), (wall,))
+    result = route_connection(board, _FOOTPRINT_LOOKUP, RouteRequest(from_=h(2, 4), to=h(4, 4)))
+    hopped = next(a for a in result.alternatives if a.strategy == "solder-trace-hopped")
+    assert [c.path for c in hopped.conductors] == [(h(2, 4), h(4, 4))]
+    assert hopped.explanation.startswith("Hopped solder trace: one insulated hop from "), (
+        hopped.explanation
+    )
+    assert "1 insulated hops" not in hopped.explanation
+
+
 def test_a_link_that_folds_into_one_hop_is_the_insulated_wire_at_its_price() -> None:
     """A wall one hole past the near pin and the far pin just beyond it: the step and the
     hop fold into one jumper from pin to pin, with no solder left in the link. That is the
