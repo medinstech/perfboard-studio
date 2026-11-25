@@ -67,7 +67,12 @@ def test_board_camera_flies_smoothly_pulses_and_cancels_on_manual_input() -> Non
         assert view._camera.is_running
         assert view._pulse.active
 
-        QTest.qWait(90)
+        # Up to a second for the first frame rather than a fixed 90 ms: under a loaded
+        # macOS run the camera animation had not ticked once by then.
+        for _ in range(50):
+            QTest.qWait(20)
+            if view.current_scale() > start_scale:
+                break
         mid_scale = view.current_scale()
         assert mid_scale > start_scale
 
