@@ -188,6 +188,11 @@ closed without a bump.
   menu's choice. A narrow window sheds the labels to icons, which keep them as tooltips,
   and then the search's width, before anything overlaps. Over a board the row keeps only
   the icon, since the steps hold the middle.
+- **The 3D camera swings back instead of jumping.** Reset View, and the turn-over with
+  the board, carry the camera round what it looks at to the standard view in about
+  0.4 s, so the board is seen turning back rather than replaced; turning it over tumbles
+  it over the top. A drag or a wheel turn mid-swing takes the camera where it stands, the
+  first framing of the panel is still a cut, and with Reduce Motion on it is a cut too.
 - **Auto-wire is seen laying its copper.** When a route lands, the conductors it laid fade
   in one after another in the order the planner laid them, about a second in all however many
   there are, and the copper that was already there stays as it is. Every conductor is on the

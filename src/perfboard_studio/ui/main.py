@@ -3185,6 +3185,8 @@ class MainWindow(QMainWindow):
         self._last_lvs: LvsResult | None = None
         self._last_ratsnest: tuple[NetRatsnest, ...] = ()
         self._vtk_renderer: Any = None
+        #: The 3D camera swinging to the standard view -- see ``on_reset_3d_camera``.
+        self._camera_motion: QVariantAnimation | None = None
         self._vtk_style: Any = None
         self.vtk_widget: Any = None
         #: Which part or conductor each solid in the 3D view belongs to, rebuilt with the
@@ -5166,7 +5168,12 @@ class MainWindow(QMainWindow):
             # and is not something a user would think to go and change.
             style = view3d.trackball_style()
             widget.GetRenderWindow().GetInteractor().SetInteractorStyle(style)
-            _FrameOnFirstSize(widget, self.on_reset_3d_camera)
+            # The first framing is a cut: there is no view yet to swing from.
+            _FrameOnFirstSize(widget, lambda: self._reset_3d_camera(swing=False))
+            # A drag or a wheel turn takes the camera from a swing where it stands.
+            style.AddObserver(
+                "StartInteractionEvent", lambda *_: self._stop_3d_camera(land=False)
+            )
             self._vtk_renderer = ren
             self._vtk_style = style
             self.vtk_widget = widget
@@ -5824,14 +5831,69 @@ class MainWindow(QMainWindow):
         """
         self._refresh_3d()
 
+    #: How long the 3D camera takes to swing back to the standard view, or over with a flip.
+    CAMERA_3D_MS = 420
+
     def on_reset_3d_camera(self) -> None:
+        """Back to the standard three-quarter view -- swung there, not cut to."""
+        self._reset_3d_camera(swing=True)
+
+    def _reset_3d_camera(self, *, swing: bool) -> None:
+        """Put the 3D camera at the standard view, swung there if ``swing``.
+
+        The camera goes round the board on a sphere about what it looks at
+        (``view3d.pose_between``), so a Reset after orbiting reads as the same board turning
+        back, and a flip tumbles it over. Where it lands is exactly where
+        ``apply_default_camera`` puts it, and with motion reduced or the panel hidden it is
+        put there at once. A drag or a wheel turn mid-swing stops it where it is.
+        """
         if self._vtk_renderer is None:
             return
         from . import view3d
 
-        view3d.apply_default_camera(self._vtk_renderer, flipped=(self.side == "bottom"))
-        if self.vtk_widget is not None:
-            self.vtk_widget.GetRenderWindow().Render()
+        self._stop_3d_camera()
+        renderer = self._vtk_renderer
+        cam = renderer.GetActiveCamera()
+        start = view3d.camera_pose(cam)
+        view3d.apply_default_camera(renderer, flipped=(self.side == "bottom"))
+        end = view3d.camera_pose(cam)
+        widget = self.vtk_widget
+        if widget is None:
+            return
+        duration = motion.duration(self.CAMERA_3D_MS) if swing and widget.isVisible() else 0
+        if duration <= 0 or start == end:
+            widget.GetRenderWindow().Render()
+            return
+        curve = QEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        def step(value: object) -> None:
+            if self._vtk_renderer is not renderer:
+                return
+            t = curve.valueForProgress(float(cast(float, value)))
+            view3d.set_camera_pose(cam, view3d.pose_between(start, end, t))
+            renderer.ResetCameraClippingRange()
+            widget.GetRenderWindow().Render()
+
+        animation = QVariantAnimation(self)
+        animation.setDuration(duration)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.valueChanged.connect(step)
+        animation.finished.connect(self._stop_3d_camera)
+        self._camera_motion = animation
+        step(0.0)
+        animation.start()
+
+    def _stop_3d_camera(self, *, land: bool = True) -> None:
+        """End a swing of the 3D camera: where it was going if ``land``, else where it
+        stands, for a hand that has just taken hold of the view."""
+        animation, self._camera_motion = self._camera_motion, None
+        if animation is None:
+            return
+        if land and animation.state() == QVariantAnimation.State.Running:
+            animation.setCurrentTime(animation.duration())
+        animation.stop()
+        animation.deleteLater()
 
     # -- menu ------------------------------------------------------------
 

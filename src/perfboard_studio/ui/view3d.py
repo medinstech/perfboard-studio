@@ -25,7 +25,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 from itertools import pairwise
 from types import SimpleNamespace
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from vtkmodules import (
     vtkCommonCore,
@@ -8926,6 +8926,102 @@ def apply_default_camera(
     for actor in shown:
         actor.VisibilityOn()
     ren.ResetCameraClippingRange()
+
+
+type Vec3 = tuple[float, float, float]
+
+
+class CameraPose(NamedTuple):
+    """Where a camera stands, in the terms a move between two of them is eased in: what it
+    looks at, the way back from that to the eye, how far, which way is up, and the lens."""
+
+    focal: Vec3
+    direction: Vec3  # unit, from the focal point towards the eye
+    distance: float
+    view_up: Vec3
+    view_angle: float
+
+
+def _unit(v: Vec3) -> Vec3:
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    return (0.0, 0.0, 1.0) if n < 1e-12 else (v[0] / n, v[1] / n, v[2] / n)
+
+
+def _dot(a: Vec3, b: Vec3) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _mix(a: Vec3, b: Vec3, wa: float, wb: float) -> Vec3:
+    return (wa * a[0] + wb * b[0], wa * a[1] + wb * b[1], wa * a[2] + wb * b[2])
+
+
+def _slerp(a: Vec3, b: Vec3, t: float, *, across: Vec3) -> Vec3:
+    """The unit vector ``t`` of the way round the great circle from ``a`` to ``b``.
+
+    Two opposite vectors have no one circle between them, so the turn goes through
+    ``across`` (perpendicular to ``a``): turning a board over then tumbles it over the top
+    of the screen rather than passing the eye through it.
+    """
+    cos = max(-1.0, min(1.0, _dot(a, b)))
+    if cos > 0.9995:
+        return _unit(_mix(a, b, 1.0 - t, t))
+    if cos < -0.9995:
+        angle = math.pi * t
+        return _unit(_mix(a, across, math.cos(angle), math.sin(angle)))
+    angle = math.acos(cos)
+    sin = math.sin(angle)
+    return _unit(_mix(a, b, math.sin((1.0 - t) * angle) / sin, math.sin(t * angle) / sin))
+
+
+def _vec3(values: Sequence[float]) -> Vec3:
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def camera_pose(cam: vtk.vtkCamera) -> CameraPose:
+    focal = _vec3(cam.GetFocalPoint())
+    eye = _vec3(cam.GetPosition())
+    offset = _mix(eye, focal, 1.0, -1.0)
+    return CameraPose(
+        focal=focal,
+        direction=_unit(offset),
+        distance=math.sqrt(_dot(offset, offset)),
+        view_up=_unit(_vec3(cam.GetViewUp())),
+        view_angle=float(cam.GetViewAngle()),
+    )
+
+
+def set_camera_pose(cam: vtk.vtkCamera, pose: CameraPose) -> None:
+    cam.SetFocalPoint(*pose.focal)
+    cam.SetPosition(*_mix(pose.focal, pose.direction, 1.0, pose.distance))
+    cam.SetViewUp(*pose.view_up)
+    cam.SetViewAngle(pose.view_angle)
+    cam.OrthogonalizeViewUp()
+
+
+def pose_between(start: CameraPose, end: CameraPose, t: float) -> CameraPose:
+    """The camera ``t`` (0..1) of the way from ``start`` to ``end``: round the subject, not
+    through it. The focal point slides, the eye swings on a sphere about it, the distance
+    changes by the same ratio every frame (so a zoom feels even), and up turns with the
+    view. ``t`` = 0 and 1 are the two poses exactly."""
+    if t <= 0.0:
+        return start
+    if t >= 1.0:
+        return end
+    direction = _slerp(start.direction, end.direction, t, across=start.view_up)
+    up = _slerp(start.view_up, end.view_up, t, across=start.direction)
+    # Up stays perpendicular to the line of sight, as vtkCamera keeps it.
+    up = _unit(_mix(up, direction, 1.0, -_dot(up, direction)))
+    if start.distance > 1e-9 and end.distance > 1e-9:
+        distance = start.distance * (end.distance / start.distance) ** t
+    else:
+        distance = start.distance + (end.distance - start.distance) * t
+    return CameraPose(
+        focal=_mix(start.focal, end.focal, 1.0 - t, t),
+        direction=direction,
+        distance=distance,
+        view_up=up,
+        view_angle=start.view_angle + (end.view_angle - start.view_angle) * t,
+    )
 
 
 def _actors(ren: vtk.vtkRenderer) -> list[vtk.vtkActor]:
