@@ -828,13 +828,13 @@ class BoardDesigner(QDialog):
         self.legend_letters_across.setToolTip(
             t("Standard numbering: letters across the columns, numbers down the rows.")
         )
-        self.legend_letters_across.clicked.connect(lambda: self._apply_legend_axes(False))
+        self.legend_letters_across.clicked.connect(self._letters_across)
         self.legend_numbers_across = QPushButton(t("Numbers across"))
         self.legend_numbers_across.setAutoDefault(False)
         self.legend_numbers_across.setToolTip(
             t("Swapped numbering: numbers across the columns, letters down the rows.")
         )
-        self.legend_numbers_across.clicked.connect(lambda: self._apply_legend_axes(True))
+        self.legend_numbers_across.clicked.connect(self._numbers_across)
         orient_row.addWidget(self.legend_letters_across, 1)
         orient_row.addWidget(self.legend_numbers_across, 1)
         self._row(legend, t("Axes"), orient_widget, "legend.axes")
@@ -958,6 +958,16 @@ class BoardDesigner(QDialog):
                 except ValueError as error:
                     return path, str(error)
         return None
+
+    # The axes buttons are connected to these bound methods and never to a lambda that
+    # holds ``self``: a lambda kept the dialog alive past its last reference, so a designer
+    # that was never closed was destroyed after the QApplication at interpreter exit, and
+    # the run that had passed every test ended in a crash (PySide6 6.12, every platform).
+    def _letters_across(self) -> None:
+        self._apply_legend_axes(False)
+
+    def _numbers_across(self) -> None:
+        self._apply_legend_axes(True)
 
     def _apply_legend_axes(self, numbers_across: bool) -> None:
         """Fill the column and row run fields for standard or swapped legend axes."""
