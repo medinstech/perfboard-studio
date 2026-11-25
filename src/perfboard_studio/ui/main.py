@@ -446,7 +446,7 @@ from .engine_text import finding_text, names_in, net_class_word, say, say_findin
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
-from .header import HeaderBar
+from .header import HeaderBar, QuickAction
 from .home import WALKTHROUGH, Home, HomeExample, LastBoard, UpdateStatus
 from .i18n import counted, hole_grid, set_language, t
 from .i18n import language as current_language
@@ -3697,6 +3697,30 @@ class MainWindow(QMainWindow):
             redo=self.act_redo,
             save=self.act_save,
             search=self.act_palette,
+            # Home's own doors, said again at the header's right while Home is up: each
+            # goes through Home's signal, so it does exactly what the sidebar's does.
+            quick=(
+                QuickAction(
+                    t("New Circuit"),
+                    "new-circuit",
+                    t("Start on the sheet: add parts and join their pins. The board comes after."),
+                    lambda: self._home_door("newCircuit"),
+                ),
+                QuickAction(
+                    t("Open…"),
+                    "open",
+                    t("Open a board or a project from disk (Ctrl+O)."),
+                    lambda: self._home_door("openFile"),
+                ),
+                QuickAction(
+                    t("Tour"),
+                    "tour",
+                    t("Opens a circuit that is already drawn and walks through it: board, "
+                      "placement, wiring, checks, guide."),
+                    lambda: self._home_door("startTour"),
+                ),
+            ),
+            themes=self.act_theme,
         )
         # The pill opens the notes, which carry the one action that is possible now.
         self.header.updateRequested.connect(self._on_update_notes)
@@ -3720,6 +3744,12 @@ class MainWindow(QMainWindow):
         bar.setFixedHeight(0)
         bar.hovered.connect(self._on_menu_bar_hovered)
         self._refresh_title()
+
+    def _home_door(self, signal: Literal["newCircuit", "openFile", "startTour"]) -> None:
+        """One of Home's doors, from the header: the same signal the sidebar's button sends."""
+        home = self._home_page
+        if home is not None:
+            getattr(home, signal).emit()
 
     # -- ☰ and the search over Home -----------------------------------------------
     #

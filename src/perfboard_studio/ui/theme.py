@@ -671,6 +671,9 @@ QLabel#homeCaption {{ color: {k.accent_text}; font-size: {CAPTION_PX}px; font-we
 QFrame#homeStepRule {{ background: {k.border_strong}; border: none; }}
 QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
 QLabel#headerPlace {{ color: {k.text_secondary}; }}
+QLabel#headerAppName {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QToolButton#headerQuick {{ color: {k.text_secondary}; padding: 3px 8px; }}
+QToolButton#headerQuick:hover, QToolButton#headerTheme:hover {{ color: {k.text}; }}
 /* A newer release exists: a pill in the header and a card on Home, both in the accent. */
 QPushButton#headerUpdate {{
     background: {k.accent};
@@ -703,6 +706,9 @@ QPushButton#headerSearch {{
     text-align: left;
     min-width: 220px;
 }}
+/* Over Home, where the search stands alone in the middle of the row. */
+QPushButton#headerSearch[span="wide"] {{ min-width: 380px; }}
+QPushButton#headerSearch[span="mid"] {{ min-width: 240px; }}
 /* Narrow: the magnifier alone, so the step bar keeps the current step's name. */
 QPushButton#headerSearch[narrow="true"] {{ min-width: 0px; padding: {s["xs"]}px {s["sm"]}px; }}
 QPushButton#headerSearch:hover {{

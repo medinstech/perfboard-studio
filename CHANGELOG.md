@@ -172,6 +172,12 @@ closed without a bump.
 
 ### Changed
 
+- **Over Home the top row says what the application is.** The icon and "Perfboard Studio"
+  at the left, the search in the middle of the window, and Home's own doors at the right:
+  New Circuit, Open, Tour, and a sun or a moon that switches the theme through the View
+  menu's choice. A narrow window sheds the labels to icons, which keep them as tooltips,
+  and then the search's width, before anything overlaps. Over a board the row keeps only
+  the icon, since the steps hold the middle.
 - **The panels are cards.** Every panel stands on the window's gutter as a card with round
   corners instead of a region ruled off by hairlines, and the gutter between two panels is
   what is dragged to resize them. A group's tabs (Library, Parts, Nets; Board, Schematic,

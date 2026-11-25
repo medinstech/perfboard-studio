@@ -11,14 +11,25 @@ letter, and Ctrl+K finds any command by name).
 This is a QWidget laid into a toolbar row, as the step bar was (see "The window walks
 through six steps" in docs/ARCHITECTURE.md for why a row and not a dock), and it imports
 nothing of the window: the window hands it the menus, the actions and the step bar.
+
+OVER HOME THE ROW SAYS WHAT THE APPLICATION IS. With no board there are no steps, and the
+row was ☰ at one end, the search at the other and nothing between. Now it is the
+application's icon and name, the search in the middle of the window, and four quick actions
+at the right -- New Circuit, Open, Tour and the theme -- which are Home's own (the window
+hands them over) and stand down with the steps' arrival. The icon and the name stay over a
+board, before Home ›, so the row starts the same way everywhere. As the window narrows the
+actions shed their words first, then the search its width, then its words, and last the
+name: nothing is ever drawn over anything else.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QAction, QResizeEvent
+from PySide6.QtGui import QAction, QIcon, QResizeEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -36,6 +47,30 @@ from .workflow import WorkflowBar
 #: The header's height, in logical pixels: one row, the step dots and the next button
 #: with a little air round them.
 HEADER_HEIGHT = 46
+
+#: The application's icon, beside its name at the row's start.
+APP_ICON = Path(__file__).resolve().parent / "assets" / "perfboard-studio.png"
+
+#: How Home's row fits a width, widest first: whether the quick actions say their words,
+#: how wide the search is ("wide", "mid", or "narrow" for the magnifier alone), and
+#: whether the application's name is shown. The first that fits is used.
+HOME_FITS: tuple[tuple[bool, str, bool], ...] = (
+    (True, "wide", True),
+    (True, "mid", True),
+    (False, "mid", True),
+    (False, "narrow", True),
+    (False, "narrow", False),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class QuickAction:
+    """One of Home's buttons at the header's right: its words, picture, tooltip and deed."""
+
+    label: str
+    picture: str
+    tooltip: str
+    run: Callable[[], None]
 
 
 class HeaderBar(QWidget):
@@ -56,6 +91,8 @@ class HeaderBar(QWidget):
         redo: QAction,
         save: QAction,
         search: QAction,
+        quick: Sequence[QuickAction] = (),
+        themes: Mapping[str, QAction] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -87,6 +124,17 @@ class HeaderBar(QWidget):
         self.menu_button.setToolTip(t("Menus: File, Edit, View and the rest. Alt opens them too."))
         self.menu_button.clicked.connect(lambda: self.open_menu())
         layout.addWidget(self.menu_button)
+
+        # The application: its icon and its name, the row's start on every page.
+        self.app_icon = QLabel()
+        self.app_icon.setObjectName("headerAppIcon")
+        self.app_icon.setPixmap(QIcon(str(APP_ICON)).pixmap(QSize(20, 20)))
+        layout.addSpacing(2)
+        layout.addWidget(self.app_icon)
+        self.app_name = QLabel("Perfboard Studio")
+        self.app_name.setObjectName("headerAppName")
+        layout.addWidget(self.app_name)
+        layout.addSpacing(6)
 
         # The way back to Home once a board is open, as the first step of a path to the
         # board's name: "Home › ATmega328 Relay Board". Home came up at a start and never
@@ -161,6 +209,44 @@ class HeaderBar(QWidget):
         self.search.setCursor(Qt.CursorShape.PointingHandCursor)
         self.search.clicked.connect(search.trigger)
         layout.addWidget(self.search)
+        # Over Home, the room right of the search: with ``gap`` sized to match, it holds
+        # the search in the middle of the window (``_centre_search``).
+        self.gap_right = QWidget()
+        self.gap_right.setObjectName("headerGap")
+        self.gap_right.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.gap_right.hide()
+        layout.addWidget(self.gap_right, 1)
+
+        # Home's quick actions, and the theme. Hidden over a board, where the steps are.
+        self.quick_buttons: list[QToolButton] = []
+        for item in quick:
+            button = QToolButton()
+            button.setObjectName("headerQuick")
+            button.setText(item.label)
+            button.setIcon(icons.icon(item.picture))
+            button.setIconSize(QSize(icons.SIZE - 2, icons.SIZE - 2))
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setAutoRaise(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(item.tooltip)
+            button.clicked.connect(lambda _checked=False, run=item.run: run())
+            button.hide()
+            layout.addWidget(button)
+            self.quick_buttons.append(button)
+        #: The View menu's two theme choices; the button runs the one not chosen, so the
+        #: button and the menu can never disagree about which theme is set.
+        self._themes: Mapping[str, QAction] = themes or {}
+        self.theme_button = QToolButton()
+        self.theme_button.setObjectName("headerTheme")
+        self.theme_button.setIconSize(QSize(icons.SIZE - 2, icons.SIZE - 2))
+        self.theme_button.setAutoRaise(True)
+        self.theme_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_button.clicked.connect(self._switch_theme)
+        self.theme_button.hide()
+        for action in self._themes.values():
+            action.toggled.connect(lambda _on: self._show_theme())
+        self._show_theme()
+        layout.addWidget(self.theme_button)
 
         self.undo_button = self._action_button(undo, "undo")
         self.redo_button = self._action_button(redo, "redo")
@@ -174,7 +260,117 @@ class HeaderBar(QWidget):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        self._fit_search()
+        if self._on_home:
+            self._fit_home()
+        else:
+            self._fit_search()
+
+    # -- the theme ------------------------------------------------------------------
+
+    def chosen_theme(self) -> str | None:
+        """The theme the View menu has ticked, or None with no theme actions."""
+        return next((name for name, action in self._themes.items() if action.isChecked()), None)
+
+    def _show_theme(self) -> None:
+        """A moon while the light theme is chosen (a click chooses dark), a sun while dark."""
+        chosen = self.chosen_theme()
+        if chosen is None:
+            self.theme_button.setVisible(False)
+            return
+        to_dark = chosen != "dark"
+        self.theme_button.setIcon(icons.icon("moon" if to_dark else "sun"))
+        self.theme_button.setToolTip(
+            t("Switch to the dark theme. It applies the next time Perfboard Studio starts.")
+            if to_dark
+            else t("Switch to the light theme. It applies the next time Perfboard Studio starts.")
+        )
+        self.theme_button.setAccessibleName(t("Theme"))
+
+    def _switch_theme(self) -> None:
+        chosen = self.chosen_theme()
+        other = next((name for name in self._themes if name != chosen), None)
+        if other is not None:
+            self._themes[other].trigger()
+
+    # -- Home's row ----------------------------------------------------------------
+
+    def _fit_home(self) -> None:
+        """The first of ``HOME_FITS`` that fits the width, and then the search centred."""
+        if self._fitting:
+            return
+        layout = self.layout()
+        if layout is None:
+            return
+        self._fitting = True
+        try:
+            self.gap.setMinimumWidth(0)
+            self.gap.setMaximumWidth(16777215)
+            # The widest that fits with the search in the middle; failing that, the widest
+            # that fits at all.
+            fits = [fit for fit in HOME_FITS if self._try_home_fit(*fit, centred=True)]
+            if not fits:
+                fits = [fit for fit in HOME_FITS if self._try_home_fit(*fit, centred=False)]
+            self._home_fit(*(fits[0] if fits else HOME_FITS[-1]))
+            layout.setGeometry(self.rect())
+            self._centre_search()
+        finally:
+            self._fitting = False
+
+    def _try_home_fit(self, words: bool, span: str, named: bool, *, centred: bool) -> bool:
+        """Whether Home's row fits the width laid out so -- with the search in the middle
+        of the window too, if ``centred``."""
+        layout = self.layout()
+        if layout is None:
+            return False
+        self._home_fit(words, span, named)
+        if not centred:
+            return layout.sizeHint().width() <= self.width()
+        spacing = max(0, layout.spacing())
+        margins = layout.contentsMargins()
+
+        def span_of(widgets: Sequence[QWidget]) -> int:
+            return sum(w.sizeHint().width() + spacing for w in widgets if not w.isHidden())
+
+        left = margins.left() + span_of(
+            [self.menu_button, self.app_icon, self.app_name]
+        ) + 8  # the two spacings either side of the icon
+        right = margins.right() + span_of([*self.quick_buttons, self.theme_button])
+        search = self.search.sizeHint().width() + 2 * spacing
+        return search + 2 * max(left, right) <= self.width()
+
+    def _home_fit(self, words: bool, span: str, named: bool) -> None:
+        style = (
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            if words
+            else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        for button in self.quick_buttons:
+            button.setToolButtonStyle(style)
+        self._narrow_search(span == "narrow")
+        if self.search.property("span") != span:
+            self.search.setProperty("span", span)
+            theme.restyle(self.search)
+        self.app_name.setVisible(named)
+
+    def _centre_search(self) -> None:
+        """Size the room left of the search so the search stands in the window's middle --
+        or as near it as the things beside it allow."""
+        layout = self.layout()
+        if layout is None:
+            return
+        gap_left = self.gap.geometry().left()
+        search_width = self.search.width()
+        spacing = max(0, layout.spacing())
+        wanted = (self.width() - search_width) // 2 - spacing - gap_left
+        right_side = sum(
+            widget.sizeHint().width() + spacing
+            for widget in (*self.quick_buttons, self.theme_button)
+            if not widget.isHidden()
+        ) + layout.contentsMargins().right()
+        room = self.width() - gap_left - search_width - right_side - 2 * spacing
+        width = max(0, min(wanted, room))
+        self.gap.setFixedWidth(width)
+        layout.setGeometry(self.rect())
 
     def _fit_search(self) -> None:
         """The search's words go before the current step's name does.
@@ -259,13 +455,22 @@ class HeaderBar(QWidget):
                        self.undo_button, self.redo_button, self.steps.next_button):
             widget.setVisible(not on)
         self.gap.setVisible(on)
+        self.gap_right.setVisible(on)
+        for button in self.quick_buttons:
+            button.setVisible(on)
+        self.theme_button.setVisible(on and self.chosen_theme() is not None)
         self.place.setVisible(bool(self.place.text()) and not on)
         self.unsaved.setVisible(self._modified and not on)
         self.update_pill.setVisible(self._version is not None and not on)
         # Over Home the steps are gone and the search has the room; off it, it fits again.
         if on:
-            self._narrow_search(False)
+            self._fit_home()
         else:
+            # The icon stays and the name goes: over a board the name took the room the
+            # steps say their names in, at every width below 1600 px.
+            self.app_name.setVisible(False)
+            self.search.setProperty("span", None)
+            theme.restyle(self.search)
             self._fit_search()
 
     def open_menu(self, menu: QMenu | None = None) -> QMenu:

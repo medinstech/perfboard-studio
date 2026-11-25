@@ -25,6 +25,7 @@ the icons are built around rather than four unrelated pictures.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -608,6 +609,71 @@ def _menu(p: QPainter) -> None:
         p.drawLine(QPointF(18, y), QPointF(82, y))
 
 
+def _new_circuit(p: QPainter) -> None:
+    """A sheet with a plus at its corner: a new circuit, drawn on the sheet first."""
+    sheet = QPainterPath(QPointF(56, 84))
+    sheet.lineTo(QPointF(22, 84))
+    sheet.quadTo(QPointF(16, 84), QPointF(16, 78))
+    sheet.lineTo(QPointF(16, 18))
+    sheet.quadTo(QPointF(16, 12), QPointF(22, 12))
+    sheet.lineTo(QPointF(64, 12))
+    sheet.quadTo(QPointF(70, 12), QPointF(70, 18))
+    sheet.lineTo(QPointF(70, 50))
+    p.drawPath(sheet)
+    p.setPen(_pen(_ink.accent, 7))
+    p.drawLine(QPointF(72, 60), QPointF(72, 88))
+    p.drawLine(QPointF(58, 74), QPointF(86, 74))
+
+
+def _open(p: QPainter) -> None:
+    """A folder: open a board or a project from disk."""
+    folder = QPainterPath(QPointF(12, 78))
+    folder.lineTo(QPointF(12, 26))
+    folder.quadTo(QPointF(12, 22), QPointF(16, 22))
+    folder.lineTo(QPointF(38, 22))
+    folder.lineTo(QPointF(46, 32))
+    folder.lineTo(QPointF(80, 32))
+    folder.quadTo(QPointF(84, 32), QPointF(84, 36))
+    folder.lineTo(QPointF(84, 44))
+    p.drawPath(folder)
+    front = QPainterPath(QPointF(12, 78))
+    front.lineTo(QPointF(24, 46))
+    front.lineTo(QPointF(92, 46))
+    front.lineTo(QPointF(80, 78))
+    front.closeSubpath()
+    p.drawPath(front)
+
+
+def _tour(p: QPainter) -> None:
+    """A play mark in a ring: the tour, a board walked through step by step."""
+    p.drawEllipse(QPointF(50, 50), 37, 37)
+    play = QPainterPath(QPointF(42, 34))
+    play.lineTo(QPointF(66, 50))
+    play.lineTo(QPointF(42, 66))
+    play.closeSubpath()
+    p.setPen(_pen(_ink.accent, 7))
+    p.drawPath(play)
+
+
+def _sun(p: QPainter) -> None:
+    """A sun: the light theme. A disc and eight short rays, the rays in the accent."""
+    p.drawEllipse(QPointF(50, 50), 17, 17)
+    p.setPen(_pen(_ink.accent, 7))
+    for step in range(8):
+        angle = step * math.pi / 4
+        dx, dy = math.cos(angle), math.sin(angle)
+        p.drawLine(QPointF(50 + 29 * dx, 50 + 29 * dy), QPointF(50 + 39 * dx, 50 + 39 * dy))
+
+
+def _moon(p: QPainter) -> None:
+    """A crescent moon: the dark theme. One circle with a second taken out of it."""
+    disc = QPainterPath()
+    disc.addEllipse(QPointF(48, 52), 34, 34)
+    bite = QPainterPath()
+    bite.addEllipse(QPointF(68, 34), 28, 28)
+    p.drawPath(disc.subtracted(bite))
+
+
 #: Name -> drawing. The names are what the toolbar and the menus ask for.
 DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "save": _save,
@@ -657,6 +723,11 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "show": _show,
     "zoom-in": _zoom_in,
     "zoom-out": _zoom_out,
+    "new-circuit": _new_circuit,
+    "open": _open,
+    "tour": _tour,
+    "sun": _sun,
+    "moon": _moon,
 }
 
 

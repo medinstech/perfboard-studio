@@ -6341,6 +6341,16 @@ TURKISH: Mapping[str, str] = {
     "Your boards and the examples. This board stays open, and Continue comes back to it.":
         "Kartlarınız ve örnekler. Bu kart açık kalır; Devam Et ile ona dönersiniz.",
     "Tour": "Tur",
+    "Theme": "Tema",
+    "Switch to the dark theme. It applies the next time Perfboard Studio starts.": (
+        "Koyu temaya geçin. Perfboard Studio bir sonraki açılışında uygulanır."
+    ),
+    "Switch to the light theme. It applies the next time Perfboard Studio starts.": (
+        "Açık temaya geçin. Perfboard Studio bir sonraki açılışında uygulanır."
+    ),
+    "Open a board or a project from disk (Ctrl+O).": (
+        "Diskten bir kart ya da proje açın (Ctrl+O)."
+    ),
     "Show All": "Tümünü Göster",
     "Saved today": "Bugün kaydedildi",
     "Saved yesterday": "Dün kaydedildi",
