@@ -8268,7 +8268,7 @@ class MainWindow(QMainWindow):
                 "when the board changes, so an edit cannot move what you were looking at."
             )
         )
-        self.act_sch_fit.triggered.connect(lambda: self.schematic_view.fit())
+        self.act_sch_fit.triggered.connect(lambda: self.schematic_view.fit(animate=True))
 
 
         self.act_sch_place = QAction(icons.icon("sch-place"), t("&Place on the Board"), self)
@@ -11437,7 +11437,7 @@ class MainWindow(QMainWindow):
         )
         arrange.triggered.connect(self.on_schematic_auto_layout)
         fit = menu.addAction(t("Fit the S&heet"))
-        fit.triggered.connect(view.fit)
+        fit.triggered.connect(lambda: view.fit(animate=True))
         return menu
 
     def _add_pin_entries(self, menu: QMenu, pin: tuple[str, str] | None) -> None:
@@ -13451,6 +13451,8 @@ class MainWindow(QMainWindow):
         if refs:
             self._schematic_ref = str(refs[0])
             self._sync_schematic_highlight()
+            if self.schematic_view.isVisible():
+                self.schematic_view.focus_symbol(str(refs[0]))
         net_id = item.data(0, ROLE_NET_ID)
         if net_id:
             self._select_net(net_id)
@@ -16391,9 +16393,9 @@ class MainWindow(QMainWindow):
         been zoomed into one pin fitted the BOARD behind it.
         """
         if hasattr(self, "schematic_view") and self.schematic_view.hasFocus():
-            self.schematic_view.fit()
+            self.schematic_view.fit(animate=True)
         else:
-            self.view.fit_board()
+            self.view.fit_board(animate=True)
 
     def on_zoom(self, factor: float) -> None:
         if hasattr(self, "schematic_view") and self.schematic_view.hasFocus():

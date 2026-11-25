@@ -35,6 +35,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
     QMimeData,
+    QObject,
     QPoint,
     QPointF,
     QRect,
@@ -199,7 +200,7 @@ from perfboard_studio.wirecolour import (
 )
 from perfboard_studio.wiringstats import vias
 
-from . import motion
+from . import motion, theme
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
     AXIAL_ARCHETYPES,
@@ -8659,6 +8660,201 @@ FINDING_FRAME_PITCHES = 8
 FINDING_MAX_SCALE = 24.0
 
 
+class CameraFlight(QObject):
+    """Log-scale camera interpolation for 2D ``QGraphicsView`` canvases.
+
+    Interpolates ``log(scale)`` and scene centre together with ``OutCubic`` easing so zoom
+    velocity stays perceptually constant, cancels cleanly on manual navigation, and snaps
+    immediately under Reduce Motion or while the view is hidden.
+    """
+
+    def __init__(self, view: QGraphicsView) -> None:
+        super().__init__(view)
+        self._view = view
+        self._anim: QVariantAnimation | None = None
+        self._start_center = QPointF()
+        self._end_center = QPointF()
+        self._start_log_scale = 0.0
+        self._end_log_scale = 0.0
+        self._target_scale = 1.0
+        self._on_done: Callable[[], None] | None = None
+
+    @property
+    def is_running(self) -> bool:
+        return self._anim is not None
+
+    @property
+    def target_scale(self) -> float:
+        return self._target_scale
+
+    @property
+    def target_center(self) -> QPointF:
+        return QPointF(self._end_center)
+
+    def cancel(self) -> None:
+        if self._anim is not None:
+            self._anim.stop()
+            self._anim = None
+        self._on_done = None
+
+    def fly_to(
+        self,
+        center: QPointF,
+        scale: float,
+        *,
+        duration_ms: int = 240,
+        on_done: Callable[[], None] | None = None,
+    ) -> None:
+        self.cancel()
+        target_scale = max(1e-3, float(scale))
+        self._target_scale = target_scale
+        self._end_center = QPointF(center)
+        cur_scale = max(1e-3, float(self._view.transform().m11()))
+        cur_center = self._view.mapToScene(self._view.viewport().rect().center())
+        dur = motion.duration(duration_ms) if self._view.isVisible() else 0
+        dist = math.hypot(center.x() - cur_center.x(), center.y() - cur_center.y())
+        log_diff = abs(math.log(target_scale / cur_scale))
+        if dur <= 0 or (dist < 0.25 and log_diff < 1e-3):
+            self._apply(target_scale, center)
+            if on_done is not None:
+                on_done()
+            return
+
+        self._start_center = cur_center
+        self._start_log_scale = math.log(cur_scale)
+        self._end_log_scale = math.log(target_scale)
+        self._on_done = on_done
+
+        anim = QVariantAnimation(self)
+        anim.setDuration(dur)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._step)
+        anim.finished.connect(self._finish)
+        self._anim = anim
+        anim.start()
+
+    def _apply(self, scale: float, center: QPointF) -> None:
+        self._view.resetTransform()
+        self._view.scale(scale, scale)
+        self._view.centerOn(center)
+
+    def _step(self, value: object) -> None:
+        t_val = float(value) if isinstance(value, (int, float)) else 1.0
+        s = math.exp(self._start_log_scale + (self._end_log_scale - self._start_log_scale) * t_val)
+        cx = self._start_center.x() + (self._end_center.x() - self._start_center.x()) * t_val
+        cy = self._start_center.y() + (self._end_center.y() - self._start_center.y()) * t_val
+        self._apply(s, QPointF(cx, cy))
+
+    def _finish(self) -> None:
+        self._anim = None
+        self._apply(self._target_scale, self._end_center)
+        done = self._on_done
+        self._on_done = None
+        if done is not None:
+            done()
+
+
+class SpotlightPulse(QObject):
+    """Brief cosmetic concentric ring pulse at a navigated scene target.
+
+    Strictly cosmetic: never triggers under Reduce Motion, never paints when ``_on_paper``
+    is true (1:1 PDF/PNG export), and automatically clears when finished.
+    """
+
+    def __init__(self, view: QGraphicsView) -> None:
+        super().__init__(view)
+        self._view = view
+        self._anim: QVariantAnimation | None = None
+        self._center: QPointF | None = None
+        self._base_radius = 3.0
+        self._colour_hex: str | None = None
+        self._progress = 0.0
+
+    @property
+    def active(self) -> bool:
+        return self._center is not None and self._anim is not None
+
+    def clear(self) -> None:
+        if self._anim is not None:
+            self._anim.stop()
+            self._anim = None
+        self._center = None
+        self._progress = 0.0
+        self._view.viewport().update()
+
+    def trigger(
+        self,
+        center: QPointF,
+        *,
+        radius_mm: float = 3.0,
+        colour_hex: str | None = None,
+        duration_ms: int = 650,
+    ) -> None:
+        dur = motion.duration(duration_ms) if self._view.isVisible() else 0
+        if dur <= 0:
+            self.clear()
+            return
+        if self._anim is not None:
+            self._anim.stop()
+        self._center = QPointF(center)
+        self._base_radius = max(1.5, float(radius_mm))
+        self._colour_hex = colour_hex
+        self._progress = 0.0
+        anim = QVariantAnimation(self)
+        anim.setDuration(dur)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._step)
+        anim.finished.connect(self.clear)
+        self._anim = anim
+        anim.start()
+
+    def _step(self, value: object) -> None:
+        self._progress = float(value) if isinstance(value, (int, float)) else 1.0
+        self._view.viewport().update()
+
+    def paint(self, painter: QPainter) -> None:
+        if self._center is None or self._anim is None or _on_paper(painter):
+            return
+        p = max(0.0, min(1.0, self._progress))
+        base = QColor(self._colour_hex or theme.ACTIVE.accent)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # Soft radial wash inside the target area.
+        wash = QColor(base)
+        wash.setAlphaF((1.0 - p) * 0.16)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(wash)
+        painter.drawEllipse(self._center, self._base_radius, self._base_radius)
+
+        # Leading expanding ring.
+        r1 = self._base_radius + 6.5 * p
+        c1 = QColor(base)
+        c1.setAlphaF(((1.0 - p) ** 1.35) * 0.88)
+        pen1 = QPen(c1, 2.2)
+        pen1.setCosmetic(True)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(pen1)
+        painter.drawEllipse(self._center, r1, r1)
+
+        # Trailing inner ring for subtle depth.
+        if p > 0.20:
+            p2 = (p - 0.20) / 0.80
+            r2 = self._base_radius * 0.65 + 4.4 * p2
+            c2 = QColor(base)
+            c2.setAlphaF(((1.0 - p2) ** 1.35) * 0.56)
+            pen2 = QPen(c2, 1.5)
+            pen2.setCosmetic(True)
+            painter.setPen(pen2)
+            painter.drawEllipse(self._center, r2, r2)
+
+        painter.restore()
+
+
 class FlipCurtain(QWidget):
     """The board turning over (``BoardView.turn_over``): the face seen before, pictured,
     turning edge-on about the middle of the view, and the face after turning in from
@@ -8893,6 +9089,9 @@ class BoardView(QGraphicsView):
         self.drag_banner = ViewOverlay(self.viewport(), "modeBanner")
         #: The board turning over, while it does (``turn_over``).
         self._curtain: FlipCurtain | None = None
+        #: Smooth 2D camera flight and cosmetic target spotlight pulse.
+        self._camera = CameraFlight(self)
+        self._pulse = SpotlightPulse(self)
         self.viewport().installEventFilter(self)
 
     def set_preview_frame(self, colour: QColor | None) -> None:
@@ -8919,6 +9118,10 @@ class BoardView(QGraphicsView):
         painter.drawRect(self.viewport().rect().adjusted(1, 1, -2, -2))
         painter.end()
 
+    def drawForeground(self, painter: QPainter, rect: QRectF | QRect) -> None:
+        super().drawForeground(painter, rect)
+        self._pulse.paint(painter)
+
     # -- turning the board over -----------------------------------------------
 
     #: How long the board takes to turn over, in milliseconds.
@@ -8932,6 +9135,8 @@ class BoardView(QGraphicsView):
         loses track of: the picture jumped, and which edge had gone where was a puzzle. The
         turn says it. The scene flips at once, under the curtain, so nothing waits on the
         animation; a press while it is turning lands it and flips straight back."""
+        self._camera.cancel()
+        self._pulse.clear()
         curtain = self._curtain
         if curtain is not None:
             curtain.finish()
@@ -9258,21 +9463,25 @@ class BoardView(QGraphicsView):
 
     def zoom_by(self, factor: float) -> None:
         """Zoom about the viewport centre, for a toolbar button or a keyboard shortcut."""
+        base_scale = self._camera.target_scale if self._camera.is_running else self.current_scale()
+        target_center = (
+            self._camera.target_center
+            if self._camera.is_running
+            else self.mapToScene(self.viewport().rect().center())
+        )
         self._navigated()
-        factor = self._clamped_factor(factor)
-        if factor == 1.0:
+        target_scale = min(MAX_SCALE, max(MIN_SCALE, base_scale * factor))
+        if abs(target_scale - self.current_scale()) < 1e-4:
             return
-        anchor = self.transformationAnchor()
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
-        self.scale(factor, factor)
-        self.setTransformationAnchor(anchor)
-        self._refresh_hover()
+        self._camera.fly_to(
+            target_center, target_scale, duration_ms=140, on_done=self._refresh_hover
+        )
 
     #: Widgets laid over the view's edges -- the tool rail at the left, the view bar at the
     #: bottom right (``FloatingBar``) -- that a fit leaves room for (``fit_board``).
     overlays: tuple[QWidget, ...] = ()
 
-    def fit_board(self) -> None:
+    def fit_board(self, *, animate: bool = False) -> None:
         """The whole board in view, clear of the bars laid over the view.
 
         Fitted to the viewport, the board's top-left corner was under the tool rail and a
@@ -9286,12 +9495,27 @@ class BoardView(QGraphicsView):
         across, down = self._overlay_room(viewport)
         room = viewport.adjusted(across, down, -across, -down)
         if rect.isEmpty() or room.width() < 80 or room.height() < 80:
+            self._camera.cancel()
             self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
-        else:
-            scale = min((room.width() - 4) / rect.width(), (room.height() - 4) / rect.height())
-            self.resetTransform()
-            self.scale(scale, scale)
-            self.centerOn(rect.center())
+            self._clamp_scale()
+            self._fitted = True
+            return
+        scale = min((room.width() - 4) / rect.width(), (room.height() - 4) / rect.height())
+        scale = min(MAX_SCALE, max(MIN_SCALE, scale))
+        if animate and not motion.reduced() and self.isVisible():
+            # Mark navigated during flight so scrollbar resizeEvents do not snap back.
+            self._navigated()
+
+            def _landed() -> None:
+                self._fitted = True
+                self._refresh_hover()
+
+            self._camera.fly_to(rect.center(), scale, duration_ms=260, on_done=_landed)
+            return
+        self._camera.cancel()
+        self.resetTransform()
+        self.scale(scale, scale)
+        self.centerOn(rect.center())
         self._clamp_scale()
         self._fitted = True
 
@@ -9305,16 +9529,21 @@ class BoardView(QGraphicsView):
         (``FloatingBar.eventFilter``) -- so the fit leaves them their room."""
         super().resizeEvent(event)
         if self._fitted:
-            self.fit_board()
+            self.fit_board(animate=False)
 
     def _navigated(self) -> None:
         """The person zoomed or panned: a resize leaves the board where they put it."""
+        self._camera.cancel()
         self._fitted = False
 
-    def look_at(self, point: QPointF) -> None:
+    def look_at(self, point: QPointF, *, pulse: bool = True) -> None:
         """Centre on one point -- a part somebody asked to go to."""
         self._navigated()
-        self.centerOn(point)
+        self._camera.fly_to(
+            point, self.current_scale(), duration_ms=240, on_done=self._refresh_hover
+        )
+        if pulse:
+            self._pulse.trigger(point, radius_mm=2.8)
 
     def _overlay_room(self, viewport: QRect) -> tuple[int, int]:
         """(across, down): the room the visible bars take from the viewport's sides
@@ -9468,12 +9697,25 @@ class BoardView(QGraphicsView):
         grow_x = max(0.0, least - rect.width()) / 2
         grow_y = max(0.0, least - rect.height()) / 2
         rect = rect.adjusted(-grow_x, -grow_y, grow_x, grow_y)
-        self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
-        if self.current_scale() > FINDING_MAX_SCALE:
-            factor = FINDING_MAX_SCALE / self.current_scale()
-            self.scale(factor, factor)
-            self.centerOn(rect.center())
-        self._clamp_scale()
+        viewport = self.viewport().rect()
+        if viewport.width() >= 16 and viewport.height() >= 16 and not rect.isEmpty():
+            scale = min(
+                (viewport.width() - 4) / rect.width(),
+                (viewport.height() - 4) / rect.height(),
+            )
+            scale = min(FINDING_MAX_SCALE, MAX_SCALE, max(MIN_SCALE, scale))
+            self._camera.fly_to(
+                rect.center(), scale, duration_ms=280, on_done=self._refresh_hover
+            )
+        else:
+            self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+            if self.current_scale() > FINDING_MAX_SCALE:
+                factor = FINDING_MAX_SCALE / self.current_scale()
+                self.scale(factor, factor)
+                self.centerOn(rect.center())
+            self._clamp_scale()
+        radius = max(2.6, min(rect.width(), rect.height()) * 0.25)
+        self._pulse.trigger(rect.center(), radius_mm=radius)
 
     def reveal_holes(self, holes: Sequence[HoleCoord], board: Board, side: BoardSide) -> None:
         """Bring the given holes into view WITHOUT changing zoom, unless they cannot fit.
@@ -9485,15 +9727,30 @@ class BoardView(QGraphicsView):
         if not holes:
             return
         rect = self._holes_rect(holes, board, side, 4.0)
-        viewport = self.mapToScene(self.viewport().rect()).boundingRect()
-        if rect.width() > viewport.width() or rect.height() > viewport.height():
+        viewport_scene = self.mapToScene(self.viewport().rect()).boundingRect()
+        if rect.width() > viewport_scene.width() or rect.height() > viewport_scene.height():
             self._navigated()
-            self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
-            self._clamp_scale()
+            viewport = self.viewport().rect()
+            if viewport.width() >= 16 and viewport.height() >= 16 and not rect.isEmpty():
+                scale = min(
+                    (viewport.width() - 4) / rect.width(),
+                    (viewport.height() - 4) / rect.height(),
+                )
+                scale = min(MAX_SCALE, max(MIN_SCALE, scale))
+                self._camera.fly_to(
+                    rect.center(), scale, duration_ms=260, on_done=self._refresh_hover
+                )
+            else:
+                self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+                self._clamp_scale()
+            self._pulse.trigger(rect.center(), radius_mm=3.2)
             return
-        if not viewport.contains(rect):
+        if not viewport_scene.contains(rect):
             self._navigated()
-            self.centerOn(rect.center())
+            self._camera.fly_to(
+                rect.center(), self.current_scale(), duration_ms=240, on_done=self._refresh_hover
+            )
+            self._pulse.trigger(rect.center(), radius_mm=3.2)
 
 
 def copper_shape(conductor: Conductor) -> tuple[str, str, tuple[tuple[int, int], ...]]:

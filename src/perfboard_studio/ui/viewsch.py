@@ -112,14 +112,21 @@ from perfboard_studio.schematic import (
 )
 from perfboard_studio.schematic_export import NIGHT, SheetInk
 
-from . import theme
+from . import motion, theme
 from .canvasinput import wheel_intent
 from .i18n import t
 from .scenetext import draw_flag_label, draw_outlined_label, label_font, label_plate_rect
 
 # The drag formats live with the board, which is what receives one of them and which
 # already owns the vocabulary a drop lands in (screen_to_hole). Two constants, three views.
-from .view2d import FOOTPRINT_MIME, PART_MIME, overlay_room, picture_beside_the_pointer
+from .view2d import (
+    FOOTPRINT_MIME,
+    PART_MIME,
+    CameraFlight,
+    SpotlightPulse,
+    overlay_room,
+    picture_beside_the_pointer,
+)
 
 #: Which tool has the left button on the sheet.
 #:
@@ -1437,6 +1444,9 @@ class SchematicView(QGraphicsView):
         #: Middle-button panning, which every tool leaves alone. See set_tool.
         self._panning = False
         self._pan_origin = QPointF()
+        #: Smooth 2D camera flight and cosmetic target spotlight pulse.
+        self._camera = CameraFlight(self)
+        self._pulse = SpotlightPulse(self)
         #: Which button the pan started on: the middle one, or the left with Space held.
         self._pan_button = Qt.MouseButton.MiddleButton
         #: Space is down, so the left button pans -- the laptop's middle button.
@@ -2138,7 +2148,7 @@ class SchematicView(QGraphicsView):
     #: a fit leaves room for (``fit``, ``view2d.overlay_room``).
     overlays: tuple[QWidget, ...] = ()
 
-    def fit(self) -> None:
+    def fit(self, *, animate: bool = False) -> None:
         if self.item is None:
             return
         sheet = QRectF(0.0, 0.0, self.item.drawing.width, self.item.drawing.height)
@@ -2159,14 +2169,27 @@ class SchematicView(QGraphicsView):
         across, down = overlay_room(self, self.overlays, viewport)
         room = viewport.adjusted(across, down, -across, -down)
         if room.width() < 80 or room.height() < 80:
+            self._camera.cancel()
             self.fitInView(sheet, Qt.AspectRatioMode.KeepAspectRatio)
-        else:
-            scale = min(
-                (room.width() - 4) / sheet.width(), (room.height() - 4) / sheet.height()
-            )
-            self.resetTransform()
-            self.scale(scale, scale)
-            self.centerOn(sheet.center())
+            self._fitted = True
+            self._user_framed = False
+            return
+        scale = min((room.width() - 4) / sheet.width(), (room.height() - 4) / sheet.height())
+        scale = min(self.MAX_SCALE, max(self.MIN_SCALE, scale))
+        if animate and not motion.reduced() and self.isVisible():
+            self._user_framed = True
+
+            def _landed() -> None:
+                self._show_scroll_bars(False)
+                self._fitted = True
+                self._user_framed = False
+
+            self._camera.fly_to(sheet.center(), scale, duration_ms=260, on_done=_landed)
+            return
+        self._camera.cancel()
+        self.resetTransform()
+        self.scale(scale, scale)
+        self.centerOn(sheet.center())
         self._fitted = True
         # Fit hands the view back to the sheet: the next resize fits it again.
         self._user_framed = False
@@ -2186,8 +2209,31 @@ class SchematicView(QGraphicsView):
         Marked theirs BEFORE the bars return, because a bar coming in is itself a resize,
         and a resize of a view still marked fitted would fit it -- undoing the very zoom
         that brought the bar in."""
+        self._camera.cancel()
         self._user_framed = True
         self._show_scroll_bars(True)
+
+    def look_at(self, point: QPointF, *, pulse: bool = True) -> None:
+        """Smoothly centre on a sheet point and optionally pulse a spotlight ring there."""
+        self._fitted = True
+        self._hand_over_framing()
+        self._camera.fly_to(point, self.current_scale(), duration_ms=240)
+        if pulse:
+            self._pulse.trigger(point, radius_mm=3.5)
+
+    def focus_symbol(self, ref: str) -> None:
+        """Glide to symbol ``ref`` on the sheet with a target spotlight pulse."""
+        if self.item is None:
+            return
+        symbol = next((s for s in self.item.drawing.symbols if s.ref == ref), None)
+        if symbol is None:
+            return
+        center = QPointF(symbol.at.x + symbol.width / 2.0, symbol.at.y + symbol.height / 2.0)
+        self.look_at(center, pulse=True)
+
+    def drawForeground(self, painter: QPainter, rect: QRectF | QRect) -> None:
+        super().drawForeground(painter, rect)
+        self._pulse.paint(painter)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Keep a fitted sheet fitted while the panel finds its size.
@@ -2292,6 +2338,7 @@ class SchematicView(QGraphicsView):
 
     def _pan_by(self, dx: float, dy: float) -> None:
         """Move the content by this many pixels: right and down are positive."""
+        self._camera.cancel()
         horizontal = self.horizontalScrollBar()
         vertical = self.verticalScrollBar()
         horizontal.setValue(horizontal.value() - round(dx))
@@ -2299,15 +2346,18 @@ class SchematicView(QGraphicsView):
 
     def zoom_by(self, factor: float) -> None:
         """Zoom about the centre, for a keyboard shortcut."""
-        factor = self._clamped_factor(factor)
-        if factor == 1.0:
+        base_scale = self._camera.target_scale if self._camera.is_running else self.current_scale()
+        target_center = (
+            self._camera.target_center
+            if self._camera.is_running
+            else self.mapToScene(self.viewport().rect().center())
+        )
+        target_scale = min(self.MAX_SCALE, max(self.MIN_SCALE, base_scale * factor))
+        if abs(target_scale - self.current_scale()) < 1e-4:
             return
-        anchor = self.transformationAnchor()
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
-        self.scale(factor, factor)
-        self.setTransformationAnchor(anchor)
         self._fitted = True
         self._hand_over_framing()
+        self._camera.fly_to(target_center, target_scale, duration_ms=140)
 
     #: Every tool that draws a note by dragging a box out.
     SHAPE_TOOLS: tuple[str, ...] = ("line", "rectangle", "circle")
@@ -3499,6 +3549,7 @@ class SchematicView(QGraphicsView):
     # -- panning, on the middle button or Space with the left -------------------------------
 
     def _start_pan(self, event: QMouseEvent) -> None:
+        self._camera.cancel()
         self._panning = True
         self._pan_button = event.button()
         self._hand_over_framing()
