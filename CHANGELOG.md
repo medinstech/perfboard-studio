@@ -188,6 +188,14 @@ closed without a bump.
   menu's choice. A narrow window sheds the labels to icons, which keep them as tooltips,
   and then the search's width, before anything overlaps. Over a board the row keeps only
   the icon, since the steps hold the middle.
+- **A long run shows a card, and an empty panel shows its icon.** Auto-place, auto-wire,
+  the board trial and the guide's pictures used to put up the platform's progress dialog;
+  they show a card over the window now, with what is being done, the time it has taken so
+  far, a bar that keeps moving while nothing can say how far the run has got (and fills
+  smoothly when something can), and Cancel. The Nets, Parts, sheet and guide panels show
+  their own icon over the words they say when empty, and a panel that becomes empty while
+  it is in view lets the words fade in rather than appear in one frame. With Reduce Motion
+  on, the bar is still and the words are simply there.
 - **Hover eases in.** A Home card rises two pixels off the page on a soft shadow while
   the pointer is on it, the header's buttons and the wire-colour swatches fade their hover
   in and out over 120 ms instead of switching, and a primary button sinks a pixel as it is

@@ -976,6 +976,7 @@ QProgressBar {{
     text-align: center;
 }}
 QProgressBar::chunk {{ background: {k.accent}; border-radius: {RADIUS_SM}px; }}
+QProgressDialog#plannerCard {{ background: transparent; }}
 """
 
 

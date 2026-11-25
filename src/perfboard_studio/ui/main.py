@@ -466,6 +466,7 @@ from .palette import ALSO as PALETTE_ALSO
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
 from .partnames import footprint_label
+from .plannercard import PlannerCard
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
 from .problems import ProblemsBar, advice, finding_tip, findings_tip
 from .project import write_project
@@ -8035,6 +8036,7 @@ class MainWindow(QMainWindow):
                 t("No nets yet"),
                 t("Join two pins with Connect, on the schematic or the board. Pins joined "
                   "together make a net."),
+                icon="connect",
             ),
         )
         self.nets_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -8063,6 +8065,7 @@ class MainWindow(QMainWindow):
                 t("No parts yet"),
                 t("Parts you add show up here with their values. It becomes your shopping "
                   "list."),
+                icon="sch-add",
             ),
         )
         self.part_list.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
@@ -8178,6 +8181,7 @@ class MainWindow(QMainWindow):
                     (t("Open an Example…"), lambda: self.menu_examples.exec(QCursor.pos())),
                     (t("Import from KiCad…"), lambda: self.on_import_netlist()),
                 ),
+                icon="schematic",
             ),
             lambda: self._sheet_blank,
         )
@@ -10495,6 +10499,7 @@ class MainWindow(QMainWindow):
                 t("Once parts are on the board, this becomes the soldering order, one step "
                   "at a time."),
                 button=(t("Place on the Board"), lambda: self.act_sch_place.trigger()),
+                icon="guide",
             ),
             lambda: not self.bus.document.components,
         )
@@ -13967,7 +13972,7 @@ class MainWindow(QMainWindow):
                     # Only now, so a run that finishes quickly never flashes a dialog: a
                     # window that blinks is worse than one that pauses imperceptibly.
                     shown = text()
-                    progress = QProgressDialog(shown, t("Cancel"), 0, 0, self)
+                    progress = PlannerCard(shown, t("Cancel"), 0, 0, self)
                     progress.setWindowTitle(t("Working"))
                     progress.setWindowModality(Qt.WindowModality.WindowModal)
                     progress.setMinimumDuration(0)
@@ -18728,7 +18733,7 @@ class MainWindow(QMainWindow):
         def progress(done: int, of: int) -> bool:
             nonlocal dialog, skipped
             if dialog is None and time.perf_counter() - started > self.PLANNER_GRACE_S:
-                dialog = QProgressDialog(
+                dialog = PlannerCard(
                     t("Drawing the build steps…"), t("Skip the Pictures"), 0, of, self
                 )
                 dialog.setWindowTitle(t("Build Guide"))

@@ -761,6 +761,7 @@ TURKISH: Mapping[str, str] = {
     "Import failed": "İçe aktarılamadı",
     "Export failed": "Dışa aktarılamadı",
     "Working": "Çalışıyor",
+    "{seconds} s": "{seconds} sn",
     "Drawing the build steps…": "Montaj adımları çiziliyor…",
     # -- messages that used to be built as English f-strings -------------------
     "Esc to stop placing.": "yerleştirmeyi bitirmek için Esc.",

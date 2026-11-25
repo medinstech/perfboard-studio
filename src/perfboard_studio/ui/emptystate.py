@@ -15,16 +15,27 @@ different ways to do one thing.
 ``EmptyOverlay`` lays an ``EmptyState`` over a widget and shows it exactly while that widget
 has nothing to show. Over a list or a tree it follows the model's own signals, so a panel
 never has to remember to say it is empty; over anything else the owner calls ``refresh``.
+
+A state may carry the panel's own icon over its title, in a soft accent disc: the picture
+the panel's button or menu item already shows, so the empty panel and the way to it look
+alike. And a panel that BECOMES empty while it is on screen -- the last net deleted, the
+board's parts all taken off -- has its words fade in and rise a few pixels into place
+(``ARRIVE_MS``, ``RISE_PX``) rather than replace the rows in one frame, which read as the
+panel failing. Through ``motion``: reduced, or a panel not yet shown, the words are simply
+there.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from typing import cast
 
-from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtCore import QEasingCurve, QEvent, QObject, QRectF, QSize, Qt, QVariantAnimation
+from PySide6.QtGui import QColor, QIcon, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QGraphicsEffect,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -32,7 +43,36 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import theme
+from . import icons, motion, theme
+
+#: How long an empty state takes to arrive, and how far below its place it starts.
+ARRIVE_MS = 220
+RISE_PX = 8
+#: The disc an empty state's icon sits in, and the icon in it.
+BADGE_PX = 52
+BADGE_ICON_PX = 26
+
+
+class Badge(QWidget):
+    """A panel's icon in a soft accent disc, over an empty state's title."""
+
+    def __init__(self, name: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.name = name
+        self.setFixedSize(BADGE_PX, BADGE_PX)
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.ACTIVE.accent_subtle))
+        painter.drawEllipse(QRectF(self.rect()))
+        side = BADGE_ICON_PX
+        corner = (BADGE_PX - side) // 2
+        # The icon's "on" picture: drawn in the accent, as a checked tool is.
+        picture = icons.icon(self.name).pixmap(QSize(side, side), QIcon.Mode.Normal, QIcon.State.On)
+        painter.drawPixmap(corner, corner, side, side, picture)
+        painter.end()
 
 
 class EmptyState(QWidget):
@@ -45,6 +85,7 @@ class EmptyState(QWidget):
         button: tuple[str, Callable[[], object]] | None = None,
         links: Sequence[tuple[str, Callable[[], object]]] = (),
         parent: QWidget | None = None,
+        icon: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("emptyState")
@@ -56,6 +97,11 @@ class EmptyState(QWidget):
         layout.setContentsMargins(*([theme.SPACE["xl"]] * 4))
         layout.setSpacing(theme.SPACE["sm"])
         layout.addStretch(1)
+        self.badge: Badge | None = None
+        if icon is not None:
+            self.badge = Badge(icon)
+            layout.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignHCenter)
+            layout.addSpacing(theme.SPACE["xs"])
         self.title = QLabel(title)
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setWordWrap(True)
@@ -105,6 +151,9 @@ class EmptyOverlay(QObject):
         self._cover = cover
         self._is_empty = is_empty
         self.state = state
+        #: The arrival under way, if one is: a level from 0 (below, clear) to 1 (in place).
+        self._arrival: QVariantAnimation | None = None
+        self._level = 1.0
         state.setParent(cover)
         cover.installEventFilter(self)
         self.refresh()
@@ -120,12 +169,66 @@ class EmptyOverlay(QObject):
 
     def refresh(self, *_args: object) -> None:
         empty = self._is_empty()
+        arriving = empty and self.state.isHidden() and self._cover.isVisible()
         self.state.setVisible(empty)
-        if empty:
-            self.state.setGeometry(self._cover.rect())
-            self.state.raise_()
+        if not empty:
+            self._settle()
+            return
+        self.state.raise_()
+        if arriving:
+            self._arrive()
+        else:
+            self._place()
+
+    def arriving(self) -> bool:
+        """Whether the words are still on their way in."""
+        return self._arrival is not None
+
+    def _place(self) -> None:
+        rise = round((1.0 - self._level) * RISE_PX)
+        self.state.setGeometry(self._cover.rect().translated(0, rise))
+
+    def _arrive(self) -> None:
+        ms = motion.duration(ARRIVE_MS)
+        if ms == 0:
+            self._settle()
+            return
+        self._settle()
+        fade = QGraphicsOpacityEffect(self.state)
+        fade.setOpacity(0.0)
+        self.state.setGraphicsEffect(fade)
+        arrival = QVariantAnimation(self)
+        arrival.setStartValue(0.0)
+        arrival.setEndValue(1.0)
+        arrival.setDuration(ms)
+        arrival.setEasingCurve(QEasingCurve.Type.OutCubic)
+        arrival.valueChanged.connect(self._step)
+        arrival.finished.connect(self._settle)
+        self._arrival = arrival
+        self._level = 0.0
+        self._place()
+        arrival.start()
+
+    def _step(self, value: object) -> None:
+        self._level = float(cast(float, value))
+        effect = self.state.graphicsEffect()
+        if isinstance(effect, QGraphicsOpacityEffect):
+            effect.setOpacity(self._level)
+        self._place()
+
+    def _settle(self) -> None:
+        """In place and opaque, with nothing running and no effect left on the words: an
+        opacity effect renders its widget through a pixmap for as long as it is set."""
+        if self._arrival is not None:
+            self._arrival.stop()
+            self._arrival = None
+        self._level = 1.0
+        if self.state.graphicsEffect() is not None:
+            self.state.setGraphicsEffect(cast(QGraphicsEffect, None))
+        if self.state.isVisible():
+            self._place()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.Resize and self.state.isVisible():
-            self.state.setGeometry(self._cover.rect())
+            self._place()
         return False

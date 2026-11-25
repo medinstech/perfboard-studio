@@ -54,6 +54,109 @@ def test_a_panel_with_more_than_one_reason_to_be_empty_can_change_its_words() ->
     assert state.button is not None and state.button.isHidden()
 
 
+
+# -- an icon, and arriving rather than appearing ----------------------------------------
+
+
+def _wait_for(done, timeout_ms: int) -> bool:  # type: ignore[no-untyped-def]
+    from PySide6.QtTest import QTest
+
+    for _ in range(timeout_ms // 10):
+        if done():
+            return True
+        QTest.qWait(10)
+    return bool(done())
+
+
+def _shown_tree():  # type: ignore[no-untyped-def]
+    tree = QTreeWidget()
+    tree.resize(300, 240)
+    tree.addTopLevelItem(QTreeWidgetItem(["GND"]))
+    overlay = EmptyOverlay.over_view(tree, EmptyState("No nets yet", "Join two pins.", icon="connect"))
+    tree.show()
+    QApplication.processEvents()
+    assert overlay.state.isHidden()
+    return tree, overlay
+
+
+def test_a_state_may_carry_its_panels_icon_over_the_title() -> None:
+    from perfboard_studio.ui import theme
+
+    with_icon = EmptyState("No nets yet", "Join two pins.", icon="connect")
+    assert with_icon.badge is not None and with_icon.badge.name == "connect"
+    layout = with_icon.layout()
+    assert layout.indexOf(with_icon.badge) < layout.indexOf(with_icon.title)
+    image = with_icon.badge.grab().toImage()
+    middle = image.pixelColor(4, image.height() // 2 + 4)
+    assert middle.name() == theme.ACTIVE.accent_subtle
+    assert EmptyState("A", "a").badge is None
+
+
+def test_a_panel_that_empties_on_screen_has_its_words_arrive() -> None:
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+    from perfboard_studio.ui import emptystate, motion
+
+    tree, overlay = _shown_tree()
+    try:
+        motion.set_reduced(False)
+        tree.clear()
+        assert not overlay.state.isHidden()
+        assert overlay.arriving()
+        assert isinstance(overlay.state.graphicsEffect(), QGraphicsOpacityEffect)
+        assert overlay.state.geometry().top() > 0  # below its place, rising
+        assert overlay.state.geometry().top() <= emptystate.RISE_PX
+        assert _wait_for(lambda: not overlay.arriving(), 2000)
+        assert overlay.state.graphicsEffect() is None  # nothing left on the words at rest
+        assert overlay.state.geometry() == tree.viewport().rect()
+    finally:
+        motion.reset()
+        tree.close()
+
+
+def test_with_motion_reduced_the_words_are_simply_there() -> None:
+    from perfboard_studio.ui import motion
+
+    tree, overlay = _shown_tree()
+    try:
+        motion.set_reduced(True)
+        tree.clear()
+        assert not overlay.arriving()
+        assert overlay.state.graphicsEffect() is None
+        assert overlay.state.geometry() == tree.viewport().rect()
+    finally:
+        motion.reset()
+        tree.close()
+
+
+def test_a_panel_not_yet_on_screen_does_not_animate() -> None:
+    from perfboard_studio.ui import motion
+
+    try:
+        motion.set_reduced(False)
+        tree = QTreeWidget()
+        overlay = EmptyOverlay.over_view(tree, EmptyState("No nets yet", "Join two pins."))
+        assert not overlay.arriving() and overlay.state.graphicsEffect() is None
+    finally:
+        motion.reset()
+
+
+def test_a_row_arriving_mid_way_puts_the_words_away_cleanly() -> None:
+    from perfboard_studio.ui import motion
+
+    tree, overlay = _shown_tree()
+    try:
+        motion.set_reduced(False)
+        tree.clear()
+        assert overlay.arriving()
+        tree.addTopLevelItem(QTreeWidgetItem(["VCC"]))
+        assert overlay.state.isHidden()
+        assert not overlay.arriving()
+        assert overlay.state.graphicsEffect() is None
+    finally:
+        motion.reset()
+        tree.close()
+
 # -- in the window -----------------------------------------------------------------------
 
 
@@ -116,3 +219,13 @@ def test_the_guide_offers_to_place_a_circuit_that_is_waiting(make_window) -> Non
     state = window._guide_empty.state
     assert not state.isHidden()
     assert state.button is not None and not state.button.isHidden()
+
+
+def test_every_panel_in_the_window_shows_its_icon(make_window) -> None:
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
+
+    window = make_window(create_starter_document(DocumentMeta(name="blank", created="", modified="")))
+    overlays = (window._nets_empty, window._parts_empty, window._sheet_empty, window._guide_empty)
+    names = [overlay.state.badge.name for overlay in overlays if overlay.state.badge is not None]
+    assert names == ["connect", "sch-add", "schematic", "guide"]
