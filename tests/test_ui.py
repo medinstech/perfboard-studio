@@ -23381,9 +23381,16 @@ def test_inspector_resistor_body_and_span_controls() -> None:
 
         window.scene.select_components([u1.id])
         part_ed = window.inspector.part_editor
+        assert part_ed.resistor_size.toggle.isHidden()
         assert part_ed.resistor_size.body_widget.isHidden()
 
         window.scene.select_components([r1.id])
+        assert not part_ed.resistor_size.toggle.isHidden()
+        assert "1/4 W" in part_ed.resistor_size.toggle.text()
+        assert part_ed.resistor_size.body_widget.isHidden()
+
+        # Expanding the Body/Span disclosure reveals the controls and keeps them open across edits.
+        part_ed.resistor_size.toggle.click()
         assert not part_ed.resistor_size.body_widget.isHidden()
         assert part_ed.resistor_size.body_buttons["0207"].isChecked()
         assert part_ed.resistor_size.span_combo.currentData() == 3
@@ -23393,6 +23400,8 @@ def test_inspector_resistor_body_and_span_controls() -> None:
         r1_after = next(c for c in window.bus.document.components if c.ref == "R1")
         assert r1_after.footprint_id == axial_resistor_id(4, "0309")
         assert axial_resistor_body(r1_after.footprint_id) == (4, "0309")
+        assert not part_ed.resistor_size.body_widget.isHidden()
+        assert "1/2 W" in part_ed.resistor_size.toggle.text()
 
         # Switching to 1/8 W keeps the 4-hole span and uses the 0204 body.
         part_ed.resistor_size.body_buttons["0204"].click()
@@ -23405,11 +23414,22 @@ def test_inspector_resistor_body_and_span_controls() -> None:
         part_ed.resistor_size.span_combo.setCurrentIndex(idx_2)
         r1_short = next(c for c in window.bus.document.components if c.ref == "R1")
         assert r1_short.footprint_id == axial_resistor_id(2, "0204")
+        assert "1/8 W" in part_ed.resistor_size.toggle.text()
+
+        # Selecting another part collapses the disclosure again so fresh selections stay compact.
+        window.scene.select_components([u1.id])
+        assert part_ed.resistor_size.toggle.isHidden()
+        window.scene.select_components([r1.id])
+        assert not part_ed.resistor_size.toggle.isHidden()
+        assert part_ed.resistor_size.body_widget.isHidden()
 
         # Unplaced design part also exposes the controls via part.update.
         _add(window, "R2", "r-axial-3", "4.7k")
         window._on_schematic_part_activated("R2")
         design_ed = window.inspector.design_part_editor
+        assert not design_ed.resistor_size.toggle.isHidden()
+        assert design_ed.resistor_size.body_widget.isHidden()
+        design_ed.resistor_size.toggle.click()
         assert not design_ed.resistor_size.body_widget.isHidden()
         design_ed.resistor_size.body_buttons["0204"].click()
         r2 = next(p for p in window.bus.document.parts if p.ref == "R2")

@@ -264,6 +264,9 @@ closed without a bump.
 
 ### Fixed
 
+- **Axial resistor Properties fit a 720 px window on every platform.** The Body and Span
+  controls now start collapsed behind a `1/4 W · 3 holes ▸` link beside the part's heading,
+  so selecting a resistor adds no height to Properties on Linux or macOS (#16).
 - **Arrange This Symbol lays out that symbol only.** It used to take the symbol's entry out
   of a hand-drawn sheet, which parked it in the overflow column at the right edge. It now
   re-lays it beside its neighbours (`sheet.arrange` for the one reference) and every other

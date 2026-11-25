@@ -7114,6 +7114,9 @@ TURKISH: Mapping[str, str] = {
     # A finding on one board of a system, the board said before it.
     "On {board}: {finding}": "{board} üzerinde: {finding}",
     "Body": "Gövde",
+    "Body wattage and lead span — click to change.": (
+        "Gövde gücü ve bacak açıklığı — değiştirmek için tıklayın."
+    ),
     "The lead span: how many holes apart the two leads go in.": (
         "Bacak aralığı: iki bacağın kaç delik arayla takıldığı."
     ),

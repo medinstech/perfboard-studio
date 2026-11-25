@@ -1056,11 +1056,12 @@ class _CableEditor(QWidget):
 class _ResistorSizeControls:
     """Body rating (1/8 W, 1/4 W, 1/2 W) and lead span controls for axial resistors.
 
-    Shown directly under Package in both ``_PartEditor`` and ``_DesignPartEditor``
-    whenever ``footprints.axial_resistor_body(footprint_id)`` matches an axial resistor.
-    Switching to a larger body widens the span to the shortest span that body fits in;
-    switching either control dispatches one ``component.update`` / ``part.update`` with the
-    resolved ``axial_resistor_id(span, body)``.
+    Collapsed by default behind ``toggle`` (a quiet link sitting on the editor's title row,
+    showing the current wattage and hole span, e.g. ``1/4 W · 3 holes ▸``) so an axial
+    resistor's Properties editor adds zero height on any platform and keeps its bottom
+    action row inside a 720 px window. Clicking ``toggle`` reveals the Body and Span row
+    directly under Package; editing the same resistor keeps it open until another part is
+    selected.
     """
 
     BODIES: tuple[AxialResistorBody, ...] = ("0204", "0207", "0309")
@@ -1074,9 +1075,20 @@ class _ResistorSizeControls:
         self._form = form
         self._commit = commit
         self._loading = False
+        self._available = False
+        self._expanded = False
         self._footprint_id = ""
         self._current_body: AxialResistorBody = "0207"
         self._current_span = 3
+
+        self.toggle = QPushButton(parent)
+        theme.variant(self.toggle, "link")
+        self.toggle.setCheckable(True)
+        self.toggle.setAutoDefault(False)
+        self.toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle.setAccessibleName(t("Body"))
+        self.toggle.setToolTip(t("Body wattage and lead span — click to change."))
+        self.toggle.toggled.connect(self._on_toggled)
 
         self.body_widget = QWidget(parent)
         body_row = QHBoxLayout(self.body_widget)
@@ -1085,7 +1097,7 @@ class _ResistorSizeControls:
         self.body_group = QButtonGroup(parent)
         self.body_group.setExclusive(True)
         self.body_buttons: dict[AxialResistorBody, QToolButton] = {}
-        for code in self.BODIES:
+        for index, code in enumerate(self.BODIES):
             button = QToolButton(self.body_widget)
             # The fraction alone, so the row fits beside its label: "1/4" on a resistor's
             # body is read as watts, and the tooltip says so in full.
@@ -1096,14 +1108,11 @@ class _ResistorSizeControls:
             button.setCheckable(True)
             button.setProperty("segment", True)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            button.clicked.connect(lambda _checked=False, c=code: self._on_body_clicked(c))
-            self.body_group.addButton(button)
+            self.body_group.addButton(button, index)
             body_row.addWidget(button)
             self.body_buttons[code] = button
+        self.body_group.idClicked.connect(self._on_body_id_clicked)
 
-        # The span on the same row as the body, its entries saying "3 holes": a row of
-        # its own made a resistor's editor taller than Properties at 1280 x 720, with the
-        # Auto-wire and Delete row under the status bar.
         self.span_combo = QComboBox(self.body_widget)
         _narrow(self.span_combo)
         self.span_combo.setMinimumContentsLength(3)
@@ -1115,11 +1124,33 @@ class _ResistorSizeControls:
         self.problem = _Problem()
 
         self._row = _add_field(form, t("Body"), self.body_widget, self.problem)
-        self._set_visible(False)
+        self._sync_visibility()
 
-    def _set_visible(self, shown: bool) -> None:
+    def _update_toggle_text(self) -> None:
+        watts = AXIAL_RESISTOR_WATTS[self._current_body]
+        holes = t("{count} holes").format(count=self._current_span)
+        chevron = "▾" if self._expanded else "▸"
+        self.toggle.setText(f"{watts} · {holes} {chevron}")
+
+    def _sync_visibility(self) -> None:
+        self.toggle.setVisible(self._available)
+        shown = self._available and self._expanded
         self._form.setRowVisible(self._row, shown)
         self.body_widget.setVisible(shown)
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._expanded = bool(expanded) and self._available
+        self.toggle.blockSignals(True)
+        self.toggle.setChecked(self._expanded)
+        self.toggle.blockSignals(False)
+        if self._available:
+            self._update_toggle_text()
+        self._sync_visibility()
+
+    def _on_toggled(self, checked: bool) -> None:
+        if self._loading:
+            return
+        self.set_expanded(checked)
 
     def load(self, footprint_id: str, *, enabled: bool = True, clear_problem: bool = False) -> bool:
         parsed = axial_resistor_body(footprint_id)
@@ -1127,12 +1158,20 @@ class _ResistorSizeControls:
             self.problem.show_problem("")
         if parsed is None:
             self._footprint_id = ""
-            self._set_visible(False)
+            self._available = False
+            self._expanded = False
+            self.toggle.blockSignals(True)
+            self.toggle.setChecked(False)
+            self.toggle.blockSignals(False)
+            self._sync_visibility()
             return False
         span, body = parsed
         self._footprint_id = footprint_id
         self._current_span = span
         self._current_body = body
+        self._available = True
+        if clear_problem:
+            self._expanded = False
         self._loading = True
         try:
             self.body_buttons[body].setChecked(True)
@@ -1148,9 +1187,13 @@ class _ResistorSizeControls:
             if idx >= 0:
                 self.span_combo.setCurrentIndex(idx)
             self.span_combo.setEnabled(enabled)
+            self.toggle.blockSignals(True)
+            self.toggle.setChecked(self._expanded)
+            self.toggle.blockSignals(False)
+            self._update_toggle_text()
         finally:
             self._loading = False
-        self._set_visible(True)
+        self._sync_visibility()
         return True
 
     def _apply(self, span: int, body: AxialResistorBody) -> None:
@@ -1161,6 +1204,10 @@ class _ResistorSizeControls:
         self.problem.show_problem(problem or "")
         if problem:
             self.load(self._footprint_id, enabled=self.span_combo.isEnabled())
+
+    def _on_body_id_clicked(self, index: int) -> None:
+        if 0 <= index < len(self.BODIES):
+            self._on_body_clicked(self.BODIES[index])
 
     def _on_body_clicked(self, body: AxialResistorBody) -> None:
         if self._loading or not self._footprint_id:
@@ -1194,7 +1241,12 @@ class _PartEditor(QWidget):
 
         self.title = QLabel()
         self.title.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(self.title)
+        part_title_row = QHBoxLayout()
+        part_title_row.setContentsMargins(0, 0, 0, 0)
+        part_title_row.setSpacing(theme.SPACE["sm"])
+        part_title_row.addWidget(self.title)
+        part_title_row.addStretch(1)
+        layout.addLayout(part_title_row)
 
         form = _form()
         self.ref = CommitLine(self._commit_ref)
@@ -1257,6 +1309,7 @@ class _PartEditor(QWidget):
         package_column.addWidget(self.older_problem)
         form.addRow(t("Package"), package)
         self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
+        part_title_row.addWidget(self.resistor_size.toggle, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.pin1 = CommitLine(self._commit_pin1)
         self.pin1.setToolTip(t("The hole pin 1 is in. Type another to move the part there."))
@@ -1587,7 +1640,12 @@ class _DesignPartEditor(QWidget):
         self.where = _fact(t("In the design, not on the board yet."))
         heading = QVBoxLayout()
         heading.setSpacing(2)
-        heading.addWidget(self.title)
+        design_title_row = QHBoxLayout()
+        design_title_row.setContentsMargins(0, 0, 0, 0)
+        design_title_row.setSpacing(theme.SPACE["sm"])
+        design_title_row.addWidget(self.title)
+        design_title_row.addStretch(1)
+        heading.addLayout(design_title_row)
         heading.addWidget(self.where)
         layout.addLayout(heading)
 
@@ -1612,6 +1670,7 @@ class _DesignPartEditor(QWidget):
         package_row.addWidget(self.change_part, 0, Qt.AlignmentFlag.AlignTop)
         form.addRow(t("Package"), package)
         self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
+        design_title_row.addWidget(self.resistor_size.toggle, 0, Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(form)
 
         self.pinout = PinoutEditor()
