@@ -119,7 +119,14 @@ from .commands import (
     replace_conductors,
 )
 from .connectivity import FootprintLookup
-from .footprints import body_extent, body_is_round, entry_corridor, raised_board, wire_entry
+from .footprints import (
+    body_extent,
+    body_is_round,
+    edge_box,
+    entry_corridor,
+    raised_board,
+    wire_entry,
+)
 from .geometry import (
     SubstrateEdges,
     all_pin_holes,
@@ -182,6 +189,8 @@ EDGE_SEEKING_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
     {
         "screw-terminal",
         "pin-header",
+        "pin-header-ra",
+        "pin-socket-ra",
         "box-header",
         "wire-to-board",
         "potentiometer",
@@ -814,6 +823,9 @@ class _Part:
     #: ``footprints.body_extent`` gives both renderers and DRC, not the courtyard, which is
     #: padded by half a pitch and would put every edge-row resistor over the edge.
     rel_body: tuple[_Box, ...]
+    #: The box the board's edge is measured against per rotation index --
+    #: ``footprints.edge_box``, which is ``rel_body`` but for a right-angle header's far side.
+    rel_edge: tuple[_Box, ...]
     #: The wire-entry corridor per rotation index, relative to the anchor in mm, and the
     #: direction it faces -- ``footprints.entry_corridor`` turned as the body is turned.
     #: ``None`` at every index for a part with no wire entry, which is nearly all of them.
@@ -882,6 +894,8 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
         boxes: list[_Box | None] = []
         bodies: list[_Box] = []
         body = body_extent(footprint, board.pitch).box
+        edge_boxes: list[_Box] = []
+        edge_body = edge_box(footprint, board.pitch)
         corridor = entry_corridor(footprint, board.pitch)
         facing = wire_entry(footprint)
         entries: list[_Box | None] = []
@@ -903,6 +917,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
             )
             offsets.append(placed)
             bodies.append(_Box(*turned_box(body, rotation, component.mirrored)))
+            edge_boxes.append(_Box(*turned_box(edge_body, rotation, component.mirrored)))
             if corridor is not None and facing is not None:
                 entries.append(_Box(*turned_box(corridor, rotation, component.mirrored)))
                 entry_dirs.append(
@@ -968,6 +983,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 pin_offsets=tuple(offsets),
                 rel_box=tuple(boxes),
                 rel_body=tuple(bodies),
+                rel_edge=tuple(edge_boxes),
                 rel_entry=tuple(entries),
                 entry_dir=tuple(entry_dirs),
                 rel_poly=tuple(polys),
@@ -1643,7 +1659,7 @@ class _Scorer:
         for col, row in state.pins(position):
             if not (0 <= col < self.board_cols and 0 <= row < self.board_rows):
                 return 0, 0.0
-        body = state.parts[position].rel_body[state.rot[position]]
+        body = state.parts[position].rel_edge[state.rot[position]]
         x = state.col[position] * self.board_pitch
         y = state.row[position] * self.board_pitch
         worst = max(

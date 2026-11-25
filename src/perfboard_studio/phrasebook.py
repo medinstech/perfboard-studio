@@ -526,6 +526,16 @@ TURKISH: dict[str, str] = {
         "Bu parça aynalanmış: parça yüzünden değil, LEHİM yüzünden takılır. Lehimlemeden "
         "önce pin sırasını kartla karşılaştırın."
     ),
+    "Right angle: the openings face the {side} edge of the board. Check before fitting "
+    "it: it goes into the holes either way round.": (
+        "90°: ağızları kartın {side} kenarına bakıyor. Takmadan önce kontrol edin: "
+        "deliklere iki yönde de oturur."
+    ),
+    "Right angle: the pins lie flat and point to the {side} edge of the board. Check before "
+    "fitting it: it goes into the holes either way round.": (
+        "90°: pinleri yatık ve kartın {side} kenarına bakıyor. Takmadan önce kontrol edin: "
+        "deliklere iki yönde de oturur."
+    ),
     "The wire entries face the {side} edge of the board — the screws on top, the openings "
     "towards the {side}. Check before soldering: it fits the holes either way round.": (
         "Kablo girişleri kartın {side} kenarına bakıyor — vidalar üstte, ağızlar {side} "
@@ -1155,6 +1165,9 @@ TURKISH: dict[str, str] = {
     "to220": "TO-220",
     "led-round": "LED",
     "pin-header": "pin başlığı",
+    "pin-socket": "dişi pin başlığı",
+    "pin-header-ra": "90° pin başlığı",
+    "pin-socket-ra": "90° dişi pin başlığı",
     "screw-terminal": "klemens",
     "potentiometer": "potansiyometre",
     "tactile-switch": "tact buton",

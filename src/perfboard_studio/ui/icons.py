@@ -1005,6 +1005,10 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
     "to220": _to220,
     "led-round": _led,
     "pin-header": _pin_header,
+    # Drawn as the pin header until their own pictures are drawn.
+    "pin-socket": _pin_header,
+    "pin-header-ra": _pin_header,
+    "pin-socket-ra": _pin_header,
     "screw-terminal": _screw_terminal,
     "potentiometer": _potentiometer,
     "tactile-switch": _tactile,

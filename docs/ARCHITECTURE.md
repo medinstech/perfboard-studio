@@ -185,6 +185,16 @@ all 61 footprints, every rotation, mirrored and not. Both halves of the placer t
 inside the tolerance and added only when they are not, which is why no golden placement
 moved.
 
+**A right-angle strip reaches past the edge on purpose, on one side.** `hdr-RxC-ra` and
+`skt-RxC-ra` lie flat past their last row, out to the tips of their pins, and belong on an
+edge with that side over it so a plug goes in from beside the board. Both the rule and
+`placer.overhang_terms` measure `footprints.edge_box` rather than the body: the body, except
+on the side `REACHES_PAST_EDGE_BY_ARCHETYPE` names, where it stops half a pitch past the
+legs. Every other side is measured as before, and overlap, the courtyard and the STEP solid
+still take the whole body. For every other part the two boxes are the same tuple, which
+`tests/test_sockets.py` checks over the registry along with the placer/DRC agreement for the
+new strips.
+
 ## A screw terminal has a mouth
 
 A terminal's wires go in through one long face, and `footprints.WIRE_ENTRY_BY_ARCHETYPE`

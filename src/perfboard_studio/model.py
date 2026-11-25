@@ -467,6 +467,15 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
     # everything about it that the board cares about is different -- where the body is,
     # how tall it stands, when it goes in, how its leads are bent.
     "axial-upright",
+    # A female header -- a "pin socket" -- standing up: the strip a module's pins or a
+    # jumper's plug go into. A header's pins and numbering in a moulding with a contact in
+    # every hole, 8.5 mm tall where a header's plastic is 2.5.
+    "pin-socket",
+    # A pin header and a female header made RIGHT-ANGLE: the legs stand in their holes and
+    # bend over, and the moulding and the pins lie flat beyond the last row, pointing off
+    # the board -- put on an edge so a cable's plug or another board goes in from the side.
+    "pin-header-ra",
+    "pin-socket-ra",
 ]
 
 #: Archetypes that get hot enough to matter to a neighbour.
@@ -491,6 +500,9 @@ SEATED_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
         "dip",
         "relay-box",
         "pin-header",
+        "pin-socket",
+        "pin-header-ra",
+        "pin-socket-ra",
         "box-header",
         "screw-terminal",
         "screw-terminal-vertical",

@@ -64,7 +64,11 @@ def _first(kicad_footprint: str) -> str | None:
         ("Package_DIP:DIP-16_W7.62mm_Socket", "dip-16"),
         ("Package_DIP:DIP-40_W15.24mm", "dip-40-wide"),
         ("Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", "hdr-1x4"),
-        ("Connector_PinSocket_2.54mm:PinSocket_2x08_P2.54mm_Vertical", "hdr-2x8"),
+        # A socket is a female header, and a _Horizontal strip is right-angle.
+        ("Connector_PinSocket_2.54mm:PinSocket_2x08_P2.54mm_Vertical", "skt-2x8"),
+        ("Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Horizontal", "hdr-1x4-ra"),
+        ("Connector_PinSocket_2.54mm:PinSocket_1x06_P2.54mm_Horizontal", "skt-1x6-ra"),
+        ("Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Horizontal", "hdr-2x5-ra"),
         ("Connector_IDC:IDC-Header_2x05_P2.54mm_Vertical", "idc-2x5"),
         (
             "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",

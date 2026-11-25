@@ -3817,6 +3817,10 @@ _BUILDERS: dict[str, Any] = {
     "to220": _to220_pieces,
     "led-round": _led_pieces,
     "pin-header": _header_pieces,
+    # Built as the pin header until their own pieces are built.
+    "pin-socket": _header_pieces,
+    "pin-header-ra": _header_pieces,
+    "pin-socket-ra": _header_pieces,
     "screw-terminal": _screw_terminal_pieces,
     "potentiometer": _pot_pieces,
     "tactile-switch": _switch_pieces,

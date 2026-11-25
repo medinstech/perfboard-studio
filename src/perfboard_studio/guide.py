@@ -62,6 +62,7 @@ from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_electrical
 from .erc import run_erc
 from .footprints import (
+    REACHES_PAST_EDGE_BY_ARCHETYPE,
     adapter_package,
     fitting_note,
     flying_lead_length_mm,
@@ -228,6 +229,9 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     "to220": 4,
     "crystal-hc49": 4,
     "pin-header": 5,
+    "pin-socket": 5,
+    "pin-header-ra": 5,
+    "pin-socket-ra": 5,
     "screw-terminal": 5,
     "potentiometer": 5,
     "tactile-switch": 5,
@@ -1570,6 +1574,22 @@ def _part_step(
             "way round.",
             side=say(side),
         ))
+    lies_off = REACHES_PAST_EDGE_BY_ARCHETYPE.get(footprint.body.archetype)
+    if lies_off is not None:
+        # A right-angle strip goes in its holes either way round as a terminal does, and
+        # turned round it points its pins across the board instead of off it.
+        side = entry_side(
+            transform_offset(lies_off[0], lies_off[1], component.rotation, component.mirrored)
+        )
+        notes.append(say(
+            "Right angle: the openings face the {side} edge of the board. Check before "
+            "fitting it: it goes into the holes either way round.",
+            side=say(side),
+        ) if footprint.body.archetype == "pin-socket-ra" else say(
+            "Right angle: the pins lie flat and point to the {side} edge of the board. Check "
+            "before fitting it: it goes into the holes either way round.",
+            side=say(side),
+        ))
     if footprint.body.archetype == "screw-terminal-vertical":
         notes.append(say(
             "The wires go in from ABOVE: this is the header, and the screw plug is pushed "
@@ -1678,7 +1698,7 @@ def plugs_in_on_a_cable(component: ComponentInstance, footprint: Footprint) -> b
     two cannot say it about different parts (``CABLED_MODULE``). A wire-to-board header (a JST
     XH, a KK 254) is the same, its plug latched."""
     return (
-        footprint.body.archetype in ("pin-header", "wire-to-board")
+        footprint.body.archetype in ("pin-header", "pin-header-ra", "wire-to-board")
         and bool(component.value.strip())
         and any(declared_pin_name(component, pin.number) for pin in footprint.pins)
     )

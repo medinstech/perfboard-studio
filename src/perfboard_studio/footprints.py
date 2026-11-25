@@ -917,15 +917,7 @@ def pin_header_footprint(
     if not isinstance(cols, int) or cols < 1:
         raise ValueError(f"pin_header_footprint: cols must be a positive integer (got {cols}).")
     lead_diameter = 0.64 if lead_diameter_mm is None else lead_diameter_mm
-    pins: list[FootprintPin] = []
-    if rows == 1:
-        for i in range(cols):
-            pins.append(_make_pin(str(i + 1), i, 0))
-    else:
-        for i in range(cols):
-            pins.append(_make_pin(str(2 * i + 1), i, 0))
-            pins.append(_make_pin(str(2 * i + 2), i, 1))
-    pins_t = tuple(pins)
+    pins_t = _header_pins(rows, cols)
     outline = _rect_outline(_to_mm(pins_t), 0, 0, COURTYARD_MARGIN_MM)
     fp_id = id if id is not None else f"hdr-{rows}x{cols}"
     fp_name = name if name is not None else f"Pin header, {rows}x{cols}"
@@ -944,6 +936,131 @@ def pin_header_footprint(
             },
         ),
         lead_diameter=lead_diameter,
+        polarized=False,
+    )
+
+
+def _header_pins(rows: int, cols: int) -> tuple[FootprintPin, ...]:
+    """A header's pins: 1xN left to right, 2xN zig-zag with pin 2 across from pin 1."""
+    pins: list[FootprintPin] = []
+    if rows == 1:
+        for i in range(cols):
+            pins.append(_make_pin(str(i + 1), i, 0))
+    else:
+        for i in range(cols):
+            pins.append(_make_pin(str(2 * i + 1), i, 0))
+            pins.append(_make_pin(str(2 * i + 2), i, 1))
+    return tuple(pins)
+
+
+def _one_or_two_rows(rows: int, cols: int, caller: str) -> None:
+    if rows not in (1, 2):
+        raise ValueError(f"{caller}: a header strip is 1 or 2 rows (got {rows}).")
+    if not isinstance(cols, int) or cols < 1:
+        raise ValueError(f"{caller}: cols must be a positive integer (got {cols}).")
+
+
+#: A female header's moulding, standing: KiCad 10's PinSocket_1xNN_P2.54mm_Vertical and
+#: its model. The same number as ``MODULE_SEAT_SOCKETED_MM``, because it is the same strip.
+PIN_SOCKET_HEIGHT_MM: Mm = 8.5
+
+
+def pin_socket_footprint(
+    *,
+    rows: int,
+    cols: int,
+    lead_diameter_mm: Mm | None = None,
+    id: str | None = None,
+    name: str | None = None,
+) -> Footprint:
+    """Female header ("pin socket"), single or dual row, 2.54 mm pitch, standing up.
+
+    Pins and numbering exactly as :func:`pin_header_footprint`'s, so a header and the
+    socket it goes into name the same pin the same way. The moulding is one pitch per hole,
+    as a header's is, and :data:`PIN_SOCKET_HEIGHT_MM` tall.
+    """
+    _one_or_two_rows(rows, cols, "pin_socket_footprint")
+    pins_t = _header_pins(rows, cols)
+    return Footprint(
+        id=id if id is not None else f"skt-{rows}x{cols}",
+        name=name if name is not None else f"Female header, {rows}x{cols}",
+        pins=pins_t,
+        body_outline=_rect_outline(_to_mm(pins_t), 0, 0, COURTYARD_MARGIN_MM),
+        body_height=PIN_SOCKET_HEIGHT_MM,
+        body=BodySpec(
+            archetype="pin-socket",
+            dims={
+                "length": (cols - 1) * STANDARD_PITCH_MM,
+                "width": (rows - 1) * STANDARD_PITCH_MM,
+                "height": PIN_SOCKET_HEIGHT_MM,
+            },
+        ),
+        lead_diameter=0.64 if lead_diameter_mm is None else lead_diameter_mm,
+        polarized=False,
+    )
+
+
+#: Where a right-angle part lies, in mm from its LAST pin row's centre towards increasing
+#: row: ``(bodyFrom, bodyTo, pinReach)`` -- the moulding's near face, its far face, and the
+#: tips of the pins. Measured off KiCad 10's PinHeader_1xNN_P2.54mm_Horizontal and
+#: PinSocket_1xNN_P2.54mm_Horizontal, and the same from the second row of their 2xNN
+#: siblings. A socket's contacts end inside its moulding, so its reach is its far face.
+RIGHT_ANGLE_REACH_MM: dict[BodyArchetype, tuple[Mm, Mm, Mm]] = {
+    "pin-header-ra": (1.5, 4.04, 10.04),
+    "pin-socket-ra": (1.52, 10.03, 10.03),
+}
+
+
+def right_angle_header_footprint(
+    *,
+    rows: int,
+    cols: int,
+    female: bool = False,
+    lead_diameter_mm: Mm | None = None,
+    id: str | None = None,
+    name: str | None = None,
+) -> Footprint:
+    """A right-angle pin header (``hdr-RxC-ra``) or female header (``skt-RxC-ra``).
+
+    Pins and numbering as the standing strip's. Every leg stands in its hole and bends over
+    towards increasing row; the moulding and the pins lie flat past the last row, as far as
+    :data:`RIGHT_ANGLE_REACH_MM` says, ``rows`` pitches high. The courtyard is all of it,
+    the legs over their holes to the tips, because nothing else can stand there -- and a
+    part is meant to put that far side over the edge (``REACHES_PAST_EDGE_BY_ARCHETYPE``).
+    """
+    _one_or_two_rows(rows, cols, "right_angle_header_footprint")
+    archetype: BodyArchetype = "pin-socket-ra" if female else "pin-header-ra"
+    body_from, body_to, pin_reach = RIGHT_ANGLE_REACH_MM[archetype]
+    pitch = STANDARD_PITCH_MM
+    half = pitch / 2
+    pins_t = _header_pins(rows, cols)
+    min_x, max_x = -half, (cols - 1) * pitch + half
+    min_y, max_y = -half, (rows - 1) * pitch + pin_reach
+    height = rows * pitch
+    strip = "Female header" if female else "Pin header"
+    return Footprint(
+        id=id if id is not None else f"{'skt' if female else 'hdr'}-{rows}x{cols}-ra",
+        name=name if name is not None else f"{strip}, {rows}x{cols}, right angle",
+        pins=pins_t,
+        body_outline=(
+            Point2(min_x, min_y),
+            Point2(max_x, min_y),
+            Point2(max_x, max_y),
+            Point2(min_x, max_y),
+        ),
+        body_height=height,
+        body=BodySpec(
+            archetype=archetype,
+            dims={
+                "length": (cols - 1) * pitch,
+                "width": body_to - body_from,
+                "height": height,
+                "bodyFrom": body_from,
+                "bodyTo": body_to,
+                "pinReach": pin_reach,
+            },
+        ),
+        lead_diameter=0.64 if lead_diameter_mm is None else lead_diameter_mm,
         polarized=False,
     )
 
@@ -2431,6 +2548,11 @@ most two decimals and are written without units.
                                                         DIP is, down one and up the other
   dip-<pins>[-wide]                                     a DIP of any pin count
   hdr-<rows>x<cols>                                     a pin header
+  skt-<rows>x<cols>                                     a female header (pin socket), 1 or
+                                                        2 rows, numbered as hdr- is
+  hdr-<rows>x<cols>-ra | skt-<rows>x<cols>-ra           a right-angle pin or female header:
+                                                        its pins lie flat past the last row,
+                                                        pointing off the board
   mod-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<T>-s<S>[-o<X>x<Y>]
                                                         a module on header pins: its pins
                                                         as for box-, its own board W x D,
@@ -2619,6 +2741,18 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
     (
         re.compile(r"^hdr-(\d+)x(\d+)$"),
         lambda m: pin_header_footprint(rows=_grid(m[1]), cols=_grid(m[2])),
+    ),
+    (
+        re.compile(r"^skt-(\d+)x(\d+)$"),
+        lambda m: pin_socket_footprint(rows=_grid(m[1]), cols=_grid(m[2])),
+    ),
+    (
+        re.compile(r"^hdr-(\d+)x(\d+)-ra$"),
+        lambda m: right_angle_header_footprint(rows=_grid(m[1]), cols=_grid(m[2])),
+    ),
+    (
+        re.compile(r"^skt-(\d+)x(\d+)-ra$"),
+        lambda m: right_angle_header_footprint(rows=_grid(m[1]), cols=_grid(m[2]), female=True),
     ),
     (
         re.compile(r"^screw-terminal-(\d+)$"),
@@ -2937,14 +3071,25 @@ def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
     outline_x, outline_y = _outline_extent(footprint)
     x_key, y_key, axis = BODY_DIM_KEYS.get(archetype, ("length", "width", "x"))
 
-    if archetype == "pin-header":
+    if archetype in ("pin-header", "pin-socket"):
         # Derived from the pins rather than from dims: the registry records a header's width
         # as 0.0 because the moulding is exactly one hole wide per ROW, and a 2xN header has
         # two. Growing the pin span by one pitch in each direction gives the moulding for any
-        # arrangement, single row or double.
+        # arrangement, single row or double. A female header's moulding is the same strip.
         size_x = span_x + pitch
         size_y = span_y + pitch
         axis = "y" if span_y > span_x else "x"
+    elif archetype in RIGHT_ANGLE_REACH_MM:
+        # The legs over their holes, half a pitch round them as a header's moulding is, and
+        # then everything lying flat past the last row out to the tips of the pins
+        # (``pinReach``), which is what nothing else can stand on. From the pins at THIS
+        # pitch and the reach in millimetres, so the body stays on its legs on any board.
+        size_x = span_x + pitch
+        near = centre_y - span_y / 2 - pitch / 2
+        far = centre_y + span_y / 2 + dims.get("pinReach", pitch / 2)
+        size_y = far - near
+        centre_y = (near + far) / 2
+        axis = "x"
     else:
         size_x = dims.get(x_key) or outline_x
         size_y = dims.get(y_key) or outline_y
@@ -2968,6 +3113,43 @@ def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
         size_y=max(size_y, MIN_BODY_MM),
         axis=axis,
     )
+
+
+#: Archetypes whose body is MEANT to reach past the board's edge on one side, and that
+#: side in the footprint's own frame: a right-angle header or socket, put on an edge so a
+#: plug or another board goes in from beside it. Only the edge is measured without that
+#: side (:func:`edge_box`); overlap, the courtyard and the 3D body still ask the whole body.
+REACHES_PAST_EDGE_BY_ARCHETYPE: dict[BodyArchetype, tuple[int, int]] = {
+    "pin-header-ra": (0, 1),
+    "pin-socket-ra": (0, 1),
+}
+
+
+def edge_box(footprint: Footprint, pitch: Mm) -> tuple[Mm, Mm, Mm, Mm]:
+    """The box a board's edge is measured against, ``(min_x, max_x, min_y, max_y)`` unturned.
+
+    :func:`body_extent`'s box, except on the side a part reaches past the edge on purpose
+    (``REACHES_PAST_EDGE_BY_ARCHETYPE``), where it stops half a pitch past its own pins: the
+    legs in the holes still have to be over the board, and the pins beyond them are where
+    they are meant to be. ``component-overhangs-edge`` and the placer's edge term both ask
+    this, so the optimiser never prices an overhang DRC does not report, or the reverse.
+    """
+    min_x, max_x, min_y, max_y = body_extent(footprint, pitch).box
+    side = REACHES_PAST_EDGE_BY_ARCHETYPE.get(footprint.body.archetype)
+    if side is None or not footprint.pins:
+        return min_x, max_x, min_y, max_y
+    half = pitch / 2
+    cols = [pin.d_col * pitch for pin in footprint.pins]
+    rows = [pin.d_row * pitch for pin in footprint.pins]
+    if side[0] > 0:
+        max_x = max(cols) + half
+    elif side[0] < 0:
+        min_x = min(cols) - half
+    if side[1] > 0:
+        max_y = max(rows) + half
+    elif side[1] < 0:
+        min_y = min(rows) - half
+    return min_x, max_x, min_y, max_y
 
 
 def _outline_extent(footprint: Footprint) -> tuple[Mm, Mm]:

@@ -1978,6 +1978,9 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "to220": "box",  # likewise, and the tab tells you nothing about the pinout either
     "led-round": "led",
     "pin-header": "connector",
+    "pin-socket": "connector",
+    "pin-header-ra": "connector",
+    "pin-socket-ra": "connector",
     "screw-terminal": "connector",
     "potentiometer": "potentiometer",
     "tactile-switch": "switch",  # the legs on one side are bonded; see _switch_poles

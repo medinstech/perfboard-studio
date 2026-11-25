@@ -53,8 +53,8 @@ from .footprints import (
     SUPERSEDED_FOOTPRINTS,
     WIRE_ENTRY_CLEARANCE_MM,
     RaisedBoard,
-    body_extent,
     body_is_round,
+    edge_box,
     entry_corridor,
     raised_board,
     wire_entry,
@@ -1065,8 +1065,9 @@ def _check_body_overhang(doc: PerfDocument, lookup: FootprintLookup) -> list[Drc
         if not all(is_inside_board(h, board) for h in (pin_holes or [component.anchor])):
             continue
 
+        # The body, less the side a right-angle header reaches off the board on purpose.
         min_x, max_x, min_y, max_y = turned_box(
-            body_extent(footprint, board.pitch).box, component.rotation, component.mirrored
+            edge_box(footprint, board.pitch), component.rotation, component.mirrored
         )
         anchor = hole_to_mm(component.anchor, board)
         reach = edge_overhangs_mm(

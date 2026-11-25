@@ -181,6 +181,30 @@ _ON_THE_GRID = (
     "its 0.64 mm posts go into 1.0 mm holes 2.54 mm apart up to 4 pins "
     "(footprints.pins_on_the_grid)"
 )
+_SOCKET_SUMMARY = (
+    "A 2.54 mm female header strip, 8.5 mm tall, that a module's pins or a jumper's plug go into"
+)
+_RA_HEADER_SUMMARY = (
+    "A 2.54 mm right-angle pin header: its pins lie flat and point off the board, so a "
+    "cable's plug goes on from the side. It belongs on an edge"
+)
+_RA_SOCKET_SUMMARY = (
+    "A 2.54 mm right-angle female header: its openings face off the board, so a module or a "
+    "plug goes in from the side. It belongs on an edge"
+)
+_STRIP_WORDS = ("female header", "pin socket", "dişi header", "dişi pin", "soket", "connector",
+                "konnektör")
+_RA_WORDS = ("right angle", "90 degree", "90°", "angled", "yatay", "açılı", "connector",
+             "konnektör")
+
+
+def _kicad_strip(kind: str, pins: int, way: str) -> str:
+    """Where a strip's numbers come from: KiCad 10's own footprint for it."""
+    return (
+        f"KiCad 10 Connector_Pin{kind}_2.54mm:Pin{kind}_1x{pins:02d}_P2.54mm_{way} and its model"
+    )
+
+
 _XH_WORDS = ("JST", "XH", "JST-XH", "XH2.54", "XH2.5", "wire-to-board", "connector",
              "konnektör", "JST konnektör")
 _KK_WORDS = ("Molex", "KK", "KK254", "KK 254", "KF2510", "2510", "wire-to-board",
@@ -1841,6 +1865,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                 source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-08A_1x08_P2.54mm_Vertical "
                        "(Molex 22-27-2081); drawn from the 3-pin model cut into three",
                 check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-8A", "AE-6410-08A")),
+    *(
+        CatalogPart(f"female-header-1x{n}", f"Female header, 1x{n}", "connector", f"skt-1x{n}",
+                    _SOCKET_SUMMARY, ref_prefix="J",
+                    source=_kicad_strip("Socket", n, "Vertical"), aliases=_STRIP_WORDS)
+        for n in (3, 4, 6, 8)
+    ),
+    *(
+        CatalogPart(f"ra-header-1x{n}", f"Right-angle pin header, 1x{n}", "connector",
+                    f"hdr-1x{n}-ra", _RA_HEADER_SUMMARY, ref_prefix="J",
+                    source=_kicad_strip("Header", n, "Horizontal"), aliases=_RA_WORDS)
+        for n in (3, 4, 6)
+    ),
+    *(
+        CatalogPart(f"ra-female-header-1x{n}", f"Right-angle female header, 1x{n}", "connector",
+                    f"skt-1x{n}-ra", _RA_SOCKET_SUMMARY, ref_prefix="J",
+                    source=_kicad_strip("Socket", n, "Horizontal"),
+                    aliases=(*_STRIP_WORDS, *_RA_WORDS))
+        for n in (4, 6)
+    ),
     CatalogPart("servo-header", "Hobby servo (on a header)", "connector", "hdr-1x3",
                 "A hobby servo such as the SG90. Its cable plugs into this 3-pin header: "
                 "PWM + - from pin 1",
@@ -4416,6 +4459,9 @@ _PACKAGE_WORDS: dict[str, tuple[str, ...]] = {
     "to220": ("transistor", "transistör", "regulator", "regülatör"),
     "dip": ("ic", "chip", "entegre"),
     "pin-header": ("header", "konnektör", "connector"),
+    "pin-socket": ("header", "socket", "female", "konnektör", "connector", "dişi"),
+    "pin-header-ra": ("header", "right angle", "konnektör", "connector"),
+    "pin-socket-ra": ("header", "socket", "female", "right angle", "konnektör", "connector", "dişi"),
     "box-header": ("header", "connector", "konnektör"),
     "wire-to-board": ("connector", "konnektör"),
     "screw-terminal": ("terminal", "klemens"),

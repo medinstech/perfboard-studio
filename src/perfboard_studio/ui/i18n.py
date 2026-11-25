@@ -1972,6 +1972,9 @@ TURKISH: Mapping[str, str] = {
     "TO-220 packages": "TO-220 kılıfları",
     "DIP packages": "DIP kılıfları",
     "Pin headers": "Pin başlıkları",
+    "Female headers": "Dişi pin başlıkları",
+    "Right-angle pin headers": "90° pin başlıkları",
+    "Right-angle female headers": "90° dişi pin başlıkları",
     "Wire-to-board connectors": "Kablo-kart konnektörleri",
     "IDC box headers": "IDC kutu başlıklar",
     "Screw terminals": "Vidalı klemensler",
@@ -4624,6 +4627,24 @@ TURKISH: Mapping[str, str] = {
     "round, so turned half round its first wire lands on the last pin.": (
         "KF2510 başlıklar KK 254 kopyalarıdır ve aynı fişleri alır. Fiş tek yönde takılır, "
         "bu yüzden ters çevrilirse ilk kablosu son pine gelir."
+    ),
+    **{f"Female header, 1x{n}": f"Dişi pin başlığı, 1x{n}" for n in (3, 4, 6, 8)},
+    **{f"Right-angle pin header, 1x{n}": f"90° pin başlığı, 1x{n}" for n in (3, 4, 6)},
+    **{f"Right-angle female header, 1x{n}": f"90° dişi pin başlığı, 1x{n}" for n in (4, 6)},
+    "A 2.54 mm female header strip, 8.5 mm tall, that a module's pins or a jumper's plug go "
+    "into": (
+        "Bir modülün pinlerinin ya da bir jumper fişinin takıldığı, 2,54 mm aralıklı, 8,5 mm "
+        "yüksekliğinde dişi pin başlığı şeridi"
+    ),
+    "A 2.54 mm right-angle pin header: its pins lie flat and point off the board, so a "
+    "cable's plug goes on from the side. It belongs on an edge": (
+        "2,54 mm aralıklı 90° pin başlığı: pinleri yatık durur ve kartın dışına bakar, böylece "
+        "kablonun fişi yandan takılır. Yeri kartın kenarıdır"
+    ),
+    "A 2.54 mm right-angle female header: its openings face off the board, so a module or a "
+    "plug goes in from the side. It belongs on an edge": (
+        "2,54 mm aralıklı 90° dişi pin başlığı: ağızları kartın dışına bakar, böylece bir modül "
+        "ya da fiş yandan takılır. Yeri kartın kenarıdır"
     ),
     "JST XH connector, 2-pin, top entry": (
         "JST XH konnektör, 2 pinli, üstten girişli"

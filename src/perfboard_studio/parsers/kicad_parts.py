@@ -301,10 +301,16 @@ _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]]
     ),
     (re.compile(r"^DIP-(?P<pins>\d+)_W(?P<row>[\d.]+)mm"), _dip),
     # KiCad counts columns first ("2x08" is two columns of eight), this library rows first
-    # ("hdr-2x8" is two rows of eight); both number pin 2 across from pin 1.
+    # ("hdr-2x8" is two rows of eight); both number pin 2 across from pin 1. A PinSocket is
+    # a female header (skt-) and a _Horizontal one is right-angle (-ra).
     (
-        re.compile(r"^Pin(?:Header|Socket)_(?P<a>\d+)x(?P<b>\d+)_P2\.54mm"),
-        lambda m: [f"hdr-{int(m['a'])}x{int(m['b'])}"],
+        re.compile(
+            r"^Pin(?P<kind>Header|Socket)_(?P<a>\d+)x(?P<b>\d+)_P2\.54mm(?P<ra>_Horizontal)?"
+        ),
+        lambda m: [
+            f"{'skt' if m['kind'] == 'Socket' else 'hdr'}-{int(m['a'])}x{int(m['b'])}"
+            + ("-ra" if m["ra"] else "")
+        ],
     ),
     (
         re.compile(r"^IDC-Header_2x(?P<n>\d+)_P2\.54mm_Vertical"),

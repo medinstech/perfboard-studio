@@ -22,6 +22,14 @@ closed without a bump.
 
 ### Added
 
+- **Female headers and right-angle strips.** `skt-RxC` is a female header (a pin socket),
+  `hdr-RxC-ra` and `skt-RxC-ra` the right-angle header and socket, one or two rows, numbered
+  as `hdr-RxC` is. A right-angle strip lies flat past its last row as far as KiCad 10's
+  `_Horizontal` models measure, and is meant to point off the board: the edge rule and the
+  placer let it reach past the edge on that side only, the guide says which edge it points
+  to, and the placer moves it to an edge as it does a header. KiCad's `PinSocket` now reads
+  as a female header and `_Horizontal` as right-angle, and the catalog offers common sizes.
+  Drawn as a pin header until their own bodies arrive (#16).
 - **A printed legend can go on past Z in doubled letters.** `AxisLegend.letters = "doubled"`
   prints A..Z, then AA, BB, .. ZZ, as some boards do, where the default carries on AA, AB, ..
   as the addresses do. Left out of the file at its default, so every board keeps its bytes;
