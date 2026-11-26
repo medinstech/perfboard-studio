@@ -2383,6 +2383,30 @@ def test_the_guide_panel_says_what_the_guide_says() -> None:
         _close(window)
 
 
+def _submenu_of(owner, action):
+    """Find ``action``'s submenu among ``owner``'s child ``QMenu``s without calling
+    ``QAction.menu()``, whose PySide6 wrapper cycles with the action's and can collect
+    the window's own submenu wrappers when GC runs."""
+    import shiboken6
+    from PySide6.QtWidgets import QMenu
+
+    target = shiboken6.getCppPointer(action)[0]
+    for menu in owner.findChildren(QMenu):
+        if shiboken6.getCppPointer(menu.menuAction())[0] == target:
+            return menu
+    return None
+
+
+def _button_menu(owner, button):
+    """Find a ``QToolButton``'s attached menu among ``owner``'s child ``QMenu``s without
+    calling ``.menu()``."""
+    for action in button.actions():
+        menu = _submenu_of(owner, action)
+        if menu is not None:
+            return menu
+    return None
+
+
 def _menu_tooltips(window) -> list[tuple[str, str]]:
     """(text, tooltip) for every action in every menu, depth first, in menu order.
 
@@ -5733,7 +5757,7 @@ def test_the_box_button_arms_the_shape_it_shows() -> None:
         window.on_sheet_tool("select")
         box.trigger()
         assert window.schematic_view.tool == "line"
-        menu = box.menu()
+        menu = _submenu_of(window, box)
         assert menu is not None
         labels = [action.text() for action in menu.actions()]
         assert labels == ["Box", "Line", "Circle"]
@@ -7316,7 +7340,9 @@ def test_the_boards_tools_float_on_the_board() -> None:
         corner = [button.defaultAction() for button in window.board_view_tools.buttons]
         for action in (window.act_flip, window.act_zoom_in, window.act_zoom_out, window.act_fit):
             assert action in corner
-        shown = window.board_view_tools.buttons[0].menu().actions()
+        show_menu = _button_menu(window, window.board_view_tools.buttons[0])
+        assert show_menu is not None
+        shown = show_menu.actions()
         assert window.act_ratsnest in shown and window.act_values in shown
         assert window.face_switch.parent() is window.board_view_tools
     finally:
@@ -7358,7 +7384,7 @@ def test_every_tool_is_on_the_rail_with_a_hairline_between_kinds() -> None:
         }
         for kind, button in window.draw_tools.items():
             assert button.actions() == [draw[kind]]
-            assert button.menu() is None
+            assert _button_menu(window, button) is None
         # The kinds apart: pointer and Connect | the solder | the wires | Measure.
         order: list[str] = []
         layout = tools.layout()
@@ -7463,7 +7489,8 @@ def test_a_narrow_window_keeps_every_board_tool_on_screen() -> None:
     # The corner pill gives up Show's word, then the face switch -- whose setting is still
     # in Show's menu -- before it would run off the view, and takes them back with room.
     show = window.board_view_tools.buttons[0]
-    assert window.act_far_side in show.menu().actions()
+    show_menu = _button_menu(window, show)
+    assert show_menu is not None and window.act_far_side in show_menu.actions()
     window.resize(3000, 1000)
     for _ in range(10):
         QApplication.processEvents()
@@ -9269,17 +9296,17 @@ def test_a_view_is_put_away_from_the_panels_submenu() -> None:
     from perfboard_studio.ui import i18n
 
     window = _window_on(_golden_document("ne555"))
-    # The actions are HELD, not walked as temporaries. Under PySide6 6.10 the wrapper
-    # ``QAction.menu()`` hands back dies with the action's own wrapper, and the dead one
-    # stays cached for that menu: collecting the submenus out of a comprehension left a
-    # list of menus every one of which raised "already deleted" -- while the menus
-    # themselves were alive and well in the window.
     tops = window.menuBar().actions()
-    entries = [entry for top in tops if top.menu() is not None for entry in top.menu().actions()]
+    entries = [
+        entry
+        for top in tops
+        if (top_menu := _submenu_of(window, top)) is not None
+        for entry in top_menu.actions()
+    ]
     panels = next(
-        entry.menu()
+        sub
         for entry in entries
-        if entry.menu() is not None and entry.menu().title() == i18n.t("Panels")
+        if (sub := _submenu_of(window, entry)) is not None and sub.title() == i18n.t("Panels")
     )
     toggles = panels.actions()
     assert window.act_board_panel in toggles and window.act_schematic in toggles
@@ -11502,7 +11529,8 @@ def test_the_class_submenu_offers_exactly_what_the_net_dialog_does() -> None:
 
     window._add_net_entries(menu, net_id)
 
-    submenu = _entry(menu, "Class").menu()
+    submenu = _submenu_of(menu, _entry(menu, "Class"))
+    assert submenu is not None
     assert [a.text() for a in submenu.actions()] == [
         row[2] for row in NET_CLASSES
     ]
@@ -11525,7 +11553,9 @@ def test_making_a_net_a_ground_draws_it_as_a_rail() -> None:
     menu = QMenu()
     window._add_net_entries(menu, net_id)
 
-    next(a for a in _entry(menu, "Class").menu().actions() if "Ground" in a.text()).trigger()
+    classes = _submenu_of(menu, _entry(menu, "Class"))
+    assert classes is not None
+    next(a for a in classes.actions() if "Ground" in a.text()).trigger()
     window._refresh_schematic_panel()
 
     assert [net.net_class for net in window.bus.document.nets] == ["ground"]
@@ -14155,7 +14185,8 @@ def test_home_is_one_click_away_with_the_board_left_open(monkeypatch) -> None:
     try:
         header = window.header
         assert window.act_home.shortcut() == QKeySequence("Alt+Home")
-        assert window.act_home in window.menuBar().actions()[0].menu().actions()
+        file_menu = _submenu_of(window, window.menuBar().actions()[0])
+        assert file_menu is not None and window.act_home in file_menu.actions()
         assert not header.home_button.isHidden() and header.home_button.text() == "Home"
         document = window.bus.system_document
         monkeypatch.setattr(window, "on_open_recent", lambda path: pytest.fail("read again"))
@@ -16673,8 +16704,9 @@ def test_every_action_the_old_toolbars_had_has_a_place_on_screen() -> None:
         for bar in bars:
             for button in bar.buttons:
                 on_screen.add(button.defaultAction())
-                if button.menu() is not None:
-                    on_screen.update(button.menu().actions())
+                sub = _button_menu(window, button)
+                if sub is not None:
+                    on_screen.update(sub.actions())
                 on_screen.update(getattr(button, "tools", ()))  # a group's list
         on_screen.update((window.act_board_panel, window.act_schematic, window.act_3d,
                           window.act_guide_panel))  # the views' tabs
@@ -17080,7 +17112,7 @@ def test_the_sheets_tools_float_on_the_sheet() -> None:
         assert window.sheet_tools.parent() is window.schematic_view
         tools = [button.defaultAction() for button in window.sheet_tools.buttons]
         assert tools == [window.act_sheet_tool[n] for n in ("select", "wire", "label", "port", "text", "rectangle")]
-        shapes = window.act_sheet_tool["rectangle"].menu()
+        shapes = _submenu_of(window, window.act_sheet_tool["rectangle"])
         assert shapes is not None and len(shapes.actions()) == 3
         corner = [button.defaultAction() for button in window.sheet_view_tools.buttons]
         assert window.act_sch_auto in corner and window.act_sch_fit in corner
@@ -21884,7 +21916,7 @@ def test_one_nets_wiring_is_redone_in_a_style_of_its_own(monkeypatch: pytest.Mon
             window.view.mapFromScene(window.scene.conductor_items["cond-8"].boundingRect().center())
         )
         redo = next(a for a in menu.actions() if a.text() == "Redo Wiring of THRESH")
-        styles = redo.menu()
+        styles = _submenu_of(menu, redo)
         assert styles is not None
         names = [a.text() for a in styles.actions()]
         assert len(names) == 4 and "Solder trace where possible" in names
