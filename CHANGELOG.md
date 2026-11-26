@@ -42,6 +42,16 @@ closed without a bump.
   hand. A dropped part used to arrive as its footprint, and the click put down a second part
   with a new reference beside the one on the sheet.
 
+- **A pinout card for every part the catalogue knows the pins of.** Right-click a part in
+  the Library or the Parts panel and choose Show Pinout, or follow the link under its package
+  in Properties: every pin is drawn where its pad is, seen from above, with its name, its port
+  and what it can do besides (PWM, ADC, I2C, SPI, UART, interrupts...) coloured by kind, and a
+  numbered warning where a pin needs one -- the ESP32's strapping pins, its input-only pins,
+  a pin with an LED on it. The functions are read from the makers' documents, which the card
+  names at its foot. The part in the middle is the board view's own drawing of it, alone, with
+  no board behind it; the card follows the window's theme and language, and Save SVG writes it
+  on white into the project's `outputs/`. `--headless` writes a `pinout-<ref>.svg` for every
+  part on the board that has one (#16).
 - **Female headers and right-angle strips.** `skt-RxC` is a female header (a pin socket),
   `hdr-RxC-ra` and `skt-RxC-ra` the right-angle header and socket, one or two rows, numbered
   as `hdr-RxC` is. A right-angle strip lies flat past its last row as far as KiCad 10's

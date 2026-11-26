@@ -4367,7 +4367,13 @@ def catalog_part_placed_as(component: ComponentInstance) -> CatalogPart | None:
     """The catalog part ``component`` was placed from, as far as the board can tell: the one
     with its package and its value. A value edited by hand is a part the catalog does not
     know, and None."""
-    return _BY_PACKAGE_AND_VALUE.get((component.footprint_id, component.value))
+    return catalog_part_of(component.footprint_id, component.value)
+
+
+def catalog_part_of(footprint_id: str, value: str) -> CatalogPart | None:
+    """The catalog part with this package and this value, placed or still only in the
+    design; None for one the catalog does not know."""
+    return _BY_PACKAGE_AND_VALUE.get((footprint_id, value))
 
 
 #: What the catalog says of a module that reaches the board down a cable into a header.

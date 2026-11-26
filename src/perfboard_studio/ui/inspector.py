@@ -109,6 +109,7 @@ from perfboard_studio.model import (
     has_component_side_copper,
 )
 from perfboard_studio.phrasebook import guide_language, phrasebook
+from perfboard_studio.pinout import PinoutCard
 from perfboard_studio.system import (
     FIRST_BOARD,
     board_document,
@@ -183,10 +184,24 @@ class InspectorHooks:
     select_wiring: Callable[[str], object] = lambda _key: None
     #: The step card's "Try every wiring style" clicked.
     try_every_style: Callable[[], object] = lambda: None
+    #: The pinout card of the catalogue part with this package and value, or None, and
+    #: the window that shows one (``pinoutview``): the link under a part's package.
+    pinout_card: Callable[[str, str], PinoutCard | None] = lambda _footprint, _value: None
+    show_pinout: Callable[[PinoutCard], object] = lambda _card: None
     #: Whether the window says where the work stands (``Inspector.set_step``): nothing
     #: selected is then the step, and the board's editor waits for Board Settings. Left out,
     #: nothing selected is the board, as it always was.
     shows_steps: bool = False
+
+
+def _pinout_link() -> QLabel:
+    """The link under a part's package to its pinout card: shown on a part that has one."""
+    link = QLabel(f'<a href="pinout">{escape(t("Pinout card…"))}</a>')
+    link.setTextFormat(Qt.TextFormat.RichText)
+    link.setTextInteractionFlags(Qt.TextInteractionFlag.LinksAccessibleByMouse)
+    link.setToolTip(t("Every pin of this part where its pad is, with what it can do."))
+    link.hide()
+    return link
 
 
 @dataclass(frozen=True, slots=True)
@@ -1308,6 +1323,9 @@ class _PartEditor(QWidget):
         self.older_problem = _Problem()
         package_column.addWidget(self.older_problem)
         form.addRow(t("Package"), package)
+        self.pinout_card = _pinout_link()
+        self.pinout_card.linkActivated.connect(lambda _href: self._on_pinout())
+        form.addRow("", self.pinout_card)
         self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
         part_title_row.addWidget(self.resistor_size.toggle, 0, Qt.AlignmentFlag.AlignVCenter)
 
@@ -1423,6 +1441,14 @@ class _PartEditor(QWidget):
             or ""
         )
 
+    def _on_pinout(self) -> None:
+        component = self._component
+        if component is None:
+            return
+        card = self._inspector.hooks.pinout_card(component.footprint_id, component.value)
+        if card is not None:
+            self._inspector.hooks.show_pinout(card)
+
     def load(self, document: PerfDocument, component: ComponentInstance) -> None:
         another = self._component is None or self._component.id != component.id
         self._document = document
@@ -1441,6 +1467,10 @@ class _PartEditor(QWidget):
             )
             self.change_part.setEnabled(not component.locked)
             self.locked_note.setVisible(component.locked)
+            self.pinout_card.setVisible(
+                self._inspector.hooks.pinout_card(component.footprint_id, component.value)
+                is not None
+            )
             superseded = SUPERSEDED_FOOTPRINTS.get(component.footprint_id)
             self.older.setVisible(superseded is not None)
             self.use_current.setEnabled(not component.locked)
@@ -1669,6 +1699,9 @@ class _DesignPartEditor(QWidget):
         package_row.addWidget(self.package, 1)
         package_row.addWidget(self.change_part, 0, Qt.AlignmentFlag.AlignTop)
         form.addRow(t("Package"), package)
+        self.pinout_card = _pinout_link()
+        self.pinout_card.linkActivated.connect(lambda _href: self._on_pinout())
+        form.addRow("", self.pinout_card)
         self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
         design_title_row.addWidget(self.resistor_size.toggle, 0, Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(form)
@@ -1695,6 +1728,14 @@ class _DesignPartEditor(QWidget):
         buttons.addWidget(_action_button(actions.remove_design))
         layout.addLayout(buttons)
 
+    def _on_pinout(self) -> None:
+        part = self._part
+        if part is None:
+            return
+        card = self._inspector.hooks.pinout_card(part.footprint_id, part.value)
+        if card is not None:
+            self._inspector.hooks.show_pinout(card)
+
     def load(self, part: SchematicPart) -> None:
         another = self._part is None or self._part.id != part.id
         self._part = part
@@ -1708,6 +1749,9 @@ class _DesignPartEditor(QWidget):
             name = footprint_label(footprint.name) if footprint is not None else part.footprint_id
             self.package.setText(f"{name}  ({part.footprint_id})")
             self.resistor_size.load(part.footprint_id, enabled=True, clear_problem=another)
+            self.pinout_card.setVisible(
+                self._inspector.hooks.pinout_card(part.footprint_id, part.value) is not None
+            )
             if another:
                 self.pinout.say("")
                 for problem in (self.pinout_problem, self.note_problem):

@@ -1273,6 +1273,71 @@ TURKISH: dict[str, str] = {
     "Module, {0}+{1} pins, {2} mm, seated {3} mm up": (
         "Modül, {0}+{1} pin, {2} mm, {3} mm yukarıda"
     ),
+    # The pinout card (``pinout_export``): its heading, legend, notes and warnings. Pin
+    # names, ports and function labels are the maker's and are never said here.
+    "Logic {volts}": "Lojik {volts}",
+    "at most {ma} mA per pin": "pin başına en çok {ma} mA",
+    "seen from above": "üstten görünüş",
+    "PWM": "PWM",
+    "Analog input (ADC)": "Analog giriş (ADC)",
+    "Analog output (DAC)": "Analog çıkış (DAC)",
+    "Touch": "Dokunmatik",
+    "External interrupt": "Harici kesme",
+    "Serial (UART)": "Seri (UART)",
+    "SPI": "SPI",
+    "I2C": "I2C",
+    "Other: {kinds}": "Diğer: {kinds}",
+    "timer": "zamanlayıcı",
+    "comparator": "karşılaştırıcı",
+    "crystal/clock": "kristal/saat",
+    "reset": "reset",
+    "debugging": "hata ayıklama",
+    "reference": "referans",
+    "Every port pin also has a pin-change interrupt (PCINT); the card does not show it.": (
+        "Her port pininde ayrıca pin değişim kesmesi (PCINT) vardır; kart bunu göstermez."
+    ),
+    "{kinds} can be routed to any GPIO (the GPIO matrix); the card does not show it.": (
+        "{kinds} herhangi bir GPIO pinine yönlendirilebilir (GPIO matrisi); kart bunu "
+        "göstermez."
+    ),
+    "The small framed numbers are the app's pad numbers (U1.2 on the schematic), not "
+    "what is printed on the board.": (
+        "Çerçeveli küçük sayılar uygulamanın ped numaralarıdır (şemada U1.2), kartın "
+        "üzerinde yazanlar değil."
+    ),
+    "Reset pin: it is an I/O only with the RSTDISBL fuse set, and then the chip can no "
+    "longer be programmed over ISP.": (
+        "Reset pini: yalnızca RSTDISBL sigortası (fuse) programlanınca G/Ç olur; o zaman "
+        "çip artık ISP ile programlanamaz."
+    ),
+    "Analog input only: it cannot be a digital I/O.": (
+        "Yalnızca analog giriş: dijital G/Ç olarak kullanılamaz."
+    ),
+    "The board's LED is on this pin: as an input, the LED and its resistor load it.": (
+        "Kartın LED'i bu pinde: giriş olarak kullanıldığında LED ve direnci pini yükler."
+    ),
+    "Programs are uploaded through this pin: disconnect its circuit to upload.": (
+        "Programlar bu pin üzerinden yüklenir: yüklerken bu pine bağlı devreyi ayırın."
+    ),
+    "Strapping pin: read at power-up to choose how the chip boots; do not hold it high or "
+    "low while it starts.": (
+        "Önyükleme (strapping) pini: çip açılırken nasıl başlayacağını seçmek için okunur; "
+        "açılış sırasında yüksek ya da alçak tutmayın."
+    ),
+    "Input only: this pin has no output driver.": (
+        "Yalnızca giriş: bu pinin çıkış sürücüsü yok."
+    ),
+    "Wired to the module's flash memory: do not use it in the circuit.": (
+        "Modülün flaş belleğine bağlı: devrede kullanmayın."
+    ),
+    "ADC2 channel: it cannot be read while Wi-Fi is running.": (
+        "ADC2 kanalı: Wi-Fi çalışırken okunamaz."
+    ),
+    "{title} datasheet": "{title} veri sayfası",
+    "{title} schematic": "{title} şeması",
+    "{title} user guide": "{title} kullanım kılavuzu",
+    "{title} board file": "{title} kart dosyası",
+    "Read from: {documents}": "Kaynak: {documents}",
 }
 
 

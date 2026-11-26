@@ -31,7 +31,7 @@ REPO = Path(__file__).resolve().parents[1]
 #: the 555's RESET to VCC moved them.
 ONE_BOARD_SECTIONS = [
     "Perfboard", "document", "board", "substrate", "parts", "2D", "pads", "1:1", "PDF", "PDF",
-    "schematic", "schematic.svg,", "STEP", "ERC", "DRC", "LVS", "ratsnest", "autoroute", "0",
+    "schematic", "schematic.svg,", "STEP", "pinouts", "ERC", "DRC", "LVS", "ratsnest", "autoroute", "0",
     "would", "style", "balanced", "*", "solder", "wire", "lead-bend", "auto-place",
     "Placement", "HPWL", "build", "8", "step", "!", "3D", "outputs",
 ]

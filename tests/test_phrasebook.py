@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from perfboard_studio import guide as guide_module
-from perfboard_studio import guide_export, model, persist
+from perfboard_studio import guide_export, model, persist, pinout_export
 from perfboard_studio.footprints import footprint_lookup, standard_footprints
 from perfboard_studio.guide import (
     PHASE_TITLES,
@@ -117,12 +117,18 @@ def said_from_tables() -> set[str]:
         | set(guide_export.WIRE_TABLE_COLUMNS)
         | _warning_codes()
         | set(NAME_TEMPLATES)
+        # The pinout card's legend, warnings and documents, said from its tables.
+        | set(pinout_export.GROUP_WORDS.values())
+        | set(pinout_export.OTHER_WORDS.values())
+        | set(pinout_export.WARNING_WORDS.values())
+        | set(pinout_export.DOCUMENT_WORDS.values())
     )
 
 
 def said() -> set[str]:
     literals = set().union(
-        *(_said_literals(SRC / name) for name in ("guide.py", "guide_export.py", "phrasebook.py", "system.py", "harness.py"))
+        *(_said_literals(SRC / name) for name in ("guide.py", "guide_export.py", "phrasebook.py", "system.py", "harness.py",
+                       "pinout_export.py"))
     )
     return literals | said_from_tables()
 

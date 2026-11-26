@@ -58,6 +58,7 @@ from perfboard_studio.harness import build_harness
 from perfboard_studio.lvs import LvsResult, run_lvs
 from perfboard_studio.model import Board, PerfDocument
 from perfboard_studio.phrasebook import guide_language
+from perfboard_studio.pinout_export import pinout_svg
 from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.placer import plan_placement
 from perfboard_studio.ratsnest import ratsnest, summarize
@@ -81,6 +82,8 @@ from .export_schematic import svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .i18n import language
 from .main import _document_arguments, read_document_text
+from .pinoutart import part_art_svg
+from .pinoutview import pinout_card_of
 from .view2d import BACKGROUND, RULER_MARGIN_MM, BoardScene, print_scene
 
 
@@ -304,6 +307,24 @@ def _write_schematic(
         print(f"             note: {note}")
 
 
+def _write_pinouts(doc: PerfDocument, lookup: FootprintLookup, out_dir: Path) -> None:
+    """A pinout card for every part on the board that has one, with the board view's
+    drawing of it in the middle -- the card the window shows, in the run's language."""
+    written: list[str] = []
+    for component in doc.components:
+        card = pinout_card_of(component.footprint_id, component.value, lookup)
+        if card is None:
+            continue
+        svg = pinout_svg(
+            card, language=guide_language(language()), art=part_art_svg(card, lookup)
+        )
+        name = f"pinout-{component.ref}.svg"
+        (out_dir / name).write_text(svg, encoding="utf-8")
+        written.append(name)
+    if written:
+        print(f"pinouts      {len(written)} -> {', '.join(written)}")
+
+
 def _print_erc(doc: PerfDocument, lookup: FootprintLookup) -> None:
     # --- ERC first: the circuit, before anything about the board. Each finding is
     # printed, because a circuit error is the one thing in this report the board's own
@@ -415,6 +436,7 @@ def _run_board(
     step = export_step(doc, lookup, out_dir / "board.step")
     t_step = (time.perf_counter() - t0) * 1000
     print(f"STEP model   {t_step:6.1f} ms   {step.stat().st_size // 1024} KB -> {step.name}")
+    _write_pinouts(doc, lookup, out_dir)
 
     if system is None:
         _print_erc(doc, lookup)

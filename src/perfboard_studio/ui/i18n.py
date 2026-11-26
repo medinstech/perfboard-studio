@@ -1958,6 +1958,19 @@ TURKISH: Mapping[str, str] = {
     "This document has no parts to draw yet.": "Bu belgede henüz çizilecek parça yok.",
     "Show the Folder": "Klasörü Göster",
     "Close": "Kapat",
+    # -- a part's pinout card (pinoutview) -------------------------------------------------
+    "Show Pinout…": "Pin Haritasını Göster…",
+    "Pinout card…": "Pin haritası…",
+    "Pinout of {part}": "{part} pin haritası",
+    "Save SVG…": "SVG Kaydet…",
+    "Saves the card on a white background, ready to print.": (
+        "Kartı yazdırmaya hazır, beyaz zeminde kaydeder."
+    ),
+    "SVG pictures (*.svg)": "SVG resimleri (*.svg)",
+    "Could not save the card": "Kart kaydedilemedi",
+    "Every pin of this part where its pad is, with what it can do.": (
+        "Bu parçanın her pini, pedinin olduğu yerde ve neler yapabildiğiyle."
+    ),
     # -- right-click -----------------------------------------------------------
     "&Copy This Problem": "Bu Sorunu &Kopyala",
     "Copy &All Problems": "&Tüm Sorunları Kopyala",

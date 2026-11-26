@@ -4587,3 +4587,56 @@ that hole and the edge -- "A7/L", "E1/T", "X7/R", "E18/B" -- and `parse_hole` re
 in either case; a corner and anything further out keep "(col -1, row -1)", and a breadboard
 keeps its own names. The guide says it in words where it first uses it, and in Turkish the
 suffix goes on the word beside the address, never on it: "A7 deliğinin yanındaki parmak".
+
+## A pinout card is the engine's page, and the part in its middle is the window's drawing
+
+A pinout card (`pinout.py`, `pinfunctions.py`, `pinout_export.py`) shows every pin of a
+catalogue part where its pad is, with what it can do: its port, its functions coloured by
+kind, and a numbered warning where a pin needs one. The facts come from tables read off the
+maker's documents, and the card names them at its foot.
+
+**The page is the engine's; the drawing in its middle is not.** The part drawn from above is
+the board view's own drawing (`ComponentItem`, `moduleart`, the KiCad top views), and that is
+Qt. The engine imports no Qt, so `pinout_svg` takes the drawing as SVG TEXT (`art`) and puts it
+in the card's frame unread: it drops the root, the title and the description, keeps the
+definitions and the drawing, and scales the viewBox onto the frame. With no art it draws a
+plain body, a DIP's package and legs or a module's board and pads. The labels are laid out
+the same way in both cases, so the two kinds of card differ only in the middle
+(`test_the_plain_body_and_the_art_lay_the_labels_out_alike`). The window and `--headless` have
+Qt, so they make the art with `ui/pinoutart.part_art_svg`. The MCP server and anything else
+without a display get the plain body. The art changes whenever the board view's drawing
+changes, and the card needs no code of its own to follow.
+
+**The art comes out of Qt as vector.** `QSvgGenerator` renders the one item, and the result is
+paths, gradients and text with no `<image>` in it, 25 to 45 KB a part. Its viewBox is the
+card's `frame` in tenths of a millimetre. The frame is the body joined with every pad, plus
+`PAD_REACH_MM`, so a drawing that reaches its pads fits whole.
+
+**The part is drawn alone.** On the first renders the board scene was rendered with every
+other item hidden. The scene's canvas still showed behind the part, and the lead ends the
+board view paints into a board's holes read as a perfboard's pad rings around a bare chip.
+The verdict on them was that no perfboard may show under the part. So the item stands in a bare
+`QGraphicsScene` with no background, on a board of which only the pitch is read. A bare chip
+leaves its lead ends out, so from above it is its body and its legs. A module keeps its own
+pins, because they belong to its own board. `tests/test_pinout_art.py` renders the chip and
+checks that the drawing is transparent past its legs.
+
+**SVG Tiny, because the window shows the same file.** QtSvg implements SVG Tiny 1.2, so the
+card avoids `dominant-baseline` and avoids font-family lists, which QtSvg does not parse. The
+fonts are part of the ink (`PinoutInk`). A saved file carries a fallback list for browsers.
+The window passes a single family, along with colours it reads from the application's palette
+at paint time (`card_ink`, the way `brand` reads it), so a card painted after a theme switch is
+painted in the new theme.
+
+**The numbers on a module are the app's.** A bare chip's pad numbers are the maker's pin
+numbers. A module's pad numbers are the footprint's own count (U1.2 on the schematic), and
+they are not what the board's maker prints. So a module's pad numbers go in small frames
+outside the drawing, with a sentence at the foot saying so. Pin names, ports and function
+labels are the maker's and are never translated. What a kind, a warning and a document are
+called is said through the guide's phrasebook, so a Turkish card is written with no interface
+loaded. `tests/test_phrasebook.py` reads `pinout_export.py` and its word tables.
+
+**One warning, one triangle.** A pin with two warnings shows two numbered triangles side by
+side. The first card ran IO12's two warnings, strapping (2) and ADC2 (5), into one triangle
+that read "25". `test_a_pin_with_two_warnings_gets_two_triangles_not_one_reading_25` counts
+the triangles and checks the number each one carries.

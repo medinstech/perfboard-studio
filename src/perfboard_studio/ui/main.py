@@ -362,6 +362,7 @@ from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footpri
     plan_import,
 )
 from perfboard_studio.phrasebook import GuideLanguage, guide_language, phrasebook
+from perfboard_studio.pinout import PinoutCard
 from perfboard_studio.placer import (
     BoardSuggestion,
     DesignPlacement,
@@ -480,6 +481,13 @@ from .palette import SHORTCUT as PALETTE_SHORTCUT
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel, natural_key
 from .partnames import footprint_label
+from .pinoutview import (
+    PinoutDialog,
+    card_of_part_row,
+    offer_pinout_on,
+    pinout_card_of,
+    save_folder,
+)
 from .plannercard import PlannerCard
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
 from .problems import ProblemsBar, advice, finding_tip, findings_tip
@@ -7607,6 +7615,13 @@ class MainWindow(QMainWindow):
         header.setStretchLastSection(False)
         self.library_tree.itemSelectionChanged.connect(self._on_library_selection_changed)
         self.library_tree.itemActivated.connect(self._on_library_item_activated)
+        offer_pinout_on(
+            self.library_tree,
+            lambda item: pinout_card_of(
+                "", "", self.lookup, catalog_id=item.data(0, ROLE_CATALOG_ID)
+            ) if item.data(0, ROLE_CATALOG_ID) else None,
+            self.show_pinout,
+        )
         layout.addWidget(self.library_tree)
 
         self.button_custom_part = QPushButton(t("Custom Part…"))
@@ -8248,6 +8263,11 @@ class MainWindow(QMainWindow):
         self.part_list.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
         self.part_list.componentChosen.connect(self.go_to_component)
         self.part_list.partChosen.connect(self._on_part_list_design_part)
+        offer_pinout_on(
+            self.part_list.tree,
+            lambda item: card_of_part_row(item, self.bus.system_document, self.lookup),
+            self.show_pinout,
+        )
         dock = QDockWidget(t("Parts"), self)
         dock.setObjectName("dockPartList")
         dock.setWidget(self.part_list)
@@ -11338,6 +11358,10 @@ class MainWindow(QMainWindow):
                 wiring_styles=lambda: self.wiring_styles(),
                 current_style=lambda: self._routing_style,
                 select_wiring=lambda key: self._select_wiring(key),
+                pinout_card=lambda footprint, value: pinout_card_of(
+                    footprint, value, self.lookup
+                ),
+                show_pinout=lambda card: self.show_pinout(card),
                 try_every_style=lambda: self.on_try_every_style(),
                 shows_steps=True,
             ),
@@ -17906,6 +17930,12 @@ class MainWindow(QMainWindow):
             guess=counts["guess"],
         )
         self.statusBar().showMessage(message, 15000)
+
+    def show_pinout(self, card: PinoutCard) -> None:
+        """A part's pinout card, from a right-click in the Library or Parts, or the link in
+        Properties: in the window's language, saved into the project's ``outputs/``."""
+        folder = save_folder(self.current_path)
+        PinoutDialog(card, self.lookup, self._guide_language(), folder, self).exec()
 
     def on_save(self) -> bool:
         """Save, returning whether it happened. The bool is what the close guard needs."""
