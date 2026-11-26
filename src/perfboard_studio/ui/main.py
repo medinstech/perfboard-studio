@@ -466,6 +466,9 @@ from .inspector import (
 )
 from .numberbox import NumberBox
 from .palette import ALSO as PALETTE_ALSO
+from .palette import KIND as PALETTE_KIND
+from .palette import PATH_SEP as PALETTE_PATH_SEP
+from .palette import RECENT_LIMIT as PALETTE_RECENT_LIMIT
 from .palette import SHORTCUT as PALETTE_SHORTCUT
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
@@ -786,6 +789,19 @@ def app_settings() -> QSettings:
 
 
 RECENT_FILES_KEY = "recentFiles"
+#: The commands last run from the palette, newest first, by their menu path and name.
+PALETTE_RECENT_KEY = "palette/recentCommands"
+
+#: What the palette offers first, under the step the step bar points at: the commands
+#: that step is done with, by the window's attribute names.
+PALETTE_SUGGESTIONS: dict[str, tuple[str, ...]] = {
+    "circuit": ("act_sch_add", "act_connect", "act_new_net", "act_sch_auto"),
+    "board": ("act_design_board", "act_features"),
+    "place": ("act_autoplace", "act_reroll"),
+    "route": ("act_autoroute", "act_ratsnest"),
+    "check": ("act_drc_panel",),
+    "build": ("act_show_guide", "act_guide", "act_pdf", "act_export_step"),
+}
 
 #: Where the last project was made or opened, so the next dialog starts in the same place
 #: rather than in whatever directory the process happens to have been launched from.
@@ -3771,9 +3787,19 @@ class MainWindow(QMainWindow):
         """
         # Every command by its name (``ui/palette.py``): Ctrl+K, or the header's field. On
         # the window and in no menu -- it is the way INTO the menus.
-        self.command_palette = CommandPalette(self, self._palette_entries)
+        self.command_palette = CommandPalette(
+            self,
+            self._palette_entries,
+            recent=self._palette_recent,
+            remember=self._palette_remember,
+            suggested_title=lambda: t("Suggested for {step}").format(
+                step=step_title(self.workflow_bar.next_key)
+            ),
+        )
         self.act_palette = QAction(t("Search Commands…"), self)
         self.act_palette.setShortcut(QKeySequence(PALETTE_SHORTCUT))
+        # Held down, the key would repeat and flip it open, shut, open.
+        self.act_palette.setAutoRepeat(False)
         # Its key closes it again: a palette is put away the way it was called.
         self.act_palette.triggered.connect(lambda _checked=False: self.command_palette.toggle())
         self.addAction(self.act_palette)
@@ -3907,6 +3933,21 @@ class MainWindow(QMainWindow):
         for top in self._top_menus:
             mirror(top, menu.addMenu(top.title()), self._keeps_home(top.menuAction(), False))
 
+    def _palette_recent(self) -> list[str]:
+        """The commands last run from the palette, newest first (``Entry.key``)."""
+        stored = app_settings().value(PALETTE_RECENT_KEY, [])
+        # A list, a bare string when one was saved, None when none was (``_recent_paths``).
+        if isinstance(stored, str):
+            return [stored]
+        if not isinstance(stored, list):
+            return []
+        return [str(key) for key in stored if key]
+
+    def _palette_remember(self, key: str) -> None:
+        """Put ``key`` first among the commands last run from the palette."""
+        kept = [key, *(old for old in self._palette_recent() if old != key)]
+        app_settings().setValue(PALETTE_RECENT_KEY, kept[: PALETTE_RECENT_LIMIT * 4])
+
     def _palette_entries(self) -> list[Entry]:
         """What the palette offers: every enabled entry of every menu under ☰, by its own
         words, with the menus it is in and its key -- then every part and net by name.
@@ -3925,6 +3966,11 @@ class MainWindow(QMainWindow):
             for menu in self.findChildren(QMenu)
         }
         entries: list[Entry] = []
+        suggested = {
+            shiboken6.getCppPointer(action)[0]
+            for name in PALETTE_SUGGESTIONS.get(self.workflow_bar.next_key, ())
+            if isinstance(action := getattr(self, name, None), QAction)
+        }
 
         def walk(menu: QMenu, path: tuple[str, ...], seen: set[int], keeps: bool) -> None:
             for action in menu.actions():
@@ -3944,25 +3990,52 @@ class MainWindow(QMainWindow):
                     part for part in (action.toolTip(), str(action.property(PALETTE_ALSO) or ""))
                     if part and part != label
                 )
+                kind = str(action.property(PALETTE_KIND) or "command")
+                if kind == "file":
+                    # Open Recent's files are listed from the stored list, as they are now
+                    # (below); its menu may be as old as the last time it was opened.
+                    continue
+                where = PALETTE_PATH_SEP.join(path)
+                remembered = f"{where}/{label}" if kind == "command" else ""
                 if action.isCheckable():
                     label = f"{label} ({t('on') if action.isChecked() else t('off')})"
                 entries.append(
                     Entry(
                         label=label,
-                        where=" \u25b8 ".join(path),
+                        where=where,
                         keys=action.shortcut().toString(
                             QKeySequence.SequenceFormat.NativeText
                         ),
                         run=partial(self._run_from_home, action,
                                     self._keeps_home(action, keeps)),
                         icon=None if action.icon().isNull() else action.icon(),
+                        kind=kind,
                         also=also,
+                        key=remembered,
+                        suggested=shiboken6.getCppPointer(action)[0] in suggested,
                     )
                 )
 
         for top in self._top_menus:
             walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]},
                  self._keeps_home(top.menuAction(), False))
+
+        # The files last opened, by name and with the folder each is in, as Open Recent
+        # lists them -- read from the stored list rather than by rebuilding that menu here,
+        # whose clear() deleted actions out from under their wrappers.
+        for file in (Path(entry) for entry in self._recent_paths()):
+            if file.is_file():
+                entries.append(
+                    Entry(
+                        label=file.name,
+                        where=str(file.parent),
+                        keys="",
+                        # Opening it takes Home away, as any door does.
+                        run=partial(self.on_open_recent, file),
+                        icon=icons.icon("open"),
+                        kind="file",
+                    )
+                )
 
         document = self.bus.system_document
         # A part by what somebody remembers of it: "R37" from a finding, "10k" from the
@@ -6079,7 +6152,7 @@ class MainWindow(QMainWindow):
         )
         act_add_cable.setProperty(PALETTE_ALSO, t("harness, wire between boards, connect boards"))
         act_add_cable.triggered.connect(lambda _checked=False: self.on_add_cable())
-        act_features = board_menu.addAction(t("Board &Features…"))
+        act_features = self.act_features = board_menu.addAction(t("Board &Features…"))
         act_features.setToolTip(
             t(
                 "Mounting holes and edge-connector fingers. A mounting bore takes the "
@@ -6123,7 +6196,9 @@ class MainWindow(QMainWindow):
             )
         )
         act_sheet.triggered.connect(self.on_export_schematic_dialog)
-        act_pdf = export_menu.addAction(t("1:1 &PDF (component side + solder side)…"))
+        act_pdf = self.act_pdf = export_menu.addAction(
+            t("1:1 &PDF (component side + solder side)…")
+        )
         act_pdf.triggered.connect(self.on_export_pdf)
         act_png = export_menu.addAction(t("3D S&napshot…"))
         act_png.triggered.connect(self.on_export_3d_png)
@@ -6362,7 +6437,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_autoplace.triggered.connect(self.on_autoplace)
-        act_reroll = place_menu.addAction(t("&Try Another Arrangement"))
+        act_reroll = self.act_reroll = place_menu.addAction(t("&Try Another Arrangement"))
         act_reroll.setToolTip(
             t(
                 "Search again from a different seed. Annealing is a random walk, so this is "
@@ -16857,6 +16932,7 @@ class MainWindow(QMainWindow):
         boards = sorted(folder.glob("*.perf")) if folder is not None else []
         for path in boards:
             action = self.menu_examples.addAction(path.stem)
+            action.setProperty(PALETTE_KIND, "example")
             action.setToolTip(
                 t("Opens as a new, untitled board: Save asks where your copy goes.")
             )
@@ -17119,6 +17195,7 @@ class MainWindow(QMainWindow):
             # underneath it are not.
             action = menu.addAction(f"&{index}  {path.name}")
             action.setToolTip(str(path))
+            action.setProperty(PALETTE_KIND, "file")
             action.triggered.connect(lambda _checked=False, p=path: self.on_open_recent(p))
         menu.addSeparator()
         menu.addAction(t("&Clear List")).triggered.connect(self.on_clear_recent)

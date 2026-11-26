@@ -2942,20 +2942,20 @@ def test_a_part_can_be_found_by_reference_value_or_footprint() -> None:
     try:
         window.on_go_to_part()
         palette = window.command_palette
-        everything = palette.list.count()
+        everything = len(palette.shown())
         assert everything == len(window.bus.document.components) + len(window.bus.document.parts)
 
         first = window.bus.document.components[0]
         palette.field.setText(first.ref)
-        assert 0 < palette.list.count() < everything
+        assert 0 < len(palette.shown()) < everything
         palette.field.setText(first.value)
-        assert palette.list.count() > 0
+        assert len(palette.shown()) > 0
         footprint = window.lookup(first.footprint_id)
         palette.field.setText(footprint_label(footprint.name))
-        assert palette.list.count() > 0
+        assert len(palette.shown()) > 0
 
         palette.field.setText("no such part anywhere")
-        assert palette.list.count() == 0
+        assert len(palette.shown()) == 0
         palette.close_palette()
     finally:
         _close(window)

@@ -251,3 +251,192 @@ def test_the_windows_ctrl_k_and_go_to_part_put_it_away_again() -> None:
         assert not palette.isVisibleTo(window)
     finally:
         _discard(window)
+
+
+# ---------------------------------------------------------------------------
+# What it lists: sections with nothing typed, groups when something is
+# ---------------------------------------------------------------------------
+
+
+def _noop() -> None:
+    pass
+
+
+def _listing() -> list[Entry]:
+    return [
+        Entry("New Board", "File", "Ctrl+N", _noop, key="File/New Board"),
+        Entry("Undo", "Edit", "Ctrl+Z", _noop, key="Edit/Undo"),
+        Entry("Auto-wire Everything", "Wiring", "", _noop, key="Wiring/Auto-wire Everything",
+              suggested=True),
+        Entry("Fit Board", "View \u25b8 Zoom", "F", _noop, key="View \u25b8 Zoom/Fit Board"),
+        Entry("ne555-astable", "File \u25b8 Open Example", "", _noop, kind="example"),
+        Entry("lamp.perf", "C:/boards", "", _noop, kind="file"),
+        Entry("R1  10k", "Part on the board", "", _noop, kind="part"),
+        Entry("Rail", "Net", "", _noop, kind="net"),
+    ]
+
+
+def test_nothing_typed_lists_recent_then_suggested_then_each_menu() -> None:
+    from perfboard_studio.ui.palette import sections
+
+    listed = sections(_listing(), "", recent=["Edit/Undo", "gone/Missing"],
+                      suggested_title="Suggested for Wiring")
+    assert [title for title, _ in listed] == [
+        "Recent Commands", "Recent Files", "Suggested for Wiring",
+        "File", "Edit", "Wiring", "View", "Examples", "Parts", "Nets",
+    ]
+    by_title = dict(listed)
+    # A remembered command that is no longer offered is passed over, not shown empty.
+    assert [entry.label for entry in by_title["Recent Commands"]] == ["Undo"]
+    assert [entry.label for entry in by_title["Suggested for Wiring"]] == ["Auto-wire Everything"]
+    # A menu's section is its top level: a submenu's command is in its menu.
+    assert [entry.label for entry in by_title["View"]] == ["Fit Board"]
+
+
+def test_an_empty_section_is_left_out() -> None:
+    from perfboard_studio.ui.palette import sections
+
+    commands = [entry for entry in _listing() if entry.kind == "command" and not entry.suggested]
+    titles = [title for title, _ in sections(commands, "")]
+    assert titles == ["File", "Edit", "View"]
+
+
+def test_typed_groups_by_kind_with_the_best_match_first() -> None:
+    from perfboard_studio.ui.palette import sections
+
+    listed = sections(_listing(), "r1")
+    assert listed[0][0] == "Parts"
+    # The names first, then what only says it where it lives (a folder, "on the board").
+    listed = sections(_listing(), "board")
+    assert [title for title, _ in listed] == ["Commands", "Recent Files", "Parts"]
+    # rank's order inside the group, ties in the order the menus list them.
+    assert [entry.label for entry in listed[0][1]] == ["New Board", "Fit Board"]
+    listed = sections(_listing(), "ne555")
+    assert [title for title, _ in listed] == ["Examples"]
+
+
+def test_recent_commands_are_capped() -> None:
+    from perfboard_studio.ui.palette import RECENT_LIMIT, sections
+
+    many = [Entry(f"Do {n}", "Edit", "", _noop, key=f"Edit/Do {n}") for n in range(9)]
+    listed = dict(sections(many, "", recent=[entry.key for entry in many]))
+    assert len(listed["Recent Commands"]) == RECENT_LIMIT
+
+
+def test_a_shortcut_is_said_as_keycaps() -> None:
+    from perfboard_studio.ui.palette import keycaps
+
+    assert keycaps("Ctrl+Shift+R") == ["Ctrl", "Shift", "R"]
+    assert keycaps("Ctrl++") == ["Ctrl", "+"]
+    assert keycaps("F") == ["F"]
+    assert keycaps("Ctrl+K, Ctrl+G") == ["Ctrl", "K"]
+    assert keycaps("") == []
+
+
+def _sectioned_host(remembered: list[str]) -> _Host:
+    host = _open_host()
+    host.commands._entries_now = _listing
+    host.commands._remember = remembered.append
+    host.commands.close_palette()
+    host.commands.open()
+    return host
+
+
+def test_a_header_is_not_a_row() -> None:
+    from perfboard_studio.ui.palette import ROLE_HEADER
+
+    host = _sectioned_host([])
+    try:
+        palette = host.commands
+        header = palette.list.item(0)
+        assert header.data(ROLE_HEADER)
+        assert header.flags() == Qt.ItemFlag.NoItemFlags
+        # The first ROW is current, not the header above it.
+        assert palette.list.currentRow() == 1
+        palette._run_item(header)
+        assert palette.isVisible()
+        # Every entry once, and the suggested one again in its menu, where it lives.
+        assert len(palette.shown()) == len(_listing()) + 1
+        assert palette.headers()[:3] == ["Recent Files", "Suggested", "File"]
+    finally:
+        host.close()
+
+
+def test_the_arrows_step_over_the_headers() -> None:
+    host = _sectioned_host([])
+    try:
+        palette = host.commands
+        seen = []
+        for _ in range(len(_listing()) + 3):
+            seen.append(palette.list.currentItem().data(Qt.ItemDataRole.UserRole))
+            QTest.keyClick(palette.field, Qt.Key.Key_Down)
+        assert all(isinstance(entry, Entry) for entry in seen)
+        # Down past the last row stays on it; Up from the first stays there too.
+        assert seen[-1] is palette.shown()[-1]
+        for _ in range(len(_listing()) + 3):
+            QTest.keyClick(palette.field, Qt.Key.Key_Up)
+        assert palette.list.currentItem().data(Qt.ItemDataRole.UserRole) is palette.shown()[0]
+    finally:
+        host.close()
+
+
+def test_running_a_command_remembers_it_and_a_part_is_not() -> None:
+    remembered: list[str] = []
+    host = _sectioned_host(remembered)
+    try:
+        palette = host.commands
+        palette.field.setText("undo")
+        palette.run_current()
+        assert remembered == ["Edit/Undo"]
+        palette.open()
+        palette.field.setText("r1")
+        palette.run_current()
+        assert remembered == ["Edit/Undo"]
+    finally:
+        host.close()
+
+
+def test_the_window_remembers_what_was_run_and_suggests_for_its_step() -> None:
+    from pathlib import Path
+
+    from perfboard_studio import persist
+    from perfboard_studio.ui.main import MainWindow
+    from perfboard_studio.ui.workflow import step_title
+
+    _app()
+    root = Path(__file__).resolve().parents[1]
+    loaded = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    from perfboard_studio.ui import main as main_module
+
+    examples = sorted((root / "examples").glob("*.perf"))[:2]
+    gone = root / "examples" / "no-such-board.perf"
+    main_module.app_settings().setValue(
+        main_module.RECENT_FILES_KEY, [str(path) for path in (*examples, gone)]
+    )
+    window = MainWindow(loaded)
+    try:
+        palette = window.command_palette
+        window.act_palette.trigger()
+        # The files last opened, by name, and one that has gone away left out.
+        assert "Recent Files" in palette.headers()
+        assert [entry.label for entry in palette.shown() if entry.kind == "file"] == [
+            path.name for path in examples
+        ]
+        step = window.workflow_bar.next_key
+        title = f"Suggested for {step_title(step)}"
+        assert title in palette.headers()
+        assert "Recent Commands" not in palette.headers()
+        palette.field.setText("Fit")
+        chosen = palette.shown()[0]
+        assert chosen.kind == "command" and chosen.key
+        palette.run_current()
+        assert window._palette_recent() == [chosen.key]
+        window.act_palette.trigger()
+        headers = palette.headers()
+        assert headers[0] == "Recent Commands"
+        assert palette.shown()[0].key == chosen.key
+        palette.close_palette()
+    finally:
+        _discard(window)

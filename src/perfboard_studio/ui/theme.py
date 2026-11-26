@@ -730,10 +730,10 @@ QPushButton#headerSearch:hover {{
 QFrame#commandPalette QLineEdit {{
     background: transparent;
     border: none;
-    font-size: {LEAD_PX}px;
-    padding: {s["sm"]}px {s["md"]}px;
+    font-size: {LEAD_PX + 3}px;
+    padding: 10px {s["sm"]}px;
 }}
-QFrame#commandPalette QListView {{ background: transparent; border: none; }}
+QFrame#commandPalette QListView {{ background: transparent; border: none; padding: {s["xs"]}px 0px; }}
 QFrame#commandPalette QListView::item {{
     padding: {s["sm"]}px {s["md"]}px;
     border-radius: {RADIUS_SM}px;

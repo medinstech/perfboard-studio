@@ -182,6 +182,14 @@ closed without a bump.
 
 ### Changed
 
+- **The command palette says where everything is.** With nothing typed, Ctrl+K opens on
+  the commands last run from it, the files last opened and what the step bar's current step
+  suggests ("Suggested for Wiring"), then each menu as its own section; with something
+  typed, what matches is grouped under Commands, Parts, Nets, Examples and Recent Files, the
+  group with the best match first. Each row has its icon on a tile, its menu path quieter
+  beside the name and its key drawn as keycaps, and a footer says which keys move, run and
+  close. The arrows step over the headers. Holding Ctrl+K no longer flips it open and shut.
+
 - **Install and Restart runs only an installer this project signed.** Besides the checksum,
   the downloaded `Setup.exe` must carry an intact Authenticode signature that Windows trusts,
   made by the project's publisher; an unsigned installer, one changed after signing, or one
