@@ -4437,7 +4437,11 @@ class MainWindow(QMainWindow):
         strip = QDockWidget(t("Update"), self)
         strip.setObjectName("dockUpdate")
         strip.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
-        strip.setTitleBarWidget(QWidget(strip))
+        title = QWidget(strip)
+        title_layout = QHBoxLayout(title)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title.setFixedHeight(0)
+        strip.setTitleBarWidget(title)
         # ``setWidget`` SHOWS what it is given, so the bar's own "nothing to announce"
         # state has to be put back afterwards -- otherwise the strip is down and the bar
         # inside it reads as up, which is the difference between "no update" and "an update
@@ -4445,6 +4449,7 @@ class MainWindow(QMainWindow):
         announcing = not self.update_bar.isHidden()
         strip.setWidget(self.update_bar)
         self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, strip)
+        strip.setVisible(announcing)
         self.update_strip = strip
         # Followed rather than told: the bar puts ITSELF up and down as the check moves
         # through its states, and a second place deciding when it is up would be a second
