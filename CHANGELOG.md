@@ -368,6 +368,10 @@ closed without a bump.
 
 ### Fixed
 
+- **The illuminated RGB encoder's LEDs are common anode.** The SparkFun breakout's check said
+  COMMON was COM-15141's common cathode and went to ground; the maker's drawing marks pin 5 +
+  and the colours' pins -, so COMMON goes to the supply, a colour lights when its pin is
+  pulled to ground, and SWITCH reads high when pushed and wants a pull-down.
 - **The header's search puts the palette away.** Clicked with the palette open, it closed
   it on the press as a click outside and opened it again on the release, so the palette
   could be closed with Ctrl+K and Escape but not from the button that opened it.
