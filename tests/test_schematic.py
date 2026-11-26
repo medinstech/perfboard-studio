@@ -88,6 +88,7 @@ from perfboard_studio.schematic import (
     _split_tall_layers,
     _text_width,
     build_schematic,
+    drawing_after_move,
     pin_at,
     pin_position,
     rail_glyph_bars,
@@ -1884,6 +1885,33 @@ def test_a_turned_symbol_has_its_rails_and_names_at_its_turned_pins(path: Path) 
         for wire in drawing.wires:
             start = (round(wire.path[0].x, 6), round(wire.path[0].y, 6))
             assert start in pins, f"{wire.net_name} starts off every pin, turned {turn}"
+
+
+@pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)
+def test_dragging_the_first_symbol_moves_no_other(path: Path) -> None:
+    """The report: on a sheet drawn for you, dragging the first symbol made every symbol
+    move. The drag is drawn live by ``drawing_after_move`` with only the symbol being
+    dragged, and on a sheet nobody had frozen yet that one placement was the whole sheet:
+    every other symbol had no place of its own and was parked past the right-hand edge
+    until the drop froze them back. A sheet not frozen yet now starts from where it is
+    drawn, so while the drag is going every other symbol stays where it was."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    derived = build_schematic(doc, REGISTRY)
+    ids = {part.ref: part.id for part in circuit_parts(doc)}
+    first = next(s for s in derived.symbols if s.ref in ids)
+    dragged = SymbolPlacement(
+        id=ids[first.ref],
+        at=snap_to_grid(Point2(x=first.at.x + 3 * GRID_MM, y=first.at.y + 2 * GRID_MM)),
+        rotation=first.rotation,
+        mirrored=first.mirrored,
+    )
+
+    live = drawing_after_move(doc, REGISTRY, [dragged], wires_as_drawn(derived, doc))
+
+    was = {s.ref: (s.at, s.rotation, s.mirrored) for s in derived.symbols if s.ref != first.ref}
+    now = {s.ref: (s.at, s.rotation, s.mirrored) for s in live.symbols if s.ref != first.ref}
+    assert now == was
+    assert next(s.at for s in live.symbols if s.ref == first.ref) == dragged.at
 
 
 @pytest.mark.parametrize("path", REAL_BOARDS, ids=lambda path: path.stem)

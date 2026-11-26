@@ -308,6 +308,11 @@ closed without a bump.
 
 ### Fixed
 
+- **Dragging a symbol on a sheet drawn for you moves only that symbol.** The drag was drawn
+  live with only the symbol being dragged, and until the first drop froze the sheet that one
+  placement was the whole sheet: every other symbol was parked in a column past the right
+  edge for as long as the drag went on. A sheet not frozen yet now starts from where it is
+  drawn, so the drag shows what the drop saves.
 - **Axial resistor Properties fit a 720 px window on every platform.** The Body and Span
   controls now start collapsed behind a `1/4 W · 3 holes ▸` link beside the part's heading,
   so selecting a resistor adds no height to Properties on Linux or macOS (#16).

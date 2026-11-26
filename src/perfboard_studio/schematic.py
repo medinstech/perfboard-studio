@@ -2901,13 +2901,33 @@ def _provisional_drawing(
     return SchematicDrawing(symbols=_symbols_drawn(ordered, placements))
 
 
+def _as_drawn(doc: PerfDocument, lookup: FootprintLookup) -> dict[str, SymbolPlacement]:
+    """Every symbol of a sheet nobody has frozen yet, where the sheet drawn for you has it.
+
+    What a move starts from when ``doc.sheet`` is empty. A drag is drawn live with only the
+    symbols being dragged, and on an empty sheet those few placements would BE the sheet:
+    every other symbol, with no place of its own, was parked past the right-hand edge for as
+    long as the drag went on, and came back only when the drop froze it. These are the
+    positions the window's freeze reads off the same drawing (``MainWindow._sheet_placements``),
+    snapped the same way, so what the drag shows is what the drop saves.
+    """
+    ids = {part.ref: part.id for part in circuit_parts(doc)}
+    return {
+        ids[s.ref]: SymbolPlacement(
+            id=ids[s.ref], at=snap_to_grid(s.at), rotation=s.rotation, mirrored=s.mirrored
+        )
+        for s in build_schematic(doc, lookup).symbols
+        if s.ref in ids
+    }
+
+
 def _after_move(
     doc: PerfDocument,
     lookup: FootprintLookup,
     moved: Sequence[SymbolPlacement],
     frozen: Sequence[SheetWire],
 ) -> tuple[SchematicDrawing, dict[frozenset[NetNode], SheetWire]]:
-    placed = {p.id: p for p in doc.sheet}
+    placed = {p.id: p for p in doc.sheet} if doc.sheet else _as_drawn(doc, lookup)
     old_by_id = dict(placed)
     placed.update({p.id: p for p in moved})
     # When two ends of one wire move together by the same grid shift (no rotation or mirror

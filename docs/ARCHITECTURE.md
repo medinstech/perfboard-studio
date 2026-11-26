@@ -1544,7 +1544,11 @@ So `build_schematic` has two paths, chosen by whether `doc.sheet` is empty:
 symbols around the one somebody had placed would move the twenty every time the one moved.
 So the first edit FREEZES the sheet: the window sends a `SymbolPlacement` for every symbol,
 read off the drawing already on screen, in one `symbol.move` — one command, one undo step,
-and nothing jumps (`MainWindow._sheet_placements`). A part added afterwards is PARKED in a
+and nothing jumps (`MainWindow._sheet_placements`). The drag before that drop is drawn
+with only the symbols being dragged (`drawing_after_move`), so on a sheet not frozen yet the
+engine starts from the same positions read off the same drawing (`schematic._as_drawn`);
+without it those few placements were the whole sheet, and every other symbol was parked
+past the right-hand edge until the drop -- `test_dragging_the_first_symbol_moves_no_other`. A part added afterwards is PARKED in a
 column past the right-hand edge rather than dropped at the origin on top of something.
 
 **What is not joined by a wire is joined by NAME**, with a label at the pin. That is not a

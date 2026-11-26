@@ -8703,6 +8703,28 @@ def _open_schematic(doc):
     return window
 
 
+def test_dragging_the_first_symbol_on_a_sheet_drawn_for_you_moves_no_other() -> None:
+    """The report: on an example's sheet, dragging the first symbol made every symbol move.
+    The drag is drawn live with only the symbol being dragged, and on a sheet nobody had
+    frozen yet that one placement was the whole sheet, so every other symbol was parked past
+    the right-hand edge until the drop froze it back (``schematic._as_drawn``)."""
+    window = _open_schematic(_example_document("ne555-astable"))
+    try:
+        window._refresh_schematic_panel()
+        assert not window.bus.document.sheet, "the example's sheet is drawn for you"
+        before = window.schematic_view.item.drawing
+        first = before.symbols[0]
+
+        live = window._live_drawing([(first.ref, first.at.x + 3 * 2.54, first.at.y + 2 * 2.54)])
+
+        assert live is not None
+        assert {s.ref: s.at for s in live.symbols if s.ref != first.ref} == {
+            s.ref: s.at for s in before.symbols if s.ref != first.ref
+        }
+    finally:
+        _close(window)
+
+
 def test_moving_a_symbol_keeps_the_wires_on_the_sheet_and_one_undo_takes_them_back() -> None:
     """The report was "moving a part on the schematic cuts every connection". It did not
     touch the netlist, but it took every wire off the page: the first move froze the sheet,
