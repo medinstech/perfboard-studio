@@ -9951,10 +9951,15 @@ class MainWindow(QMainWindow):
         whole point of drawing a circuit before laying one out. It lands where it was
         dropped rather than wherever the layout would have put it, which means the sheet is
         frozen if it was not already -- dropping a part somewhere is saying where it goes.
+
+        Pressing on the row to drag it selected it, which armed the board to place it; left
+        armed, the part came onto the board stuck to the pointer and a click there put down
+        a second one. Put down here, as Enter and a double-click do.
         """
         ref = self._add_part_to_design(footprint_id)
         if ref is None:
             return
+        self.scene.arm_placement(None)
         self._refresh_schematic_panel()
         self._dispatch_sheet_layout(
             {ref: Point2(x=x, y=y)}, f"Add {ref} to the sheet at ({x:.0f}, {y:.0f})"

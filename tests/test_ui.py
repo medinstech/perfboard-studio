@@ -11498,6 +11498,38 @@ def test_a_part_dropped_on_the_sheet_joins_the_design_where_it_landed() -> None:
     _close(window)
 
 
+@pytest.mark.parametrize("way", ["dropped", "double-clicked"])
+@pytest.mark.parametrize("start", ["blank", "ne555-astable"])
+def test_a_part_put_on_the_sheet_is_not_still_in_hand_on_the_board(way: str, start: str) -> None:
+    """Pressing on a Library row to drag it selects it, and selecting a row arms the board
+    to place it. A part dropped on the sheet left it armed: on the board it came stuck to
+    the pointer, and a click put down a SECOND part -- a new reference by ``component.place``
+    -- beside the one the sheet already held. The drop now puts it down, as Enter and a
+    double-click always did."""
+    window = (
+        _blank_window_on_the_sheet() if start == "blank" else _window_on(_example_document(start))
+    )
+    try:
+        window.show()
+        window.show_schematic()
+        before = len(window.bus.document.parts) + len(window.bus.document.components)
+        window._select_library_footprint("r-axial-3")
+        assert window.scene.armed_footprint_id == "r-axial-3"
+        if way == "dropped":
+            window._on_sheet_footprint_dropped("r-axial-3", 50.8, 25.4)
+        else:
+            window._on_library_item_activated(window.library_tree.currentItem())
+
+        window.show_board()
+        assert window.scene.armed_footprint_id is None
+        board = window.bus.document.board
+        assert window.scene.place_armed(HoleCoord(board.cols - 2, board.rows - 2)) is None
+        after = len(window.bus.document.parts) + len(window.bus.document.components)
+        assert after == before + 1
+    finally:
+        _close(window)
+
+
 def test_a_right_click_on_a_wire_offers_the_net() -> None:
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
