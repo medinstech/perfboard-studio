@@ -265,6 +265,45 @@ GHOST_MM = 0.35
 #: so severity reads without the colour.
 MARK_ERROR = theme.ACTIVE.danger
 MARK_WARNING = theme.ACTIVE.warning
+
+
+def sync_theme(tokens: theme.Tokens | None = None) -> None:
+    """Update the sheet ink, paper, grid and mark colours after a live theme switch."""
+    global ACTIVE_INK, SHEET, INK, INK_DIM, GRID_MAJOR, BODY_FILL
+    global SIGNAL, POWER, GROUND, HIGHLIGHT, UNDEFINED, TEXT_HALO
+    global SELECTED, NOTE, MARK_ERROR, MARK_WARNING
+    active = theme.ACTIVE if tokens is None else tokens
+    ACTIVE_INK = (
+        NIGHT
+        if active.name == "dark"
+        else SheetInk(
+            background=active.sheet_paper,
+            ink=active.sheet_ink,
+            dim=active.sheet_ink_dim,
+            undefined=active.warning,
+            signal=theme.NET_COLOURS["signal"],
+            power=theme.NET_COLOURS["power"],
+            ground=theme.NET_COLOURS["ground"],
+        )
+    )
+    SHEET = ACTIVE_INK.background
+    INK = ACTIVE_INK.ink
+    INK_DIM = ACTIVE_INK.dim
+    GRID_MAJOR = active.sheet_grid_major
+    BODY_FILL = active.sheet_body
+    SIGNAL = ACTIVE_INK.signal
+    POWER = ACTIVE_INK.power
+    GROUND = ACTIVE_INK.ground
+    HIGHLIGHT = active.accent
+    UNDEFINED = ACTIVE_INK.undefined
+    TEXT_HALO = active.sheet_paper
+    SELECTED = active.sheet_selected
+    NOTE = active.sheet_note
+    MARK_ERROR = active.danger
+    MARK_WARNING = active.warning
+
+
+theme.on_change(sync_theme)
 MARK_RADIUS_MM = 1.35
 MARK_MM = 0.45
 #: How much of the error colour fills its ring: enough to find from across the sheet, little
@@ -1477,6 +1516,17 @@ class SchematicView(QGraphicsView):
     #: than the eye can separate is not a grid, it is a grey wash over the drawing -- and at
     #: a fit-to-window zoom on a big sheet that is exactly what 2.54 mm comes to.
     MIN_GRID_PX = 4.0
+
+    def refresh_theme(self) -> None:
+        """Apply the active theme's sheet paper, grid and ink colours and repaint."""
+        self.setBackgroundBrush(QBrush(QColor(SHEET)))
+        self.resetCachedContent()
+        if self.item is not None:
+            self.item.update()
+        scene = self.scene()
+        if scene is not None:
+            scene.update()
+        self.viewport().update()
 
     def drawBackground(self, painter: QPainter, rect: QRectF | QRect) -> None:
         """The sheet, and the grid on it.

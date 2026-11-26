@@ -342,6 +342,16 @@ class SystemView(QGraphicsView):
         self._selected = (kind, item_id) if kind is not None and item_id is not None else None
         self._show_selected()
 
+    def refresh_theme(self, language: str = "en") -> None:
+        """Repaint the system bench and scene overlays in the active theme."""
+        self.setBackgroundBrush(QBrush(QColor(theme.ACTIVE.canvas)))
+        if self._shown is not None:
+            doc = self._shown
+            self._shown = None
+            self.set_document(doc, language)
+        else:
+            self.viewport().update()
+
     @property
     def selected(self) -> tuple[str, str] | None:
         return self._selected

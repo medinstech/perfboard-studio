@@ -136,13 +136,15 @@ def test_the_theme_button_runs_the_view_menu_s_choice(monkeypatch) -> None:
         assert header.theme_button.icon().cacheKey() == expected.cacheKey()
         assert other in header.theme_button.toolTip().lower()
         header.theme_button.click()
-        # The View menu's tick moved: the button and the menu are one choice.
+        # The View menu's tick moved and the theme switched live with no restart dialog.
         assert window.act_theme[other].isChecked()
         assert not window.act_theme[start].isChecked()
         assert header.chosen_theme() == other
-        assert len(told) == 1  # the same "from the next start" note the menu gives
+        assert not told
         assert start in header.theme_button.toolTip().lower()
     finally:
+        if window.header.chosen_theme() != "dark":
+            window.on_theme("dark")
         _close(window)
 
 

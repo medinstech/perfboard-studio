@@ -3384,17 +3384,20 @@ every colour by role — surfaces, three strengths of text, one accent, the stat
 colours, and the canvases round the board and under the sheet — and `DARK` and `LIGHT`
 are the two instances, chosen on 2026-10-28 from candidates rendered on the real window.
 `stylesheet(tokens)` and `palette(tokens)` are the only styling, and `theme.apply` sets
-them on the QApplication over Fusion, once per process, from `MainWindow.__init__`. It
-was a stylesheet on the window over the platform's own style, and on Windows everything
-the sheet did not name drew natively — light dock tabs, search fields and check boxes in
-a dark window — while a dialog with no parent was not themed at all. Four things hold it
-together, each pinned in `tests/test_theme.py`:
+them on the QApplication over Fusion from `MainWindow.__init__` and re-applies them live
+when the user switches themes. It was a stylesheet on the window over the platform's own
+style, and on Windows everything the sheet did not name drew natively — light dock tabs,
+search fields and check boxes in a dark window — while a dialog with no parent was not
+themed at all. Four things hold it together, each pinned in `tests/test_theme.py`:
 
-- **A theme is chosen once, on import**, and applies at the next start like the
-  language: `PERFBOARD_STUDIO_THEME`, then the View menu's choice (`theme.THEME_KEY` in
-  `main.app_settings()`'s store), then dark. Modules all over `ui/` read the names as they
-  are imported, so a live switch would leave whatever a rebuild missed in the old colours.
-  `tests/conftest.py` sets the variable, so a developer's own choice never reaches the suite.
+- **A theme starts from the environment or stored choice and switches live.** At import
+  time `PERFBOARD_STUDIO_THEME` beats the View menu's choice (`theme.THEME_KEY` in
+  `main.app_settings()`'s store), which beats dark; `tests/conftest.py` sets the variable
+  so a developer's own choice never reaches the suite. Choosing the other theme in View ▸
+  Theme or from the header button calls `theme.apply(app, tokens)` immediately — no dialog
+  and no restart — updating `theme.ACTIVE`, the application palette and cached stylesheet,
+  elevated drop shadows, dynamic icon engines (`ui/icons.py`), the 2D/schematic/system
+  canvases and the 3D viewport background in place. Language stays next-start.
 - **What is drawn ON the board does not follow the theme.** The net-class colours
   (`theme.NET_COLOURS`, read by the ratsnest and the sheet alike) and the marks for
   selection, hover and the placement ghost (`theme.CANVAS_*`) sit on FR4 green in either

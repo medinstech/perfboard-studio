@@ -9182,6 +9182,26 @@ def environment_texture() -> vtk.vtkTexture:
     return texture
 
 
+#: The 3D viewport's default dark background (also used by offscreen build-guide renders).
+DEFAULT_BACKGROUND: tuple[float, float, float] = (0.09, 0.09, 0.11)
+
+
+def hex_to_rgb(colour: str) -> tuple[float, float, float]:
+    """A ``#rrggbb`` token as VTK's normalised (r, g, b) triple."""
+    value = colour.lstrip("#")
+    return (
+        int(value[0:2], 16) / 255.0,
+        int(value[2:4], 16) / 255.0,
+        int(value[4:6], 16) / 255.0,
+    )
+
+
+def set_background_hex(ren: vtk.vtkRenderer, colour: str | None) -> None:
+    """Set ``ren``'s background to ``colour`` (``#rrggbb``), or :data:`DEFAULT_BACKGROUND`."""
+    rgb = DEFAULT_BACKGROUND if colour is None else hex_to_rgb(colour)
+    ren.SetBackground(*rgb)
+
+
 def build_renderer(
     doc: PerfDocument,
     lookup: FootprintLookup,
@@ -9192,11 +9212,12 @@ def build_renderer(
     pin_names: bool = True,
     board_notes: bool = True,
     owners: dict[vtk.vtkActor, ActorOwner] | None = None,
+    background: str | None = None,
 ) -> tuple[vtk.vtkRenderer, dict[str, int]]:
     """A renderer with the board in it, framed and lit. For a first build or a one-off
     offscreen render; an interactive view refreshes with :func:`populate_renderer`."""
     ren = vtk.vtkRenderer()
-    ren.SetBackground(0.09, 0.09, 0.11)
+    set_background_hex(ren, background)
     stats = populate_renderer(
         ren,
         doc,

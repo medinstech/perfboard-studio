@@ -3849,6 +3849,9 @@ class MainWindow(QMainWindow):
         # Not in the toolbar area's context menu, which is where a user would hide it.
         strip.toggleViewAction().setVisible(False)
         strip.setContentsMargins(0, 0, 0, 0)
+        strip_layout = strip.layout()
+        if strip_layout is not None:
+            strip_layout.setContentsMargins(0, 0, 0, 0)
         # Flush with the header around it: styled by name in the one stylesheet.
         strip.addWidget(self.header)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, strip)
@@ -5245,6 +5248,7 @@ class MainWindow(QMainWindow):
                 pin_names=self._pin_names_shown(),
                 board_notes=self._board_labels_shown(),
                 owners=self._3d_owners,
+                background=self._3d_background_hex(),
             )
             widget.GetRenderWindow().AddRenderer(ren)
             widget.Initialize()
@@ -7032,7 +7036,7 @@ class MainWindow(QMainWindow):
             action.setChecked(code == current_language())
             action.triggered.connect(lambda _checked, c=code: self.on_language(c))
             self.act_language[code] = action
-        # Beside the language and for its reason: applied at the next start.
+        # Beside the language, but applied live: no restart and no confirmation box.
         theme_menu = view_menu.addMenu(t("&Theme"))
         self.act_theme: dict[str, QAction] = {}
         for name, label in (("dark", t("&Dark")), ("light", t("&Light"))):
@@ -18782,21 +18786,97 @@ class MainWindow(QMainWindow):
             ),
         )
 
+    def _3d_background_hex(self) -> str | None:
+        """The 3D viewport's canvas colour in light mode, or None for the default dark studio."""
+        return None if theme.ACTIVE.name == "dark" else theme.ACTIVE.canvas
+
     def on_theme(self, name: str) -> None:
-        """Record the theme. It takes effect at the next start, for the language's reason:
-        the window's colours are read as it is built, and a live switch would leave whatever
-        a rebuild missed in the old ones."""
+        """Switch the whole application to ``name`` live, with no restart and no dialog."""
+        tokens = theme.THEMES.get(name)
+        if tokens is None:
+            return
         app_settings().setValue(theme.THEME_KEY, name)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            theme.apply(app, tokens)
+            for top in QApplication.topLevelWidgets():
+                if isinstance(top, MainWindow):
+                    top._apply_theme()
+        else:
+            self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        """Recolour every panel, scene, icon and overlay on this window after ``theme.apply``."""
+        active_name = theme.ACTIVE.name
         for key, action in self.act_theme.items():
-            action.setChecked(key == name)
-        QMessageBox.information(
-            self,
-            t("Theme changed"),
-            t(
-                "The window's colours are set as it opens, so the new theme appears the "
-                "next time Perfboard Studio starts."
-            ),
-        )
+            blocked = action.blockSignals(True)
+            action.setChecked(key == active_name)
+            action.blockSignals(blocked)
+        self.header.refresh_theme()
+        self.scene.refresh_theme()
+        self.view.refresh_theme()
+        self.schematic_view.refresh_theme()
+        self.system_view.refresh_theme(language=current_language())
+        if self._vtk_renderer is not None:
+            from . import view3d
+
+            view3d.set_background_hex(self._vtk_renderer, self._3d_background_hex())
+            if self.vtk_widget is not None and self.dock_3d.isVisible():
+                self.vtk_widget.GetRenderWindow().Render()
+        # Library group counts carry an explicit tertiary foreground; part icons follow
+        # ``theme.ACTIVE.icon_tile`` dynamically through ``_PartIconEngine``.
+        tertiary = QColor(theme.ACTIVE.text_tertiary)
+        for index in range(self.library_tree.topLevelItemCount()):
+            group = self.library_tree.topLevelItem(index)
+            if group is not None:
+                group.setForeground(1, tertiary)
+        self.library_tree.viewport().update()
+        self.part_list.refresh_theme()
+        self._refresh_nets_panel(self._last_ratsnest)
+        self._refresh_problems_bar()
+        if self._last_lvs is not None:
+            self._refresh_drc_panel(self._last_violations, self._last_lvs)
+        if self._guide_pages_widget is not None:
+            self._refresh_guide_tree_theme()
+            if self._bench_widget is not None:
+                self._bench_widget.refresh_theme()
+        if self._properties_filled:
+            self._refresh_properties()
+        if self._hovered_hole is not None:
+            self._on_hovered_hole(self._hovered_hole.col, self._hovered_hole.row)
+        if self._autosave_complained:
+            self.label_warning.setText(
+                theme.ink(t("Could not write the recovery file — save your work yourself."), "warning")
+            )
+        self._refresh_status()
+        self.toasts.refresh_theme()
+        if self._home_page is not None:
+            self._home_page.refresh_theme()
+        if self.command_palette.isVisible():
+            self.command_palette.update()
+        self.update()
+
+    def _refresh_guide_tree_theme(self) -> None:
+        """Recolour existing build-guide step rows without regenerating the guide."""
+        tree = self._guide_tree_widget
+        if tree is None:
+            return
+        secondary = QColor(theme.colour("secondary"))
+        text = QColor(theme.colour("text"))
+        blocked = tree.blockSignals(True)
+        try:
+            for i in range(tree.topLevelItemCount()):
+                head = tree.topLevelItem(i)
+                if head is None:
+                    continue
+                for j in range(head.childCount()):
+                    row = head.child(j)
+                    if row is not None and row.data(0, ROLE_STEP_FOCUS) is not None:
+                        dim = row.checkState(0) == Qt.CheckState.Checked
+                        row.setForeground(0, secondary if dim else text)
+        finally:
+            tree.blockSignals(blocked)
+        tree.viewport().update()
 
     def on_reduce_motion(self, on: bool) -> None:
         """Apply Reduce Motion live across every animation and remember it."""

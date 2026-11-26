@@ -2054,12 +2054,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "&Dark": "&Koyu",
     "&Light": "&Açık",
-    "Theme changed": "Tema değişti",
-    "The window's colours are set as it opens, so the new theme appears the next time "
-    "Perfboard Studio starts.": (
-        "Pencerenin renkleri açılırken belirlenir; yeni tema Perfboard Studio'nun bir "
-        "sonraki açılışında görünür."
-    ),
     "The interface is built in one language when the window opens, so the new "
     "one appears the next time Perfboard Studio starts.": (
         "Arayüz, pencere açılırken tek bir dilde kurulur; yeni dil Perfboard Studio'nun "
@@ -6374,12 +6368,8 @@ TURKISH: Mapping[str, str] = {
         "Kartlarınız ve örnekler. Bu kart açık kalır; Devam Et ile ona dönersiniz.",
     "Tour": "Tur",
     "Theme": "Tema",
-    "Switch to the dark theme. It applies the next time Perfboard Studio starts.": (
-        "Koyu temaya geçin. Perfboard Studio bir sonraki açılışında uygulanır."
-    ),
-    "Switch to the light theme. It applies the next time Perfboard Studio starts.": (
-        "Açık temaya geçin. Perfboard Studio bir sonraki açılışında uygulanır."
-    ),
+    "Switch to the dark theme.": "Koyu temaya geçin.",
+    "Switch to the light theme.": "Açık temaya geçin.",
     "Open a board or a project from disk (Ctrl+O).": (
         "Diskten bir kart ya da proje açın (Ctrl+O)."
     ),

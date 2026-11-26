@@ -293,11 +293,15 @@ class HeaderBar(QWidget):
         to_dark = chosen != "dark"
         self.theme_button.setIcon(icons.icon("moon" if to_dark else "sun"))
         self.theme_button.setToolTip(
-            t("Switch to the dark theme. It applies the next time Perfboard Studio starts.")
-            if to_dark
-            else t("Switch to the light theme. It applies the next time Perfboard Studio starts.")
+            t("Switch to the dark theme.") if to_dark else t("Switch to the light theme.")
         )
         self.theme_button.setAccessibleName(t("Theme"))
+
+    def refresh_theme(self) -> None:
+        """Update the theme toggle, step dots and icons after a live theme switch."""
+        self._show_theme()
+        self.steps.refresh_theme()
+        self.update()
 
     def _switch_theme(self) -> None:
         chosen = self.chosen_theme()

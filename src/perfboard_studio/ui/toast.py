@@ -418,6 +418,13 @@ class ToastHost(QObject):
             card.dismiss(immediate=True)
         self._cards.clear()
 
+    def refresh_theme(self) -> None:
+        """Repaint any visible toast cards and their status glyphs in the active theme."""
+        for card in self._cards:
+            card.update()
+            for child in card.findChildren(QWidget):
+                child.update()
+
     def reposition(self, *, animate: bool = False) -> None:
         for card, pos in self._layout_targets():
             card.move_to(pos, animate=animate)

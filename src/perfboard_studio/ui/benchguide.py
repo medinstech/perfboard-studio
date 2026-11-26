@@ -574,6 +574,17 @@ class BenchView(QWidget):
         self.next.setText(t("Done  ✓") if last else t("Done, next  ▶"))
         self.moved.emit(index)
 
+    def refresh_theme(self) -> None:
+        """Repaint the phase bar and current step picture in the active theme."""
+        self.phase_bar.update()
+        if (
+            self.items
+            and self.pages.currentWidget() is self.card
+            and 0 <= self.current < len(self.items)
+        ):
+            self.picture.setPixmap(self._picture(self.items[self.current], self.PICTURE))
+        self.update()
+
     def _shown_phases(self) -> list[BenchPhase]:
         return [p for p in self._phases if any(i.phase is p for i in self.items)]
 

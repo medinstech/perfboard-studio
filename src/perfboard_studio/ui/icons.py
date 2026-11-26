@@ -30,10 +30,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QIconEngine, QPainter, QPainterPath, QPen, QPixmap
 
-from .theme import ACTIVE as TOKENS
+from . import theme
 
 #: Logical icon size. 22 px is the toolbar's, and the only size anything asks for.
 SIZE = 22
@@ -46,6 +46,7 @@ BOX = 100.0
 STROKE = 7.5
 
 _cache: dict[str, QIcon] = {}
+_pixmap_cache: dict[tuple[str, str, QIcon.Mode, QIcon.State], QPixmap] = {}
 
 
 @dataclass(slots=True)
@@ -56,14 +57,18 @@ class _Ink:
     accent: str
 
 
-_ink = _Ink(TOKENS.text_secondary, TOKENS.accent)
+_ink = _Ink(theme.ACTIVE.text_secondary, theme.ACTIVE.accent)
 
-#: (mode, state, lines, accent) for each picture an icon carries.
-_STATES = (
-    (QIcon.Mode.Normal, QIcon.State.Off, TOKENS.text_secondary, TOKENS.accent),
-    (QIcon.Mode.Normal, QIcon.State.On, TOKENS.accent_text, TOKENS.accent_text),
-    (QIcon.Mode.Disabled, QIcon.State.Off, TOKENS.text_tertiary, TOKENS.text_tertiary),
-)
+
+def _state_inks(
+    tokens: theme.Tokens, mode: QIcon.Mode, state: QIcon.State
+) -> tuple[QIcon.Mode, QIcon.State, str, str]:
+    """Normalise ``(mode, state)`` to one of the three inked pictures and return its colours."""
+    if mode == QIcon.Mode.Disabled:
+        return (QIcon.Mode.Disabled, QIcon.State.Off, tokens.text_tertiary, tokens.text_tertiary)
+    if state == QIcon.State.On:
+        return (QIcon.Mode.Normal, QIcon.State.On, tokens.accent_text, tokens.accent_text)
+    return (QIcon.Mode.Normal, QIcon.State.Off, tokens.text_secondary, tokens.accent)
 
 
 def _pen(colour: str, width: float = STROKE) -> QPen:
@@ -151,7 +156,7 @@ def _solder_trace(p: QPainter) -> None:
     _beads(p)
     # The holes, left open: a bead sits on a pad, around its hole.
     p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor(TOKENS.bg_raised))
+    p.setBrush(QColor(theme.ACTIVE.bg_raised))
     for x in (18.0, 50.0, 82.0):
         p.drawEllipse(QPointF(x, 50), 4.5, 4.5)
     p.setBrush(Qt.BrushStyle.NoBrush)
@@ -748,8 +753,58 @@ def _picture(draw: Callable[[QPainter], None], lines: str, accent: str) -> QPixm
     return pixmap
 
 
+class _ThemedIconEngine(QIconEngine):
+    """Paints a named icon from ``theme.ACTIVE`` so live theme switches recolour every
+    action, button and menu without rebuilding them."""
+
+    def __init__(self, name: str, draw: Callable[[QPainter], None]) -> None:
+        super().__init__()
+        self._name = name
+        self._draw = draw
+
+    def _base(self, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
+        tokens = theme.ACTIVE
+        norm_mode, norm_state, lines, accent = _state_inks(tokens, mode, state)
+        key = (tokens.name, self._name, norm_mode, norm_state)
+        cached = _pixmap_cache.get(key)
+        if cached is not None:
+            return cached
+        built = _picture(self._draw, lines, accent)
+        _pixmap_cache[key] = built
+        return built
+
+    def actualSize(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QSize:
+        return size.boundedTo(QSize(SIZE, SIZE))
+
+    def pixmap(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
+        base = self._base(mode, state)
+        if size.isEmpty() or (size.width() >= SIZE and size.height() >= SIZE):
+            return base
+        scale = base.devicePixelRatio()
+        scaled = base.scaled(
+            QSize(max(1, round(size.width() * scale)), max(1, round(size.height() * scale))),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        scaled.setDevicePixelRatio(scale)
+        return scaled
+
+    def scaledPixmap(
+        self, size: QSize, mode: QIcon.Mode, state: QIcon.State, scale: float
+    ) -> QPixmap:
+        return self.pixmap(size, mode, state)
+
+    def paint(
+        self, painter: QPainter, rect: QRect, mode: QIcon.Mode, state: QIcon.State
+    ) -> None:
+        painter.drawPixmap(rect, self._base(mode, state))
+
+    def clone(self) -> QIconEngine:
+        return _ThemedIconEngine(self._name, self._draw)
+
+
 def icon(name: str) -> QIcon:
-    """The named icon, drawn once and kept.
+    """The named icon, backed by a live theme engine and cached per name.
 
     An unknown name gives an empty icon rather than raising: a missing picture is a
     cosmetic fault, and taking the window down over one would not be.
@@ -762,9 +817,7 @@ def icon(name: str) -> QIcon:
     if draw is None:
         return QIcon()
 
-    built = QIcon()
-    for mode, state, lines, accent in _STATES:
-        built.addPixmap(_picture(draw, lines, accent), mode, state)
+    built = QIcon(_ThemedIconEngine(name, draw))
     _cache[name] = built
     return built
 
@@ -802,6 +855,7 @@ TILE_RADIUS = 6
 LEAD = "#c2c8d0"
 
 _part_cache: dict[str, QIcon] = {}
+_part_pixmap_cache: dict[str, QPixmap] = {}
 
 
 def _fill(p: QPainter, style: Any, colour: str | None = None) -> None:
@@ -1136,14 +1190,9 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
 }
 
 
-def part_icon(footprint: Any, value: str | None = None) -> QIcon:
-    """A small colour picture of this part, in the colours the board draws it in."""
-    from .bodies import style_for
-
-    archetype = footprint.body.archetype
-    style = style_for(footprint, value)
-    key = f"{archetype}:{footprint.polarized}:{style.fill}:{TOKENS.icon_tile}"
-    cached = _part_cache.get(key)
+def _render_part_pixmap(archetype: str, polarized: bool, style: Any, tile_hex: str) -> QPixmap:
+    key = f"{archetype}:{polarized}:{style.fill}:{tile_hex}"
+    cached = _part_pixmap_cache.get(key)
     if cached is not None:
         return cached
 
@@ -1156,20 +1205,78 @@ def part_icon(footprint: Any, value: str | None = None) -> QIcon:
     # A soft tile under the picture: the parts are drawn in their own colours, and a black
     # TO-92 or a dark-blue electrolytic straight on the dark panel was a hole in the row.
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QColor(TOKENS.icon_tile))
+    painter.setBrush(QColor(tile_hex))
     painter.drawRoundedRect(QRectF(0.5, 0.5, PART_SIZE - 1, PART_SIZE - 1), TILE_RADIUS, TILE_RADIUS)
     inset = (PART_SIZE - PICTURE_SIZE) / 2
     painter.translate(inset, inset)
     painter.scale(PICTURE_SIZE / BOX, PICTURE_SIZE / BOX)
     if archetype == "axial-cylinder":
-        _axial(painter, style, bool(footprint.polarized))
+        _axial(painter, style, polarized)
     elif archetype == "axial-upright":
-        _axial_upright(painter, style, bool(footprint.polarized))
+        _axial_upright(painter, style, polarized)
     else:
         PART_DRAWINGS.get(archetype, _generic)(painter, style)
     painter.end()
     pixmap.setDevicePixelRatio(float(scale))
+    _part_pixmap_cache[key] = pixmap
+    return pixmap
 
-    built = QIcon(pixmap)
+
+class _PartIconEngine(QIconEngine):
+    """Paints a part picture on ``theme.ACTIVE.icon_tile`` so library rows follow live switches."""
+
+    def __init__(self, archetype: str, polarized: bool, style: Any) -> None:
+        super().__init__()
+        self._archetype = archetype
+        self._polarized = polarized
+        self._style = style
+
+    def _base(self) -> QPixmap:
+        return _render_part_pixmap(
+            self._archetype, self._polarized, self._style, theme.ACTIVE.icon_tile
+        )
+
+    def actualSize(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QSize:
+        return size.boundedTo(QSize(PART_SIZE, PART_SIZE))
+
+    def pixmap(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
+        base = self._base()
+        if size.isEmpty() or (size.width() >= PART_SIZE and size.height() >= PART_SIZE):
+            return base
+        scale = base.devicePixelRatio()
+        scaled = base.scaled(
+            QSize(max(1, round(size.width() * scale)), max(1, round(size.height() * scale))),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        scaled.setDevicePixelRatio(scale)
+        return scaled
+
+    def scaledPixmap(
+        self, size: QSize, mode: QIcon.Mode, state: QIcon.State, scale: float
+    ) -> QPixmap:
+        return self.pixmap(size, mode, state)
+
+    def paint(
+        self, painter: QPainter, rect: QRect, mode: QIcon.Mode, state: QIcon.State
+    ) -> None:
+        painter.drawPixmap(rect, self._base())
+
+    def clone(self) -> QIconEngine:
+        return _PartIconEngine(self._archetype, self._polarized, self._style)
+
+
+def part_icon(footprint: Any, value: str | None = None) -> QIcon:
+    """A small colour picture of this part, in the colours the board draws it in."""
+    from .bodies import style_for
+
+    archetype = footprint.body.archetype
+    polarized = bool(footprint.polarized)
+    style = style_for(footprint, value)
+    key = f"{archetype}:{polarized}:{style.fill}:{style.edge}:{style.accent}"
+    cached = _part_cache.get(key)
+    if cached is not None:
+        return cached
+    built = QIcon(_PartIconEngine(archetype, polarized, style))
     _part_cache[key] = built
     return built

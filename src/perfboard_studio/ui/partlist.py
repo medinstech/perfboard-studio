@@ -149,6 +149,17 @@ class PartListPanel(QWidget):
         self._select(selected)
         self._apply_filter()
 
+    def refresh_theme(self) -> None:
+        """Recolour unplaced design rows after a live theme switch."""
+        dim = QBrush(QColor(theme.colour("secondary")))
+        columns = self.tree.columnCount()
+        for index in range(self.tree.topLevelItemCount()):
+            row = self.tree.topLevelItem(index)
+            if row is not None and row.data(REF, _KIND) == IN_DESIGN:
+                for column in range(columns):
+                    row.setForeground(column, dim)
+        self.tree.viewport().update()
+
     def _placed_row(
         self,
         component: ComponentInstance,

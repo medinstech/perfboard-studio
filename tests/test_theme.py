@@ -1,9 +1,10 @@
-"""The chrome's tokens, the one stylesheet made from them, and how a theme is chosen.
+"""The chrome's tokens, the one stylesheet made from them, and live theme switching.
 
-Two themes, chosen once per process (``ui/theme.py``): the dark one by default and the
-light one from View > Theme, at the next start. These hold what that rests on -- the choice
-and its precedence, the application-wide styling, colours that read where they are drawn,
-one colour per net class on the board and the sheet -- and the window's side of it.
+Two themes (``ui/theme.py``): dark by default and light from View > Theme or the header
+toggle, applied live without a restart. These hold what that rests on -- the initial
+choice and its precedence, application-wide styling, colours that read where they are
+drawn, one colour per net class on the board and the sheet, and live-switch parity with a
+fresh start in either theme.
 """
 
 from __future__ import annotations
@@ -281,7 +282,61 @@ def test_a_second_window_does_not_restyle_the_application(window) -> None:  # ty
         other.close()
 
 
-def test_choosing_the_theme_waits_for_the_next_start(window, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def _palette_snapshot(pal: QPalette) -> dict[tuple[int, int], str]:
+    roles = (
+        QPalette.ColorRole.Window,
+        QPalette.ColorRole.WindowText,
+        QPalette.ColorRole.Base,
+        QPalette.ColorRole.AlternateBase,
+        QPalette.ColorRole.Text,
+        QPalette.ColorRole.Button,
+        QPalette.ColorRole.ButtonText,
+        QPalette.ColorRole.Highlight,
+        QPalette.ColorRole.HighlightedText,
+        QPalette.ColorRole.PlaceholderText,
+        QPalette.ColorRole.ToolTipBase,
+        QPalette.ColorRole.ToolTipText,
+        QPalette.ColorRole.Link,
+        QPalette.ColorRole.LinkVisited,
+        QPalette.ColorRole.BrightText,
+        QPalette.ColorRole.Light,
+        QPalette.ColorRole.Midlight,
+        QPalette.ColorRole.Mid,
+        QPalette.ColorRole.Dark,
+        QPalette.ColorRole.Accent,
+    )
+    groups = (QPalette.ColorGroup.Active, QPalette.ColorGroup.Disabled)
+    return {
+        (int(group.value), int(role.value)): pal.color(group, role).name()
+        for group in groups
+        for role in roles
+    }
+
+
+def _grab_bytes(widget) -> bytes:  # type: ignore[no-untyped-def]
+    image = widget.grab().toImage().convertToFormat(
+        widget.grab().toImage().Format.Format_ARGB32
+    )
+    return bytes(image.constBits())  # type: ignore[call-overload]
+
+
+def _sampled_colours(widget) -> set[str]:  # type: ignore[no-untyped-def]
+    image = widget.grab().toImage()
+    w, h = image.width(), image.height()
+    return {
+        image.pixelColor(x, y).name()
+        for x in range(0, w, max(1, w // 24))
+        for y in range(0, h, max(1, h // 24))
+    }
+
+
+def test_choosing_the_theme_switches_live_and_matches_a_fresh_start(
+    window, monkeypatch  # type: ignore[no-untyped-def]
+) -> None:
+    """Switching dark -> light -> dark happens immediately with no dialog, repaints the
+    2D and schematic scenes, and produces the same stylesheet, palette roles and rendered
+    chrome as a window started fresh in that theme."""
+    from perfboard_studio.footprints import get_footprint
     from perfboard_studio.ui import main as main_module
 
     told: list[str] = []
@@ -290,17 +345,134 @@ def test_choosing_the_theme_waits_for_the_next_start(window, monkeypatch) -> Non
     )
     app = QApplication.instance()
     assert isinstance(app, QApplication)
-    sheet = app.styleSheet()
+
+    def _prepare(win) -> None:  # type: ignore[no-untyped-def]
+        win.dock_schematic.show()
+        win.dock_schematic.raise_()
+        win._refresh_schematic_panel()
+        win.move(100, 100)
+        win.show()
+        win.resize(1200, 760)
+        for _ in range(5):
+            QApplication.processEvents()
+
+    _prepare(window)
+    dark_sheet = app.styleSheet()
     assert window.act_theme["dark"].isChecked()
+    resistor = get_footprint("r-axial-3")
+    assert resistor is not None
 
-    window.on_theme("light")
+    try:
+        # 1. Live switch: dark -> light.
+        window.on_theme("light")
+        QApplication.processEvents()
 
-    assert main_module.app_settings().value(theme.THEME_KEY) == "light"
-    assert window.act_theme["light"].isChecked()
-    assert not window.act_theme["dark"].isChecked()
-    assert told, "a change that only happens next time has to say so"
-    assert theme.ACTIVE is DARK
-    assert app.styleSheet() == sheet
+        assert not told, "switching themes live must not pop a restart dialog"
+        assert main_module.app_settings().value(theme.THEME_KEY) == "light"
+        assert window.act_theme["light"].isChecked()
+        assert not window.act_theme["dark"].isChecked()
+        assert theme.ACTIVE is LIGHT
+        assert app.styleSheet() != dark_sheet
+        assert _palette_snapshot(app.palette()) == _palette_snapshot(theme.palette(LIGHT))
+
+        # 2D board canvas, schematic sheet and icons updated live.
+        assert view2d.BACKGROUND.name() == LIGHT.canvas
+        assert window.scene.backgroundBrush().color().name() == LIGHT.canvas
+        assert LIGHT.sheet_paper == viewsch.SHEET
+        assert LIGHT.sheet_ink == viewsch.INK
+        assert window.schematic_view.backgroundBrush().color().name() == LIGHT.sheet_paper
+        assert window._3d_background_hex() == LIGHT.canvas
+
+        assert LIGHT.canvas in _sampled_colours(window.view.viewport())
+        assert DARK.canvas not in _sampled_colours(window.view.viewport())
+        assert LIGHT.sheet_paper in _sampled_colours(window.schematic_view.viewport())
+        assert DARK.sheet_paper not in _sampled_colours(window.schematic_view.viewport())
+
+        # Icons and library part tiles dynamically re-inked for LIGHT.
+        on_img = icons.icon("autoroute").pixmap(
+            QSize(icons.SIZE, icons.SIZE), QIcon.Mode.Normal, QIcon.State.On
+        ).toImage()
+        on_inks = {
+            on_img.pixelColor(x, y).name()
+            for x in range(on_img.width())
+            for y in range(on_img.height())
+            if on_img.pixelColor(x, y).alpha() == 255
+        }
+        assert LIGHT.accent_text in on_inks
+        assert DARK.accent_text not in on_inks
+        tile_img = icons.part_icon(resistor).pixmap(
+            QSize(icons.PART_SIZE, icons.PART_SIZE)
+        ).toImage()
+        assert tile_img.pixelColor(tile_img.width() // 2, 2).name() == LIGHT.icon_tile
+
+        # Compare live-switched window against a window started fresh in LIGHT.
+        main_module.app_settings().remove(main_module.GEOMETRY_KEY)
+        main_module.app_settings().remove(main_module.WINDOW_STATE_KEY)
+        fresh_light = main_module.MainWindow(window.bus.document)
+        try:
+            _prepare(fresh_light)
+            assert app.styleSheet() == theme._stylesheet_for(LIGHT)
+            assert _palette_snapshot(window.palette()) == _palette_snapshot(fresh_light.palette())
+            for attr in ("header", "problems_bar"):
+                assert _grab_bytes(getattr(window, attr)) == _grab_bytes(
+                    getattr(fresh_light, attr)
+                ), f"live-switched LIGHT {attr} diverged from fresh start"
+            assert _grab_bytes(window.view.viewport()) == _grab_bytes(
+                fresh_light.view.viewport()
+            ), "live-switched LIGHT 2D viewport diverged from fresh start"
+            assert _grab_bytes(window.schematic_view.viewport()) == _grab_bytes(
+                fresh_light.schematic_view.viewport()
+            ), "live-switched LIGHT schematic viewport diverged from fresh start"
+        finally:
+            fresh_light._saved_document = fresh_light.bus.document
+            fresh_light.close()
+
+        # 2. Live switch back: light -> dark.
+        window.on_theme("dark")
+        QApplication.processEvents()
+
+        assert not told
+        assert main_module.app_settings().value(theme.THEME_KEY) == "dark"
+        assert window.act_theme["dark"].isChecked()
+        assert not window.act_theme["light"].isChecked()
+        assert theme.ACTIVE is DARK
+        assert app.styleSheet() == dark_sheet
+        assert _palette_snapshot(app.palette()) == _palette_snapshot(theme.palette(DARK))
+        assert view2d.BACKGROUND.name() == DARK.canvas
+        assert window.scene.backgroundBrush().color().name() == DARK.canvas
+        assert DARK.sheet_paper == viewsch.SHEET
+        assert viewsch.ACTIVE_INK == viewsch.NIGHT
+        assert window.schematic_view.backgroundBrush().color().name() == DARK.sheet_paper
+        assert window._3d_background_hex() is None
+
+        assert DARK.canvas in _sampled_colours(window.view.viewport())
+        assert LIGHT.canvas not in _sampled_colours(window.view.viewport())
+        assert DARK.sheet_paper in _sampled_colours(window.schematic_view.viewport())
+        assert LIGHT.sheet_paper not in _sampled_colours(window.schematic_view.viewport())
+
+        main_module.app_settings().remove(main_module.GEOMETRY_KEY)
+        main_module.app_settings().remove(main_module.WINDOW_STATE_KEY)
+        fresh_dark = main_module.MainWindow(window.bus.document)
+        try:
+            _prepare(fresh_dark)
+            assert _palette_snapshot(window.palette()) == _palette_snapshot(fresh_dark.palette())
+            for attr in ("header", "problems_bar"):
+                assert _grab_bytes(getattr(window, attr)) == _grab_bytes(
+                    getattr(fresh_dark, attr)
+                ), f"live-switched DARK {attr} diverged from fresh start"
+            assert _grab_bytes(window.view.viewport()) == _grab_bytes(
+                fresh_dark.view.viewport()
+            ), "live-switched DARK 2D viewport diverged from fresh start"
+            assert _grab_bytes(window.schematic_view.viewport()) == _grab_bytes(
+                fresh_dark.schematic_view.viewport()
+            ), "live-switched DARK schematic viewport diverged from fresh start"
+        finally:
+            fresh_dark._saved_document = fresh_dark.bus.document
+            fresh_dark.close()
+    finally:
+        if theme.ACTIVE is not DARK:
+            window.on_theme("dark")
+        QApplication.processEvents()
 
 
 def test_a_tone_colours_a_label_through_the_one_sheet(window) -> None:  # type: ignore[no-untyped-def]

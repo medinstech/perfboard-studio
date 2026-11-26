@@ -276,7 +276,6 @@ from .scenetext import (
 # The window's own palette, for what is drawn round the board, and the marks drawn on
 # it that belong to the application rather than to the object -- see theme.py's note on
 # why the two are apart.
-from .theme import ACTIVE as THEME_TOKENS
 from .theme import (
     CANVAS_ERROR,
     CANVAS_HOVER,
@@ -294,7 +293,7 @@ QWIDGETSIZE_MAX = (1 << 24) - 1
 
 #: Around the board: the application's canvas, so it follows the theme. The board on it
 #: does not.
-BACKGROUND = QColor(THEME_TOKENS.canvas)
+BACKGROUND = QColor(theme.ACTIVE.canvas)
 SUBSTRATE = {"FR4": QColor("#2e6b3f"), "FR2": QColor("#a8834e"), "FR1": QColor("#b8925c")}
 SUBSTRATE_EDGE = QColor("#0d1a12")
 #: The copper comes from the board's own scheme, because a phenolic board's pads are
@@ -372,7 +371,7 @@ RISK_RING = QColor(CANVAS_ERROR)
 #: two of them under a 5 mm LED read as an "8" on its dome, and told the opposite story from
 #: the bar beneath. Picked or hovered in the drawer, its rings come up over the parts in
 #: ``RISK_RING`` (``BoardScene.set_focused_holes``).
-BENCH_RING = QColor(THEME_TOKENS.text_secondary)
+BENCH_RING = QColor(theme.ACTIVE.text_secondary)
 #: Over the pads (-90) and the strips and spines (-84), under the parts (10) and the copper on
 #: the side looked at (40).
 BENCH_RING_Z = -80
@@ -383,8 +382,25 @@ RISK_RING_Z = 60
 BEFORE_COPPER = QColor(236, 112, 255, 210)
 BEFORE_COPPER_Z = RISK_RING_Z - 1
 #: The ruler is drawn on the canvas, outside the board, so it is the theme's too.
-RULER_TEXT = QColor(THEME_TOKENS.canvas_ruler)
-RULER_TEXT_MAJOR = QColor(THEME_TOKENS.canvas_ruler_major)
+RULER_TEXT = QColor(theme.ACTIVE.canvas_ruler)
+RULER_TEXT_MAJOR = QColor(theme.ACTIVE.canvas_ruler_major)
+
+
+def _set_colour(target: QColor, hex_colour: str) -> None:
+    parsed = QColor(hex_colour)
+    target.setRgb(parsed.red(), parsed.green(), parsed.blue(), parsed.alpha())
+
+
+def sync_theme(tokens: theme.Tokens | None = None) -> None:
+    """Update the canvas, ruler and bench-ring colours in place after a live theme switch."""
+    active = theme.ACTIVE if tokens is None else tokens
+    _set_colour(BACKGROUND, active.canvas)
+    _set_colour(BENCH_RING, active.text_secondary)
+    _set_colour(RULER_TEXT, active.canvas_ruler)
+    _set_colour(RULER_TEXT_MAJOR, active.canvas_ruler_major)
+
+
+theme.on_change(sync_theme)
 #: Silkscreen. White ink on the board it is printed on, and a dim ghost of it when the
 #: board is turned over -- the same convention component bodies on the far side follow.
 LEGEND_INK = QColor("#eef2f8")
@@ -6781,6 +6797,13 @@ class BoardScene(QGraphicsScene):
         self.violations = tuple(violations)
         self._apply_violations()
 
+    def refresh_theme(self) -> None:
+        """Apply the active theme's canvas, ruler and bench-ring colours and repaint."""
+        self.setBackgroundBrush(QBrush(BACKGROUND))
+        if self._bench_item is not None:
+            self._apply_violations()
+        self.update()
+
     def _apply_violations(self) -> None:
         risk_holes: list[HoleCoord] = []
         bench_holes: list[HoleCoord] = []
@@ -9292,6 +9315,13 @@ class BoardView(QGraphicsView):
             if colour is not None
             else QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
         )
+        self.viewport().update()
+
+    def refresh_theme(self) -> None:
+        """Repaint the viewport and any active preview frame in the current theme."""
+        if self._preview_frame is not None:
+            self._preview_frame = QColor(theme.ACTIVE.accent)
+        self.resetCachedContent()
         self.viewport().update()
 
     def paintEvent(self, event: QPaintEvent) -> None:

@@ -21,12 +21,12 @@ over the platform's own style, and everything the stylesheet did not name drew n
 on Windows the dock tabs, every search field and every check box were light Windows 11
 widgets in a dark window, and a dialog with no parent got no theme at all.
 
-THE THEME IS CHOSEN ONCE, when this module is imported, and applies at the next start like
-the language: modules all over ``ui/`` read these names as they are imported, and
-re-colouring a running window would leave whatever a rebuild missed in the old theme. The
-variable beats the View menu's stored choice, which beats the default; the suite sets the
-variable in ``tests/conftest.py``, so what a developer chose in their own window never
-changes what the tests measure.
+THE THEME STARTS FROM THE ENVIRONMENT OR THE STORED CHOICE, and switches live from
+View > Theme or the header button without restarting: ``apply(app, tokens)`` updates
+``ACTIVE``, the application palette, the stylesheet, the elevated shadows and every
+registered listener in place. The variable beats the View menu's stored choice, which
+beats the default; the suite sets the variable in ``tests/conftest.py``, so what a
+developer chose in their own window never changes what the tests measure.
 """
 
 from __future__ import annotations
@@ -36,7 +36,8 @@ import os
 import shutil
 import sys
 import tempfile
-from collections.abc import Mapping
+import weakref
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
@@ -311,23 +312,36 @@ def _choose() -> Tokens:
     return chosen_theme(os.environ, _stored_choice())
 
 
-#: The theme this process runs in. Fixed for its life; see the module docstring.
+#: The theme currently in force. Updated live by ``apply``.
 ACTIVE: Tokens = _choose()
+
+#: Listeners notified after ``apply`` switches ``ACTIVE`` (canvas colour tables, etc.).
+_listeners: list[Callable[[Tokens], None]] = []
+
+#: Floating widgets whose drop shadow tracks ``ACTIVE.shadow_alpha``.
+_elevated: weakref.WeakSet[QWidget] = weakref.WeakSet()
+
+
+def on_change(callback: Callable[[Tokens], None]) -> None:
+    """Register ``callback`` to run whenever ``apply`` switches the active theme."""
+    if callback not in _listeners:
+        _listeners.append(callback)
 
 
 Role = Literal["text", "secondary", "tertiary", "accent", "danger", "warning", "success"]
 
 
-def colour(role: Role, tokens: Tokens = ACTIVE) -> str:
+def colour(role: Role, tokens: Tokens | None = None) -> str:
     """The colour a piece of TEXT takes for its role, as a hex string."""
+    active = ACTIVE if tokens is None else tokens
     return {
-        "text": tokens.text,
-        "secondary": tokens.text_secondary,
-        "tertiary": tokens.text_tertiary,
-        "accent": tokens.accent_text,
-        "danger": tokens.danger,
-        "warning": tokens.warning,
-        "success": tokens.success,
+        "text": active.text,
+        "secondary": active.text_secondary,
+        "tertiary": active.text_tertiary,
+        "accent": active.accent_text,
+        "danger": active.danger,
+        "warning": active.warning,
+        "success": active.success,
     }[role]
 
 
@@ -365,6 +379,7 @@ def elevate(widget: QWidget) -> None:
     shadow.setOffset(0.0, 4.0)
     shadow.setColor(QColor(0, 0, 0, ACTIVE.shadow_alpha))
     widget.setGraphicsEffect(shadow)
+    _elevated.add(widget)
 
 
 def card(dock: QDockWidget) -> None:
@@ -1236,31 +1251,97 @@ class _KeyboardCues(QObject):
 
 #: The style and the cue filter, held here so Python does not collect what Qt is using.
 _applied: tuple[_Style, _KeyboardCues] | None = None
+#: Cached arrow image paths and stylesheets per theme name so live switches do no disk I/O
+#: after each theme has been built once.
+_arrow_cache: dict[str, dict[str, str]] = {}
+_sheet_cache: dict[str, str] = {}
 
 
-def apply(app: QApplication, tokens: Tokens = ACTIVE) -> None:
+def _sync_legacy(tokens: Tokens) -> None:
+    global WINDOW, PANEL, PANEL_ALT, BORDER, TEXT, TEXT_DIM, ACCENT, ACCENT_DIM
+    global ERROR, WARNING, OK
+    WINDOW = tokens.bg_app
+    PANEL = tokens.bg_surface
+    PANEL_ALT = tokens.bg_subtle
+    BORDER = tokens.border
+    TEXT = tokens.text
+    TEXT_DIM = tokens.text_secondary
+    ACCENT = tokens.accent
+    ACCENT_DIM = tokens.accent_subtle
+    ERROR = tokens.danger
+    WARNING = tokens.warning
+    OK = tokens.success
+
+
+def _stylesheet_for(tokens: Tokens) -> str:
+    sheet = _sheet_cache.get(tokens.name)
+    if sheet is not None:
+        return sheet
+    arrows = _arrow_cache.get(tokens.name)
+    if arrows is None:
+        # A folder of its own, removed at exit: eight small files nobody should find later.
+        folder = Path(tempfile.mkdtemp(prefix=f"perfboard-studio-theme-{tokens.name}-"))
+        atexit.register(shutil.rmtree, folder, True)
+        arrows = _arrow_images(tokens, folder)
+        _arrow_cache[tokens.name] = arrows
+    sheet = stylesheet(tokens, arrows)
+    _sheet_cache[tokens.name] = sheet
+    return sheet
+
+
+def _refresh_shadows(tokens: Tokens) -> None:
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    shadow_colour = QColor(0, 0, 0, tokens.shadow_alpha)
+    for widget in list(_elevated):
+        effect = widget.graphicsEffect()
+        if isinstance(effect, QGraphicsDropShadowEffect):
+            effect.setColor(shadow_colour)
+
+
+def apply(app: QApplication, tokens: Tokens | None = None) -> None:
     """Style the whole application: Fusion, the palette, the font and the one stylesheet.
 
     On the application rather than a window, so a dialog with no parent, a tooltip and a
-    message box are themed too. Idempotent: every window calls it, and a test suite builds
-    a great many.
+    message box are themed too. Idempotent when ``tokens`` is already applied; passing
+    another theme switches the running application live without restarting.
     """
-    global _applied
-    if _applied is not None and _applied[0].tokens is tokens:
+    global ACTIVE, _applied
+    target = ACTIVE if tokens is None else tokens
+    changed = target is not ACTIVE
+    if changed:
+        ACTIVE = target
+        _sync_legacy(target)
+    if _applied is not None and _applied[0].tokens is target:
+        if changed:
+            _refresh_shadows(target)
+            for callback in list(_listeners):
+                callback(target)
         return
-    style = _Style(tokens)
-    cues = _KeyboardCues(style)
-    # A folder of its own, removed at exit: eight small files nobody should find later.
-    folder = Path(tempfile.mkdtemp(prefix="perfboard-studio-theme-"))
-    atexit.register(shutil.rmtree, folder, True)
-    app.setStyle(style)
-    app.setPalette(palette(tokens))
-    app.setFont(font(app.font()))
-    app.setStyleSheet(stylesheet(tokens, _arrow_images(tokens, folder)))
-    app.installEventFilter(cues)
-    if _applied is not None:
-        app.removeEventFilter(_applied[1])
-    _applied = (style, cues)
+    sheet = _stylesheet_for(target)
+    if _applied is None:
+        style = _Style(target)
+        cues = _KeyboardCues(style)
+        app.setStyle(style)
+        app.setFont(font(app.font()))
+        app.setPalette(palette(target))
+        app.setStyleSheet(sheet)
+        app.installEventFilter(cues)
+        _applied = (style, cues)
+    else:
+        _applied[0].tokens = target
+        cues = _applied[1]
+        # Pause the app-wide key-cue filter during the style repolish burst so Qt does not
+        # bounce thousands of StyleChange/Polish events across Python.
+        app.removeEventFilter(cues)
+        try:
+            app.setPalette(palette(target))
+            app.setStyleSheet(sheet)
+        finally:
+            app.installEventFilter(cues)
+    _refresh_shadows(target)
+    for callback in list(_listeners):
+        callback(target)
 
 
 def font(base: QFont) -> QFont:

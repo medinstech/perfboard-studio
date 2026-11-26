@@ -190,6 +190,11 @@ closed without a bump.
   beside the name and its key drawn as keycaps, and a footer says which keys move, run and
   close. The arrows step over the headers. Holding Ctrl+K no longer flips it open and shut.
 
+- **Switching between dark and light themes happens live, with no restart and no dialog.**
+  Choosing Dark or Light from View ▸ Theme or the header toggle immediately re-applies the
+  application palette and stylesheet and recolours the header, Home, docks, icons, Inspector,
+  toasts, Problems drawer, step bar, 2D canvas, schematic ink (Night in dark), System view
+  and 3D viewport background in place. Language stays next-start.
 - **Install and Restart runs only an installer this project signed.** Besides the checksum,
   the downloaded `Setup.exe` must carry an intact Authenticode signature that Windows trusts,
   made by the project's publisher; an unsigned installer, one changed after signing, or one

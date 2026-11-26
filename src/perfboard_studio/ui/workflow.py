@@ -888,6 +888,16 @@ class WorkflowBar(QWidget):
             painter.drawEllipse(QPointF(cx, cy), radius, radius)
         painter.end()
 
+    def refresh_theme(self) -> None:
+        """Redraw the step dots, connectors and highlight pill in the active theme."""
+        for number, step in enumerate(self.steps, start=1):
+            button = self.buttons.get(step.key)
+            if button is not None:
+                button.setIcon(step_dot(number, step.status))
+        for connector in self._connectors:
+            connector.update()
+        self.update()
+
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         self._fit()

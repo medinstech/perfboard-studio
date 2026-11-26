@@ -84,11 +84,10 @@ from perfboard_studio.schematic import build_schematic
 from perfboard_studio.system import board_document, board_ids
 from perfboard_studio.version import __version__
 
-from . import hover, theme
+from . import hover, theme, viewsch
 from .boardpreview import render_board
 from .brand import BrandLink
 from .i18n import t
-from .viewsch import SHEET, SheetItem
 from .workflow import DOT_SIZE, StepState, step_dot, step_title
 
 
@@ -277,12 +276,12 @@ def _sheet_picture(
     picture = QPixmap(
         round(sheet.width() * scale) + 2 * margin, round(sheet.height() * scale) + 2 * margin
     )
-    picture.fill(QColor(SHEET))
+    picture.fill(QColor(viewsch.SHEET))
     painter = QPainter(picture)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.translate(margin, margin)
     painter.scale(scale, scale)
-    SheetItem(drawing).paint(painter, QStyleOptionGraphicsItem(), None)
+    viewsch.SheetItem(drawing).paint(painter, QStyleOptionGraphicsItem(), None)
     painter.end()
     return picture
 
@@ -349,6 +348,7 @@ class FramedPicture(QWidget):
         self._rounded = rounded
         self._source = QPixmap()
         self._on_paper = False
+        self._average_colour: QColor | None = None
         self._backdrop = QColor(theme.ACTIVE.bg_subtle)
         self._scaled = QPixmap()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -374,19 +374,36 @@ class FramedPicture(QWidget):
         self._source = pixmap
         self._on_paper = on_paper
         if on_paper:
+            self._average_colour = None
             self._backdrop = QColor(theme.ACTIVE.sheet_paper)
         else:
-            own = _average(pixmap)
+            self._average_colour = _average(pixmap)
             base = QColor(theme.ACTIVE.bg_subtle)
-            self._backdrop = base if own is None else _wash(base, own, TINT)
+            self._backdrop = (
+                base if self._average_colour is None else _wash(base, self._average_colour, TINT)
+            )
         self._scaled = QPixmap()
         self.update()
 
     def clear(self) -> None:
         self._source = QPixmap()
         self._on_paper = False
+        self._average_colour = None
         self._backdrop = QColor(theme.ACTIVE.bg_subtle)
         self._scaled = QPixmap()
+        self.update()
+
+    def refresh_theme(self) -> None:
+        """Recompute the card frame's backdrop for the active theme."""
+        if self._source.isNull():
+            self._backdrop = QColor(theme.ACTIVE.bg_subtle)
+        elif self._on_paper:
+            self._backdrop = QColor(theme.ACTIVE.sheet_paper)
+        else:
+            base = QColor(theme.ACTIVE.bg_subtle)
+            self._backdrop = (
+                base if self._average_colour is None else _wash(base, self._average_colour, TINT)
+            )
         self.update()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
@@ -775,13 +792,21 @@ class Home(QWidget):
             self.last_picture.set_picture(drawn[0], on_paper=drawn[1])
         else:
             self.last_picture.clear()
+        self._fill_last_steps(last.steps)
+        self.last_hint.setText(last.hint)
+        self.last_card.show()
+        self._fill_recent()
+        if on_a_board or self.focusWidget() is None:
+            self.continue_button.setFocus()
+
+    def _fill_last_steps(self, steps: Sequence[StepState]) -> None:
         row = self._last_steps_row
         while row.count():
             item = row.takeAt(0)
             gone = item.widget() if item is not None else None
             if gone is not None:
                 gone.deleteLater()
-        for number, step in enumerate(last.steps, start=1):
+        for number, step in enumerate(steps, start=1):
             dot = QLabel()
             dot.setPixmap(step_dot(number, step.status).pixmap(QSize(DOT_SIZE, DOT_SIZE)))
             name = QLabel(step_title(step.key))
@@ -794,17 +819,41 @@ class Home(QWidget):
             row.addWidget(dot)
             row.addWidget(name)
             # The steps are one line from the first to the last: a rule between each two.
-            if number < len(last.steps):
+            if number < len(steps):
                 rule = QFrame()
                 rule.setObjectName("homeStepRule")
                 rule.setFixedHeight(1)
                 rule.setMinimumWidth(theme.SPACE["sm"])
                 row.addWidget(rule, 1)
-        self.last_hint.setText(last.hint)
-        self.last_card.show()
-        self._fill_recent()
-        if on_a_board or self.focusWidget() is None:
-            self.continue_button.setFocus()
+
+    def refresh_theme(self) -> None:
+        """Recolour Home's blueprint, card backdrops, sheet thumbnails and step dots live."""
+        pictures: list[FramedPicture] = [
+            self.walkthrough_picture,
+            self.last_picture,
+            *(card.picture for card in self.recent_cards),
+            *(card.picture for card in self.cards),
+        ]
+        need_sheet_redraw = False
+        for picture in pictures:
+            if picture.on_paper and not picture.pixmap().isNull():
+                if picture is self.last_picture and self._last is not None:
+                    drawn = self._picture_of_document(self._last.document, LAST_PICTURE)
+                    if drawn is not None:
+                        picture.set_picture(drawn[0], on_paper=drawn[1])
+                else:
+                    picture.clear()
+                    need_sheet_redraw = True
+            else:
+                picture.refresh_theme()
+        if self._last is not None:
+            self._fill_last_steps(self._last.steps)
+        if self.brand.loaded:
+            self.brand.load()
+        if need_sheet_redraw and self.isVisible():
+            self._draw_pictures()
+        self.page.update()
+        self.update()
 
     def set_show_at_start(self, on: bool) -> None:
         self.show_at_start.blockSignals(True)
