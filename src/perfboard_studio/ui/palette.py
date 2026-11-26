@@ -20,12 +20,14 @@ from dataclasses import dataclass
 from typing import cast
 
 from PySide6.QtCore import (
+    QChildEvent,
     QEasingCurve,
     QEvent,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
     QPoint,
+    QRectF,
     Qt,
     QVariantAnimation,
 )
@@ -271,9 +273,19 @@ class CommandPalette(QFrame):
         # already given it to whatever was clicked, and taking it back would undo that.
         focus = QApplication.focusWidget()
         had_focus = focus is not None and (focus is self or self.isAncestorOf(focus))
+        covered = self.geometry()
+        effect = self.graphicsEffect()
+        if effect is not None:
+            covered = effect.boundingRectFor(QRectF(self.rect())).toAlignedRect().translated(self.pos())
         self.hide()
         parent = self.parentWidget()
-        if parent is not None and had_focus:
+        if parent is None:
+            return
+        # Painted away NOW, not when the event loop next comes round: what runs from the
+        # palette -- an example opening, a plan -- can hold the loop for seconds, and the
+        # palette's picture stood over the board all that time as if it had stayed open.
+        parent.repaint(covered)
+        if had_focus:
             parent.setFocus()
 
     # Shown and hidden rather than opened and closed: a window closed with the palette up
@@ -316,6 +328,23 @@ class CommandPalette(QFrame):
             return not self.rect().contains(at)
         if kind == QEvent.Type.WindowDeactivate:
             return watched is self.window()
+        return False
+
+    def _overtaken(self, watched: QObject, event: QEvent) -> bool:
+        """Whether a sibling has just come to stand over the palette: one made after it
+        opened -- a dock's tab bar is made when the panels are laid out again, as on leaving
+        Home -- or one raised. Either way the palette goes back on top; it was raised once,
+        at opening, and the "Build Guide" tab was painted over its top edge."""
+        parent = self.parentWidget()
+        if parent is None:
+            return False
+        kind = event.type()
+        if kind == QEvent.Type.ChildAdded and watched is parent:
+            assert isinstance(event, QChildEvent)
+            child = event.child()
+            return child is not self and child.isWidgetType()
+        if kind == QEvent.Type.ZOrderChange and watched is not self:
+            return isinstance(watched, QWidget) and watched.parentWidget() is parent
         return False
 
     def _is_closing_key(self, event: QKeyEvent) -> bool:
@@ -367,6 +396,8 @@ class CommandPalette(QFrame):
         if self.isHidden():
             return False
         kind = event.type()
+        if self._overtaken(watched, event):
+            self.raise_()
         if kind in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress) and self._is_inside(watched):
             assert isinstance(event, QKeyEvent)
             if self._is_closing_key(event):

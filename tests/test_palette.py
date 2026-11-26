@@ -10,8 +10,16 @@ foreground -- and to listening to the application only while it is open.
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QLineEdit,
+    QPushButton,
+    QTabBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from perfboard_studio.ui.palette import CommandPalette, Entry
 
@@ -155,6 +163,58 @@ def test_it_listens_to_the_application_only_while_open() -> None:
         assert host.commands._watching
         host.hide()
         assert not host.commands._watching
+    finally:
+        host.close()
+
+
+def _on_top(host: _Host) -> bool:
+    widgets = [child for child in host.children() if isinstance(child, QWidget)]
+    return widgets[-1] is host.commands
+
+
+def test_it_stays_over_a_tab_bar_made_after_it_opened() -> None:
+    """A dock's tab bar is made when the panels are laid out again -- on leaving Home --
+    and a widget made later stands over the ones before it: "Build Guide" was painted over
+    the palette's top edge."""
+    host = _open_host()
+    try:
+        bar = QTabBar(host)
+        bar.addTab("Build Guide")
+        bar.setGeometry(host.commands.geometry().adjusted(0, -10, 0, 0))
+        bar.show()
+        assert _on_top(host)
+        host.button.raise_()
+        assert _on_top(host)
+    finally:
+        host.close()
+
+
+def test_it_is_painted_away_before_what_it_runs() -> None:
+    """What runs from it -- an example opening -- can hold the event loop for seconds; the
+    window must not still show the palette over the board meanwhile."""
+    _app()
+    host = _Host()
+    # By its name, so it beats whatever theme an earlier test left on the application and
+    # reaches no widget but the window itself.
+    host.setObjectName("paintedAwayHost")
+    host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    host.setStyleSheet("#paintedAwayHost { background: #ff00ff; }")
+    seen: list[str] = []
+
+    def look() -> None:
+        image = host.screen().grabWindow(host.winId()).toImage()
+        seen.append(QColor(image.pixel(host.commands.geometry().center())).name())
+
+    host.commands._entries_now = lambda: [Entry("Open the example", "File", "", look)]
+    host.show()
+    QTest.qWaitForWindowExposed(host)
+    try:
+        host.commands.open()
+        QTest.qWait(50)
+        image = host.screen().grabWindow(host.winId()).toImage()
+        assert QColor(image.pixel(host.commands.geometry().center())).name() != "#ff00ff"
+        host.commands.run_current()
+        assert seen == ["#ff00ff"]
     finally:
         host.close()
 
