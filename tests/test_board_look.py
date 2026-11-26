@@ -18,7 +18,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QRectF
-from PySide6.QtGui import QImage, QPainter, QTransform
+from PySide6.QtGui import QColor, QImage, QPainter, QTransform
 from PySide6.QtWidgets import QApplication
 
 from perfboard_studio import persist
@@ -491,6 +491,45 @@ def test_a_modules_art_is_cached_per_zoom_and_stretched_while_the_zoom_moves() -
     assert scene.art_refresh.isActive(), "and the scene paints again when the zoom settles"
     _paint_at(scene, 6.6)
     assert cache._image is not held and not cache.stale
+
+
+def _art_box(ratio: float, cached: bool) -> tuple[float, float, float, float]:
+    """Where the Nano's blue board lands, in logical pixels, painted at ``ratio`` device
+    pixels to one: the scene rendered into an image of that ratio, as a window is grabbed on
+    a 125 % or 200 % screen. Painted twice, so the second is served from ``ArtCache``."""
+    scene = view2d.BoardScene(_example("nano-relay"), LOOKUP, side="top", show_rulers=False)
+    rect = scene.sceneRect()
+    width, height = round(rect.width() * 8), round(rect.height() * 8)
+    image = QImage(round(width * ratio), round(height * ratio), QImage.Format.Format_ARGB32)
+    image.setDevicePixelRatio(ratio)
+    for _ in range(2 if cached else 1):
+        image.fill(0)
+        painter = QPainter(image)
+        scene.render(painter, QRectF(0, 0, width, height), rect)
+        painter.end()
+    module = next(item for item in scene.component_items.values() if item.art)
+    assert (module.art_cache._image is not None) is cached
+    blue = QColor(module.board_colour or view2d.BODY_STYLES["module-board"].fill)
+    xs, ys = [], []
+    for y in range(0, image.height(), 2):
+        for x in range(0, image.width(), 2):
+            colour = image.pixelColor(x, y)
+            if abs(colour.red() - blue.red()) + abs(colour.green() - blue.green()) + abs(colour.blue() - blue.blue()) < 40:
+                xs.append(x / ratio)
+                ys.append(y / ratio)
+    assert xs, "the module's board is drawn"
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+@pytest.mark.parametrize("ratio", [1.25, 2.0])
+def test_a_modules_cached_art_lands_where_it_does_on_any_screen(ratio: float) -> None:
+    """At a 125 % Windows scale the cached art was drawn a quarter too big and off down to
+    the right, half off its board, while the pins stayed in their holes: the ratio was
+    applied to a transform that already held it. Measured on the board's own blue."""
+    plain = _art_box(1.0, cached=False)
+    for cached in (False, True):
+        box = _art_box(ratio, cached)
+        assert all(abs(a - b) <= 3 for a, b in zip(box, plain, strict=True)), (ratio, cached, box, plain)
 
 
 def test_a_modules_art_is_never_cached_on_paper(tmp_path: Path) -> None:

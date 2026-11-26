@@ -5400,8 +5400,17 @@ class ArtCache:
         engine = painter.paintEngine()
         if engine is None or engine.type() != QPaintEngine.Type.Raster or _on_paper(painter):
             return False
-        ratio = painter.device().devicePixelRatioF() or 1.0
-        to_device = painter.combinedTransform() * QTransform.fromScale(ratio, ratio)
+        # The device's own pixels, asked of the painter rather than worked out: whether the
+        # painter's transform already holds the device's pixel ratio depends on how it was
+        # opened -- a window grabbed at a 125 % scale had it, and multiplying by the ratio
+        # again drew the art a quarter too big and off its board. ``ratio`` is what is left
+        # between the painter's own units and the device's once its transform is reset, so
+        # an image drawn there at that ratio lands one image pixel to one device pixel.
+        to_device = painter.deviceTransform()
+        painter.save()
+        painter.resetTransform()
+        ratio = abs(painter.deviceTransform().m11()) or 1.0
+        painter.restore()
         margin = ART_CACHE_MARGIN_MM
         area = to_device.mapRect(path.boundingRect().adjusted(-margin, -margin, margin, margin))
         width, height = math.ceil(area.width()) + 2, math.ceil(area.height()) + 2
