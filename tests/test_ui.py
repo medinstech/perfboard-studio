@@ -16602,8 +16602,13 @@ def test_the_header_is_one_row_with_every_menu_behind_its_button() -> None:
         assert "headerToolbar" in names
         assert not {"mainToolbar", "workflowToolbar"} & names
         assert window.menuBar().maximumHeight() == 0
-        held = [action.text() for action in window.header.app_menu.actions()]
-        assert held == [menu.title() for menu in window._top_menus]
+        # Settings and the command search above the menus (``ui/settings.py``), then every
+        # menu, in the menu bar's order.
+        app_menu = window.header.app_menu
+        assert app_menu.actions()[:2] == [window.act_settings, window.act_palette]
+        titles = [menu.title() for menu in window._top_menus]
+        held = [action.text() for action in app_menu.actions() if action.text() in titles]
+        assert held == titles
         assert held == [action.text() for action in window.menuBar().actions()]
         assert window.header.undo_button.defaultAction() is window.act_undo
         assert window.header.redo_button.defaultAction() is window.act_redo

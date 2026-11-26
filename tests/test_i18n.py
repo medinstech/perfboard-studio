@@ -417,7 +417,10 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Show &Library", "Show &Nets", "Show &Problems", "Show P&arts",
                  "&Reset the Panel Layout", "&Fit Board", "Zoom &In", "Zoom &Out",
                  "Sho&w on the Board", "Measure &Distance", "E&xploded View",
-                 "Reset 3D Ca&mera", "Lan&guage", "&Theme", "R&educe Motion", "Board &Colour"],
+                 "Reset 3D Ca&mera", "Settin&gs…"],
+        # What View held of the window's preferences, in Settings now (ui/settings.py) and in
+        # a menu of their own the palette walks.
+        "settings": ["Lan&guage", "&Theme", "R&educe Motion", "Board &Colour", "Start on &Home"],
         "show on the board": ["Show &Missing Connections", "Show Hole &Addresses",
                               "Sho&w Pin Names", "Show Part Val&ues",
                               "Show Labels on &the Board", "&Copper on the Far Side",

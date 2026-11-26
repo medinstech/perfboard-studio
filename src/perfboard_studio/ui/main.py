@@ -481,6 +481,16 @@ from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
 from .raildialog import RailDialog, rail_refusal
 from .selection import NOTHING, Selection, SelectionKind
+from .settings import SHORTCUT as SETTINGS_SHORTCUT
+from .settings import Button as SettingButton
+from .settings import Category as SettingsCategory
+from .settings import Choice as SettingChoice
+from .settings import Row as SettingRow
+from .settings import SettingsDialog
+from .settings import Swatches as SettingSwatches
+from .settings import Toggle as SettingToggle
+from .settings import plain as plain_text
+from .settings import section as menu_section
 from .sheet_clipboard import sheet_block_from_json, sheet_block_to_json
 from .systemview import SystemView
 from .toast import ToastCard, ToastHost, ToastKind
@@ -970,6 +980,8 @@ FAR_SIDE_KEY = "session/showFarSide"
 NET_NAMES_KEY = "session/showNetNames"
 OFF_BOARD_KEY = "session/showOffBoard"
 VALUES_KEY = "session/showValues"
+PIN_NAMES_KEY = "session/showPinNames"
+BOARD_LABELS_KEY = "session/showBoardLabels"
 #: Whether the canvas wheel pans rather than zooms (View > Mouse Wheel).
 WHEEL_SCROLLS_KEY = "session/wheelScrolls"
 ROUTING_STYLE_KEY = "session/routingStyle"
@@ -3796,7 +3808,7 @@ class MainWindow(QMainWindow):
                 step=step_title(self.workflow_bar.next_key)
             ),
         )
-        self.act_palette = QAction(t("Search Commands…"), self)
+        self.act_palette = QAction(icons.icon("search"), t("Search Commands…"), self)
         self.act_palette.setShortcut(QKeySequence(PALETTE_SHORTCUT))
         # Held down, the key would repeat and flip it open, shut, open.
         self.act_palette.setAutoRepeat(False)
@@ -3834,6 +3846,9 @@ class MainWindow(QMainWindow):
                 ),
             ),
             themes=self.act_theme,
+            leading=(self.act_settings, self.act_palette),
+            recent=self._header_recent,
+            recent_title=t("Recent Files"),
         )
         # The pill opens the notes, which carry the one action that is possible now.
         self.header.updateRequested.connect(self._on_update_notes)
@@ -4027,7 +4042,7 @@ class MainWindow(QMainWindow):
                     )
                 )
 
-        for top in self._top_menus:
+        for top in (*self._top_menus, self.menu_settings):
             walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]},
                  self._keeps_home(top.menuAction(), False))
 
@@ -4704,6 +4719,7 @@ class MainWindow(QMainWindow):
         home.showAtStartChanged.connect(
             lambda on: app_settings().setValue(SHOW_WELCOME_KEY, bool(on))
         )
+        home.showAtStartChanged.connect(lambda on: self.act_start_on_home.setChecked(bool(on)))
         home.updateNotesRequested.connect(self._on_update_notes)
         home.updateActionRequested.connect(self._on_update_surface_action)
         home.updateRevealRequested.connect(self._on_update_reveal)
@@ -6008,9 +6024,27 @@ class MainWindow(QMainWindow):
         route_menu.setToolTipsVisible(True)
         view_menu = menu.addMenu(t("&View"))
         help_menu = menu.addMenu(t("&Help"))
-        for each in (file_menu, edit_menu, circuit_menu, board_menu, route_menu, view_menu,
-                     help_menu):
+        for each, picture in (
+            (file_menu, "open"), (edit_menu, "undo"), (circuit_menu, "schematic"),
+            (board_menu, "board"), (route_menu, "autoroute"), (view_menu, "show"),
+            (help_menu, "tour"),
+        ):
             each.setToolTipsVisible(True)
+            # Shown beside each name under ☰, where seven words in a column read as one.
+            each.menuAction().setIcon(icons.icon(picture))
+        # THE PREFERENCES, OUT OF VIEW AND INTO SETTINGS (``ui/settings.py``). Not in the
+        # menu bar: a menu all the same, so the palette finds each one by name under
+        # "Settings" as it finds a command (Ctrl+K "tema" is still the theme).
+        settings_menu = self.menu_settings = QMenu(t("Settings"), self)
+        settings_menu.setToolTipsVisible(True)
+        self.act_settings = QAction(icons.icon("settings"), t("Settin&gs…"), self)
+        self.act_settings.setShortcut(QKeySequence(SETTINGS_SHORTCUT))
+        self.act_settings.setToolTip(
+            t("Every preference of the window in one place, each said in a sentence, with a search.")
+        )
+        self.act_settings.triggered.connect(lambda _checked=False: self.on_settings())
+        self.addAction(self.act_settings)
+        self._settings_dialog: SettingsDialog | None = None
         # The way back to Home with the board left open (``on_home``), first in File, where
         # a person looks for the way back to where they started.
         act_home = self.act_home = file_menu.addAction(t("&Home"))
@@ -6770,6 +6804,7 @@ class MainWindow(QMainWindow):
             view_menu.addAction(action)
             return action
 
+        menu_section(view_menu, t("Go to"))
         self.act_show_board = view_action(
             t("Show &Board"),
             "Ctrl+1",
@@ -6811,7 +6846,7 @@ class MainWindow(QMainWindow):
         self.act_schematic = self.dock_schematic.toggleViewAction()
         self.act_3d = self.dock_3d.toggleViewAction()
         self.act_guide_panel = self.dock_guide.toggleViewAction()
-        view_menu.addSeparator()
+        menu_section(view_menu, t("Panels"))
         # The four that describe the design rather than draw it. Closing one from its
         # title bar used to leave no route back but a right-click on the menu bar, which
         # nobody finds.
@@ -6851,12 +6886,11 @@ class MainWindow(QMainWindow):
             )
         )
         act_reset_layout.triggered.connect(self.on_reset_layout)
-        view_menu.addSeparator()
+        menu_section(view_menu, t("Canvas"))
         act_flip = view_menu.addAction(t("Flip Board (component side / solder side)"))
         self.act_flip = act_flip
         act_flip.setShortcut(QKeySequence("Ctrl+F"))
         act_flip.triggered.connect(self.on_flip_board)
-        view_menu.addSeparator()
         act_fit: QAction = view_menu.addAction(t("&Fit Board"))
         self.act_fit = act_fit
         act_fit.setShortcut(QKeySequence("Ctrl+0"))
@@ -6870,7 +6904,7 @@ class MainWindow(QMainWindow):
         # THE WAY OUT FOR WHOEVER THE WHEEL RULE GETS WRONG. A trackpad is recognised only by
         # what only a trackpad sends (``canvasinput``), and on Windows it sends nothing of
         # the kind -- so there two fingers zoom like a wheel unless this says otherwise.
-        wheel_menu = view_menu.addMenu(t("Mouse Wheel"))
+        wheel_menu = settings_menu.addMenu(t("Mouse Wheel"))
         wheel_menu.setToolTipsVisible(True)
         self.menu_wheel = wheel_menu
         self.act_wheel: dict[bool, QAction] = {}
@@ -7023,10 +7057,11 @@ class MainWindow(QMainWindow):
         self.act_reset_3d = act_reset_3d
 
         view_menu.addSeparator()
+        view_menu.addAction(self.act_settings)
         # The interface could be told to speak Turkish only by an environment variable or
         # a command-line flag -- which is to say, not by anybody running the application
         # the way applications are run. The catalogue has existed the whole time.
-        language_menu = view_menu.addMenu(t("Lan&guage"))
+        language_menu = settings_menu.addMenu(t("Lan&guage"))
         self.act_language: dict[str, QAction] = {}
         # Each language by its OWN name, not translated: somebody who cannot read the
         # language the window is in has to recognise the one they can.
@@ -7037,7 +7072,7 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked, c=code: self.on_language(c))
             self.act_language[code] = action
         # Beside the language, but applied live: no restart and no confirmation box.
-        theme_menu = view_menu.addMenu(t("&Theme"))
+        theme_menu = settings_menu.addMenu(t("&Theme"))
         self.act_theme: dict[str, QAction] = {}
         for name, label in (("dark", t("&Dark")), ("light", t("&Light"))):
             action = theme_menu.addAction(label)
@@ -7045,7 +7080,7 @@ class MainWindow(QMainWindow):
             action.setChecked(name == theme.ACTIVE.name)
             action.triggered.connect(lambda _checked, n=name: self.on_theme(n))
             self.act_theme[name] = action
-        self.act_reduce_motion = view_menu.addAction(t("R&educe Motion"))
+        self.act_reduce_motion = settings_menu.addAction(t("R&educe Motion"))
         self.act_reduce_motion.setCheckable(True)
         self.act_reduce_motion.setChecked(motion.reduced())
         self.act_reduce_motion.setToolTip(
@@ -7053,11 +7088,11 @@ class MainWindow(QMainWindow):
         )
         self.act_reduce_motion.toggled.connect(self.on_reduce_motion)
 
-        view_menu.addSeparator()
+        settings_menu.addSeparator()
         # The board says its own mask and finish (Board.mask / Board.finish); this is the
         # override, "draw every board as ...", for someone matching a screenshot to a board
         # in another colour -- see ui/boardcolors.py.
-        colour_menu = view_menu.addMenu(t("Board &Colour"))
+        colour_menu = settings_menu.addMenu(t("Board &Colour"))
         colour_menu.setToolTipsVisible(True)
         self.act_colour: dict[str, QAction] = {}
         follow = colour_menu.addAction(t("As the &Board Says"))
@@ -7077,6 +7112,15 @@ class MainWindow(QMainWindow):
             action.setCheckable(True)
             action.triggered.connect(lambda _c, k=scheme.key: self.on_board_colour(k))
             self.act_colour[scheme.key] = action
+        # Home's own "show at start" box, as an action, so Settings and the palette have it.
+        settings_menu.addSeparator()
+        self.act_start_on_home = settings_menu.addAction(t("Start on &Home"))
+        self.act_start_on_home.setCheckable(True)
+        self.act_start_on_home.setChecked(_stored_bool(app_settings(), SHOW_WELCOME_KEY, True))
+        self.act_start_on_home.setToolTip(
+            t("Open on Home, with the examples and the boards you had open last.")
+        )
+        self.act_start_on_home.toggled.connect(self._on_start_on_home)
 
         # EVERY menu is kept referenced here, and it is not tidiness. QMenuBar.addMenu
         # returns a QMenu that PySide hands to Python to own; with only a local holding it,
@@ -7087,7 +7131,7 @@ class MainWindow(QMainWindow):
         self._menus = [
             file_menu, self.menu_recent, export_menu, edit_menu, circuit_menu, sheet_tools,
             align_menu, board_menu, route_menu, style_menu, view_menu, shown_menu,
-            language_menu, colour_menu, help_menu, wheel_menu,
+            language_menu, colour_menu, help_menu, wheel_menu, settings_menu, theme_menu,
         ]
         #: The menu bar's own menus, in its order: what ☰ holds (``_build_header``).
         self._top_menus = (
@@ -18374,6 +18418,8 @@ class MainWindow(QMainWindow):
         settings.setValue(NET_NAMES_KEY, self.act_net_names.isChecked())
         settings.setValue(OFF_BOARD_KEY, self.act_off_board.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
+        settings.setValue(PIN_NAMES_KEY, self.act_pin_names.isChecked())
+        settings.setValue(BOARD_LABELS_KEY, self.act_board_labels.isChecked())
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
         settings.setValue(GRID_WIRES_KEY, self._grid_wires)
@@ -18429,6 +18475,8 @@ class MainWindow(QMainWindow):
         self.act_net_names.setChecked(_stored_bool(settings, NET_NAMES_KEY, True))
         self.act_off_board.setChecked(_stored_bool(settings, OFF_BOARD_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
+        self.act_pin_names.setChecked(_stored_bool(settings, PIN_NAMES_KEY, True))
+        self.act_board_labels.setChecked(_stored_bool(settings, BOARD_LABELS_KEY, True))
         self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
         # The precedence motion.reduced() itself uses -- the environment variable, then an
         # offscreen platform, then the stored choice. Installing the stored choice alone beat
@@ -18812,6 +18860,8 @@ class MainWindow(QMainWindow):
             blocked = action.blockSignals(True)
             action.setChecked(key == active_name)
             action.blockSignals(blocked)
+        if self._settings_dialog is not None:
+            self._settings_dialog.sync()
         self.header.refresh_theme()
         self.scene.refresh_theme()
         self.view.refresh_theme()
@@ -18842,7 +18892,9 @@ class MainWindow(QMainWindow):
                 self._bench_widget.refresh_theme()
         if self._properties_filled:
             self._refresh_properties()
-        if self._hovered_hole is not None:
+        # (-1, -1) is "never hovered yet": said again, it would print "hole —" where a
+        # window that has just opened says nothing.
+        if self._hovered_hole != HoleCoord(-1, -1):
             self._on_hovered_hole(self._hovered_hole.col, self._hovered_hole.row)
         if self._autosave_complained:
             self.label_warning.setText(
@@ -19538,6 +19590,123 @@ class MainWindow(QMainWindow):
 
     def _on_automatic_updates_toggled(self, enabled: bool) -> None:
         updater.remember_preference(app_settings(), enabled)
+
+    # -- settings ------------------------------------------------------------
+
+    def on_settings(self, category: str | None = None) -> SettingsDialog:
+        """Settings (Ctrl+,): every preference in one window, each row the same action
+        its menu item, the Show button or the header's sun and moon is (``ui/settings.py``)."""
+        if self._settings_dialog is None:
+            self._settings_dialog = SettingsDialog(
+                self, self._settings_categories(), self._settings_rows
+            )
+        self._settings_dialog.open_at(category)
+        return self._settings_dialog
+
+    def _settings_categories(self) -> list[SettingsCategory]:
+        return [
+            SettingsCategory("general", "home", t("General"),
+                             t("The language, how the window opens and what the wheel does.")),
+            SettingsCategory("appearance", "sun", t("Appearance"),
+                             t("Kept on this computer, the same for every board.")),
+            SettingsCategory("shown", "show", t("Shown on the Board"),
+                             t("The same switches as the Show button in the board's corner.")),
+            SettingsCategory("wiring", "autoroute", t("Wiring"),
+                             t("How Auto-wire wires every board you open on this computer.")),
+            SettingsCategory("files", "save", t("Files and Updates"),
+                             t("Saving, and whether to look for a new version.")),
+        ]
+
+    def _settings_rows(self) -> list[SettingRow]:
+        """What Settings shows, asked for each time it opens: a hidden update has a row
+        only while there is one."""
+        settings = app_settings()
+        next_start = t("At next start")
+        rows = [
+            SettingRow("general", t("Language"),
+                       t("The language of the menus, the tips and the build guide."),
+                       SettingChoice(self.act_language), "Language dil", next_start),
+            SettingRow("general", t("Start on Home"),
+                       t("Open on Home, with the examples and the boards you had open last."),
+                       SettingToggle(self.act_start_on_home), "Start on Home welcome ana sayfa"),
+            SettingRow("general", t("Mouse Wheel"),
+                       t("Zoom with the wheel, or scroll with it and zoom with Ctrl+wheel."),
+                       SettingChoice({str(k): a for k, a in self.act_wheel.items()}),
+                       "Mouse Wheel trackpad scroll zoom"),
+            SettingRow("appearance", t("Theme"),
+                       t("The window's colours. Changes at once."),
+                       SettingChoice(self.act_theme, segmented=True), "Theme dark light"),
+            SettingRow("appearance", t("Reduce Motion"),
+                       t("Panels, menus and the board appear in place, without sliding or fading."),
+                       SettingToggle(self.act_reduce_motion), "Reduce Motion animation"),
+            SettingRow("appearance", t("Board Colour"),
+                       t("Draw every board in this colour in this window; the file keeps its own."),
+                       SettingSwatches(self.act_colour,
+                                       {scheme.key: scheme.fill for scheme in BOARD_SCHEMES}),
+                       "Board Colour mask"),
+        ]
+        shown = (
+            (self.act_ratsnest, t("The lines between pins that still have to be joined.")),
+            (self.act_rulers, t("The letters and numbers along the board's edges.")),
+            (self.act_pin_names, self.act_pin_names.toolTip()),
+            (self.act_values, self.act_values.toolTip()),
+            (self.act_board_labels, self.act_board_labels.toolTip()),
+            (self.act_far_side, self.act_far_side.toolTip()),
+            (self.act_net_names, self.act_net_names.toolTip()),
+            (self.act_off_board, self.act_off_board.toolTip()),
+        )
+        for action, why in shown:
+            rows.append(SettingRow("shown", plain_text(action.text()), why, SettingToggle(action)))
+        rows += [
+            SettingRow("wiring", plain_text(self.style_menu.title()),
+                       self._style_menu_tips["style"], SettingChoice(self.act_style),
+                       "Wiring Style routing auto-wire"),
+            SettingRow("wiring", plain_text(self.crossing_menu.title()),
+                       self._style_menu_tips["crossing"], SettingChoice(self.act_crossing),
+                       "When a Trace Must Cross jumper hop"),
+            SettingRow("wiring", plain_text(self.act_grid_wires.text()), self._grid_wires_tip,
+                       SettingToggle(self.act_grid_wires), "Lay Wires Along the Grid"),
+            SettingRow("wiring", plain_text(self.act_both_faces.text()), self._both_faces_tip,
+                       SettingToggle(self.act_both_faces), "Wire on Both Faces"),
+            SettingRow("files", plain_text(self.act_autosave_file.text()),
+                       self.act_autosave_file.toolTip(), SettingToggle(self.act_autosave_file),
+                       "Autosave to the File"),
+            SettingRow("files", plain_text(self.act_auto_updates.text()),
+                       self.act_auto_updates.toolTip(), SettingToggle(self.act_auto_updates),
+                       "Check Automatically at Startup updates",
+                       # Three states, said as three: never asked is not "off".
+                       lambda: t("Not chosen yet")
+                       if updater.stored_preference(app_settings()) is None else ""),
+        ]
+        skipped = updater.skipped_version(settings)
+        if skipped:
+            rows.append(SettingRow(
+                "files", t("Hidden Update"),
+                t("You hid version {version}, so it is not offered again.").format(version=skipped),
+                SettingButton(t("Offer It Again"), self._offer_skipped_again),
+                "Skip this version hidden update",
+            ))
+        return rows
+
+    def _offer_skipped_again(self) -> None:
+        updater.remember_skip(app_settings(), "")
+        self._refresh_update_surfaces()
+
+    def _on_start_on_home(self, on: bool) -> None:
+        app_settings().setValue(SHOW_WELCOME_KEY, bool(on))
+        home = getattr(self, "_home_page", None)
+        if home is not None:
+            home.set_show_at_start(bool(on))
+
+    def _header_recent(self) -> list[tuple[str, str, Callable[[], None]]]:
+        """The last three boards, for ☰, opened as File ▸ Open Recent opens them."""
+        files = [Path(path) for path in self._recent_paths()]
+        found: list[tuple[str, str, Callable[[], None]]] = [
+            (file.name, str(file), partial(self.on_open_recent, file))
+            for file in files
+            if file.is_file()
+        ]
+        return found[:3]
 
 
 

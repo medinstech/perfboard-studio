@@ -22,6 +22,17 @@ closed without a bump.
 
 ### Added
 
+- **Settings.** Every preference of the window in one place, with a search that finds a
+  setting by its English or Turkish words: Ctrl+,, or the top of ☰. Five categories --
+  General, Appearance, Shown on the Board, Wiring, Files and Updates -- and each row says in a
+  sentence what it does. Every row is the same switch as its menu item, the board's Show
+  button or the header's sun and moon, so they always agree. The theme, the language, Reduce
+  Motion, the board's colour and the mouse wheel moved out of View into it (Ctrl+K still finds
+  each by name), and View is now in three named groups. The automatic update check says
+  "Not chosen yet" until it is chosen, and a version hidden with Hide can be offered again.
+  ☰ also opens with Settings, the command search and the last boards opened above the menus.
+  Show Pin Names and Show Labels on the Board are now remembered between sessions like the
+  other Show items.
 - **Female headers and right-angle strips.** `skt-RxC` is a female header (a pin socket),
   `hdr-RxC-ra` and `skt-RxC-ra` the right-angle header and socket, one or two rows, numbered
   as `hdr-RxC` is. A right-angle strip lies flat past its last row as far as KiCad 10's

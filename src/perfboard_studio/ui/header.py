@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 
 from . import hover, icons, theme
 from .i18n import t
+from .settings import section
 from .workflow import WorkflowBar
 
 #: The header's height, in logical pixels: one row, the step dots and the next button
@@ -93,6 +94,9 @@ class HeaderBar(QWidget):
         search: QAction,
         quick: Sequence[QuickAction] = (),
         themes: Mapping[str, QAction] | None = None,
+        leading: Sequence[QAction] = (),
+        recent: Callable[[], Sequence[tuple[str, str, Callable[[], None]]]] | None = None,
+        recent_title: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -113,9 +117,25 @@ class HeaderBar(QWidget):
         #: Every menu of the window, as submenus of one. The menu bar still holds them --
         #: it is kept, at no height, because it is what makes Alt+F open File -- and an
         #: action may sit in two menus at once.
+        #:
+        #: Above them, what is not a menu (Settings, the command search) and the last
+        #: boards opened -- the three things somebody opens ☰ for before a menu.
         self.app_menu = QMenu(self)
+        self.app_menu.setToolTipsVisible(True)
+        for action in leading:
+            self.app_menu.addAction(action)
+        if leading:
+            self.app_menu.addSeparator()
+        self._recent = recent
+        self._recent_title = recent_title
+        self._recent_actions: list[QAction] = []
+        #: Where the menus begin: the last boards go above it.
+        self._menus_start = self.app_menu.addSeparator()
+        self._menus_start.setVisible(False)
         for menu in menus:
             self.app_menu.addMenu(menu)
+        if recent is not None:
+            self.app_menu.aboutToShow.connect(self._fill_recent)
         self.menu_button = QToolButton()
         self.menu_button.setObjectName("headerMenu")
         self.menu_button.setIcon(icons.icon("menu"))
@@ -489,6 +509,27 @@ class HeaderBar(QWidget):
             self.search.setProperty("span", None)
             theme.restyle(self.search)
             self._fit_search()
+
+    def _fill_recent(self) -> None:
+        """Put the last boards opened above the menus, as ☰ opens."""
+        for action in self._recent_actions:
+            self.app_menu.removeAction(action)
+            action.deleteLater()
+        self._recent_actions = []
+        entries = list(self._recent()) if self._recent is not None else []
+        self._menus_start.setVisible(bool(entries))
+        if not entries:
+            return
+        heading = section(self.app_menu, self._recent_title)
+        self.app_menu.removeAction(heading)
+        self.app_menu.insertAction(self._menus_start, heading)
+        self._recent_actions.append(heading)
+        for name, where, run in entries:
+            action = QAction(icons.icon("open"), name, self.app_menu)
+            action.setToolTip(where)
+            action.triggered.connect(lambda _checked=False, go=run: go())
+            self.app_menu.insertAction(self._menus_start, action)
+            self._recent_actions.append(action)
 
     def open_menu(self, menu: QMenu | None = None) -> QMenu:
         """Every menu under ☰ -- or one of them, opened straight away, for Alt+its letter

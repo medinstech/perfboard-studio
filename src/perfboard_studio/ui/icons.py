@@ -610,6 +610,22 @@ def _search(p: QPainter) -> None:
     p.drawLine(QPointF(63, 63), QPointF(86, 86))
 
 
+def _settings(p: QPainter) -> None:
+    """A gear: the window's own preferences (Settings, Ctrl+,)."""
+    path = QPainterPath()
+    for tooth in range(8):
+        middle = tooth * math.tau / 8
+        for angle, radius in ((-0.30, 31.0), (-0.17, 42.0), (0.17, 42.0), (0.30, 31.0)):
+            point = QPointF(50 + radius * math.cos(middle + angle), 50 + radius * math.sin(middle + angle))
+            if tooth == 0 and angle < -0.2:
+                path.moveTo(point)
+            else:
+                path.lineTo(point)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.drawEllipse(QPointF(50, 50), 12, 12)
+
+
 def _next_step(p: QPainter) -> None:
     """A step forward to a bar: the next step not done yet."""
     path = QPainterPath(QPointF(24, 20))
@@ -785,6 +801,7 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "exploded": _exploded,
     "camera": _camera,
     "search": _search,
+    "settings": _settings,
     "measure": _measure,
     "cut-strip": _cut_strip,
     "lock": _lock,

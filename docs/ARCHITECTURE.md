@@ -2290,6 +2290,20 @@ part found by reference, value or package; it was a dialog of its own, a second 
 the same parts. `rank` puts a name that starts with what was typed first, then one with a
 word that does, then one that only contains it.
 
+**Settings is every preference of the window in one place** (`ui/settings.py`: Ctrl+,, the
+top of ☰ and the foot of View). Twelve preferences lived in four menus, View holding the
+theme, the language, Reduce Motion, the board's colour and the wheel between the zoom and the
+panels, and somebody using the application daily did not know Reduce Motion existed. Each row
+is the window's own action -- the one the menus, the Show button and the header's sun and moon
+drive -- bound both ways, so no door can disagree with another and the code that applies and
+remembers a preference did not move. The rows are data (`MainWindow._settings_rows`), asked for
+each time the window opens, and the search folds case, accents and both Turkish i's, so
+"tekerlek", "wheel" and "TEKERLEGI" find the same row. The five preferences that left View are
+in `menu_settings`, a menu in no menu bar that the palette walks after the seven, so Ctrl+K
+"tema" still finds the theme. What View kept is said in three groups (Go to, Panels, Canvas)
+by `settings.section` headings: `QMenu.addSection` draws nothing under Fusion. ☰ holds
+Settings and the search above the menus, and the last three boards between them.
+
 There is no tool row under it. **The board's tools float on the board** (`ui/canvastools.py`,
 `_build_canvas_tools`): the pointer, Connect, the two solder tools, Cut Strip on a
 stripboard, the three wires and Measure down the left; Show, Both Faces | This Face, Flip,
@@ -3359,7 +3373,7 @@ and older file keeps its bytes and its render. The format version does not move:
 build warns about the unknown key and draws the material's look.
 
 `boardcolors.scheme_for` takes the BOARD, not its material, so nothing can draw a board
-without asking what it says it is. The View menu's choice survives as an override, "draw
+without asking what it says it is. The choice in Settings survives as an override, "draw
 every board as …", and `choose(None)` means what each board says. Each scheme still carries
 the 2D and 3D colours *together*, so a board cannot be green in the editor and blue in the
 3D view. A preset brings its product's look (`board_from_preset` takes its family's), because

@@ -754,6 +754,65 @@ QFrame#commandPalette QListView::item {{
     border-radius: {RADIUS_SM}px;
 }}
 QFrame#commandPalette QListView::item:selected {{ background: {k.accent_subtle}; color: {k.text}; }}
+/* Settings (ui/settings.py): the categories on a quiet column, the page on the surface. */
+QDialog#settingsDialog {{ background: {k.bg_surface}; }}
+QFrame#settingsSidebar {{ background: {k.bg_subtle}; border-right: 1px solid {k.border}; }}
+QLabel#settingsTitle {{ font-size: {LEAD_PX + 2}px; font-weight: {SEMIBOLD}; color: {k.text}; padding: 0px {s["2xs"]}px; }}
+QLineEdit#settingsSearch {{ padding: {s["sm"]}px {s["sm"]}px; }}
+QListWidget#settingsNav {{ background: transparent; border: none; outline: none; }}
+QListWidget#settingsNav::item {{
+    padding: {s["sm"]}px {s["md"]}px;
+    margin: 1px 0px;
+    border-radius: {RADIUS_MD}px;
+    color: {k.text_secondary};
+}}
+QListWidget#settingsNav::item:hover {{ background: {k.bg_hover}; color: {k.text}; }}
+QListWidget#settingsNav::item:selected {{ background: {k.accent_subtle}; color: {k.text}; }}
+QLabel#settingsHint {{ font-size: {CAPTION_PX}px; color: {k.text_tertiary}; }}
+QScrollArea#settingsPage, QWidget#settingsBody {{ background: {k.bg_surface}; }}
+QLabel#settingsHeading {{ font-size: {TITLE_PX}px; font-weight: {SEMIBOLD}; color: {k.text}; }}
+QLabel#settingsAbout {{ color: {k.text_tertiary}; padding-top: {s["2xs"]}px; }}
+QFrame#settingsRow {{ border-bottom: 1px solid {k.border}; }}
+QFrame#settingsRow[last="true"] {{ border-bottom: none; }}
+QLabel#settingsRowTitle {{ font-size: {LEAD_PX}px; font-weight: {SEMIBOLD}; color: {k.text}; }}
+QLabel#settingsWhy {{ color: {k.text_tertiary}; }}
+QLabel#settingsCaption {{ font-size: {CAPTION_PX - 1}px; font-weight: {SEMIBOLD}; color: {k.text_tertiary}; }}
+QLabel#settingsChip {{
+    background: {k.accent_subtle};
+    color: {k.accent_text};
+    font-size: {CAPTION_PX}px;
+    border-radius: 9px;
+    padding: 1px {s["md"]}px;
+}}
+QFrame#settingsSegments {{
+    background: {k.bg_subtle};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_MD + 1}px;
+}}
+QPushButton#settingsSegment {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {RADIUS_MD}px;
+    padding: {s["xs"]}px {s["lg"]}px;
+    color: {k.text_secondary};
+    min-width: 0px;
+}}
+QPushButton#settingsSegment:hover {{ color: {k.text}; }}
+QPushButton#settingsSegment:checked {{
+    background: {k.bg_raised};
+    border-color: {k.border_strong};
+    color: {k.text};
+    font-weight: {SEMIBOLD};
+}}
+QComboBox#settingsDropdown {{ min-width: 220px; }}
+/* A heading inside a menu (settings.section): quiet capitals over the items it names. */
+QLabel#menuSection {{
+    font-size: {CAPTION_PX - 1}px;
+    font-weight: {SEMIBOLD};
+    color: {k.text_tertiary};
+    padding: {s["sm"]}px {s["lg"]}px {s["2xs"]}px {s["lg"]}px;
+    background: transparent;
+}}
 QWidget#workflowBar QToolButton {{
     background: transparent;
     border: none;
