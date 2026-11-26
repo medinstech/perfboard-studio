@@ -18926,6 +18926,7 @@ class MainWindow(QMainWindow):
         self._refresh_problems_bar()
         if self._last_lvs is not None:
             self._refresh_drc_panel(self._last_violations, self._last_lvs)
+        self._say_finding(self.drc_tree.currentItem())
         if self._guide_pages_widget is not None:
             self._refresh_guide_tree_theme()
             if self._bench_widget is not None:

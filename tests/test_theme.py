@@ -475,6 +475,78 @@ def test_choosing_the_theme_switches_live_and_matches_a_fresh_start(
         QApplication.processEvents()
 
 
+def test_live_theme_switch_refreshes_drc_detail_and_rich_links(window) -> None:  # type: ignore[no-untyped-def]
+    """#1: QLabel#problemDetail re-renders in the new theme's secondary ink on live switch.
+    #2: Rich-text <a href> QLabels (e.g. Inspector links) re-parse with the new QPalette.Link."""
+    link = QLabel('<a href="toggle">Worth a look, if you like</a>')
+    link.setTextFormat(Qt.TextFormat.RichText)
+    link.show()
+    QApplication.processEvents()
+    try:
+        window.on_theme("light")
+        QApplication.processEvents()
+        assert LIGHT.text_secondary in window.drc_detail.text()
+        assert DARK.text_secondary not in window.drc_detail.text()
+        # Grabbed pixels of the rich-text link must use LIGHT.accent_text (Link), not DARK's.
+        img = link.grab().toImage()
+        blues = {
+            img.pixelColor(x, y).name()
+            for x in range(img.width())
+            for y in range(img.height())
+            if img.pixelColor(x, y).blue() > img.pixelColor(x, y).red() + 40
+        }
+        assert DARK.accent_text not in blues
+        assert any(
+            QColor(c).blue() > QColor(c).red() + 60 and QColor(c).red() < 110
+            for c in blues
+        ), f"expected dark-blue LIGHT link pixels, got {sorted(blues)[:10]}"
+    finally:
+        link.close()
+        window.on_theme("dark")
+        QApplication.processEvents()
+
+
+def test_confirm_dialog_keeps_cancel_default_and_focused_across_live_switch(window) -> None:  # type: ignore[no-untyped-def]
+    """#3: Switching theme live while a confirm QMessageBox is open must keep Cancel as
+    default AND focused so Enter never activates the destructive button."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMessageBox
+
+    box = QMessageBox(window)
+    box.setText("Delete selected?")
+    go = box.addButton("Delete", QMessageBox.ButtonRole.DestructiveRole)
+    cancel = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(cancel)
+    box.setEscapeButton(cancel)
+    theme.mark_destructive(box)
+    box.show()
+    QApplication.processEvents()
+    try:
+        assert not go.autoDefault()
+        assert box.defaultButton() is cancel and cancel.isDefault()
+
+        window.on_theme("light")
+        QApplication.processEvents()
+        assert box.defaultButton() is cancel and cancel.isDefault()
+        assert not go.isDefault()
+        assert QApplication.focusWidget() is cancel
+
+        window.on_theme("dark")
+        QApplication.processEvents()
+        assert box.defaultButton() is cancel and cancel.isDefault()
+        assert not go.isDefault()
+        assert QApplication.focusWidget() is cancel
+
+        QTest.keyClick(box, Qt.Key.Key_Return)
+        QApplication.processEvents()
+        assert box.clickedButton() is cancel
+    finally:
+        box.close()
+        if theme.ACTIVE is not DARK:
+            window.on_theme("dark")
+            QApplication.processEvents()
+
+
 def test_a_tone_colours_a_label_through_the_one_sheet(window) -> None:  # type: ignore[no-untyped-def]
     label = QLabel("3 errors")
     theme.tone(label, "danger")

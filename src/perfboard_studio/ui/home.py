@@ -805,6 +805,8 @@ class Home(QWidget):
             item = row.takeAt(0)
             gone = item.widget() if item is not None else None
             if gone is not None:
+                gone.hide()
+                gone.setParent(None)
                 gone.deleteLater()
         for number, step in enumerate(steps, start=1):
             dot = QLabel()
@@ -822,6 +824,7 @@ class Home(QWidget):
             if number < len(steps):
                 rule = QFrame()
                 rule.setObjectName("homeStepRule")
+                rule.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
                 rule.setFixedHeight(1)
                 rule.setMinimumWidth(theme.SPACE["sm"])
                 row.addWidget(rule, 1)

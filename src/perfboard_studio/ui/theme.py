@@ -63,6 +63,7 @@ from PySide6.QtWidgets import (
     QMenuBar,
     QMessageBox,
     QProxyStyle,
+    QPushButton,
     QStyle,
     QStyleHintReturn,
     QStyleOption,
@@ -425,6 +426,8 @@ def mark_destructive(box: QMessageBox) -> None:
     for button in box.buttons():
         if box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole:
             variant(button, "danger")
+            if isinstance(button, QPushButton):
+                button.setAutoDefault(False)
 
 
 def size(widget: QWidget, px: int) -> None:
@@ -1212,15 +1215,25 @@ def palette(k: Tokens) -> QPalette:
     return result
 
 
-def _chevron(painter: QPainter, box: QRectF, up: bool, colour: str) -> None:
+_ArrowDirection = Literal["up", "down", "left", "right"]
+
+
+def _chevron(painter: QPainter, box: QRectF, direction: _ArrowDirection, colour: str) -> None:
     """A chevron centred in ``box``: every arrow the chrome draws."""
     half = min(box.width(), box.height(), 10.0) * 0.4
     centre = box.center()
-    rise = -half / 2 if up else half / 2
+    step = half / 2
     path = QPainterPath()
-    path.moveTo(centre.x() - half, centre.y() - rise)
-    path.lineTo(centre.x(), centre.y() + rise)
-    path.lineTo(centre.x() + half, centre.y() - rise)
+    if direction in ("up", "down"):
+        rise = -step if direction == "up" else step
+        path.moveTo(centre.x() - half, centre.y() - rise)
+        path.lineTo(centre.x(), centre.y() + rise)
+        path.lineTo(centre.x() + half, centre.y() - rise)
+    else:
+        run = -step if direction == "left" else step
+        path.moveTo(centre.x() - run, centre.y() - half)
+        path.lineTo(centre.x() + run, centre.y())
+        path.lineTo(centre.x() - run, centre.y() + half)
     pen = QPen(QColor(colour), 1.5)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -1246,18 +1259,19 @@ def _arrow_images(k: Tokens, folder: Path) -> dict[str, str]:
     picks on a hidpi screen.
     """
     paths: dict[str, str] = {}
-    for name, up, colour in (
-        ("up", True, k.text_secondary),
-        ("down", False, k.text_secondary),
-        ("up-disabled", True, k.text_tertiary),
-        ("down-disabled", False, k.text_tertiary),
-    ):
+    entries: tuple[tuple[str, _ArrowDirection, str], ...] = (
+        ("up", "up", k.text_secondary),
+        ("down", "down", k.text_secondary),
+        ("up-disabled", "up", k.text_tertiary),
+        ("down-disabled", "down", k.text_tertiary),
+    )
+    for name, direction, colour in entries:
         for scale, suffix in ((1, ""), (2, "@2x")):
             image = QImage(ARROW_PX * scale, ARROW_PX * scale, QImage.Format.Format_ARGB32)
             image.fill(Qt.GlobalColor.transparent)
             painter = QPainter(image)
             painter.scale(scale, scale)
-            _chevron(painter, QRectF(0, 0, ARROW_PX, ARROW_PX), up, colour)
+            _chevron(painter, QRectF(0, 0, ARROW_PX, ARROW_PX), direction, colour)
             painter.end()
             image.save(str(folder / f"{name}{suffix}.png"))
         paths[name] = (folder / f"{name}.png").as_posix()
@@ -1313,19 +1327,25 @@ class _Style(QProxyStyle):
         if element == QStyle.PrimitiveElement.PE_IndicatorRadioButton:
             self._indicator(option, painter, radio=True)
             return
-        if element in (
-            QStyle.PrimitiveElement.PE_IndicatorArrowDown,
-            QStyle.PrimitiveElement.PE_IndicatorArrowUp,
-        ):
-            self._arrow(option, painter, up=element == QStyle.PrimitiveElement.PE_IndicatorArrowUp)
+        arrow_dirs: dict[QStyle.PrimitiveElement, _ArrowDirection] = {
+            QStyle.PrimitiveElement.PE_IndicatorArrowDown: "down",
+            QStyle.PrimitiveElement.PE_IndicatorArrowUp: "up",
+            QStyle.PrimitiveElement.PE_IndicatorArrowLeft: "left",
+            QStyle.PrimitiveElement.PE_IndicatorArrowRight: "right",
+        }
+        direction = arrow_dirs.get(element)
+        if direction is not None:
+            self._arrow(option, painter, direction)
             return
         super().drawPrimitive(element, option, painter, widget)
 
-    def _arrow(self, option: QStyleOption, painter: QPainter, up: bool) -> None:
-        """A menu button's arrow, a disclosure triangle's: the same chevron as the boxes'."""
+    def _arrow(
+        self, option: QStyleOption, painter: QPainter, direction: _ArrowDirection
+    ) -> None:
+        """A menu button's arrow, a submenu chevron, a disclosure triangle's."""
         enabled = bool(option.state & QStyle.StateFlag.State_Enabled)
         colour = self.tokens.text_secondary if enabled else self.tokens.text_tertiary
-        _chevron(painter, QRectF(option.rect), up, colour)
+        _chevron(painter, QRectF(option.rect), direction, colour)
 
     def _indicator(self, option: QStyleOption, painter: QPainter, radio: bool) -> None:
         k = self.tokens
@@ -1450,6 +1470,20 @@ def _refresh_shadows(tokens: Tokens) -> None:
             effect.setColor(shadow_colour)
 
 
+def _refresh_rich_links() -> None:
+    """Re-parse rich-text ``QLabel``s holding ``<a href=...>`` so Qt applies the active
+    ``QPalette.Link`` colour after a live theme switch."""
+    for widget in QApplication.allWidgets():
+        if isinstance(widget, QLabel):
+            text = widget.text()
+            lowered = text.lower()
+            if "<a " in lowered and "href" in lowered:
+                # QLabel::setText is a no-op when passed the identical string; clearing first
+                # forces Qt to rebuild the underlying QTextDocument with the new Link palette.
+                widget.setText("")
+                widget.setText(text)
+
+
 def apply(app: QApplication, tokens: Tokens | None = None) -> None:
     """Style the whole application: Fusion, the palette, the font and the one stylesheet.
 
@@ -1482,6 +1516,12 @@ def apply(app: QApplication, tokens: Tokens | None = None) -> None:
     else:
         _applied[0].tokens = target
         cues = _applied[1]
+        focused = app.focusWidget()
+        box_defaults = [
+            (widget, widget.defaultButton())
+            for widget in QApplication.topLevelWidgets()
+            if isinstance(widget, QMessageBox) and widget.isVisible()
+        ]
         # Pause the app-wide key-cue filter during the style repolish burst so Qt does not
         # bounce thousands of StyleChange/Polish events across Python.
         app.removeEventFilter(cues)
@@ -1490,6 +1530,18 @@ def apply(app: QApplication, tokens: Tokens | None = None) -> None:
             app.setStyleSheet(sheet)
         finally:
             app.installEventFilter(cues)
+        _refresh_rich_links()
+        if focused is not None and focused.isVisible():
+            focused.setFocus()
+        for box, default_button in box_defaults:
+            if isinstance(default_button, QPushButton):
+                box.setDefaultButton(default_button)
+                default_button.setDefault(True)
+                now_focused = app.focusWidget()
+                if now_focused is None or (
+                    box.isAncestorOf(now_focused) and now_focused is not default_button
+                ):
+                    default_button.setFocus()
     _refresh_shadows(target)
     for callback in list(_listeners):
         callback(target)
