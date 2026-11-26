@@ -242,12 +242,16 @@ from .i18n import counted, t
 from .i18n import language as current_language
 from .moduleart import (
     ART_COLOURS,
+    CAMERA_MM,
     ENCODER_MM,
+    FPC_MM,
     FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
     JST_SH_PITCH_MM,
     JST_SH_TAILS_MM,
+    MICROSD_LATCH_MM,
+    MICROSD_TAILS,
     OLED_LEDGE_MM,
     OLED_VIEW_MM,
     PCB_ANTENNA_TRACE_MM,
@@ -4316,8 +4320,9 @@ RF_NAME_MM = 1.15
 RF_CAN_CORNER_MM = 0.5
 #: A QFN's pads where they show along its sides.
 QFN_PAD_PITCH_MM = 0.5
-#: Silkscreen on a module's board: its print, the corners round a chip and their gap.
-SILK_TEXT_MM = 1.0
+#: Silkscreen on a module's board: how much of its box the print's capitals fill, the corners
+#: round a chip and their gap. A silk part's width is the box its letters were measured in.
+SILK_TEXT_SHARE = 0.8
 SILK_LINE_MM = 0.15
 SILK_GAP_MM = 0.4
 #: A module's plated holes, from above: the ring's radius and the header pin's tip.
@@ -4360,7 +4365,7 @@ def _paint_module_art(painter: QPainter, parts: Sequence[PlacedArt]) -> None:
         if part.kind == "silk":
             # Silkscreen the layout measured: the board's white ink, never upside down.
             _paint_art_print(
-                painter, part.text, min(SILK_TEXT_MM, width * 0.8), length,
+                painter, part.text, width * SILK_TEXT_SHARE, length,
                 QColor(BODY_STYLES["module-board"].accent),
             )
             painter.restore()
@@ -4947,6 +4952,12 @@ def _paint_art_part(
         _art_box(painter, half_l - 0.45, half_l, half_w * 0.68, _art_colour("mouth"))
     elif kind == "encoder":
         _paint_art_encoder(painter, length, width, look)
+    elif kind == "microsd":
+        _paint_art_microsd(painter, length, width, look, _dot_side(part))
+    elif kind == "camera":
+        _paint_art_camera(painter, length, width, look)
+    elif kind == "fpc":
+        _paint_art_fpc(painter, length, width, look, part.pitch)
     elif kind == "fresnel":
         # The square foot, the dome on it, and the facets a Fresnel lens is moulded in: a
         # hexagon at the top of the dome and the ridges out from its corners.
@@ -5007,7 +5018,16 @@ def _paint_art_part(
         painter.drawRoundedRect(top, half_w - rim, half_w - rim)
     elif kind == "flex":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("flex"))
-        _art_box(painter, -half_l, half_l, half_w * 0.8, _art_colour("flex-stiffener"))
+        if part.text:
+            # A camera's flex: bare polyimide, the copper running along it, and its printing.
+            painter.save()
+            painter.setPen(QPen(_art_colour("flex").darker(125), 0.12))
+            for share in (-0.6, -0.3, 0.0, 0.3, 0.6):
+                painter.drawLine(QPointF(-half_l, half_w * share), QPointF(half_l, half_w * share))
+            painter.restore()
+            _paint_art_print(painter, part.text, min(0.9, width * 0.16), length * 0.9, _art_ink("ink", ART_PRINT_ALPHA))
+        else:
+            _art_box(painter, -half_l, half_l, half_w * 0.8, _art_colour("flex-stiffener"))
     elif kind == "trimmer":
         body = QRectF(-half_l, -half_w, length, width)
         painter.setBrush(look.moulded(body, _art_colour("trimmer-base")))
@@ -5112,6 +5132,108 @@ def _paint_art_encoder(painter: QPainter, length: float, width: float, look: _Ar
         dx, dy = math.cos(angle), math.sin(angle)
         painter.drawLine(QPointF(shaft * 0.8 * dx, shaft * 0.8 * dy), QPointF(shaft * dx, shaft * dy))
     painter.restore()
+
+
+def _paint_art_microsd(
+    painter: QPainter, length: float, width: float, look: _ArtLook, side: float
+) -> None:
+    """A push-push micro SD socket from above, its mouth at +x (``moduleart.MICROSD_TAILS``,
+    ``MICROSD_LATCH_MM``): the contacts' tails out of the back, the steel shell with the two
+    ribs pressed along it, the latch's window by the mouth on ``side``, and the dark of the
+    mouth itself."""
+    half_l, half_w = length / 2, width / 2
+    count, pitch, reach, offset = MICROSD_TAILS
+    middle = -side * offset if side else 0.0
+    _art_legs(
+        painter, -half_l - reach, -half_l + 0.2,
+        [middle + (index - (count - 1) / 2) * pitch for index in range(count)], 0.45,
+    )
+    painter.setPen(QPen(ART_EDGE, 0.05))
+    steel = _art_colour("shield")
+    shell = QRectF(-half_l, -half_w, length, width)
+    painter.setBrush(look.metal(shell, steel))
+    painter.drawRect(shell)
+    look.bevel(painter, shell, 0.2, 55)
+    painter.save()
+    painter.setPen(QPen(steel.darker(128), 0.12))
+    for share in (-0.18, 0.18):
+        painter.drawLine(QPointF(-half_l * 0.7, half_w * share), QPointF(half_l * 0.45, half_w * share))
+    painter.restore()
+    start, long, wide = MICROSD_LATCH_MM
+    if side:
+        window = QRectF(half_l - start - long, 0.0, long, wide)
+        window.moveTop(side * (half_w - 0.15 - wide / 2) - wide / 2)
+        painter.setBrush(QBrush(_art_colour("mouth")))
+        painter.drawRect(window)
+        painter.save()
+        painter.setPen(QPen(steel.lighter(108), 0.25))
+        painter.drawLine(
+            QPointF(window.left() + 0.4, window.center().y()),
+            QPointF(window.right() - 0.5, window.center().y() + side * wide * 0.25),
+        )
+        painter.restore()
+    _art_box(painter, half_l - 0.25, half_l, half_w * 0.9, _art_colour("mouth"))
+
+
+def _paint_art_camera(painter: QPainter, length: float, width: float, look: _ArtLook) -> None:
+    """A camera module from above (``moduleart.CAMERA_MM``): the black holder, the lens
+    barrel standing out of it with its thread, and the glass, catching the light."""
+    half_l, half_w = length / 2, width / 2
+    holder = QRectF(-half_l, -half_w, length, width)
+    painter.setPen(QPen(ART_EDGE, 0.05))
+    painter.setBrush(look.moulded(holder, _art_colour("camera")))
+    painter.drawRoundedRect(holder, 0.4, 0.4)
+    look.bevel(painter, holder, 0.18, 40, 0.4)
+    centre = QPointF(0.0, 0.0)
+    barrel = min(CAMERA_MM["barrel"], length, width) / 2
+    painter.setBrush(look.domed(centre, barrel, _art_colour("barrel"), 140))
+    painter.drawEllipse(centre, barrel, barrel)
+    painter.save()
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(_art_colour("barrel").lighter(135), 0.08))
+    for share in (0.82, 0.66):
+        painter.drawEllipse(centre, barrel * share, barrel * share)
+    painter.restore()
+    glass = min(CAMERA_MM["glass"], 2 * barrel) / 2
+    tint = _art_colour("lens-glass")
+    if look.lit:
+        shine = QRadialGradient(QPointF(-glass * 0.35, -glass * 0.35), glass * 1.3)
+        shine.setColorAt(0.0, tint.lighter(260))
+        shine.setColorAt(0.45, tint)
+        shine.setColorAt(1.0, tint.darker(160))
+        painter.setBrush(QBrush(shine))
+    else:
+        painter.setBrush(QBrush(tint))
+    painter.drawEllipse(centre, glass, glass)
+
+
+def _paint_art_fpc(
+    painter: QPainter, length: float, width: float, look: _ArtLook, pitch: float
+) -> None:
+    """A flip-lock FPC connector from above, its actuator at +x (``moduleart.FPC_MM``): the
+    contacts' tails out of the back, the cream housing with its contacts' teeth showing at
+    the actuator, and the dark actuator itself."""
+    half_l, half_w = length / 2, width / 2
+    step = pitch or 0.5
+    count = max(int((width - 4.0) / step), 1)
+    at = [(index - (count - 1) / 2) * step for index in range(count)]
+    _art_legs(painter, -half_l - FPC_MM["tails"], -half_l + 0.2, at, step * 0.5)
+    painter.setPen(QPen(ART_EDGE, 0.05))
+    body = QRectF(-half_l, -half_w, length, width)
+    painter.setBrush(look.moulded(body, _art_colour("fpc")))
+    painter.drawRect(body)
+    look.bevel(painter, body, 0.15, 35)
+    actuator = min(FPC_MM["actuator"], length * 0.5)
+    face = half_l - actuator
+    painter.save()
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(_art_colour("fpc").darker(112)))
+    for across in at:
+        painter.drawRect(QRectF(face - 0.9, across - step * 0.2, 0.9, step * 0.4))
+    painter.restore()
+    bar = QRectF(face, -half_w + 0.6, actuator, width - 1.2)
+    painter.setBrush(look.moulded(bar, _art_colour("actuator")))
+    painter.drawRect(bar)
 
 
 def _paint_silk_corners(painter: QPainter, half_l: float, half_w: float, arm: float) -> None:

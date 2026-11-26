@@ -57,20 +57,14 @@ CAN_NAMES = (("1", "3V3"), ("2", "GND"), ("3", "CTX"), ("4", "CRX"), ("5", "CANH
 #: invented: a module there is nothing to measure it on is the block, which claims nothing.
 #: ``test_a_module_drawn_as_the_block_is_one_on_purpose`` fails if one of these gains a
 #: layout, so the reason cannot outlive the fact, or leaves the catalog. The ESP-01 and the
-#: nRF24L01+ were here until their photographs were rectified onto their drawn boards.
+#: nRF24L01+ were here until their photographs were rectified onto their drawn boards, the
+#: ESP32-CAM until its was rectified on its own pins, and the DFPlayer Mini until its maker's
+#: drawing was read for its socket and its chips' pads.
 DRAWN_AS_THE_BLOCK: dict[str, str] = {
-    # DFRobot's dimension drawing (DFR0299) gives the pads and the micro SD socket's outline and
-    # no chip or part positions, and there is no art kind for the socket.
-    "dfplayer-mini": "no measured layout of what stands on its board",
     # Adafruit's Eagle board has the position of every part on it (the VQFN20 chip, the two
     # resistor packs, the JST-SH sockets), but no layout has been drawn from it yet, and a
     # layout is never invented ahead of the measuring.
     "adafruit-pcf8574-qt": "Adafruit's Eagle board is not yet drawn as a layout",
-    "esp32-cam": (
-        "AI-Thinker publishes no drawing of the board, and the only pictures of it are renders "
-        "and the community's footprints: the headers are measured, the camera, the FPC "
-        "connector and the flash LED are not, so the module claims nothing about them"
-    ),
 }
 
 def _on_a_module(part) -> bool:  # type: ignore[no-untyped-def]
@@ -297,6 +291,16 @@ def _bounds(part) -> tuple[float, float, float, float]:
 #: The parts drawn as circles, whose boxes meet before their edges do.
 _ROUND_KINDS = frozenset({"capsule", "hole"})
 
+#: Parts that really are stacked, each with why: the only places one part is drawn over another.
+STACKED: dict[tuple[str, str, str], str] = {
+    ("esp32-cam", "microsd", "camera"): (
+        "the OV2640 is taped onto the socket's shell, which is why its top is 4.5 mm up"
+    ),
+    ("esp32-cam", "microsd", "flex"): (
+        "the camera's flex runs down off the socket's end to its connector, lying over the shell"
+    ),
+}
+
 
 def _polygon_meets_box(points, box) -> bool:
     """Whether a convex polygon and an axis-aligned box share any area -- separating axes,
@@ -348,6 +352,8 @@ def test_no_two_parts_on_a_module_stand_in_one_place(art, footprint_id: str, nam
     solid = [part for part in placed if part.kind != "silk"]
     for index, part in enumerate(solid):
         for other in solid[index + 1 :]:
+            if (art.key, part.kind, other.kind) in STACKED:
+                continue
             # A part that is not turned is its own box, so measuring the turned one against
             # it is exact.
             turned, square = (other, part) if other.diagonal else (part, other)
@@ -841,6 +847,8 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "adafruit-tft-1-14": ADAFRUIT_BLACK,
         "sparkfun-thumb-joystick": SPARKFUN_RED,
         "sparkfun-encoder-breakout": SPARKFUN_RED,
+        "esp32-cam": ESPRESSIF_BLACK,
+        "dfplayer-mini": ESPRESSIF_BLACK,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
@@ -1401,11 +1409,13 @@ def test_every_chip_on_a_layout_says_where_its_pin_1_is() -> None:
     """A dotted chip declares its corner, or says (0) that its source does not show one --
     so no layout leaves a dot to a default side, which is how half of them came to be on
     the wrong one. A chip turned on its corner has that corner for its feature."""
-    from perfboard_studio.ui.moduleart import PIN_ONE_KINDS
+    from perfboard_studio.ui.moduleart import PIN_ONE_KINDS, SIDED_KINDS
 
     for art in MODULE_ARTS:
         for part in art.parts:
-            if part.kind not in PIN_ONE_KINDS or part.diagonal:
+            if part.kind in SIDED_KINDS:
+                assert part.across in (-1, 1), (art.key, part.kind)
+            elif part.kind not in PIN_ONE_KINDS or part.diagonal:
                 assert part.across is None, (art.key, part.kind)
             else:
                 assert part.across in (-1, 0, 1), (art.key, part.kind, part.text)

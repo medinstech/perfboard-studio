@@ -1316,7 +1316,13 @@ green substrate. The pads a module draws are its pin ends, so `ComponentItem` do
 its own over them. What a layout prints runs along the part, and where it runs up or down
 the screen it reads from the board's right side, as boards print it and as the 3D view lays
 it (`_paint_art_print`); the encoder breakout's "RGB" up its edge was the first such print,
-and the two views had it turned opposite ways. Both views paint from ONE table,
+and the two views had it turned opposite ways. A silk part's width is the box its letters were
+measured in, and the 2D print fills `SILK_TEXT_SHARE` of it as the 3D one fills it all; a 1 mm
+cap kept the ESP32-CAM's 1.75 mm name at a pin label's size. No two parts on a layout stand in
+one place (`test_no_two_parts_on_a_module_stand_in_one_place`) except where the real board
+stacks them, and each such stack is named in that test's `STACKED` with why: the ESP32-CAM's
+camera is taped onto its micro SD socket, and its flex lies over the socket's end on its way
+to the connector. Both views paint from ONE table,
 `moduleart.ART_COLOURS`, so a trimmer is the same blue in each, and the names beside the pins
 stop at parts both views show — the block it replaced said nothing about which way round a
 module was, and the names stopped short of nothing visible.

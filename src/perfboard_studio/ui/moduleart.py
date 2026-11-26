@@ -111,6 +111,16 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:                       ``GULL_WING_LEGS`` as the TSSOP is.
 #:  * ``msop10``      -- a 10-leg MSOP (TI's DGS: 3.0 mm body, 4.9 mm over the legs, five a
 #:                       side 0.5 mm apart): the ADS1115's. Drawn from ``GULL_WING_LEGS`` too.
+#:  * ``microsd``     -- a push-push micro SD socket lying on the module: its steel shell,
+#:                       the card's mouth at the ``facing`` end, the latch's window by the
+#:                       mouth on the ``across`` side, and its contacts' tails out of the back,
+#:                       drawn past the box as a JST's are (``MICROSD_TAILS``).
+#:  * ``camera``      -- a camera module (an OV2640's) lying on whatever is under it: its
+#:                       black holder, the lens barrel and the glass, its top ``height``
+#:                       above the module's board and its holder ``CAMERA_MM`` tall under that.
+#:  * ``fpc``         -- a flip-lock FPC connector: ``length`` from its back to its actuator at
+#:                       ``facing``, its contacts ``pitch`` apart across ``width`` with their
+#:                       tails out of the back (``FPC_MM``).
 #:  * ``encoder``     -- a 12 mm rotary encoder standing on the module, its shaft up:
 #:                       ``length`` x ``width`` is its moulded base, from its LED pins at
 #:                       the ``facing`` end to its A C B pins at the other, ``height`` the
@@ -157,6 +167,11 @@ ArtKind = Literal[
     "tqfp32",
     # A 12 mm rotary encoder standing up, shaft and all: an illuminated one's clear shaft.
     "encoder",
+    # A push-push micro SD socket, a camera module on its holder, and the FPC connector its
+    # flex plugs into: what the ESP32-CAM and the DFPlayer Mini carry.
+    "microsd",
+    "camera",
+    "fpc",
     "rf-module",
     # A plain metal can soldered straight onto the module's board, over what it shields --
     # not a radio module's own board under its can.
@@ -221,6 +236,9 @@ def gull_wing_dot(body_half: float) -> tuple[float, float, float]:
 #: The chips whose builders print a pin-1 dot in a corner: at ``facing`` along the chip's
 #: axis and at ``across`` across it (``ArtPart.across``).
 PIN_ONE_KINDS: frozenset[str] = frozenset({"soic8", "qfn", "tqfp32", *GULL_WING_LEGS})
+#: The parts whose ``across`` names the side of a feature that is not a pin 1: a micro SD
+#: socket's latch window, which is on one side of the mouth and says which way round it is.
+SIDED_KINDS: frozenset[str] = frozenset({"microsd"})
 
 #: A SOT-23's legs, by kind: where each leaves the body's two long sides, as a share of the
 #: body's length, ``(back, front)`` -- the front being the ``facing`` side. One table, so the
@@ -304,6 +322,13 @@ ART_COLOURS: dict[str, str] = {
     "gold": "#d1a654",
     # An illuminated encoder's clear shaft, frosted by its knurl, as its LEDs shine up it.
     "shaft": "#dfe6ea",
+    # A camera module's black holder, its lens barrel and the glass in it; an FPC connector's
+    # cream housing and its dark actuator, as the ESP32-CAM photograph has them.
+    "camera": "#18191c",
+    "barrel": "#2a2c31",
+    "lens-glass": "#14203a",
+    "fpc": "#e8dcc0",
+    "actuator": "#2b2c30",
 }
 
 #: A screw terminal's wire mouth, per way: how wide, and from how high to how high up its
@@ -320,6 +345,19 @@ JST_SH_TAILS_MM = 0.8
 #: stand out of the base's sides (14 mm over them against the 12.4 mm base) and how wide
 #: each is, how tall the bracket stands, and the M9 bushing's and the 6 mm shaft's
 #: diameters and the bushing's height. The shaft is the rest, to the part's height.
+#: A push-push micro SD socket's contact tails out of its back: how many (eight contacts and
+#: the card switch), how far apart, how far they reach past the shell, and how far their
+#: middle is from the shell's, away from the latch -- DFRobot's DFR0299 drawing.
+MICROSD_TAILS = (9, 1.1, 0.9, 2.1)
+#: A push-push micro SD socket's latch window, by the mouth on one side of its shell: how far
+#: from the mouth it starts, how long it is and how wide, both sockets' photographs measured.
+MICROSD_LATCH_MM = (1.8, 4.4, 2.2)
+#: A camera module (the OV2640 board an ESP32-CAM carries): its lens barrel's diameter and
+#: the glass's, and how tall its holder and barrel stand above what it lies on.
+CAMERA_MM: dict[str, float] = {"barrel": 7.0, "glass": 3.4, "tall": 2.7}
+#: A flip-lock FPC connector: how deep its actuator is from the face, and how far its
+#: contacts' tails reach out of its back.
+FPC_MM: dict[str, float] = {"actuator": 2.4, "tails": 0.5}
 ENCODER_MM: dict[str, float] = {
     "bracket": 10.2,
     "leg-out": 0.8,
@@ -396,7 +434,8 @@ class ArtPart:
     #: the dot goes in, and both turn with the layout. 0 where that source does not show the
     #: dot, and then none is drawn: a missing mark claims nothing, and a wrong one tells a
     #: builder the chip is turned. ``None`` only for a part with no pin 1, or one turned on
-    #: its corner (``diagonal``), whose feature IS a corner.
+    #: its corner (``diagonal``), whose feature IS a corner. For a ``SIDED_KINDS`` part, the
+    #: side its feature is on in the same way.
     across: int | None = None
 
 
@@ -1406,6 +1445,88 @@ SPARKFUN_ENCODER_MODULE = ModuleArt(
     ),
 )
 
+#: AI-Thinker's ESP32-CAM, camera side up with the camera end at the top as the catalogue reads
+#: it, measured on a photograph rectified onto its own header pins (Nowforever's on Wikimedia
+#: Commons, CC BY-SA 4.0: a homography fitted on the sixteen pins at 2.54 mm in rows 22.86 mm
+#: apart, 0.055 mm rms and 0.13 mm at most): the micro SD socket under the camera end, its
+#: mouth flush with the board's edge and its latch towards 5V; the OV2640 camera taped onto
+#: the socket, its flex running down over the socket's end to the FPC connector across the
+#: board below it; the white flash LED in the corner past the 3V3 row's last GND; three
+#: SOT-23s, the two 0805 capacitors either side of the flex, and the board's "ESP32-CAM". The ESP32-S module is on the back and is not drawn. The photograph
+#: is good to about half a millimetre and stands the camera's top 4.5 mm up, so only the
+#: parts big enough for that are drawn, the 0402s are not, and the camera is the OV2640
+#: board's 8.5 mm square. ``u`` runs up the board towards the camera end, ``v`` across it
+#: towards the 5V row.
+ESP32_CAM_MODULE = ModuleArt(
+    key="esp32-cam",
+    board_colour=ESPRESSIF_BLACK,
+    names=("esp32-cam",),
+    board=(40.5, 27.0),
+    pins=16,
+    frame="columns",
+    landmark=("5V", 1, 1),
+    # The socket comes to within 4 mm of the rows, closer than the names need: they go over it.
+    names_over_parts=True,
+    parts=(
+        ArtPart("microsd", 13.0, 0.125, 14.5, 14.65, 1.8, facing=1, across=1),
+        ArtPart("flex", 3.2, -0.19, 7.9, 6.1, 0.15, text="TY-OV2640-V2.0"),
+        ArtPart("camera", 11.4, -0.4, 8.5, 8.5, 4.5, facing=-1),
+        ArtPart("fpc", -4.25, -0.3, 7.0, 16.6, 2.0, facing=1, pitch=0.5),
+        ArtPart("led", -8.55, -10.95, 3.0, 3.0, 0.7, colour="#f2d33c"),
+        ArtPart("sot23", -5.25, 10.06, 2.4, 2.9, 1.1),
+        ArtPart("sot23", -5.13, -11.25, 2.4, 2.9, 1.1),
+        ArtPart("sot23", 0.7, 5.07, 2.4, 2.9, 1.1, along_v=True),
+        ArtPart("chip-c", 0.6, 8.0, 2.0, 1.25, 0.6),
+        ArtPart("chip-c", 0.5, -5.2, 2.0, 1.25, 0.6),
+        ArtPart("silk", -16.4, 0.12, 15.0, 2.2, 0.0, along_v=True, text="ESP32-CAM"),
+    ),
+    source=(
+        "Nowforever's photograph of the camera side, Wikimedia Commons, CC BY-SA 4.0 "
+        "(https://commons.wikimedia.org/wiki/File:ESP32-CAM.jpg), rectified on its sixteen "
+        "header pins at about 42 px/mm (0.055 mm rms on the pins; the socket, the camera, its "
+        "flex and connector, the flash LED, the SOT-23s, the 0805s and the silkscreen, to "
+        "about 0.5 mm); "
+        "the OV2640 board's 8.5 mm holder"
+    ),
+)
+
+#: DFRobot's DFPlayer Mini (DFR0299), its micro SD side up and VCC at the top left as DFRobot
+#: draws it, measured on DFRobot's own dimension drawing v1.1 (wiki.dfrobot.com/DFR0299): the
+#: socket's outline, its mouth at the bottom edge where the card goes in (the drawing has its
+#: lip 0.2 mm past the edge, drawn to the edge) and its latch by the mouth on the BUSY side, as
+#: DFRobot's pinout picture shows it; the six 0603s across the top from their pads, the
+#: capacitors and resistors as that picture colours them; the status LED under the notch from
+#: its pads, and the board's "DFPlayer Mini". The notch in the top edge is not drawn: the board
+#: is the footprint's square. Its chips are on the back.
+DFPLAYER_MINI_MODULE = ModuleArt(
+    key="dfplayer-mini",
+    board_colour=ESPRESSIF_BLACK,
+    names=("dfplayer",),
+    board=(20.32, 20.32),
+    pins=16,
+    frame="columns",
+    landmark=("VCC", 1, 1),
+    # The socket comes to within 1.5 mm of the rows: the names go over it.
+    names_over_parts=True,
+    parts=(
+        ArtPart("microsd", -3.02, -0.06, 14.27, 14.84, 1.8, facing=-1, across=-1),
+        ArtPart("chip-c", 8.46, 7.01, 1.6, 0.8, 0.45),
+        ArtPart("chip-c", 8.46, 4.93, 1.6, 0.8, 0.45),
+        ArtPart("chip-c", 8.46, 2.85, 1.6, 0.8, 0.45),
+        ArtPart("chip-r", 8.46, -2.76, 1.6, 0.8, 0.45),
+        ArtPart("chip-r", 8.46, -4.77, 1.6, 0.8, 0.45),
+        ArtPart("chip-c", 8.46, -6.85, 1.6, 0.8, 0.45),
+        ArtPart("led", 7.64, 0.0, 1.6, 0.8, 0.35, along_v=True),
+        ArtPart("silk", 6.24, 0.52, 12.6, 1.6, 0.0, along_v=True, text="DFPlayer Mini"),
+    ),
+    source=(
+        "DFRobot's DFR0299 dimension drawing v1.1 (the board, the socket's outline and pads, "
+        "the 0603s' and the LED's pads, the silkscreen) and its pinout picture on the same "
+        "page (the black board, the latch's side, which chips are capacitors and which "
+        "resistors)"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -2040,6 +2161,8 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ADAFRUIT_TFT_1_14_MODULE,
     SPARKFUN_THUMB_JOYSTICK_MODULE,
     SPARKFUN_ENCODER_MODULE,
+    ESP32_CAM_MODULE,
+    DFPLAYER_MINI_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,

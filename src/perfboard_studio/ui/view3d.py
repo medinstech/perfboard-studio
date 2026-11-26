@@ -150,12 +150,16 @@ from .bodies import (
 )
 from .moduleart import (
     ART_COLOURS,
+    CAMERA_MM,
     ENCODER_MM,
+    FPC_MM,
     FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
     JST_SH_PITCH_MM,
     JST_SH_TAILS_MM,
+    MICROSD_LATCH_MM,
+    MICROSD_TAILS,
     OLED_LEDGE_MM,
     PCB_ANTENNA_TRACE_MM,
     SOT23_LEGS,
@@ -6558,8 +6562,151 @@ def _art_hc49(s: _ArtSolid) -> list[_Piece]:
     return pieces
 
 
+#: How far a micro SD socket's shell stops short of its mouth, the card's slot showing there.
+_MICROSD_LIP_MM = 0.08
+
+
+def _art_microsd(s: _ArtSolid) -> list[_Piece]:
+    """A push-push micro SD socket (``moduleart.MICROSD_TAILS``, ``MICROSD_LATCH_MM``): the
+    steel shell, the dark of its mouth at ``facing`` and of the latch's window by it on the
+    ``across`` side, and its contacts' tails out of the back onto their pads."""
+    count, pitch, reach, offset = MICROSD_TAILS
+    start, long, wide = MICROSD_LATCH_MM
+    middle = -s.across * offset
+    pieces = [
+        # The shell stops short of the mouth by its lip, so the dark of the mouth shows under
+        # it and nothing reaches past the socket's own outline.
+        _Piece(
+            source=s.box(s.length - _MICROSD_LIP_MM, s.width, s.height),
+            rgb=_ART_SHIELD_RGB,
+            position=s.at(-s.facing * _MICROSD_LIP_MM / 2, 0.0, s.height / 2),
+            material=STEEL,
+        ),
+        _Piece(
+            source=s.box(2 * _MICROSD_LIP_MM, s.width * 0.9, s.height * 0.6),
+            rgb=_ART_MOUTH_RGB,
+            position=s.at(s.facing * (s.length / 2 - _MICROSD_LIP_MM), 0.0, s.height * 0.3),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(reach + 0.2, 0.45, 0.12),
+            rgb=LEAD_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=TINNED,
+            instances=tuple(
+                s.at(
+                    -s.facing * (s.length / 2 + reach / 2 - 0.1),
+                    middle + (index - (count - 1) / 2) * pitch,
+                    0.06,
+                )
+                for index in range(count)
+            ),
+        ),
+    ]
+    if s.across:
+        pieces.append(
+            _Piece(
+                source=s.box(long, wide, 0.04),
+                rgb=_ART_MOUTH_RGB,
+                position=s.at(
+                    s.facing * (s.length / 2 - start - long / 2),
+                    s.across * (s.width / 2 - 0.15 - wide / 2),
+                    s.height + 0.01,
+                ),
+                material=MOULDED,
+            )
+        )
+    return pieces
+
+
+def _art_camera(s: _ArtSolid) -> list[_Piece]:
+    """A camera module lying on what is under it (``moduleart.CAMERA_MM``): its holder, the
+    lens barrel up out of it and the glass in the barrel, the top at the part's height."""
+    tall = min(CAMERA_MM["tall"], s.height)
+    base = s.height - tall
+    holder = tall * 0.45
+    barrel_r = min(CAMERA_MM["barrel"], s.length, s.width) / 2
+    return [
+        _Piece(
+            source=s.box(s.length, s.width, holder, moulded=True),
+            rgb=_hex_rgb(ART_COLOURS["camera"], BODY_RGB),
+            position=s.at(0.0, 0.0, base + holder / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=_cylinder(barrel_r, tall - holder, resolution=36),
+            rgb=_hex_rgb(ART_COLOURS["barrel"], BODY_RGB),
+            position=s.at(0.0, 0.0, base + holder + (tall - holder) / 2),
+            orientation=_ALONG_Z,
+            material=MOULDED,
+        ),
+        _Piece(
+            source=_cylinder(min(CAMERA_MM["glass"] / 2, barrel_r), 0.04, resolution=32),
+            rgb=_hex_rgb(ART_COLOURS["lens-glass"], BODY_RGB),
+            position=s.at(0.0, 0.0, s.height + 0.02),
+            orientation=_ALONG_Z,
+            material=LENS,
+        ),
+    ]
+
+
+def _art_fpc(s: _ArtSolid) -> list[_Piece]:
+    """A flip-lock FPC connector (``moduleart.FPC_MM``): the cream housing, the dark actuator
+    along its face at ``facing``, and the contacts' tails out of the back, ``pitch`` apart."""
+    actuator = min(FPC_MM["actuator"], s.length * 0.5)
+    step = s.pitch or 0.5
+    count = max(int((s.width - 4.0) / step), 1)
+    tails = FPC_MM["tails"] + 0.2
+    return [
+        _Piece(
+            source=s.box(s.length - actuator, s.width, s.height * 0.8, moulded=True),
+            rgb=_hex_rgb(ART_COLOURS["fpc"], BODY_RGB),
+            position=s.at(-s.facing * actuator / 2, 0.0, s.height * 0.4),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(actuator, s.width - 1.2, s.height, moulded=True),
+            rgb=_hex_rgb(ART_COLOURS["actuator"], BODY_RGB),
+            position=s.at(s.facing * (s.length - actuator) / 2, 0.0, s.height / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(tails, step * 0.5, 0.1),
+            rgb=LEAD_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=TINNED,
+            instances=tuple(
+                s.at(-s.facing * (s.length / 2 + tails / 2 - 0.2), (index - (count - 1) / 2) * step, 0.05)
+                for index in range(count)
+            ),
+        ),
+    ]
+
+
 def _art_flex(s: _ArtSolid) -> list[_Piece]:
-    """A panel's flex circuit lying on the module: the polyimide, its stiffener on it."""
+    """A flex circuit lying on the module: a panel's, the polyimide with its stiffener on it;
+    a camera's, the bare polyimide with what is printed on it (its ``text``)."""
+    if s.text:
+        pieces = [
+            _Piece(
+                source=s.box(s.length, s.width, s.height),
+                rgb=_hex_rgb(ART_COLOURS["flex"], BODY_RGB),
+                position=s.at(0.0, 0.0, s.height / 2),
+                material=GLOSS,
+            )
+        ]
+        glyphs, orientation = s.printed(s.text, min(0.9, s.width * 0.16), s.length * 0.9)
+        if glyphs is not None:
+            pieces.append(
+                _Piece(
+                    source=glyphs,
+                    rgb=_ART_INK_RGB,
+                    position=s.at(0.0, 0.0, s.height + _DECAL_PROUD_MM),
+                    orientation=orientation,
+                    material=INK,
+                )
+            )
+        return pieces
     return [
         _Piece(
             source=s.box(s.length, s.width, s.height * 0.5),
@@ -6615,6 +6762,9 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "fresnel": _art_fresnel,
     "terminal": _art_terminal,
     "encoder": _art_encoder,
+    "microsd": _art_microsd,
+    "camera": _art_camera,
+    "fpc": _art_fpc,
     "jst-sh": _art_jst_sh,
     "flex": _art_flex,
     "pcb-antenna": _art_pcb_antenna,

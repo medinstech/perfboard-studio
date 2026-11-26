@@ -150,3 +150,6 @@ layout's `source`:
 - **HC-SR501 PIR** — photograph by Nowforever, Wikimedia Commons, CC BY-SA 4.0:
   <https://commons.wikimedia.org/wiki/File:PIR_sensor_for_arduino.jpg> (oblique, rectified
   onto the 32 x 24 mm board TruSens' sheet draws)
+- **ESP32-CAM** — photograph by Nowforever, Wikimedia Commons, CC BY-SA 4.0:
+  <https://commons.wikimedia.org/wiki/File:ESP32-CAM.jpg> (its camera side, about 42 px/mm on
+  its sixteen header pins)

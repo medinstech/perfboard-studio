@@ -222,7 +222,10 @@ closed without a bump.
   modules repaints faster than before rather than slower. SparkFun's illuminated rotary
   encoder breakout is drawn as itself too: the encoder's base and steel bracket, its M9
   bushing and the clear knurled shaft its LEDs light, from SparkFun's board and the
-  encoder's maker drawing.
+  encoder's maker drawing. So are the ESP32-CAM -- its micro SD socket, the camera on it
+  with its flex down to the connector, the flash LED and its name, from a photograph
+  rectified on its own pins -- and the DFPlayer Mini, its socket, chips and status LED
+  from DFRobot's drawing.
 - **The command palette says where everything is.** With nothing typed, Ctrl+K opens on
   the commands last run from it, the files last opened and what the step bar's current step
   suggests ("Suggested for Wiring"), then each menu as its own section; with something
