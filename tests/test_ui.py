@@ -2386,26 +2386,31 @@ def test_the_guide_panel_says_what_the_guide_says() -> None:
 def _menu_tooltips(window) -> list[tuple[str, str]]:
     """(text, tooltip) for every action in every menu, depth first, in menu order.
 
-    The actions are held while their submenus are read -- see
-    test_a_view_is_put_away_from_the_panels_submenu for what happens otherwise."""
+    Submenus are found by matching each menu's own action, never through
+    ``QAction.menu()`` (see ``_reachable_from``). The wrapper that hands back is tied to the
+    action's wrapper, and the two make a cycle: when the collector took it -- whenever it
+    next ran, a test or two later -- the WINDOW's own wrappers of those submenus went with
+    it, and the window's next close raised "already deleted" on ``act_ratsnest``, whose
+    menu is View ▸ Show on the Board."""
+    import shiboken6
+    from PySide6.QtWidgets import QMenu
+
+    menus = {shiboken6.getCppPointer(m.menuAction())[0]: m for m in window.findChildren(QMenu)}
     found: list[tuple[str, str]] = []
-    held: list = []
 
     def walk(menu) -> None:
-        actions = menu.actions()
-        held.append(actions)
-        for action in actions:
+        for action in menu.actions():
             if action.isSeparator():
                 continue
             found.append((action.text(), action.toolTip()))
-            if action.menu() is not None:
-                walk(action.menu())
+            sub = menus.get(shiboken6.getCppPointer(action)[0])
+            if sub is not None:
+                walk(sub)
 
-    tops = window.menuBar().actions()
-    held.append(tops)
-    for top in tops:
-        if top.menu() is not None:
-            walk(top.menu())
+    for top in window.menuBar().actions():
+        sub = menus.get(shiboken6.getCppPointer(top)[0])
+        if sub is not None:
+            walk(sub)
     return found
 
 
