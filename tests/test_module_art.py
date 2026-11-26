@@ -58,14 +58,10 @@ CAN_NAMES = (("1", "3V3"), ("2", "GND"), ("3", "CTX"), ("4", "CRX"), ("5", "CANH
 #: ``test_a_module_drawn_as_the_block_is_one_on_purpose`` fails if one of these gains a
 #: layout, so the reason cannot outlive the fact, or leaves the catalog. The ESP-01 and the
 #: nRF24L01+ were here until their photographs were rectified onto their drawn boards, the
-#: ESP32-CAM until its was rectified on its own pins, and the DFPlayer Mini until its maker's
-#: drawing was read for its socket and its chips' pads.
-DRAWN_AS_THE_BLOCK: dict[str, str] = {
-    # Adafruit's Eagle board has the position of every part on it (the VQFN20 chip, the two
-    # resistor packs, the JST-SH sockets), but no layout has been drawn from it yet, and a
-    # layout is never invented ahead of the measuring.
-    "adafruit-pcf8574-qt": "Adafruit's Eagle board is not yet drawn as a layout",
-}
+#: ESP32-CAM until its was rectified on its own pins, the DFPlayer Mini until its maker's
+#: drawing was read for its socket and its chips' pads, and the PCF8574 QT until its Eagle
+#: board was. Every module the catalogue sells is drawn as itself now.
+DRAWN_AS_THE_BLOCK: dict[str, str] = {}
 
 def _on_a_module(part) -> bool:  # type: ignore[no-untyped-def]
     """A catalog part on a module's own board, whatever shelf it is on: the GY-521 is a sensor."""
@@ -207,7 +203,10 @@ def test_every_catalog_module_is_drawn_as_what_is_on_it(part) -> None:
     art = recognise_module(part.placed_value)
     assert art is not None and art.key == SHARED_LAYOUTS.get(part.id, part.id)
     placed = fit_module_art(
-        _footprint(part.footprint_id), _part(part.footprint_id, part.placed_value, part.pin_names), PITCH
+        _footprint(part.footprint_id),
+        _part(part.footprint_id, part.placed_value, part.pin_names),
+        PITCH,
+        names_shown=False,
     )
     assert placed is not None and len(placed) == len(art.parts)
 
@@ -332,7 +331,8 @@ def test_every_part_stands_on_the_module_and_under_its_top(
     footprint = _footprint(footprint_id)
     placement = placement_for(footprint, PITCH)
     top = float(footprint.body.dims["top"])
-    placed = fit_module_art(footprint, _part(footprint_id, art.names[0], names, rotation, mirrored), PITCH)
+    component = _part(footprint_id, art.names[0], names, rotation, mirrored)
+    placed = fit_module_art(footprint, component, PITCH, names_shown=False)
     assert placed is not None and len(placed) == len(art.parts)
     left = placement.centre_x - placement.size_x / 2
     right = placement.centre_x + placement.size_x / 2
@@ -524,7 +524,7 @@ def test_every_layout_is_drawn_turned_and_never_mirrored(art, footprint_id: str,
     on the wrong side of its header."""
     from perfboard_studio.ui.moduleart import DRAWN_HANDEDNESS
 
-    placed = fit_module_art(_footprint(footprint_id), _part(footprint_id, art.names[0], names), PITCH)
+    placed = fit_module_art(_footprint(footprint_id), _part(footprint_id, art.names[0], names), PITCH, names_shown=False)
     assert placed is not None, art.key
     pairs = []
     for part, laid in zip(art.parts, placed, strict=True):
@@ -838,6 +838,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-pro-micro": SPARKFUN_RED,
         "adafruit-tca9548a": ADAFRUIT_BLUE,
         "adafruit-ads1115": ADAFRUIT_BLACK,
+        "adafruit-pcf8574-qt": ADAFRUIT_BLACK,
         "adafruit-scd4x": ADAFRUIT_BLACK,
         "adafruit-drv8871": ADAFRUIT_BLUE,
         "adafruit-max4466": ADAFRUIT_BLACK,
@@ -1309,6 +1310,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
     ("adafruit-tca9548a", "TCA9548A"): (-1, -1),  # Adafruit's board: U1's pad 1, towards VIN
     ("adafruit-ads1115", ""): (-1, 1),  # Adafruit's board: U1's pad 1, towards VIN and ADDR
+    ("adafruit-pcf8574-qt", "PF574"): (-1, 1),  # Adafruit's board and photograph: towards VIN and the I2C header
     ("sparkfun-acs712", "ACS712"): (1, -1),  # SparkFun's board: U$1's pad 1, towards VCC, off the header
     ("adafruit-drv8871", ""): (-1, 1),  # Adafruit's photograph: U1's pin 1 towards IN2 and the header
     ("sparkfun-hx711", "HX711"): (-1, -1),  # SparkFun's board: U1's pad 1, towards AVDD and VCC
@@ -1403,6 +1405,24 @@ def _red_middle(image, scale: float, window, box):  # type: ignore[no-untyped-de
 
 def _sign(value: float) -> int:
     return 1 if value > 0 else -1
+
+
+def test_the_boards_own_pin_names_are_drawn_only_where_the_window_prints_none() -> None:
+    """Option C, chosen 2026-11-26 from three candidates: a module's silkscreen names for
+    its pins, and a title the window's names would be printed over, are drawn only where
+    the window prints no names of its own -- the pinout card -- so a pin is never named
+    twice, and a name is never printed over the board's own words. Only printing is."""
+    for art in MODULE_ARTS:
+        assert all(part.kind == "silk" for part in art.parts if part.under_names), art.key
+    footprint_id = next(part.footprint_id for part in CATALOG if part.id == "adafruit-pcf8574-qt")
+    names = next(part.pin_names for part in CATALOG if part.id == "adafruit-pcf8574-qt")
+    component = _part(footprint_id, "PCF8574", names)
+    shown = fit_module_art(_footprint(footprint_id), component, PITCH)
+    alone = fit_module_art(_footprint(footprint_id), component, PITCH, names_shown=False)
+    assert shown is not None and alone is not None
+    printed = {part.text for part in shown if part.kind == "silk"}
+    assert printed == {"I2C GPIO Expander"}
+    assert {"PCF8574", "P7", "P0", "VIN", "SDA", "A0"} <= {part.text for part in alone}
 
 
 def test_every_chip_on_a_layout_says_where_its_pin_1_is() -> None:

@@ -82,15 +82,61 @@ def test_a_bare_chip_is_its_body_and_legs_with_no_board_behind_it() -> None:
     assert image.pixelColor(image.width() // 2, image.height() // 2).alpha() == 255
 
 
-def test_a_module_keeps_its_own_pins() -> None:
+def test_a_module_keeps_its_own_pins(monkeypatch: pytest.MonkeyPatch) -> None:
     """An illustrated module paints its own plated holes, a header pin's tip in solder in
-    each; one drawn without illustrated art still has the board view's pin ends."""
+    each; one drawn without illustrated art still has the board view's pin ends. Every
+    module the catalogue sells is illustrated, so the plain one is the Nano with its
+    layout taken away."""
     nano = part_art_svg(_card("arduino-nano"), LOOKUP)
     assert nano is not None
     assert {ART_COLOURS["pin-tip"], ART_COLOURS["solder"]} <= _fills(nano)
-    plain = part_art_svg(_card("adafruit-pcf8574-qt"), LOOKUP)
+    assert view2d.PIN_MARKER.name() not in _fills(nano)
+    monkeypatch.setattr(view2d, "fit_module_art", lambda *_args, **_kwargs: None)
+    plain = part_art_svg(_card("arduino-nano"), LOOKUP)
     assert plain is not None
     assert view2d.PIN_MARKER.name() in _fills(plain)
+    assert ART_COLOURS["pin-tip"] not in _fills(plain)
+
+
+def test_every_module_on_a_card_is_drawn_as_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The card's part is the board view's drawing, so a module the board view draws as
+    itself is drawn so on its card too -- a layout turned by a pin's name needs the names."""
+    from perfboard_studio.catalog import CATALOG
+    from perfboard_studio.ui.moduleart import recognise_module
+
+    real = view2d.fit_module_art
+    fitted: list[bool] = []
+    monkeypatch.setattr(
+        view2d, "fit_module_art", lambda *a, **k: fitted.append(real(*a, **k) is not None) or real(*a, **k)
+    )
+    for part in CATALOG:
+        footprint = LOOKUP(part.footprint_id)
+        if footprint is None or footprint.body.archetype != "module-board":
+            continue
+        if recognise_module(part.value or part.name) is None:
+            continue
+        card = pinout_card(part.id, LOOKUP)
+        if card is None:
+            continue
+        fitted.clear()
+        assert part_art_svg(card, LOOKUP) is not None, part.id
+        assert fitted and fitted[-1], part.id
+
+
+def test_a_pinout_card_shows_the_boards_own_pin_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The card names the pins round the part, so the part in its middle is the board as it
+    is, its silkscreen names and all (``ArtPart.under_names``)."""
+    real = view2d.fit_module_art
+    fitted: list[tuple[str, ...]] = []
+
+    def fit(*args, **kwargs):  # type: ignore[no-untyped-def]
+        placed = real(*args, **kwargs)
+        fitted.append(tuple(part.text for part in placed or ()))
+        return placed
+
+    monkeypatch.setattr(view2d, "fit_module_art", fit)
+    assert part_art_svg(_card("adafruit-pcf8574-qt"), LOOKUP) is not None
+    assert fitted and {"PCF8574", "P7", "VIN"} <= set(fitted[-1])
 
 
 def test_the_cards_ink_follows_the_palette_it_is_painted_under() -> None:

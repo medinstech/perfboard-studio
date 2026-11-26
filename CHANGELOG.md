@@ -226,7 +226,9 @@ closed without a bump.
   encoder's maker drawing. So are the ESP32-CAM -- its micro SD socket, the camera on it
   with its flex down to the connector, the flash LED and its name, from a photograph
   rectified on its own pins -- and the DFPlayer Mini, its socket, chips and status LED
-  from DFRobot's drawing.
+  from DFRobot's drawing -- and Adafruit's PCF8574 QT, from its Eagle board, whose own pin
+  names are printed on its pinout card and left to the window's names on the board.
+  Adafruit's black boards have gold-plated holes, as their blue ones do.
 - **The command palette says where everything is.** With nothing typed, Ctrl+K opens on
   the commands last run from it, the files last opened and what the step bar's current step
   suggests ("Suggested for Wiring"), then each menu as its own section; with something

@@ -437,6 +437,12 @@ class ArtPart:
     #: its corner (``diagonal``), whose feature IS a corner. For a ``SIDED_KINDS`` part, the
     #: side its feature is on in the same way.
     across: int | None = None
+    #: Drawn only where the window prints no pin names of its own (``fit_module_art``'s
+    #: ``names_shown``): the board's own silkscreen names for its pins, which beside the
+    #: window's would say every pin twice in two places, and a title those names would be
+    #: printed over. A pinout card, which names the pins round the part, shows the board
+    #: with them, as it is.
+    under_names: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1175,6 +1181,69 @@ ADAFRUIT_ADS1115_MODULE = ModuleArt(
         "Adafruit ADS1115 STEMMA QT Eagle board, github adafruit/ADS1X15-Breakout-Board-PCBs, "
         "CC BY-SA (the board, both headers, every top-side part's place, package and turn); TI "
         "ADS1115 datasheet SBAS444, DGS (the chip); KiCad's JST SM04B-SRSS-TB model (the sockets)"
+    ),
+)
+
+#: Adafruit's PCF8574 GPIO expander, STEMMA QT (product 5545), read off Adafruit's own Eagle
+#: board (github adafruit/Adafruit-PCF8574-PCB, 'Adafruit PCF8574 QT'): the 25.4 x 17.78 mm
+#: board with the ten-pin I/O header ('+' P7 to P0 '-') and the six-pin I2C one 12.7 mm apart,
+#: a STEMMA QT socket on each short edge with its mouth outwards, the expander in TI's RGY
+#: VQFN-20 (3.5 x 4.5 mm) turned with its long side along the headers and its pin 1 towards
+#: VIN and the I2C header, as the board's own pin-1 circle and Adafruit's photograph show, the
+#: two 10k resistor arrays on either side of it, the 10 uF and 0.1 uF capacitors under them,
+#: the green power LED by "on" (lying along the headers, as
+#: the photograph has it), and an M2.5 hole in each corner of the I2C edge. The address
+#: jumpers and the LED's jumper are on the back and are not drawn. ``u`` runs along the
+#: headers from the VIN end, ``v`` across from the I2C header to the I/O one, as Eagle's
+#: x and y. Sizes are the packages'; the tallest thing on it is the sockets, 2.9 mm.
+ADAFRUIT_PCF8574_MODULE = ModuleArt(
+    key="adafruit-pcf8574-qt",
+    board_colour=ADAFRUIT_BLACK,
+    names=("pcf8574",),
+    board=(25.4, 17.78),
+    pins=16,
+    frame="columns",
+    landmark=("P7", -1, 1),
+    # The sockets, the LED and the resistor arrays stand where a name read inwards from its
+    # pin would go, and Adafruit prints the names outside the rows: the board is drawn as it
+    # is, and the names go over its parts, as on the ADS1115's.
+    names_over_parts=True,
+    parts=(
+        ArtPart("qfn", -0.51, 0.0, 4.5, 3.5, 0.9, facing=-1, text="PF574", across=-1),
+        ArtPart("chip-r", -5.08, 0.0, 3.2, 1.6, 0.6, along_v=True),
+        ArtPart("chip-r", 5.08, 0.25, 3.2, 1.6, 0.6, along_v=True),
+        ArtPart("chip-c", -4.57, -3.05, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 4.83, -2.92, 1.6, 0.8, 0.45),
+        ArtPart("led", -9.14, 3.68, 1.6, 0.8, 0.5, colour="#3fae49"),
+        ArtPart("jst-sh", -10.03, 0.0, 4.25, 6.0, 2.9, facing=-1),
+        ArtPart("jst-sh", 10.03, 0.0, 4.25, 6.0, 2.9, facing=1),
+        ArtPart("hole", -10.16, -6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, -6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        # The title stands where the window's names for P5, P4 and P3 go: only without them.
+        ArtPart("silk", 0.0, 4.45, 9.0, 1.47, 0.0, text="PCF8574", under_names=True),
+        ArtPart("silk", 0.0, 2.92, 12.0, 1.0, 0.0, text="I2C GPIO Expander"),
+        # Adafruit's names for the pins, inside the rows; the I/O header's "+" and "-" are
+        # not printed, as the board's own are too small to read.
+        *(
+            ArtPart("silk", u, 8.0, 2.4, 1.0, 0.0, text=name, under_names=True)
+            for name, u in (
+                ("P7", -8.89), ("P6", -6.35), ("P5", -3.81), ("P4", -1.27),
+                ("P3", 1.27), ("P2", 3.81), ("P1", 6.35), ("P0", 8.89),
+            )
+        ),
+        ArtPart("silk", -6.35, -8.0, 2.4, 1.0, 0.0, text="VIN", under_names=True),
+        ArtPart("silk", -3.81, -4.7, 2.4, 1.0, 0.0, text="GND", under_names=True),
+        ArtPart("silk", -1.02, -8.0, 2.4, 1.0, 0.0, text="SCL", under_names=True),
+        ArtPart("silk", 1.40, -4.7, 2.4, 1.0, 0.0, text="SDA", under_names=True),
+        ArtPart("silk", 4.06, -8.0, 2.4, 1.0, 0.0, text="INT", under_names=True),
+        ArtPart("silk", 6.48, -4.83, 2.4, 1.0, 0.0, text="A0", under_names=True),
+    ),
+    source=(
+        "Adafruit PCF8574 QT Eagle board, github adafruit/Adafruit-PCF8574-PCB, CC BY-SA 3.0 "
+        "(the board, both headers, every top-side part's place, package and turn, the chip's "
+        "pin-1 mark, its VQFN20_3.5X4.5 package, and the top silkscreen); Adafruit's "
+        "photograph 5545 in the same repository (the black board, the gold holes and the "
+        "chip's PF574 marking); KiCad's JST SM04B-SRSS-TB model (the sockets)"
     ),
 )
 
@@ -2149,6 +2218,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_PRO_MICRO_MODULE,
     ADAFRUIT_TCA9548A_MODULE,
     ADAFRUIT_ADS1115_MODULE,
+    ADAFRUIT_PCF8574_MODULE,
     SPARKFUN_LOGIC_LEVEL_MODULE,
     ADAFRUIT_INA219_QT_MODULE,
     ADAFRUIT_INA219_MODULE,
@@ -2282,11 +2352,16 @@ def _frame(
 
 
 def fit_module_art(
-    footprint: Footprint, component: ComponentInstance, pitch: float
+    footprint: Footprint,
+    component: ComponentInstance,
+    pitch: float,
+    *,
+    names_shown: bool = True,
 ) -> tuple[PlacedArt, ...] | None:
     """What stands on this module's board, in the footprint's frame -- or ``None`` to draw
     the block: not a module, a value nobody wrote a layout for, or a board the layout does
-    not fit (see the module docstring)."""
+    not fit (see the module docstring). ``names_shown`` says whether the window prints the
+    pins' names beside them, which leaves out the parts drawn ``under_names``."""
     if footprint.body.archetype != "module-board":
         return None
     art = recognise_module(component.value)
@@ -2313,6 +2388,8 @@ def fit_module_art(
 
     placed: list[PlacedArt] = []
     for part in art.parts:
+        if part.under_names and names_shown:
+            continue
         u = part.u * scale_u * sign_u
         v = part.v * scale_v * sign_v
         own_u = not part.along_v  # the part's own axis lies along u
@@ -2640,7 +2717,7 @@ def name_room(
 
 #: The board colours whose makers plate their holes in gold (ENIG) rather than tin: every
 #: Adafruit breakout in the photographs the layouts were drawn from.
-GOLD_PLATED_BOARDS = frozenset({ADAFRUIT_BLUE})
+GOLD_PLATED_BOARDS = frozenset({ADAFRUIT_BLUE, ADAFRUIT_BLACK})
 
 
 def module_pad_plating(board_colour: str) -> str:

@@ -5632,7 +5632,7 @@ class ComponentItem(QGraphicsItem):
         self.setToolTip(tip)
         #: What stands on a module ``moduleart`` recognises, laid out once: the part is a
         #: frozen snapshot and the item is rebuilt with the document.
-        self.art = fit_module_art(fp, comp, board.pitch)
+        self.art = fit_module_art(fp, comp, board.pitch, names_shown=show_pin_names)
         self.standing = fit_standing_board(fp, comp, board.pitch)
         #: Its own board's colour, when that is not the module style's (a Pico is green).
         self.board_colour = board_colour_for(fp, comp, board.pitch)

@@ -75,6 +75,9 @@ def part_art_svg(card: PinoutCard, lookup: FootprintLookup) -> str | None:
         value=part.value or part.name,
         footprint_id=part.footprint_id,
         anchor=HoleCoord(0, 0),
+        # A module's layout is turned by a pin it names (``ModuleArt.landmark``): without
+        # them the PCF8574 QT, the encoder and the level shifter were the block on their card.
+        pin_names=part.pin_names,
     )
     item = _PartAlone(component, footprint, _BOARD, "top", show_pin_names=False)
     item.show_reference = False

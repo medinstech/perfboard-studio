@@ -1322,7 +1322,15 @@ cap kept the ESP32-CAM's 1.75 mm name at a pin label's size. No two parts on a l
 one place (`test_no_two_parts_on_a_module_stand_in_one_place`) except where the real board
 stacks them, and each such stack is named in that test's `STACKED` with why: the ESP32-CAM's
 camera is taped onto its micro SD socket, and its flex lies over the socket's end on its way
-to the connector. Both views paint from ONE table,
+to the connector. **A board's own names for its pins are printed only where the window
+prints none** (`ArtPart.under_names`, `fit_module_art(names_shown=)`) -- chosen 2026-11-26
+from three rendered candidates on the PCF8574 QT (the window's names only; the board's too;
+the board's only where the window's are off): beside the window's names they say every pin
+twice, and where the window's names are printed is where Adafruit put its title, so
+"PCF8574" goes with them. The pinout card names the pins round the part and shows the board
+as it is, its silkscreen names and all; the 3D view, which prints the window's names, keeps
+the default. The card hands the part its pin names, because a layout is turned by a pin it
+names (`landmark`): without them three modules were the block on their cards. Both views paint from ONE table,
 `moduleart.ART_COLOURS`, so a trimmer is the same blue in each, and the names beside the pins
 stop at parts both views show — the block it replaced said nothing about which way round a
 module was, and the names stopped short of nothing visible.
