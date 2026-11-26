@@ -81,7 +81,6 @@ from PySide6.QtGui import (
     QDrag,
     QIcon,
     QKeySequence,
-    QPainter,
     QPixmap,
     QResizeEvent,
     QShortcut,
@@ -152,9 +151,9 @@ from perfboard_studio.autoroute import (
 )
 from perfboard_studio.boardbus import BoardBus
 from perfboard_studio.boardfamily import (
-    STANDARD_PRESETS,
     BoardDesign,
     BoardPreset,
+    matching_preset,
     preset_edge_connectors,
     preset_mounting_holes,
 )
@@ -435,7 +434,15 @@ from .arrangements import (
 )
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
-from .benchguide import BenchItem, BenchView, bench_items, bench_phases, crop_around
+from .benchguide import (
+    AssemblyMode,
+    BenchItem,
+    BenchView,
+    bench_items,
+    bench_phases,
+    pin_names,
+    step_pictures,
+)
 from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
@@ -2591,20 +2598,9 @@ def _board_size_name(board: Board) -> str:
 
 
 def _matching_preset(board: Board) -> BoardPreset | None:
-    """The stocked product this board IS, if it is one.
-
-    Keyed on the grid and the family and not on the border, because a board that has been
-    given a legend may have had its border raised to fit one
-    and is still the same product.
-    """
-    for preset in STANDARD_PRESETS:
-        if (
-            preset.cols == board.cols
-            and preset.rows == board.rows
-            and preset.single_sided == board.single_sided
-        ):
-            return preset
-    return None
+    """The stocked product this board IS, if it is one -- the build guide's answer too, so
+    the board the window names is the one the guide says to take."""
+    return matching_preset(board)
 
 
 def _preset_features(
@@ -4534,7 +4530,8 @@ class MainWindow(QMainWindow):
         if stack.indexOf(home) < 0:
             stack.addWidget(home)
         if not self.home_is_showing():
-            self._layout_before_home = self.saveState(WINDOW_STATE_VERSION)
+            # The panels as they were arranged, not as assembly mode put them aside.
+            self._layout_before_home = self._assembly.hand_over()
             for dock in self.findChildren(QDockWidget):
                 dock.hide()
             self.statusBar().hide()
@@ -10618,6 +10615,9 @@ class MainWindow(QMainWindow):
         dock.hide()
         dock.visibilityChanged.connect(self._on_guide_visibility_changed)
         self._guide_pages_widget: QStackedWidget | None = None
+        # Assembly mode: the editing panels step aside while the guide is in front, and the
+        # layout saved or photographed meanwhile is the one they were in (``ui/benchguide.py``).
+        self._assembly = AssemblyMode(self, dock, self.dock_board, WINDOW_STATE_VERSION)
 
     @property
     def guide_built(self) -> bool:
@@ -10758,6 +10758,7 @@ class MainWindow(QMainWindow):
             self._in_front.discard(self.dock_guide)
         if visible and self._guide_stale:
             self._refresh_guide_panel()
+        self._assembly.follow(visible)
         # The Next button's last step depends on whether the guide is in front.
         self._refresh_workflow()
 
@@ -11042,10 +11043,10 @@ class MainWindow(QMainWindow):
             return
         self._show_build_step(item.step_index, item.holes, item.key)
 
-    def _bench_picture(self, item: BenchItem, size: QSize) -> QPixmap:
+    def _bench_picture(self, item: BenchItem, size: QSize, mini: QSize) -> tuple[QPixmap, QPixmap]:
         """The board AS IT STANDS at this step (``document_at_step``) -- a cut on the bare
         board -- zoomed onto the step's holes, the part selected, seen from the side the
-        step is done on."""
+        step is done on; and the whole board beside it (``benchguide.step_pictures``)."""
         document = self.bus.document
         guide = self.current_guide()
         if item.built:
@@ -11053,19 +11054,14 @@ class MainWindow(QMainWindow):
         else:
             at = document_at_step(document, guide, -1 if item.step_index is None else item.step_index)
         side: BoardSide = "bottom" if item.solder_side else "top"
-        scene = BoardScene(at, self.lookup, side=side, show_ratsnest=False)
+        # The picture names the step's holes itself, at its edges and on its pins.
+        scene = BoardScene(at, self.lookup, side=side, show_ratsnest=False, show_rulers=False,
+                           show_pin_names=False)
+        names: dict[HoleCoord, str] = {}
         if item.component_id is not None:
             scene.select_components([item.component_id])
-        board = at.board
-        area = crop_around(item.holes, board, side, size,
-                           lambda hole: hole_to_screen(hole, board, side))
-        pixmap = QPixmap(size)
-        pixmap.fill(QColor(theme.ACTIVE.bg_app))
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        scene.render(painter, QRectF(0, 0, size.width(), size.height()), area)
-        painter.end()
-        return pixmap
+            names = pin_names(at, self.lookup, item.component_id)
+        return step_pictures(scene, at.board, item, side, size, mini, self.devicePixelRatioF(), names)
 
     def _show_guide_sheet(self, kind: str) -> None:
         """The wire cut list, or the tracks to cut, over the bench: what is wanted in a
@@ -18451,7 +18447,8 @@ class MainWindow(QMainWindow):
         if self.home_is_showing():
             layout = None if self._sizes_after_home else self._layout_before_home
         else:
-            layout = self.saveState(WINDOW_STATE_VERSION)
+            # Assembly mode's panels put aside are not a layout either: the one before it.
+            layout = self._assembly.photograph()
         if layout is not None:
             settings.setValue(WINDOW_STATE_KEY, layout)
         settings.setValue(BOARD_COLOUR_KEY, chosen_board_colour() or "")

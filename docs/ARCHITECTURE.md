@@ -1409,6 +1409,25 @@ Two derivations must not be replaced with conventions:
   (`solder-trace-proximity`) hits. The risk the tool predicted and the measurement the
   user performs are one list, which is the whole point.
 
+The first and the last phase have things to do that are neither a part nor a connection,
+and they are data too, not prose. Phase 0's `tasks` (`PhaseTask`: cut the board to its
+hole count, drill the mounting holes while it still fits in a vice, mark A1 — or, on a
+board that prints its own legend, find where its numbering starts — and solder the
+surface-mount chips onto their adapters) each carry the holes they are about; the summary
+still says every word, so a reader of the summary alone loses nothing, and a breadboard
+gets none of the cutting and marking. Phase 8's checks end with one fitting per DIP IC
+(`_ic_fittings`), its pin 1 named as a hole, after every measurement made with no power
+and before the power-up: an IC goes into its socket last, and "socket" is not a fact the
+document records, so the sentence works for a board with none.
+
+The window's Build Guide (`ui/benchguide.py`) walks the guide as one list of items in that
+order — tasks, track cuts, steps, then the last phase's measurements as ONE item with a
+row each to tick, each look before power (the IC fittings among them) an item of its own,
+and the power-up last — and puts the editing panels aside while it is in front
+(`AssemblyMode`). The layout a session or Home keeps is the photograph taken before they
+went, never the one-panel window, so the next start does not open on a window of one
+panel. Only the builder ticks a check; Done on a step never does.
+
 ## The circuit is checked before the board
 
 `erc.py` answers the one question DRC and LVS cannot: whether the CIRCUIT can work. LVS takes

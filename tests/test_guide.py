@@ -38,7 +38,7 @@ from perfboard_studio import persist
 from perfboard_studio.autoroute import plan_autoroute
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import create_document_id_generator, create_standard_registry
-from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef
 from perfboard_studio.drc import run_drc, trace_electrical
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.geometry import format_hole
@@ -72,6 +72,7 @@ from perfboard_studio.model import (
     Conductor,
     DocumentMeta,
     HoleCoord,
+    MountingHole,
     Net,
     NetClass,
     NetNode,
@@ -971,8 +972,11 @@ def test_html_carries_every_step_and_check_as_a_tickable_item() -> None:
     html = guide_to_html(guide)
 
     boxes = html.count('type="checkbox"')
-    # Phase 0's own checks are rendered too, so the count is steps + checks exactly.
-    assert boxes == guide.total_steps + guide.checkpoint_count
+    # Phase 0's own checks and tasks are rendered too, so the count is steps + checks +
+    # tasks exactly.
+    tasks = sum(len(phase.tasks) for phase in guide.phases)
+    assert tasks == 2  # cut the board, mark A1
+    assert boxes == guide.total_steps + guide.checkpoint_count + tasks
     assert "localStorage" in html
 
 
@@ -1397,3 +1401,92 @@ def test_a_bench_check_is_exactly_what_the_guide_makes_a_check_of() -> None:
         assert counted_apart == checked, name
         seen += len(checked)
     assert seen, "some board in the repository carries a bench check, or this proves nothing"
+
+
+# ---------------------------------------------------------------------------
+# Phase 0's tasks, and each IC fitted on its own pin 1
+# ---------------------------------------------------------------------------
+
+
+def test_phase_zero_lists_its_jobs_with_the_holes_they_are_about() -> None:
+    """The summary SAYS cut the board and mark A1; the tasks are those jobs one at a time,
+    with the corners and the hole they are about, so a bench can show and tick each."""
+    guide = build_guide(routed_ne555(), REGISTRY)
+    board = guide.board
+    prep = guide.phases[0]
+    assert [task.kind for task in prep.tasks] == ["cut-board", "mark-a1"]
+    cut, mark = prep.tasks
+    assert f"{board.cols} × {board.rows}" in cut.title
+    assert cut.holes == (
+        hole(0, 0), hole(board.cols - 1, 0), hole(0, board.rows - 1),
+        hole(board.cols - 1, board.rows - 1),
+    )
+    assert mark.holes == (hole(0, 0),) and "A1" in mark.title
+    # The summary keeps every word it had, and no other phase has a task.
+    assert prep.summary == "Cut the board, mark hole A1, and get the iron and the parts ready."
+    assert not any(phase.tasks for phase in guide.phases[1:])
+    # In the JSON only where there are any.
+    phases = json.loads(guide_to_json(guide))["phases"]
+    assert [task["kind"] for task in phases[0]["tasks"]] == ["cut-board", "mark-a1"]
+    assert not any("tasks" in phase for phase in phases[1:])
+
+
+def test_mounting_holes_are_drilled_before_a1_is_marked() -> None:
+    doc = dataclasses.replace(
+        make_doc(components=(component("R1", "r-axial-4", hole(2, 2)),)),
+        mounting_holes=(
+            MountingHole(id="mh-2", at=hole(20, 12)),
+            MountingHole(id="mh-1", at=hole(3, 12)),
+        ),
+    )
+    prep = build_guide(doc, REGISTRY).phases[0]
+    assert [task.kind for task in prep.tasks] == ["cut-board", "drill", "mark-a1"]
+    drill = prep.tasks[1]
+    assert drill.title == "Drill the 2 mounting holes"
+    assert drill.holes == (hole(3, 12), hole(20, 12))
+    assert format_hole(hole(3, 12)) in drill.instruction
+
+
+def test_a_stock_board_is_taken_not_cut_and_its_own_holes_are_not_drilled() -> None:
+    """A board bought at its size with its screw holes in it: "cut the board to 24 x 18"
+    and "drill the 4 mounting holes" were instructions for a board it is not. A hole the
+    product was not sold with is still drilled, and only that one."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.commands import document_on_preset
+
+    preset = next(p for p in STANDARD_PRESETS if p.name == "5 x 7 cm" and not p.single_sided)
+    doc = document_on_preset(make_doc(components=(component("R1", "r-axial-4", hole(2, 2)),)), preset)
+    assert doc.mounting_holes
+    prep = build_guide(doc, REGISTRY).phases[0]
+    kinds = [task.kind for task in prep.tasks]
+    assert kinds[0] == "stock-board" and "cut-board" not in kinds and "drill" not in kinds
+    assert prep.tasks[0].title == f"Take a 5 x 7 cm board ({preset.cols} × {preset.rows} holes)"
+    assert "already in it" in prep.tasks[0].instruction
+    assert prep.summary.startswith("Take a 5 x 7 cm board")
+    assert "Cut" not in prep.summary and "rill" not in prep.summary
+
+    extra = MountingHole(id="mh-extra", at=hole(10, 8))
+    more = dataclasses.replace(doc, mounting_holes=(*doc.mounting_holes, extra))
+    prep = build_guide(more, REGISTRY).phases[0]
+    drill = next(task for task in prep.tasks if task.kind == "drill")
+    assert drill.title == "Drill the mounting hole" and drill.holes == (hole(10, 8),)
+    assert "drill the 1 mounting hole" in prep.summary
+
+
+def test_each_ic_is_fitted_on_its_own_pin_one_between_the_checks_and_power() -> None:
+    doc = make_doc(components=(
+        component("U2", "dip-8", hole(12, 3), value="LM358"),
+        component("U1", "dip-8", hole(3, 3), value="NE555"),
+    ))
+    closing = build_guide(doc, REGISTRY).phases[-1].checkpoints
+    fittings = [check for check in closing if check.title.startswith("Fit ")]
+    assert [check.pins for check in fittings] == [
+        (PhysicalPinRef("U1", "1"),), (PhysicalPinRef("U2", "1"),),
+    ]
+    one = format_hole(hole(3, 3))
+    assert fittings[0].title == f"Fit U1, pin 1 in hole {one}"
+    assert "U1 (NE555)" in fittings[0].instruction and one in fittings[0].instruction
+    assert all(check.blocking for check in fittings)
+    # After everything measured with no power, and right before the power-up.
+    assert closing[-1].kind == "power-on"
+    assert closing[-3:-1] == tuple(fittings)

@@ -43,7 +43,7 @@ from typing import Any
 
 from .breadboard import has_breadboard_pattern, is_breadboard, is_solderable_breadboard
 from .drc import MATERIAL_LABELS
-from .geometry import board_size_mm, format_hole, holeless_positions
+from .geometry import format_hole, holeless_positions
 from .guide import (
     JSON_OMITTED_AT_DEFAULT,
     TEMPLATE_MARGIN_MM,
@@ -54,6 +54,7 @@ from .guide import (
     GuideStep,
     LeadCut,
     PartStep,
+    PhaseTask,
     WireCut,
     WireMarkKind,
     WireTemplate,
@@ -118,6 +119,8 @@ def guide_to_json(guide: Guide, indent: int = 2) -> str:
                     "number": phase.number,
                     "title": phase.title,
                     "summary": phase.summary,
+                    # Only when there are any (phase 0's), for the reason ``language`` is.
+                    **({"tasks": [_plain(task, board=guide.board) for task in phase.tasks]} if phase.tasks else {}),
                     "steps": [_plain(step, board=guide.board) for step in phase.steps],
                     "checkpoints": [_plain(check, board=guide.board) for check in phase.checkpoints],
                 }
@@ -338,6 +341,7 @@ input[type=checkbox] { width: 1.25rem; height: 1.25rem; margin-top: .2rem; flex:
 .check { border-left: 3px solid var(--ok); }
 .check.isolation { border-left-color: var(--warn); }
 .check.blocking { border-left-color: var(--error); }
+.check.task { border-left-color: var(--accent); }
 .warnbox { background: var(--panel-2); border-left: 3px solid var(--warn);
            border-radius: 6px; padding: .6rem .9rem; margin: .5rem 0; }
 .notebox { background: var(--panel-2); border-left: 3px solid var(--line);
@@ -595,12 +599,6 @@ def _html_cuts(guide: Guide, say: Phrasebook) -> str:
     )
 
 
-def _board_mm(guide: Guide) -> str:
-    """The substrate's real size, as ``W × H mm``."""
-    width, height = board_size_mm(guide.board)
-    return f"{width:.1f} × {height:.1f} mm"
-
-
 def _html_preparation(guide: Guide, say: Phrasebook) -> str:
     phase = guide.phases[0]
     rows = "".join(f"<li>{escape(tool)}</li>" for tool in guide.tools)
@@ -614,21 +612,24 @@ def _html_preparation(guide: Guide, say: Phrasebook) -> str:
         f'<p class="sub">{escape(phase.summary)}</p>'
         f"<h3>{say('On the bench')}</h3><ul>{rows}</ul>"
         + _html_iron(guide, say)
-        + f"<h3>{say('The board')}</h3><p>"
-        + (_html_breadboard(guide, say) if has_breadboard_pattern(guide.board) else say(
-            "Cut it to {cols} × {rows} holes ({size}) and mark hole {a1} in the top-left "
-            "corner on the COMPONENT side. Every address below is counted from it, so if it "
-            "is marked wrong, everything else is.",
-            cols=guide.board.cols,
-            rows=guide.board.rows,
-            # geometry.board_size_mm, never cols*pitch: the substrate runs half a pitch
-            # past the outermost hole centres PLUS the printed border, and its docstring
-            # says nothing else may recompute it. Cutting to the recomputed number cuts a
-            # bordered board short by the border on both sides.
-            size=_board_mm(guide),
-            a1='<span class="hole">A1</span>',
-        ))
-        + f"</p>{_html_cuts(guide, say)}{checks}</section>"
+        + f"<h3>{say('The board')}</h3>"
+        # The board's jobs one at a time, each ticked like a step (guide.PhaseTask): its
+        # size, cut to the substrate's real one (geometry.board_size_mm, never cols*pitch,
+        # which cuts a bordered board short by the border on both sides), and A1 marked.
+        # A breadboard comes at its size and printed, and says which way up to lay it.
+        + (f"<p>{_html_breadboard(guide, say)}</p>" if has_breadboard_pattern(guide.board) else "")
+        + "".join(_html_task(task, f"p0-t{n}") for n, task in enumerate(phase.tasks))
+        + f"{_html_cuts(guide, say)}{checks}</section>"
+    )
+
+
+def _html_task(task: PhaseTask, dom_id: str) -> str:
+    """One of phase 0's jobs, ticked like a check."""
+    return (
+        f'<label class="check task" for="{dom_id}">'
+        f'<input type="checkbox" id="{dom_id}">'
+        f'<span class="body"><div class="title">{escape(task.title)}</div>'
+        f'<div class="note">{escape(task.instruction)}</div></span></label>'
     )
 
 

@@ -18591,8 +18591,9 @@ def test_the_guide_opens_on_the_bench_at_the_first_step_not_done() -> None:
         window._on_bench_ticked(first.key, True)
         bench.set_items(bench.items, bench._phases, window._done_steps(), 0, 0)
         assert bench.current == 1
-        assert bench.title.text() == bench.items[1].title
+        assert bench.title.text() == bench.items[1].heading
         assert not bench.picture.pixmap().isNull()
+        assert not bench.minimap.pixmap().isNull()
     finally:
         _close(window)
 
@@ -18607,6 +18608,8 @@ def test_done_next_ticks_the_step_and_the_list_agrees() -> None:
     window = _window_on(_example_document("ne555-astable"))
     try:
         bench = _bench(window)
+        # A step, which the list has a row for: phase 0's jobs come first and have none.
+        bench.show_item(next(i for i, item in enumerate(bench.items) if item.step_index is not None))
         item = bench.items[bench.current]
         bench.next.click()
         assert item.key in window._done_steps()
@@ -18642,10 +18645,13 @@ def test_a_stripboards_track_cuts_are_the_first_bench_steps() -> None:
         bench = _bench(window)
         cuts = window.current_guide().track_cuts
         assert cuts
-        firsts = bench.items[: len(cuts)]
+        # After the board's own jobs -- cut it to size, mark A1 -- and before any part.
+        jobs = [item for item in bench.items if item.kind == "task"]
+        assert jobs and bench.items[: len(jobs)] == jobs
+        firsts = bench.items[len(jobs) : len(jobs) + len(cuts)]
         assert all(item.key.startswith("cut:") and item.solder_side for item in firsts)
         assert all(item.step_index is None for item in firsts)
-        assert bench.items[0].title.split(" ·")[0]
+        assert firsts[0].title.split(" ·")[0]
         assert bench.chips["tracks"].isVisibleTo(bench)
     finally:
         _close(window)
@@ -18683,13 +18689,60 @@ def test_the_phase_bar_names_the_current_phase_in_full_and_the_others_on_hover()
     try:
         bench = _bench(window)
         bar = bench.phase_bar
-        names = [name for name, _count in bar._phases]
+        names = [name for name, _count, _done in bar._phases]
         assert 0 <= bar._current < len(names)
         assert bench.items[bench.current].phase.title in names[bar._current]
         bar.resize(900, 30)
         other = next(i for i in range(len(names)) if i != bar._current)
         middle = bar._segments()[other].center().x()
         assert bar.phase_at(middle) == other
+    finally:
+        _close(window)
+
+
+def test_assembly_mode_puts_the_panels_aside_and_back_as_they_were() -> None:
+    """With the guide in front the editing panels step aside and the bench has the window;
+    the board's tab brings them back, the tab that was in front of each group in front
+    again. Meanwhile the layout to save or to go Home over is the one they were in."""
+    from PySide6.QtWidgets import QApplication, QDockWidget, QWidget
+
+    from perfboard_studio.ui.main import WINDOW_STATE_VERSION
+
+    def settle() -> None:
+        for _ in range(6):
+            QApplication.processEvents()
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.resize(1600, 1000)
+        window.show()
+        settle()
+        views = {window.dock_guide, *window.tabifiedDockWidgets(window.dock_guide)}
+        others = [d for d in window.findChildren(QDockWidget) if d not in views and not d.isHidden()]
+        assert others
+        fronts = {d.objectName() for d in others if not d.visibleRegion().isEmpty()}
+        assert fronts and len(fronts) < len(others), "some panel was a tab behind another"
+
+        window._raise_view(window.dock_guide)
+        settle()
+        assert window._assembly.active
+        assert all(d.isHidden() for d in others)
+        assert not window.dock_guide.visibleRegion().isEmpty()
+        # The photograph, not the window of one panel, is what a session or Home keeps.
+        assert window._assembly.photograph() != window.saveState(WINDOW_STATE_VERSION)
+
+        window.show_home(QWidget())
+        settle()
+        assert not window._assembly.active
+        window.leave_home()
+        settle()
+        assert window._assembly.active, "back from Home onto the guide is back on the bench"
+
+        window._raise_view(window.dock_board)
+        settle()
+        assert not window._assembly.active
+        assert not any(d.isHidden() for d in others)
+        assert {d.objectName() for d in others if not d.visibleRegion().isEmpty()} == fronts
     finally:
         _close(window)
 
@@ -18703,7 +18756,9 @@ def test_a_check_ticked_on_the_bench_is_kept_with_the_steps() -> None:
     window = _window_on(_example_document("ne555-astable"))
     try:
         bench = _bench(window)
-        with_checks = next(i for i, item in enumerate(bench.items) if item.phase.checkpoints)
+        with_checks = next(
+            i for i, item in enumerate(bench.items) if item.phase.checkpoints and item.kind != "check"
+        )
         bench.show_item(with_checks)
         phase = bench.items[with_checks].phase
         boxes = [b for b in bench.findChildren(QCheckBox) if b.text().startswith("Ω")]
@@ -19685,7 +19740,10 @@ def test_the_last_step_ends_the_build_and_ticks_no_check_for_the_builder(monkeyp
     """The last step's button said "Done, next" and did nothing: the release walkthrough
     pressed it at 23 of 23 with nowhere to go. It says "Done ✓", and after it the ending
     lists the checks not ticked -- unticked, because only the builder measured them -- and
-    offers the export and Save."""
+    offers the export and Save.
+
+    The last phase's checks are items of their own, each pressed Done by the builder who
+    made it: those are ticked, by them. Every other phase's are ticked only by hand."""
     from PySide6.QtWidgets import QCheckBox
 
     from perfboard_studio.ui.benchguide import check_key
@@ -19706,14 +19764,24 @@ def test_the_last_step_ends_the_build_and_ticks_no_check_for_the_builder(monkeyp
         done = window._done_steps()
         assert all(item.key in done for item in bench.items)
         phases = window.current_guide().phases
-        checks = list(dict.fromkeys(check_key(p, c) for p in phases for c in p.checkpoints))
+        # The last phase has no step and every short test: its measurements are one item
+        # with a row each, ticked by hand; each look before power is an item of its own.
+        closing = phases[-1]
+        looks = [c for c in closing.checkpoints if c.kind not in ("continuity", "isolation", "resistance")]
+        pressed = [check_key(closing, c) for c in looks]
+        assert pressed and [i.key for i in bench.items if i.phase is closing] == [
+            f"measure:{closing.number}", *pressed
+        ]
+        assert closing.checkpoints[-1].kind == "power-on" and bench.items[-1].key == pressed[-1]
+        checks = [
+            key for key in dict.fromkeys(
+                check_key(p, c) for p in phases for c in p.checkpoints
+            )
+            if key not in pressed
+        ]
         assert checks and not any(key in done for key in checks), "a check ticked for the builder"
         boxes = [b for b in bench.ending.findChildren(QCheckBox) if not b.isHidden()]
         assert len(boxes) == len(checks) and not any(b.isChecked() for b in boxes)
-        # The last phase has no step and every short test: the bench showed none of them.
-        closing = phases[-1]
-        assert closing.checkpoints and not any(item.phase is closing for item in bench.items)
-        assert any(b.text() == f"Ω  {closing.checkpoints[0].title}" for b in boxes)
         boxes[0].setChecked(True)
         assert checks[0] in window._done_steps()
 
@@ -19760,18 +19828,21 @@ def test_a_phases_checks_scroll_in_a_short_narrow_panel() -> None:
     window = _window_on(_example_document("ne555-astable"))
     try:
         bench = _bench(window)
-        most = max(range(len(bench.items)), key=lambda i: len(bench.items[i].phase.checkpoints))
+        most = max(
+            (i for i, item in enumerate(bench.items) if item.kind != "check"),
+            key=lambda i: len(bench.items[i].phase.checkpoints),
+        )
         bench.show_item(most)
         window.resize(1280, 720)
         window.show()
         QApplication.processEvents()
         bench.checks.activate()
-        laid = (bench.checks.itemAt(i).widget() for i in range(bench.checks.count()))
-        boxes = [b for b in laid if isinstance(b, QCheckBox)]
+        rows = [bench.checks.itemAt(i).widget() for i in range(bench.checks.count())]
+        boxes = [row.findChild(QCheckBox) for row in rows if row is not None]
         assert len(boxes) >= 5
         for box in boxes:
             assert box.height() >= box.sizeHint().height(), "a check squeezed under its own height"
-        tops = [b.y() for b in boxes]
+        tops = [row.y() for row in rows]
         assert all(b - a >= boxes[0].sizeHint().height() for a, b in itertools.pairwise(tops))
         assert bench.checks_scroll.verticalScrollBar().maximum() > 0
         assert bench.checks_scroll.height() >= 2 * boxes[0].sizeHint().height()
@@ -20396,12 +20467,14 @@ def test_a_bench_steps_rows_leave_with_it() -> None:
     window = _window_on(_example_document("ne555-astable"))
     try:
         bench = _bench(window)
-        bench.show_item(0)
+        first = next(i for i, item in enumerate(bench.items) if item.kind == "part")
+        bench.show_item(first)
         facts = [bench.facts.itemAt(i).widget() for i in range(bench.facts.count())]
         checks = [bench.checks.itemAt(i).widget() for i in range(bench.checks.count())]
-        old = [widget for widget in (*facts, *checks) if widget is not None]
+        how = [bench.how.itemAt(i).widget() for i in range(bench.how.count())]
+        old = [widget for widget in (*facts, *checks, *how) if widget is not None]
         assert old
-        bench.show_item(1)
+        bench.show_item(first + 1)
         assert all(widget.isHidden() for widget in old)
     finally:
         _close(window)
@@ -20588,7 +20661,7 @@ def test_each_cable_is_a_bench_step_after_closing_up() -> None:
         ends = [value for _what, value in cable.facts]
         assert "Main JA pin 1 → Remote JB pin 1" in ends
         assert "Main JA pin 2 → Remote JB pin 2" in ends
-        assert cable.notes and cable.phase.checkpoints
+        assert cable.how and cable.phase.checkpoints
         keys = {check_key(cable.phase, check) for check in cable.phase.checkpoints}
         assert all(key.startswith("check:9:") for key in keys)
         closing = {check_key(p, c) for p in bench._phases[:-1] for c in p.checkpoints}

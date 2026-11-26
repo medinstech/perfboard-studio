@@ -801,6 +801,42 @@ STANDARD_PRESETS: tuple[BoardPreset, ...] = tuple(
 )
 
 
+def matching_preset(board: Board) -> BoardPreset | None:
+    """The stocked product this board IS, if it is one: what the window names the board
+    and what the build guide tells the builder to buy instead of to cut.
+
+    Keyed on the grid and the family and not on the border, because a board that has been
+    given a legend may have had its border raised to fit one and is still the same product.
+    """
+    for preset in STANDARD_PRESETS:
+        if (
+            preset.cols == board.cols
+            and preset.rows == board.rows
+            and preset.single_sided == board.single_sided
+        ):
+            return preset
+    return None
+
+
+def factory_mounting_holes(
+    preset: BoardPreset, board: Board, holes: tuple[MountingHole, ...]
+) -> tuple[MountingHole, ...]:
+    """Those of ``holes`` the stock board is sold with (``preset_mounting_holes``): the
+    same place and bore. Any other is a hole somebody has to drill."""
+    sold = preset_mounting_holes(preset, board)
+
+    def came_with(hole: MountingHole) -> bool:
+        return any(
+            made.at == hole.at
+            and math.isclose(made.diameter, hole.diameter, abs_tol=0.05)
+            and math.isclose(made.offset_x_mm, hole.offset_x_mm, abs_tol=0.05)
+            and math.isclose(made.offset_y_mm, hole.offset_y_mm, abs_tol=0.05)
+            for made in sold
+        )
+
+    return tuple(hole for hole in holes if came_with(hole))
+
+
 def board_from_preset(preset: BoardPreset, base: Board) -> Board:
     """``base`` made into a stock board: the product's grid, border, legend, look and
     print, over what a stock board has never decided -- the board TYPE (a stripboard

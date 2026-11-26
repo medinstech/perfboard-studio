@@ -151,3 +151,12 @@ def test_the_window_takes_the_design_to_a_new_board_and_asks_which(tmp_path, mon
     finally:
         window._saved_document = window.bus.document
         window.close()
+
+
+def test_a_breadboard_is_not_cut_or_marked_and_its_ics_are_not_fitted_twice() -> None:
+    """It comes at its size with its addresses printed, and its ICs went in whole across
+    the groove in phase 2 -- so phase 0 has no board to cut or corner to mark, and phase 8
+    no IC to fit."""
+    guide = build_guide(_wired(), get_footprint)
+    assert guide.phases[0].tasks == ()
+    assert not [c for c in guide.phases[-1].checkpoints if c.title.startswith("Fit ")]

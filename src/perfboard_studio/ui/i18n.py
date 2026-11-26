@@ -1225,9 +1225,55 @@ TURKISH: Mapping[str, str] = {
     "Cut list": "Kesim listesi",
     "Track cuts": "Şerit kesimleri",
     "Overview": "Genel bakış",
-    "Polarity": "Yön",
     "Wire to cut": "Kesilecek tel",
     "◀  Step by step": "◀  Adım adım",
+    # The bench's assembly mode (ui/benchguide.py): the instruction, said from the step's facts.
+    "Which way round": "Takma yönü",
+    "Measure before power": "Güç vermeden önce ölçün",
+    "With no power on the board, measure each pair below and tick it when it reads what it should.": (
+        "Kartta güç yokken aşağıdaki her çifti ölçün ve beklenen değeri okuyunca işaretleyin."
+    ),
+    "Do not power the board until this is right.": "Bu doğru olmadan karta güç vermeyin.",
+    "What you should see": "Görmeniz gereken",
+    "Space: done  ·  ← →: steps": "Boşluk: yapıldı  ·  ← →: adımlar",
+    "Solder side — turn the board over": "Lehim yüzü — kartı çevirin",
+    "Bend the legs to {mm} mm apart.": "Bacakları {mm} mm aralıkla bükün.",
+    "Fit it from the component side into {holes}.": "Parça yüzünden {holes} deliklerine takın.",
+    "Fit it from the solder side into {holes}.": "Lehim yüzünden {holes} deliklerine takın.",
+    "Turn the board over, solder each leg and trim it.": (
+        "Kartı çevirin, her bacağı lehimleyin ve artığını kesin."
+    ),
+    "Solder each leg on the component side and trim it.": (
+        "Her bacağı parça yüzünde lehimleyin ve artığını kesin."
+    ),
+    "Press it into {holes}.": "{holes} deliklerine bastırarak takın.",
+    "Bring each lead to its hole, as listed below.": "Her ucu, aşağıda yazan deliğine getirin.",
+    "Cut {length} mm of AWG {awg} wire, {colour}, and strip {strip} mm off each end.": (
+        "{length} mm AWG {awg} tel kesin ({colour}) ve iki ucundan {strip} mm soyun."
+    ),
+    "Cut {length} mm of bare AWG {awg} wire.": "{length} mm çıplak AWG {awg} tel kesin.",
+    "Lay it from {a} to {b}, along the path in the picture.": (
+        "{a} deliğinden {b} deliğine, resimdeki yoldan döşeyin."
+    ),
+    "Solder both ends.": "İki ucunu lehimleyin.",
+    "Press both ends in.": "İki ucunu da bastırarak takın.",
+    "Tin the pads from {a} to {b}.": "{a} deliğinden {b} deliğine kadar pedleri kalaylayın.",
+    "Run solder along them into one unbroken line.": (
+        "Lehimi pedler boyunca kesintisiz tek bir çizgi olacak şekilde yürütün."
+    ),
+    "Lay a bare wire along the pads from {a} to {b}.": (
+        "{a} deliğinden {b} deliğine kadar pedlerin üzerine çıplak bir tel yatırın."
+    ),
+    "Solder it down at every pad it crosses.": "Üzerinden geçtiği her pede lehimleyin.",
+    "Bend the leg along the pads from {a} to {b}.": (
+        "Bacağı {a} deliğinden {b} deliğine kadar pedler boyunca bükün."
+    ),
+    "Drill out the copper at {hole}, turning the bit by hand.": (
+        "{hole} deliğindeki bakırı, matkap ucunu elle çevirerek kazıyın."
+    ),
+    "Check with the meter that the strip is open across it.": (
+        "Ölçü aletiyle şeridin orada kesildiğini kontrol edin."
+    ),
     "Cut": "Kes",
     "Colour": "Renk",
     "Yellow": "Sarı",

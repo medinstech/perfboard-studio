@@ -310,6 +310,47 @@
       "number": 0,
       "title": "Hazırlık",
       "summary": "Kartı kesin, A1 deliğini işaretleyin ve havyayı ısıtıp parçaları hazırlayın.",
+      "tasks": [
+        {
+          "kind": "cut-board",
+          "title": "Kartı 32 × 22 delik olacak şekilde kesin",
+          "instruction": "Kenarlarıyla birlikte 81.3 × 55.9 mm kart eder. Kesim çizgisini iki yüzden de çizin, kartı bir masanın kenarında kırın ve kenarı eğeyle düzeltin.",
+          "holes": [
+            {
+              "col": 0,
+              "row": 0,
+              "ref": "A1"
+            },
+            {
+              "col": 31,
+              "row": 0,
+              "ref": "AF1"
+            },
+            {
+              "col": 0,
+              "row": 21,
+              "ref": "A22"
+            },
+            {
+              "col": 31,
+              "row": 21,
+              "ref": "AF22"
+            }
+          ]
+        },
+        {
+          "kind": "mark-a1",
+          "title": "A1 deliğini işaretleyin",
+          "instruction": "Parça yüzünden bakınca sol üstteki A1 deliğinin yanına, iki yüzde de kalemle bir nokta koyun. Bu rehberdeki her adres ondan sayılır; kart ters çevrildiğinde köşeleri ayırt etmenin tek yolu da odur.",
+          "holes": [
+            {
+              "col": 0,
+              "row": 0,
+              "ref": "A1"
+            }
+          ]
+        }
+      ],
       "steps": [],
       "checkpoints": []
     },
@@ -2175,17 +2216,22 @@
         },
         {
           "kind": "polarity",
-          "title": "Entegreleri takın, 1. pin gösterildiği gibi",
-          "instruction": "U1 entegresini ancak şimdi soketine — soket takmadıysanız doğrudan karta — çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir yüzeyde düzeltin.",
-          "expected": "Her çentik ve nokta çıktıdakiyle aynı yöne bakıyor.",
+          "title": "U1 entegresini takın, 1. pin B3 deliğine",
+          "instruction": "U1 (NE555) entegresini ancak şimdi soketine — soket takmadıysanız doğrudan karta — takın: 1. pin, yani çentiğin ya da noktanın yanındaki bacak, B3 deliğine girer. Önce bacaklarını düz bir yüzeyde düzeltin ve elinize almadan önce topraklı bir şeye dokunun.",
+          "expected": "Çentik B3 deliği tarafında ve her bacak kendi deliğinde — hiçbiri gövdenin altına kıvrılmamış.",
           "holes": [],
-          "pins": [],
+          "pins": [
+            {
+              "component_ref": "U1",
+              "pin": "1"
+            }
+          ],
           "blocking": true
         },
         {
           "kind": "power-on",
           "title": "İlk enerji, akım sınırlı",
-          "instruction": "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini beklediğiniz değerin biraz üstüne ayarlayın. Açarken akımı izleyin ve eliniz şalterde olsun.",
+          "instruction": "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini beklediğiniz değerin biraz üstüne ayarlayın. Açarken akımı izleyin ve eliniz şalterde olsun. Ayarlanacak bir akım sınırı yoksa kaynağa seri küçük bir direnç ya da sigorta bağlayın veya kartı USB'den besleyin ve eliniz, çekmek için kabloda olsun.",
           "expected": "Akım aşağı yukarı beklediğiniz değerde oturur. Sınıra dayanırsa hemen kapatın ve yalıtım kontrollerine geri dönün — bir yerde köprü var.",
           "holes": [],
           "pins": [],

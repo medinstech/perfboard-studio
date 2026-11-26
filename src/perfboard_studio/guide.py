@@ -57,6 +57,7 @@ from dataclasses import dataclass
 from functools import cache, partial
 from typing import TYPE_CHECKING, Literal
 
+from .boardfamily import BoardPreset, factory_mounting_holes, matching_preset
 from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_electrical
@@ -72,6 +73,7 @@ from .footprints import (
 )
 from .geometry import (
     all_pin_holes,
+    board_size_mm,
     column_label,
     edge_connector_holes,
     entry_side,
@@ -105,6 +107,7 @@ from .model import (
     HoleCoord,
     LegendAxis,
     Mm,
+    MountingHole,
     Net,
     NetClass,
     PerfDocument,
@@ -665,6 +668,37 @@ class Checkpoint:
 
 
 # ---------------------------------------------------------------------------
+# Tasks -- what phase 0 asks of a board before anything goes on it
+# ---------------------------------------------------------------------------
+
+type TaskKind = Literal[
+    "cut-board",  # cut the board to its hole count
+    "stock-board",  # a board sold at its size: take one, nothing to cut
+    "mark-a1",  # mark the corner every address is counted from
+    "find-a1",  # a board that prints its own legend: find where it starts
+    "drill",  # the mounting holes, before anything is soldered
+    "adapters",  # the surface-mount chips onto their adapters, at a clear bench
+]
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseTask:
+    """One job that is neither a part nor a connection, done before the phase's steps.
+
+    Phase 0 has always SAID these, in its summary; as tasks they are also things to do and
+    tick, one at a time, with the holes they are about -- which is what a builder at the
+    bench needs from "mark hole A1" more than a clause in a sentence. The summary keeps
+    every word, so a reader of the summary alone loses nothing.
+    """
+
+    kind: TaskKind
+    title: str
+    instruction: str
+    #: The holes it is about: the board's corners, A1, the mounting holes.
+    holes: tuple[HoleCoord, ...] = ()
+
+
+# ---------------------------------------------------------------------------
 # The guide
 # ---------------------------------------------------------------------------
 
@@ -688,6 +722,10 @@ class GuidePhase:
     summary: str
     steps: tuple[GuideStep, ...]
     checkpoints: tuple[Checkpoint, ...]
+    #: Done before the steps (:class:`PhaseTask`); only phase 0 has any. They do not make a
+    #: phase non-empty: a phase is counted by what is placed and measured in it, which is
+    #: what every count of phases in a guide ever written was.
+    tasks: tuple[PhaseTask, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -844,6 +882,7 @@ def build_guide(
             ),
             steps=tuple(by_phase[number]),
             checkpoints=tuple(checkpoints.get(number, ())),
+            tasks=_preparation_tasks(doc, say, adapters) if number == 0 else (),
         )
         for number in sorted(PHASE_TITLES)
     )
@@ -1209,13 +1248,19 @@ def _phase_summary(
     # is nothing to cut and no corner to mark -- only which way up to lay it, the same
     # sentence the solderless breadboard's guide opens on.
     pattern = has_breadboard_pattern(board)
-    parts: list[str] = [] if pattern else [say("Cut the board")]
-    if doc.mounting_holes:
-        count = len(doc.mounting_holes)
-        sizes = ", ".join(f"{d:g} mm" for d in sorted({m.diameter for m in doc.mounting_holes}))
+    stock, drilled = _board_and_drilling(doc)
+    parts: list[str] = (
+        [] if pattern
+        else [say("Cut the board")] if stock is None
+        else [say("take a {name} board ({cols} × {rows} holes)",
+                  name=stock.name, cols=board.cols, rows=board.rows)]
+    )
+    if drilled:
+        count = len(drilled)
+        sizes = ", ".join(f"{d:g} mm" for d in sorted({m.diameter for m in drilled}))
         where = ", ".join(
             format_hole(m.at, board)
-            for m in sorted(doc.mounting_holes, key=lambda m: (m.at.row, m.at.col))
+            for m in sorted(drilled, key=lambda m: (m.at.row, m.at.col))
         )
         # Parenthesised rather than run on with a dash: this clause sits inside a comma
         # list, and a second comma list beside it reads as one long ambiguous string.
@@ -1255,7 +1300,7 @@ def _phase_summary(
     if not pattern and (numbering := _printed_numbering(board, say)) is not None:
         summary += " " + numbering
 
-    if doc.mounting_holes:
+    if drilled:
         # Its own sentence, because it is an instruction about ORDER rather than another
         # thing to do: swarf brushes off a bare board and digs out of a finished one, and
         # a board that still has to go in a vice should not have parts on it yet.
@@ -1296,6 +1341,135 @@ def _phase_summary(
             across=across,
         )
     return summary
+
+
+def _board_and_drilling(doc: PerfDocument) -> tuple[BoardPreset | None, tuple[MountingHole, ...]]:
+    """The stock board this is, if it is one (``boardfamily.matching_preset``), and the
+    mounting holes somebody has to drill: all of them on a board cut from a sheet, and on a
+    stock board only those it was not sold with. A breadboard pattern is neither cut nor
+    bought by its grid here, so it is no stock board."""
+    if has_breadboard_pattern(doc.board):
+        return None, doc.mounting_holes
+    stock = matching_preset(doc.board)
+    if stock is None:
+        return None, doc.mounting_holes
+    sold = {hole.id for hole in factory_mounting_holes(stock, doc.board, doc.mounting_holes)}
+    return stock, tuple(hole for hole in doc.mounting_holes if hole.id not in sold)
+
+
+def _preparation_tasks(
+    doc: PerfDocument, say: Phrasebook, adapters: tuple[tuple[str, str, int], ...]
+) -> tuple[PhaseTask, ...]:
+    """Phase 0's jobs, in the order they are done: the board cut to size, its mounting
+    holes drilled while it can still go in a vice, its A1 marked once the swarf is off, and
+    the surface-mount chips onto their adapters at a clear bench. A board that comes at its
+    size with its addresses printed -- either kind of breadboard -- is not cut or marked."""
+    board = doc.board
+    pattern = has_breadboard_pattern(board)
+    origin = HoleCoord(0, 0)
+    tasks: list[PhaseTask] = []
+    stock, drilled = _board_and_drilling(doc)
+    last_col, last_row = board.cols - 1, board.rows - 1
+    corners = (
+        origin,
+        HoleCoord(last_col, 0),
+        HoleCoord(0, last_row),
+        HoleCoord(last_col, last_row),
+    )
+    if stock is not None:
+        # Bought at this size with its screw holes in it: cutting it and drilling them
+        # are instructions for a board this is not.
+        sold = [m for m in doc.mounting_holes if m not in drilled]
+        instruction = say("It is sold at this size, so there is nothing to cut.")
+        if sold:
+            instruction += " " + say(
+                "Its screw holes are already in it, at {where}.",
+                where=", ".join(
+                    format_hole(m.at, board) for m in sorted(sold, key=lambda m: (m.at.row, m.at.col))
+                ),
+            )
+        tasks.append(PhaseTask(
+            kind="stock-board",
+            title=say("Take a {name} board ({cols} × {rows} holes)",
+                      name=stock.name, cols=board.cols, rows=board.rows),
+            instruction=instruction,
+            holes=corners,
+        ))
+    elif not pattern:
+        width, height = board_size_mm(board)
+        tasks.append(PhaseTask(
+            kind="cut-board",
+            title=say("Cut the board to {cols} × {rows} holes", cols=board.cols, rows=board.rows),
+            instruction=say(
+                "That is {size} of board, its edges included. Score both faces along the "
+                "line, snap it over the edge of a table and file the edge smooth.",
+                size=f"{width:.1f} × {height:.1f} mm",
+            ),
+            holes=corners,
+        ))
+    if drilled:
+        mounts = sorted(drilled, key=lambda m: (m.at.row, m.at.col))
+        sizes = ", ".join(f"{d:g} mm" for d in sorted({m.diameter for m in mounts}))
+        where = ", ".join(format_hole(m.at, board) for m in mounts)
+        tasks.append(PhaseTask(
+            kind="drill",
+            title=(
+                say("Drill the mounting hole")
+                if len(mounts) == 1
+                else say("Drill the {count} mounting holes", count=len(mounts))
+            ),
+            instruction=say(
+                "{sizes} at {where}. Drill before anything is soldered — the board can "
+                "still go in a vice, and swarf brushes off a bare board instead of having "
+                "to be picked out of a built one.",
+                sizes=sizes,
+                where=where,
+            ),
+            holes=tuple(m.at for m in mounts),
+        ))
+    if not pattern:
+        if board.labels is None:
+            tasks.append(PhaseTask(
+                kind="mark-a1",
+                title=say("Mark hole {hole}", hole=format_hole(origin, board)),
+                instruction=say(
+                    "Put a dot of marker beside {hole}, the top-left hole seen from the "
+                    "component side, on both faces. Every address in this guide is counted "
+                    "from it, and once the board is turned over it is the only way to tell "
+                    "the corners apart.",
+                    hole=format_hole(origin, board),
+                ),
+                holes=(origin,),
+            ))
+        else:
+            tasks.append(PhaseTask(
+                kind="find-a1",
+                title=say("Find where the board's numbering starts"),
+                instruction=say(
+                    "This board prints its own addresses. Lay it component side up with "
+                    "the corner its numbering starts in at the top left, where {hole} is "
+                    "in the pictures.",
+                    hole=format_hole(origin, board),
+                ),
+                holes=(origin,),
+            ))
+    if adapters:
+        tasks.append(PhaseTask(
+            kind="adapters",
+            title=say("Solder the chips onto their adapters"),
+            instruction=say(
+                "Solder the surface-mount chips onto their adapters first: {chips}. Line each "
+                "chip's pin-1 dot up with the adapter's pin 1, tack one corner leg, check it "
+                "is square, then do the rest with plenty of flux — and look along every leg "
+                "under a magnifier for a bridge. Once the adapter is on the board, nobody can "
+                "reach those legs.",
+                chips=say.joined([
+                    say("{ref} ({package})", ref=ref, package=package)
+                    for ref, package, _ in adapters
+                ]),
+            ),
+        ))
+    return tuple(tasks)
 
 
 def _breadboard_phase_summary(
@@ -2996,39 +3170,7 @@ def _closing_checks(
             )
         )
 
-    dips = [
-        component.ref
-        for component in doc.components
-        for footprint in [lookup(component.footprint_id)]
-        if footprint is not None and footprint.body.archetype == "dip"
-    ]
-    if dips:
-        checks.append(
-            Checkpoint(
-                kind="polarity",
-                title=say("Fit the ICs, pin 1 as shown"),
-                # Plural agreement on the actual count, and "sockets" is not a fact:
-                # nothing in the document records whether one was fitted, so the
-                # sentence has to work for a board where none was.
-                instruction=(
-                    say(
-                        "Only now put {parts} into its socket, or straight into the board "
-                        "if you did not fit one, notch to the end the sheet marks. "
-                        "Straighten the legs on a flat surface first.",
-                        parts=", ".join(sorted(dips)),
-                    )
-                    if len(dips) == 1
-                    else say(
-                        "Only now put {parts} into their sockets, or straight into the board "
-                        "if you did not fit one, notch to the end the sheet marks. "
-                        "Straighten the legs on a flat surface first.",
-                        parts=", ".join(sorted(dips)),
-                    )
-                ),
-                expected=say("Every notch and dot pointing the same way as the sheet."),
-                blocking=True,
-            )
-        )
+    checks.extend(_ic_fittings(doc, lookup, say))
 
     checks.append(
         Checkpoint(
@@ -3037,7 +3179,9 @@ def _closing_checks(
             instruction=say(
                 "Set the supply to the circuit's voltage and the current limit to a little "
                 "above what you expect it to draw. Watch the current as it comes up, and "
-                "keep a hand on the switch."
+                "keep a hand on the switch. With no current limit to set, put a small "
+                "resistor or a fuse in series with the supply, or power it from USB with a "
+                "hand on the cable to pull it."
             ),
             expected=say(
                 "Current settles at roughly what you expected. If it runs into the limit, "
@@ -3048,6 +3192,56 @@ def _closing_checks(
         )
     )
     return checks
+
+
+def _ic_fittings(
+    doc: PerfDocument, lookup: FootprintLookup, say: Phrasebook
+) -> list[Checkpoint]:
+    """One fitting per IC, after the checks made with no power and before the power-up:
+    which hole its pin 1 goes in, which is the one thing about it that can go wrong.
+
+    One each rather than one for them all, because each is a thing to do and look at in
+    its own place on the board -- and its pin 1 is a hole, named, not "as the sheet shows".
+    "Socket" is not a fact: nothing in the document records whether one was fitted, so
+    the sentence has to work for a board where none was. Not on a breadboard, where the
+    ICs went in whole in phase 2.
+    """
+    if is_breadboard(doc.board):
+        return []
+    fittings: list[tuple[str, Checkpoint]] = []
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None or footprint.body.archetype != "dip":
+            continue
+        pin_one = next(
+            (at for pin, at in all_pin_holes(component, footprint) if pin.number == "1"), None
+        )
+        hole = format_hole(pin_one, doc.board) if pin_one is not None else "?"
+        named = (
+            say("{ref} ({value})", ref=component.ref, value=component.value)
+            if component.value
+            else component.ref
+        )
+        fittings.append((component.ref, Checkpoint(
+            kind="polarity",
+            title=say("Fit {ref}, pin 1 in hole {hole}", ref=component.ref, hole=hole),
+            instruction=say(
+                "Only now put {part} into its socket, or straight into the board if you did "
+                "not fit one: pin 1, the leg beside the notch or the dot, goes in hole {hole}. "
+                "Straighten the legs on a flat surface first, and touch something earthed "
+                "before you pick it up.",
+                part=named,
+                hole=hole,
+            ),
+            expected=say(
+                "The notch at the end with hole {hole}, and every leg in its hole — none folded under "
+                "the body.",
+                hole=hole,
+            ),
+            pins=(PhysicalPinRef(component.ref, "1"),),
+            blocking=True,
+        )))
+    return [check for _ref, check in sorted(fittings, key=lambda entry: entry[0])]
 
 
 def _is_power_pair(doc: PerfDocument, name_a: str, name_b: str) -> bool:

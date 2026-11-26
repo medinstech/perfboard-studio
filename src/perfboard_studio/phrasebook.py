@@ -420,6 +420,7 @@ TURKISH: dict[str, str] = {
         "Entegreleri takın, son kontrolleri yapın ve akım sınırı altında enerji verin."
     ),
     "Cut the board": "Kartı kesin",
+    "take a {name} board ({cols} × {rows} holes)": "bir {name} kart alın ({cols} × {rows} delik)",
     "drill the {count} mounting hole ({sizes} at {where})": (
         "{count} montaj deliğini delin ({sizes}, yeri: {where})"
     ),
@@ -656,6 +657,43 @@ TURKISH: dict[str, str] = {
         "bacaklara kimse ulaşamaz."
     ),
     "{ref} ({package})": "{ref} ({package})",
+    # Phase 0's tasks (guide.PhaseTask): the summary's clauses, as things to do one by one.
+    "Cut the board to {cols} × {rows} holes": "Kartı {cols} × {rows} delik olacak şekilde kesin",
+    "Take a {name} board ({cols} × {rows} holes)": "Bir {name} kart alın ({cols} × {rows} delik)",
+    "It is sold at this size, so there is nothing to cut.": (
+        "Bu boyda satılır; kesilecek bir şey yok."
+    ),
+    "Its screw holes are already in it, at {where}.": "Vida delikleri üzerinde hazır: {where}.",
+    "That is {size} of board, its edges included. Score both faces along the line, snap it "
+    "over the edge of a table and file the edge smooth.": (
+        "Kenarlarıyla birlikte {size} kart eder. Kesim çizgisini iki yüzden de çizin, kartı "
+        "bir masanın kenarında kırın ve kenarı eğeyle düzeltin."
+    ),
+    "Drill the mounting hole": "Montaj deliğini delin",
+    "Drill the {count} mounting holes": "{count} montaj deliğini delin",
+    "{sizes} at {where}. Drill before anything is soldered — the board can still go in a "
+    "vice, and swarf brushes off a bare board instead of having to be picked out of a built "
+    "one.": (
+        "{where} konumunda {sizes}. Delme işini hiçbir şey lehimlenmeden yapın — kart hâlâ "
+        "mengeneye takılabilir ve talaş, kurulmuş bir karttan tek tek ayıklanmak yerine "
+        "çıplak karttan fırçayla silinir."
+    ),
+    "Mark hole {hole}": "{hole} deliğini işaretleyin",
+    "Put a dot of marker beside {hole}, the top-left hole seen from the component side, on "
+    "both faces. Every address in this guide is counted from it, and once the board is "
+    "turned over it is the only way to tell the corners apart.": (
+        "Parça yüzünden bakınca sol üstteki {hole} deliğinin yanına, iki yüzde de kalemle "
+        "bir nokta koyun. Bu rehberdeki her adres ondan sayılır; kart ters çevrildiğinde "
+        "köşeleri ayırt etmenin tek yolu da odur."
+    ),
+    "Find where the board's numbering starts": "Kartın numaralandırmasının başladığı köşeyi bulun",
+    "This board prints its own addresses. Lay it component side up with the corner its "
+    "numbering starts in at the top left, where {hole} is in the pictures.": (
+        "Bu kartın adresleri üzerinde basılı. Kartı parça yüzü yukarıda, numaralandırmanın "
+        "başladığı köşe sol üstte — resimlerde {hole} deliğinin olduğu yerde — olacak "
+        "şekilde koyun."
+    ),
+    "Solder the chips onto their adapters": "Çipleri adaptörlerine lehimleyin",
     "Key slot on the side of the pin-1 row; pin 1 in {hole} (the cable's red stripe goes "
     "to pin 1)": (
         "Kilit yuvası 1. pin sırası tarafında; 1. pin {hole} deliğine (kablonun kırmızı "
@@ -837,30 +875,31 @@ TURKISH: dict[str, str] = {
         "Her şerit, bant ve düz taraf çıktının gösterdiği yöne bakıyor. Ters takılmış bir "
         "elektrolitik gürültüyle bozulur, ters bir diyot ise sessizce."
     ),
-    "Fit the ICs, pin 1 as shown": "Entegreleri takın, 1. pin gösterildiği gibi",
-    "Only now put {parts} into its socket, or straight into the board if you did not fit "
-    "one, notch to the end the sheet marks. Straighten the legs on a flat surface first.": (
-        "{parts} entegresini ancak şimdi soketine — soket takmadıysanız doğrudan karta — "
-        "çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir "
-        "yüzeyde düzeltin."
+    "Fit {ref}, pin 1 in hole {hole}": "{ref} entegresini takın, 1. pin {hole} deliğine",
+    "Only now put {part} into its socket, or straight into the board if you did not fit "
+    "one: pin 1, the leg beside the notch or the dot, goes in hole {hole}. Straighten the legs "
+    "on a flat surface first, and touch something earthed before you pick it up.": (
+        "{part} entegresini ancak şimdi soketine — soket takmadıysanız doğrudan karta — "
+        "takın: 1. pin, yani çentiğin ya da noktanın yanındaki bacak, {hole} deliğine girer. "
+        "Önce bacaklarını düz bir yüzeyde düzeltin ve elinize almadan önce topraklı bir "
+        "şeye dokunun."
     ),
-    "Only now put {parts} into their sockets, or straight into the board if you did not "
-    "fit one, notch to the end the sheet marks. Straighten the legs on a flat surface "
-    "first.": (
-        "{parts} entegrelerini ancak şimdi soketlerine — soket takmadıysanız doğrudan karta "
-        "— çentikleri çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını "
-        "düz bir yüzeyde düzeltin."
+    "The notch at the end with hole {hole}, and every leg in its hole — none folded under the "
+    "body.": (
+        "Çentik {hole} deliği tarafında ve her bacak kendi deliğinde — hiçbiri gövdenin "
+        "altına kıvrılmamış."
     ),
-    "Every notch and dot pointing the same way as the sheet.": (
-        "Her çentik ve nokta çıktıdakiyle aynı yöne bakıyor."
-    ),
+    "{ref} ({value})": "{ref} ({value})",
     "First power-up, current limited": "İlk enerji, akım sınırlı",
     "Set the supply to the circuit's voltage and the current limit to a little above what "
     "you expect it to draw. Watch the current as it comes up, and keep a hand on the "
-    "switch.": (
+    "switch. With no current limit to set, put a small resistor or a fuse in series with "
+    "the supply, or power it from USB with a hand on the cable to pull it.": (
         "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini "
         "beklediğiniz değerin biraz üstüne ayarlayın. Açarken akımı izleyin ve eliniz "
-        "şalterde olsun."
+        "şalterde olsun. Ayarlanacak bir akım sınırı yoksa kaynağa seri küçük bir direnç "
+        "ya da sigorta bağlayın veya kartı USB'den besleyin ve eliniz, çekmek için "
+        "kabloda olsun."
     ),
     "Current settles at roughly what you expected. If it runs into the limit, power down "
     "at once and go back to the isolation checks — something is bridged.": (
@@ -1042,13 +1081,6 @@ TURKISH: dict[str, str] = {
         "{temperature} °C, bir pedde en fazla {dwell:g} s. {note}"
     ),
     "The board": "Kart",
-    "Cut it to {cols} × {rows} holes ({size}) and mark hole {a1} in the top-left corner on "
-    "the COMPONENT side. Every address below is counted from it, so if it is marked wrong, "
-    "everything else is.": (
-        "Kartı {cols} × {rows} delik olarak kesin ({size}) ve PARÇA yüzünde sol üst "
-        "köşedeki {a1} deliğini işaretleyin. Aşağıdaki her adres ondan sayılır; yanlış "
-        "işaretlenirse geri kalan her şey de yanlış olur."
-    ),
     "{footprint} · pins {holes}": "{footprint} · pinler {holes}",
     "Bend the leads to {pitch:.2f} mm ({holes:.0f} holes).": (
         "Bacakları {pitch:.2f} mm'ye bükün ({holes:.0f} delik)."

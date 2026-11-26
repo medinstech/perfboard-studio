@@ -271,6 +271,9 @@ CAPTION_PX = 11
 LEAD_PX = 13
 #: The build guide's two buttons at the bench (``ui/benchguide.py``).
 BENCH_PX = 20
+#: The bench's headline and which way round a part goes, read from across it.
+BENCH_TITLE_PX = 28
+BENCH_POLARITY_PX = 17
 TITLE_PX = 18
 SEMIBOLD = 600
 
@@ -1058,6 +1061,65 @@ QProgressBar {{
 }}
 QProgressBar::chunk {{ background: {k.accent}; border-radius: {RADIUS_SM}px; }}
 QProgressDialog#plannerCard {{ background: transparent; }}
+
+/* The build guide's bench (ui/benchguide.py): three cards on the window's gutter -- the
+   steps, the board, the instruction -- read from across a bench, so the headline is large
+   and which way round a part goes is a box of the warning's colour. */
+QWidget#bench {{ background: {k.bg_app}; }}
+QFrame#benchRail, QFrame#benchStage, QFrame#benchPane {{
+    background: {k.bg_surface};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_CARD}px;
+}}
+QLabel#benchRailTitle {{ font-size: {TITLE_PX}px; font-weight: {SEMIBOLD}; }}
+QListWidget#benchSteps {{ background: transparent; border: none; outline: none; }}
+QListWidget#benchSteps::item {{ padding: {s["xs"]}px {s["md"]}px; border-radius: {RADIUS_MD}px; }}
+QListWidget#benchSteps::item:selected {{ background: {k.accent_subtle}; color: {k.text}; }}
+QLabel#benchEyebrow {{ color: {k.accent_text}; font-weight: {SEMIBOLD}; }}
+QLabel#benchTitle {{ font-size: {BENCH_TITLE_PX}px; font-weight: {SEMIBOLD}; }}
+QLabel#benchSubline {{ color: {k.text_secondary}; }}
+QFrame#benchPolarity {{
+    background: {k.warning_subtle};
+    border: 1px solid {k.warning};
+    border-radius: {RADIUS_CARD}px;
+}}
+QLabel#benchPolarityIcon {{ color: {k.warning}; font-size: 22px; font-weight: 700; }}
+QLabel#benchPolarityCaption {{ color: {k.warning}; font-size: 11px; font-weight: 700; }}
+QLabel#benchPolarityText {{ color: {k.text}; font-size: {BENCH_POLARITY_PX}px; font-weight: {SEMIBOLD}; }}
+QLabel#benchGate {{
+    background: {k.danger_subtle};
+    border: 1px solid {k.danger};
+    border-radius: {RADIUS_CARD}px;
+    color: {k.text};
+    font-weight: {SEMIBOLD};
+    padding: {s["md"]}px {s["lg"]}px;
+}}
+QLabel#benchCaption {{ color: {k.text_tertiary}; font-size: 11px; font-weight: 700; }}
+QLabel#benchSaid, QLabel#benchHow {{ font-size: 15px; }}
+QLabel#benchExpected {{ color: {k.text_secondary}; font-size: 14px; }}
+QLabel#benchNumber {{
+    background: {k.accent_subtle};
+    color: {k.accent_text};
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+}}
+QLabel#benchNotes, QLabel#benchProbe {{ color: {k.text_secondary}; }}
+QFrame#benchCheck {{
+    background: {k.bg_subtle};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_LG}px;
+}}
+QFrame#benchCheck[blocking="true"] {{ border-left: 3px solid {k.danger}; }}
+QLabel#benchSide {{
+    color: {k.text_secondary};
+    background: {k.bg_subtle};
+    border-radius: 9px;
+    padding: 2px {s["lg"]}px;
+    font-weight: {SEMIBOLD};
+}}
+QLabel#benchSide[flipped="true"] {{ color: {k.warning}; background: {k.warning_subtle}; }}
+QLabel#benchHint {{ color: {k.text_tertiary}; font-size: 11px; }}
 """
 
 

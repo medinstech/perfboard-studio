@@ -309,6 +309,47 @@
       "number": 0,
       "title": "Preparation",
       "summary": "Cut the board, mark hole A1, and get the iron and the parts ready.",
+      "tasks": [
+        {
+          "kind": "cut-board",
+          "title": "Cut the board to 32 × 22 holes",
+          "instruction": "That is 81.3 × 55.9 mm of board, its edges included. Score both faces along the line, snap it over the edge of a table and file the edge smooth.",
+          "holes": [
+            {
+              "col": 0,
+              "row": 0,
+              "ref": "A1"
+            },
+            {
+              "col": 31,
+              "row": 0,
+              "ref": "AF1"
+            },
+            {
+              "col": 0,
+              "row": 21,
+              "ref": "A22"
+            },
+            {
+              "col": 31,
+              "row": 21,
+              "ref": "AF22"
+            }
+          ]
+        },
+        {
+          "kind": "mark-a1",
+          "title": "Mark hole A1",
+          "instruction": "Put a dot of marker beside A1, the top-left hole seen from the component side, on both faces. Every address in this guide is counted from it, and once the board is turned over it is the only way to tell the corners apart.",
+          "holes": [
+            {
+              "col": 0,
+              "row": 0,
+              "ref": "A1"
+            }
+          ]
+        }
+      ],
       "steps": [],
       "checkpoints": []
     },
@@ -2174,17 +2215,22 @@
         },
         {
           "kind": "polarity",
-          "title": "Fit the ICs, pin 1 as shown",
-          "instruction": "Only now put U1 into its socket, or straight into the board if you did not fit one, notch to the end the sheet marks. Straighten the legs on a flat surface first.",
-          "expected": "Every notch and dot pointing the same way as the sheet.",
+          "title": "Fit U1, pin 1 in hole B3",
+          "instruction": "Only now put U1 (NE555) into its socket, or straight into the board if you did not fit one: pin 1, the leg beside the notch or the dot, goes in hole B3. Straighten the legs on a flat surface first, and touch something earthed before you pick it up.",
+          "expected": "The notch at the end with hole B3, and every leg in its hole — none folded under the body.",
           "holes": [],
-          "pins": [],
+          "pins": [
+            {
+              "component_ref": "U1",
+              "pin": "1"
+            }
+          ],
           "blocking": true
         },
         {
           "kind": "power-on",
           "title": "First power-up, current limited",
-          "instruction": "Set the supply to the circuit's voltage and the current limit to a little above what you expect it to draw. Watch the current as it comes up, and keep a hand on the switch.",
+          "instruction": "Set the supply to the circuit's voltage and the current limit to a little above what you expect it to draw. Watch the current as it comes up, and keep a hand on the switch. With no current limit to set, put a small resistor or a fuse in series with the supply, or power it from USB with a hand on the cable to pull it.",
           "expected": "Current settles at roughly what you expected. If it runs into the limit, power down at once and go back to the isolation checks — something is bridged.",
           "holes": [],
           "pins": [],
