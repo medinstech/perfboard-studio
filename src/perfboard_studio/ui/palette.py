@@ -90,6 +90,9 @@ PATH_SEP = " \u25b8 "
 #: How many of the commands last run from the palette it offers first.
 RECENT_LIMIT = 5
 
+#: Kinds that give way to a command, a part or a net matching as well (``rank``).
+LATER_KINDS = {"example": 1, "file": 2}
+
 #: The icon a row shows when its command has none of its own.
 FALLBACK_ICONS = {
     "command": "more",
@@ -221,7 +224,13 @@ def rank(entries: Sequence[Entry], typed: str) -> list[Entry]:
         # Last: a word in what it DOES finds it, below everything its name finds.
         elif needle in entry.also.casefold():
             described.append(entry)
-    return exact + starts + words + inside + described
+    # Inside a rank, a command before an example or a file the menus happen to list first:
+    # "r" is Rotate and Redo before relay-and-supply.
+    return [
+        entry
+        for found in (exact, starts, words, inside, described)
+        for entry in sorted(found, key=lambda each: LATER_KINDS.get(each.kind, 0))
+    ]
 
 
 #: The row's own data roles: what is said after the name, and whether it is a header.

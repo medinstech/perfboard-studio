@@ -3972,7 +3972,13 @@ class MainWindow(QMainWindow):
             if isinstance(action := getattr(self, name, None), QAction)
         }
 
-        def walk(menu: QMenu, path: tuple[str, ...], seen: set[int], keeps: bool) -> None:
+        def walk(
+            menu: QMenu,
+            path: tuple[str, ...],
+            seen: set[int],
+            keeps: bool,
+            picture: QIcon | None = None,
+        ) -> None:
             for action in menu.actions():
                 if action.isSeparator() or not action.isVisible() or not action.text():
                     continue
@@ -3980,8 +3986,10 @@ class MainWindow(QMainWindow):
                 if sub is not None:
                     key = shiboken6.getCppPointer(sub)[0]
                     if key not in seen:
+                        # Export's entries have no icons of their own: each is one of its.
                         walk(sub, (*path, plain(sub.title())), seen | {key},
-                             self._keeps_home(action, keeps))
+                             self._keeps_home(action, keeps),
+                             icons.icon("export") if sub is self.menu_export else picture)
                     continue
                 if not action.isEnabled():
                     continue
@@ -4008,7 +4016,7 @@ class MainWindow(QMainWindow):
                         ),
                         run=partial(self._run_from_home, action,
                                     self._keeps_home(action, keeps)),
-                        icon=None if action.icon().isNull() else action.icon(),
+                        icon=picture if action.icon().isNull() else action.icon(),
                         kind=kind,
                         also=also,
                         key=remembered,

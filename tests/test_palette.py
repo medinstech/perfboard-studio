@@ -308,7 +308,7 @@ def test_typed_groups_by_kind_with_the_best_match_first() -> None:
     assert listed[0][0] == "Parts"
     # The names first, then what only says it where it lives (a folder, "on the board").
     listed = sections(_listing(), "board")
-    assert [title for title, _ in listed] == ["Commands", "Recent Files", "Parts"]
+    assert [title for title, _ in listed] == ["Commands", "Parts", "Recent Files"]
     # rank's order inside the group, ties in the order the menus list them.
     assert [entry.label for entry in listed[0][1]] == ["New Board", "Fit Board"]
     listed = sections(_listing(), "ne555")
@@ -440,3 +440,14 @@ def test_the_window_remembers_what_was_run_and_suggests_for_its_step() -> None:
         palette.close_palette()
     finally:
         _discard(window)
+
+
+def test_a_command_wins_a_tie_over_an_example_listed_before_it() -> None:
+    from perfboard_studio.ui.palette import rank
+
+    example = Entry("relay-and-supply", "File \u25b8 Open Example", "", _noop, kind="example")
+    recent = Entry("rotary.perf", "C:/boards", "", _noop, kind="file")
+    rotate = Entry("Rotate", "Edit", "R", _noop, key="Edit/Rotate")
+    assert [entry.label for entry in rank([example, recent, rotate], "r")] == [
+        "Rotate", "relay-and-supply", "rotary.perf",
+    ]
