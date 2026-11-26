@@ -506,6 +506,68 @@ def test_live_theme_switch_refreshes_drc_detail_and_rich_links(window) -> None: 
         QApplication.processEvents()
 
 
+def test_a_live_switch_passes_over_a_shadowed_widget_qt_has_deleted(window) -> None:  # type: ignore[no-untyped-def]
+    """``elevate`` keeps its widgets in a set weak on the Python wrapper, which can outlive
+    the widget: a window closed earlier left a deleted floating bar there, and the next live
+    switch raised on it, in whichever window made it."""
+    from PySide6.QtWidgets import QFrame
+    from shiboken6 import delete
+
+    gone = QFrame()
+    theme.elevate(gone)
+    kept = QFrame()
+    theme.elevate(kept)
+    delete(gone)
+    try:
+        window.on_theme("light")
+        assert kept.graphicsEffect().color().alpha() == LIGHT.shadow_alpha
+    finally:
+        window.on_theme("dark")
+        QApplication.processEvents()
+
+
+def test_the_build_guide_comes_back_from_a_round_trip_pixel_for_pixel(window) -> None:  # type: ignore[no-untyped-def]
+    """Dark, light and dark again is the bench it was, to the pixel. The guide's card was
+    its page stack, a QFrame, and a live switch made the card's hairline a frame of the
+    stack's own: everything on the bench moved a pixel down and right and stayed there.
+    In light, a phase still to come is a pale bar, lighter than the current phase's pill,
+    not a solid grey one heavier than it."""
+    from PySide6.QtTest import QTest
+
+    def settle() -> None:
+        for _ in range(6):
+            QApplication.processEvents()
+        QTest.qWait(300)  # the picture is redrawn on a debounce after a resize
+        QApplication.processEvents()
+
+    window.resize(1050, 800)
+    window.show()
+    window._raise_view(window.dock_guide)
+    settle()
+    bench = window.bench
+    assert bench.items and not bench.phase_bar.isHidden()
+    before = _grab_bytes(bench)
+    try:
+        window.on_theme("light")
+        settle()
+        bar = bench.phase_bar
+        image = bar.grab().toImage()
+        segments = bar._segments()
+        current = segments[bar._current]
+        upcoming = segments[-1].center()
+        assert image.pixelColor(int(current.left()) + 4, int(current.center().y())).name() == (
+            LIGHT.accent_subtle
+        )
+        assert image.pixelColor(int(upcoming.x()), int(upcoming.y())).name() == LIGHT.bg_pressed
+        window.on_theme("dark")
+        settle()
+        assert _grab_bytes(bench) == before, "the bench moved or changed over dark -> light -> dark"
+    finally:
+        if theme.ACTIVE is not DARK:
+            window.on_theme("dark")
+        QApplication.processEvents()
+
+
 def test_confirm_dialog_keeps_cancel_default_and_focused_across_live_switch(window) -> None:  # type: ignore[no-untyped-def]
     """#3: Switching theme live while a confirm QMessageBox is open must keep Cancel as
     default AND focused so Enter never activates the destructive button."""

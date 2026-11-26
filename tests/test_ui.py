@@ -8228,7 +8228,9 @@ def test_every_panel_is_a_card_and_keeps_its_widget() -> None:
     """The panels stand on the gutter as cards (theme.card): a property the stylesheet
     draws, so each dock still holds the very widget every caller reads through
     ``widget()``. The update strip is a bar across the window and is no card. The guide's
-    panel is built on first use, after the window carded a stand-in, and is carded too."""
+    panel is built on first use, after the window carded a stand-in, and is carded too: a
+    plain widget round its page stack, since the stack is a QFrame and a carded QFrame
+    takes the card's hairline as a frame of its own on a live theme switch."""
     from PySide6.QtWidgets import QDockWidget
 
     window = _window_on(_load_dense())
@@ -8239,7 +8241,7 @@ def test_every_panel_is_a_card_and_keeps_its_widget() -> None:
             window.dock_part_list: window.part_list,
         }
         pages = window.guide_pages  # built here, on first use
-        holds[window.dock_guide] = pages
+        holds[window.dock_guide] = pages.parentWidget()
         for dock in window.findChildren(QDockWidget):
             inner = dock.widget()
             assert inner is not None, dock.objectName()
@@ -20621,7 +20623,7 @@ def test_the_guide_is_built_when_it_comes_in_front_and_works_as_it_did() -> None
         assert window.act_next_step is not None and window.act_clear_progress is not None
         window._raise_view(window.dock_guide)
         assert window.guide_built
-        assert window.dock_guide.widget() is window.guide_pages
+        assert window.guide_pages.parentWidget() is window.dock_guide.widget()
         assert window.guide_tools.parent() is window.guide_overview
         assert window.guide_tree.topLevelItemCount() > 0
         assert window.bench.items

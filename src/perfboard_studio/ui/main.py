@@ -10766,8 +10766,15 @@ class MainWindow(QMainWindow):
         guide.add_action(self.act_guide, icons.icon("export"))
         self._guide_tools_widget = guide
 
+        # The card is a plain widget round the pages, as every other dock's is: the stack
+        # is a QFrame, and a QFrame carded takes the card's hairline as a frame of its own
+        # when the theme is switched live, which moved the whole bench a pixel.
+        holder = QWidget()
+        holding = QVBoxLayout(holder)
+        holding.setContentsMargins(0, 0, 0, 0)
+        holding.addWidget(self._guide_pages_widget)
         stand_in = self.dock_guide.widget()
-        self.dock_guide.setWidget(self._guide_pages_widget)
+        self.dock_guide.setWidget(holder)
         theme.card(self.dock_guide)
         if stand_in is not None:
             stand_in.deleteLater()

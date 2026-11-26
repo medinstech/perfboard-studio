@@ -1461,10 +1461,17 @@ def _stylesheet_for(tokens: Tokens) -> str:
 
 
 def _refresh_shadows(tokens: Tokens) -> None:
+    """Recolour every shadow ``elevate`` made. The set is weak on the PYTHON wrapper, and a
+    wrapper can outlive its widget: a window closed with its floating bars deleted by Qt
+    left them here, and the next window's theme switch raised on the first of them."""
     from PySide6.QtWidgets import QGraphicsDropShadowEffect
+    from shiboken6 import isValid
 
     shadow_colour = QColor(0, 0, 0, tokens.shadow_alpha)
     for widget in list(_elevated):
+        if not isValid(widget):
+            _elevated.discard(widget)
+            continue
         effect = widget.graphicsEffect()
         if isinstance(effect, QGraphicsDropShadowEffect):
             effect.setColor(shadow_colour)
