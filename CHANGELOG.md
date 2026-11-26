@@ -23,7 +23,8 @@ closed without a bump.
 ### Added
 
 - **Settings.** Every preference of the window in one place, with a search that finds a
-  setting by its English or Turkish words: Ctrl+,, or the top of ☰. Five categories --
+  setting by its English or Turkish words, whichever language the window is in ("tema" in
+  an English window, "wheel" in a Turkish one): Ctrl+,, or the top of ☰. Five categories --
   General, Appearance, Shown on the Board, Wiring, Files and Updates -- and each row says in a
   sentence what it does. Every row is the same switch as its menu item, the board's Show
   button or the header's sun and moon, so they always agree. The theme, the language, Reduce

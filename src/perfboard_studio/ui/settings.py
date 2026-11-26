@@ -24,6 +24,7 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import cache
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -56,7 +57,7 @@ from PySide6.QtWidgets import (
 )
 
 from perfboard_studio.ui import icons, motion, theme
-from perfboard_studio.ui.i18n import t
+from perfboard_studio.ui.i18n import CATALOGUES, t
 
 SHORTCUT = "Ctrl+,"
 #: Where the results of a search are shown: not a category, and never in the list.
@@ -134,11 +135,35 @@ def plain(text: str) -> str:
 
 def fold(text: str) -> str:
     """Text as a search compares it: no case, no accents, and Turkish's dotted and dotless
-    i as one letter -- somebody typing "gorunum" on an English keyboard means Görünüm, and
+    i as one letter -- somebody typing "gorunus" on an English keyboard means Görünüş, and
     "ışık" and "isik" are one word to anybody who is not a spelling checker."""
     text = text.replace("İ", "i").replace("I", "i").replace("ı", "i")
     decomposed = unicodedata.normalize("NFKD", text.casefold())
     return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+@cache
+def _forms() -> dict[str, frozenset[str]]:
+    """Every string the catalogues know, beside what it is in every language, without its
+    access keys: "Theme" and "Tema" are each other's, whichever window asks."""
+    english = {key for catalogue in CATALOGUES.values() for key in catalogue}
+    forms: dict[str, frozenset[str]] = {}
+    for key in english:
+        said = frozenset(
+            {plain(key)}
+            | {plain(catalogue[key]) for catalogue in CATALOGUES.values() if key in catalogue}
+        )
+        for form in said:
+            forms[form] = forms.get(form, frozenset()) | said
+    return forms
+
+
+def in_every_language(text: str) -> str:
+    """``text`` and what it is in the other languages, when the catalogue has it: the words
+    a search looks in. The window is built in one language and somebody types in the one
+    they think in -- "tema" in an English window found nothing, "theme" in a Turkish one
+    found only the rows whose hidden words happened to say it."""
+    return " ".join(sorted(_forms().get(text, frozenset({text})) | {text}))
 
 
 def chip_of(row: Row) -> str:
@@ -147,7 +172,7 @@ def chip_of(row: Row) -> str:
 
 def matches(rows: Sequence[Row], categories: Sequence[Category], text: str) -> list[Row]:
     """The rows every word of ``text`` is found in -- title, sentence, the extra words, or
-    the category's name -- in the order the pages list them."""
+    the category's name, each in every language -- in the order the pages list them."""
     words = fold(text).split()
     if not words:
         return []
@@ -155,7 +180,8 @@ def matches(rows: Sequence[Row], categories: Sequence[Category], text: str) -> l
     order = {c.key: i for i, c in enumerate(categories)}
     found = []
     for row in rows:
-        haystack = fold(" ".join((row.title, row.why, row.words, titles.get(row.category, ""))))
+        said = (row.title, row.why, titles.get(row.category, ""))
+        haystack = fold(" ".join((*map(in_every_language, said), row.words)))
         if all(word in haystack for word in words):
             found.append(row)
     return sorted(found, key=lambda r: order.get(r.category, len(order)))

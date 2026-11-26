@@ -107,6 +107,56 @@ def test_the_search_finds_a_row_by_its_words_in_either_language() -> None:
     assert matches(rows, cats, "   ") == []
 
 
+def test_the_search_finds_the_other_languages_words_in_either_window() -> None:
+    """The window is built in one language and a person types in the one they think in:
+    "tema" in an English window found nothing, because only the hidden words were English
+    in both. Every title, sentence and category is looked in as the catalogue says it in
+    every language -- both ways, with no hidden words to help."""
+    _app()
+    from perfboard_studio.ui.i18n import TURKISH
+
+    action = QAction("x")
+
+    def window_in(say) -> tuple[list[Row], list[Category]]:  # type: ignore[no-untyped-def]
+        cats = [Category("general", "home", say("General"), ""),
+                Category("appearance", "sun", say("Appearance"), "")]
+        rows = [
+            Row("general", say("Mouse Wheel"),
+                say("Zoom with the wheel, or scroll with it and zoom with Ctrl+wheel."),
+                Toggle(action)),
+            Row("appearance", say("Theme"), say("The window's colours. Changes at once."),
+                Toggle(action)),
+            Row("appearance", say("Reduce Motion"),
+                say("Panels, menus and the board appear in place, without sliding or fading."),
+                Toggle(action)),
+        ]
+        return rows, cats
+
+    rows, cats = window_in(lambda english: english)
+    wheel, theme_row, motion_row = rows
+    assert matches(rows, cats, "tema") == [theme_row]
+    assert matches(rows, cats, "tekerlek") == [wheel]
+    assert matches(rows, cats, "hareket") == [motion_row]
+    assert matches(rows, cats, "görünüş") == [theme_row, motion_row]
+
+    rows, cats = window_in(lambda english: TURKISH[english])
+    wheel, theme_row, motion_row = rows
+    assert matches(rows, cats, "theme") == [theme_row]
+    assert matches(rows, cats, "wheel") == [wheel]
+    assert matches(rows, cats, "motion") == [motion_row]
+    assert matches(rows, cats, "appearance") == [theme_row, motion_row]
+    # A word of each language in one search is still every word found in one row.
+    assert matches(rows, cats, "tema colours") == [theme_row]
+    assert matches(rows, cats, "tema wheel") == []
+
+
+def test_appearance_is_not_the_view_menus_word() -> None:
+    """One word per concept: Settings' Appearance page is not the View menu."""
+    from perfboard_studio.ui.i18n import TURKISH
+
+    assert TURKISH["Appearance"] != TURKISH["&View"].replace("&", "")
+
+
 # -- the window ----------------------------------------------------------------------
 
 
@@ -192,6 +242,9 @@ def test_the_search_shows_rows_from_every_category_and_gives_the_page_back() -> 
         dialog.search.setText("wheel")
         assert dialog.shown_titles() == ["Mouse Wheel"]
         assert dialog.nav.selectedItems() == []
+        # The Turkish word in the English window, which no row's hidden words say.
+        dialog.search.setText("tema")
+        assert dialog.shown_titles() == ["Theme"]
         dialog.search.setText("zzzz nothing")
         assert dialog.shown_titles() == []
         dialog.search.clear()
