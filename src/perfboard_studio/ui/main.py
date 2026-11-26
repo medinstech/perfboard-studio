@@ -3846,6 +3846,8 @@ class MainWindow(QMainWindow):
             recent=self._header_recent,
             recent_title=t("Recent Files"),
         )
+        # Clicked with the palette open, the header's search closes it, as Ctrl+K does.
+        self.command_palette.toggled_by(self.header.search)
         # The pill opens the notes, which carry the one action that is possible now.
         self.header.updateRequested.connect(self._on_update_notes)
         self.header.homeRequested.connect(self.on_home)

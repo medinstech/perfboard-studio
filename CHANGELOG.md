@@ -182,7 +182,7 @@ closed without a bump.
   insulation colours, Custom… for any other, and By net, which hands it back to its net's own
   colour and leaves `color` out of the file again. Several wires selected change together in
   one undo step; a solder trace in the same selection is not a wire and keeps what it has.
-- **Reduce Motion.** View ▸ Reduce Motion lands every animation (a part dropping into the 3D
+- **Reduce Motion.** Settings ▸ Reduce Motion lands every animation (a part dropping into the 3D
   view, a wire drawing itself, the board turning over) on its final state at once, live and
   remembered. `PERFBOARD_STUDIO_REDUCE_MOTION=1` (or `0`) pins it for one run, and the test
   suite pins it on so renders and tests stay deterministic.
@@ -228,7 +228,7 @@ closed without a bump.
   hairlines instead of bright `WindowText`, the `Show` menu chevron sits centred beside its
   label, and flyout tool buttons tuck a compact indicator into their bottom-right corner.
 - **Switching between dark and light themes happens live, with no restart and no dialog.**
-  Choosing Dark or Light from View ▸ Theme or the header toggle immediately re-applies the
+  Choosing Dark or Light from Settings ▸ Theme or the header toggle immediately re-applies the
   application palette and stylesheet and recolours the header, Home, docks, icons, Inspector,
   toasts, Problems drawer, step bar, 2D canvas, schematic ink (Night in dark), System view
   and 3D viewport background in place. Language stays next-start.
@@ -271,11 +271,11 @@ closed without a bump.
 - **Auto-wire is seen laying its copper.** When a route lands, the conductors it laid fade
   in one after another in the order the planner laid them, about a second in all however many
   there are, and the copper that was already there stays as it is. Every conductor is on the
-  board and can be clicked from the first frame; with View ▸ Reduce Motion it is simply there.
+  board and can be clicked from the first frame; with Settings ▸ Reduce Motion it is simply there.
 - **The command palette and the Problems drawer move.** Ctrl+K's palette drops the last few
   pixels into place as its shadow deepens, with the keyboard in the field from the first frame;
   the Problems drawer slides open from its bar and back down to it, the list in view the whole
-  way. Both are still under View ▸ Reduce Motion, and closing the palette is never animated.
+  way. Both are still under Settings ▸ Reduce Motion, and closing the palette is never animated.
 - **The panels are cards.** Every panel stands on the window's gutter as a card with round
   corners instead of a region ruled off by hairlines, and the gutter between two panels is
   what is dragged to resize them. A group's tabs (Library, Parts, Nets; Board, Schematic,
@@ -358,6 +358,9 @@ closed without a bump.
 
 ### Fixed
 
+- **The header's search puts the palette away.** Clicked with the palette open, it closed
+  it on the press as a click outside and opened it again on the release, so the palette
+  could be closed with Ctrl+K and Escape but not from the button that opened it.
 - **Dragging a symbol on a sheet drawn for you moves only that symbol.** The drag was drawn
   live with only the symbol being dragged, and until the first drop froze the sheet that one
   placement was the whole sheet: every other symbol was parked in a column past the right

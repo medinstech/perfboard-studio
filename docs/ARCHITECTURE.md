@@ -2881,7 +2881,7 @@ short of a whole notch a trackpad, which is what a Windows touchpad sends -- and
 smooth or free-spin mouse wheel sends, so one mouse zoomed and another panned. On Windows a
 touchpad's scrolling arrives as `WM_MOUSEWHEEL` and Qt hands it on with a null pixel delta,
 no phase and no device of its own (read in Qt 6.10's `qwindowspointerhandler.cpp`, not
-measured on hardware), so nothing there tells the two apart: **View ▸ Mouse Wheel ▸
+measured on hardware), so nothing there tells the two apart: **Settings ▸ Mouse Wheel ▸
 Scrolls** (`session/wheelScrolls`) is the way out, panning every wheel with Ctrl zooming.
 
 **Nothing is committed until the button comes up.** The dragged symbols, the wire following

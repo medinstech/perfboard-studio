@@ -39,6 +39,7 @@ from PySide6.QtCore import (
     QRectF,
     QSize,
     Qt,
+    QTimer,
     QVariantAnimation,
 )
 from PySide6.QtGui import (
@@ -58,6 +59,7 @@ from PySide6.QtGui import (
     QWindow,
 )
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QApplication,
     QFrame,
     QGraphicsDropShadowEffect,
@@ -469,6 +471,10 @@ class CommandPalette(QFrame):
         self.setFixedWidth(WIDTH)
         self._opening: QVariantAnimation | None = None
         self._watching = False
+        self._togglers: list[QAbstractButton] = []
+        # The toggler a click outside has just closed the palette from, whose own click
+        # (on the release) is then not an opening -- see ``toggled_by``.
+        self._closed_from: QAbstractButton | None = None
         self.hide()
 
     def paintEvent(self, event: QPaintEvent) -> None:
@@ -528,8 +534,34 @@ class CommandPalette(QFrame):
         frame = self.list.frameWidth() * 2
         return max(ROW_PX * 3, total) + frame
 
+    def toggled_by(self, button: QAbstractButton) -> None:
+        """``button`` opens and closes the palette, as its key does -- the header's search.
+
+        A click on it while the palette is open is a click outside, and the press closed it
+        before the button heard of it; the button's click came on the release and opened it
+        again, so the palette could not be closed from the button that opened it. The press
+        now says which toggler it closed from, and that toggler's click is the closing."""
+        self._togglers.append(button)
+        # Released comes before clicked, and also when the pointer was dragged off and no
+        # click follows: forgotten after either, so it never eats a later opening.
+        button.released.connect(lambda: QTimer.singleShot(0, self._forget_closed_from))
+
+    def _forget_closed_from(self) -> None:
+        self._closed_from = None
+
+    def _toggler_at(self, event: QMouseEvent) -> QAbstractButton | None:
+        at = event.globalPosition().toPoint()
+        for button in self._togglers:
+            if button.isVisible() and button.rect().contains(button.mapFromGlobal(at)):
+                return button
+        return None
+
     def toggle(self, kinds: frozenset[str] | None = None) -> None:
         """Close it if it is open, open it if not: what its key does."""
+        if self._closed_from is not None:
+            # The press on a toggler closed it already; this is that toggler's click.
+            self._closed_from = None
+            return
         if self.isHidden():
             self.open(kinds)
         else:
@@ -756,6 +788,9 @@ class CommandPalette(QFrame):
                 self.close_palette()
                 return True
         if self._closes_on(watched, event):
+            if kind == QEvent.Type.MouseButtonPress:
+                assert isinstance(event, QMouseEvent)
+                self._closed_from = self._toggler_at(event)
             self.close_palette()
             return False
         if watched is self.field and kind == QEvent.Type.KeyPress:

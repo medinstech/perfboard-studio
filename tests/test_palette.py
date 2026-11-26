@@ -88,6 +88,45 @@ def test_a_click_outside_keeps_the_keyboard_where_it_was_given() -> None:
         host.close()
 
 
+def _host_with_toggler() -> tuple[_Host, QPushButton]:
+    host = _open_host()
+    toggler = QPushButton("Search", host)
+    toggler.move(10, 10)
+    toggler.show()
+    toggler.clicked.connect(lambda: host.commands.toggle())
+    host.commands.toggled_by(toggler)
+    return host, toggler
+
+
+def test_the_button_that_opens_it_closes_it() -> None:
+    """The header's search: its press closed the palette as a click outside, and its click
+    on the release opened it again, so it could not be put away from where it came."""
+    host, toggler = _host_with_toggler()
+    try:
+        QTest.mouseClick(toggler, Qt.MouseButton.LeftButton)
+        QTest.qWait(0)
+        assert host.commands.isHidden()
+        QTest.mouseClick(toggler, Qt.MouseButton.LeftButton)
+        QTest.qWait(0)
+        assert host.commands.isVisible()
+    finally:
+        host.close()
+
+
+def test_a_press_on_the_button_dragged_off_does_not_eat_the_next_opening() -> None:
+    host, toggler = _host_with_toggler()
+    try:
+        QTest.mousePress(toggler, Qt.MouseButton.LeftButton)
+        assert host.commands.isHidden()
+        QTest.mouseMove(toggler, QPoint(-50, -50))
+        QTest.mouseRelease(toggler, Qt.MouseButton.LeftButton, pos=QPoint(-50, -50))
+        QTest.qWait(0)
+        host.commands.toggle()
+        assert host.commands.isVisible()
+    finally:
+        host.close()
+
+
 def test_a_click_inside_leaves_it_open() -> None:
     host = _open_host()
     try:
@@ -451,3 +490,31 @@ def test_a_command_wins_a_tie_over_an_example_listed_before_it() -> None:
     assert [entry.label for entry in rank([example, recent, rotate], "r")] == [
         "Rotate", "relay-and-supply", "rotary.perf",
     ]
+
+
+def test_the_headers_search_opens_it_and_puts_it_away() -> None:
+    from pathlib import Path
+
+    from perfboard_studio import persist
+    from perfboard_studio.ui.main import MainWindow
+
+    _app()
+    root = Path(__file__).resolve().parents[1]
+    loaded = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    window = MainWindow(loaded)
+    window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+    window.show()
+    QTest.qWaitForWindowExposed(window)
+    try:
+        palette = window.command_palette
+        search = window.header.search
+        QTest.mouseClick(search, Qt.MouseButton.LeftButton)
+        QTest.qWait(0)
+        assert palette.isVisibleTo(window)
+        QTest.mouseClick(search, Qt.MouseButton.LeftButton)
+        QTest.qWait(0)
+        assert not palette.isVisibleTo(window)
+    finally:
+        _discard(window)
