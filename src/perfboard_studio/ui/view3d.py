@@ -150,6 +150,7 @@ from .bodies import (
 )
 from .moduleart import (
     ART_COLOURS,
+    ENCODER_MM,
     FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
@@ -6304,6 +6305,65 @@ def _art_capsule(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+_ART_SHAFT_RGB = _hex_rgb(ART_COLOURS["shaft"], BODY_RGB)
+
+
+def _art_encoder(s: _ArtSolid) -> list[_Piece]:
+    """A 12 mm rotary encoder standing on the module (``moduleart.ENCODER_MM``, Top-Up's
+    EC12P), its pin rows at the ends of its length: the moulded base, the steel bracket over
+    it with a leg down each side, the M9 bushing threaded as a pot's is, and the clear
+    knurled shaft up to the part's height."""
+    frame = min(ENCODER_MM["frame"], s.height)
+    plate = 0.4
+    base = frame - plate
+    along = min(ENCODER_MM["bracket"], s.length)
+    leg_out, leg_wide = ENCODER_MM["leg-out"], ENCODER_MM["leg-wide"]
+    bushing = max(min(ENCODER_MM["bushing-tall"], s.height - frame), 0.0)
+    shaft = s.height - frame - bushing
+    pieces = [
+        _Piece(
+            source=s.box(s.length, s.width, base, moulded=True),
+            rgb=_ART_EPOXY_RGB,
+            position=s.at(0.0, 0.0, base / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(along, s.width, plate),
+            rgb=_ART_SHIELD_RGB,
+            position=s.at(0.0, 0.0, base + plate / 2),
+            material=STEEL,
+        ),
+    ]
+    for end in (-1.0, 1.0):
+        pieces.append(
+            _Piece(
+                source=s.box(leg_wide, leg_out, frame),
+                rgb=_ART_SHIELD_RGB,
+                position=s.at(0.0, end * (s.width + leg_out) / 2, frame / 2),
+                material=STEEL,
+            )
+        )
+    if bushing > 0:
+        pieces.append(
+            _Piece(
+                source=_lathe(_threaded_profile(ENCODER_MM["bushing"] / 2, bushing), resolution=40),
+                rgb=_ART_SHIELD_RGB,
+                position=s.at(0.0, 0.0, frame),
+                material=STEEL,
+            )
+        )
+    if shaft > 0:
+        pieces.append(
+            _Piece(
+                source=_knurled_prism(ENCODER_MM["shaft"] / 2, shaft, teeth=24),
+                rgb=_ART_SHAFT_RGB,
+                position=s.at(0.0, 0.0, frame + bushing),
+                material=GLOSS,
+            )
+        )
+    return pieces
+
+
 def _art_terminal(s: _ArtSolid) -> list[_Piece]:
     """A screw terminal block on the module: the moulded block, per way a slotted steel
     screw head standing its decal's tenth and a half proud of the top over its pin, the
@@ -6554,6 +6614,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "oled": _art_oled,
     "fresnel": _art_fresnel,
     "terminal": _art_terminal,
+    "encoder": _art_encoder,
     "jst-sh": _art_jst_sh,
     "flex": _art_flex,
     "pcb-antenna": _art_pcb_antenna,

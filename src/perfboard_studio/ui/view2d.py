@@ -48,6 +48,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QConicalGradient,
     QCursor,
     QDragEnterEvent,
     QDragLeaveEvent,
@@ -241,6 +242,7 @@ from .i18n import counted, t
 from .i18n import language as current_language
 from .moduleart import (
     ART_COLOURS,
+    ENCODER_MM,
     FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
@@ -4521,6 +4523,11 @@ def _paint_laser_text(painter: QPainter, text: str, height: float, room: float) 
     painter.restore()
 
 
+#: How far off a quarter turn a print still counts as on it: a part along y is turned by
+#: exactly 90 degrees, which ``atan2`` gives back a hair either side of it.
+PRINT_TURN_SLACK_DEG = 1e-6
+
+
 def _paint_art_print(
     painter: QPainter,
     text: str,
@@ -4543,7 +4550,10 @@ def _paint_art_print(
     if world.determinant() < 0:
         painter.scale(1.0, -1.0)
         world = painter.worldTransform()
-    if 90.0 < math.degrees(math.atan2(world.m12(), world.m11())) % 360.0 <= 270.0:
+    # Upright, or up the screen when it runs across it: read from the board's right side,
+    # as a board prints it and as the 3D view lays it (``view3d._ArtSolid.printed``).
+    turned = math.degrees(math.atan2(world.m12(), world.m11())) % 360.0
+    if 90.0 - PRINT_TURN_SLACK_DEG <= turned < 270.0 - PRINT_TURN_SLACK_DEG:
         painter.rotate(180.0)
     painter.setPen(ink)
     _paint_laser_text(painter, text, height, room)
@@ -4935,6 +4945,8 @@ def _paint_art_part(
         painter.drawRect(body)
         look.bevel(painter, body, 0.12, 40)
         _art_box(painter, half_l - 0.45, half_l, half_w * 0.68, _art_colour("mouth"))
+    elif kind == "encoder":
+        _paint_art_encoder(painter, length, width, look)
     elif kind == "fresnel":
         # The square foot, the dome on it, and the facets a Fresnel lens is moulded in: a
         # hexagon at the top of the dome and the ridges out from its corners.
@@ -5029,6 +5041,77 @@ def _paint_art_part(
                     lit=look.lit,
                 )
         painter.setPen(edge)
+
+
+#: An illuminated encoder's shaft, end on: the knurl's teeth round it, and the three LEDs'
+#: colours it carries round its edge, faint, unlit -- clear plastic with red, green and blue
+#: under it, not a lamp that is on.
+ENCODER_KNURL_TEETH = 24
+ENCODER_TINTS = ("#ff7c7c", "#7cf09a", "#7ca6ff")
+ENCODER_TINT_SHARE = 0.3
+
+
+def _paint_art_encoder(painter: QPainter, length: float, width: float, look: _ArtLook) -> None:
+    """A 12 mm rotary encoder from above (``moduleart.ENCODER_MM``), its pin rows at the
+    ends of ``length``: its moulded base where it shows at the pin rows, the steel bracket
+    over it with a leg out of each side, the M9 bushing's thread seen end on as rings, and
+    the clear knurled shaft its LEDs light."""
+    half_l, half_w = length / 2, width / 2
+    edge = QPen(ART_EDGE, 0.05)
+    steel = _art_colour("shield")
+    leg_out, leg_wide = ENCODER_MM["leg-out"], ENCODER_MM["leg-wide"]
+    painter.setPen(edge)
+    legs = QRectF(-leg_wide / 2, -half_w - leg_out, leg_wide, width + 2 * leg_out)
+    painter.setBrush(look.metal(legs, steel.darker(112)))
+    painter.drawRect(legs)
+    base = QRectF(-half_l, -half_w, length, width)
+    painter.setBrush(look.moulded(base, _art_colour("epoxy")))
+    painter.drawRoundedRect(base, 0.8, 0.8)
+    along = min(ENCODER_MM["bracket"], length) / 2
+    bracket = QRectF(-along, -half_w, 2 * along, width)
+    painter.setBrush(look.metal(bracket, steel))
+    painter.drawRect(bracket)
+    look.bevel(painter, bracket, 0.15, 45)
+
+    centre = QPointF(0.0, 0.0)
+    bushing = min(ENCODER_MM["bushing"], length, width) / 2
+    shaft = min(ENCODER_MM["shaft"] / 2, bushing * 0.8)
+    painter.setBrush(look.domed(centre, bushing, steel.darker(106), 118))
+    painter.drawEllipse(centre, bushing, bushing)
+    painter.save()
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(steel.darker(140), 0.06))
+    ring = bushing - 0.4
+    while ring > shaft + 0.25:
+        painter.drawEllipse(centre, ring, ring)
+        ring -= 0.5
+    painter.restore()
+
+    clear = ART_COLOURS["shaft"]
+    if look.lit:
+        tint = QConicalGradient(centre, 90.0)
+        for index, hue in enumerate((*ENCODER_TINTS, ENCODER_TINTS[0])):
+            tint.setColorAt(index / len(ENCODER_TINTS), _mixed(clear, hue, ENCODER_TINT_SHARE))
+        painter.setBrush(QBrush(tint))
+    else:
+        painter.setBrush(QBrush(QColor(clear)))
+    painter.drawEllipse(centre, shaft, shaft)
+    if look.lit:
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        frost = QRadialGradient(QPointF(-shaft * 0.3, -shaft * 0.3), shaft * 1.2)
+        frost.setColorAt(0.0, QColor(255, 255, 255, 150))
+        frost.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.setBrush(QBrush(frost))
+        painter.drawEllipse(centre, shaft, shaft)
+        painter.restore()
+    painter.save()
+    painter.setPen(QPen(QColor(clear).darker(135), 0.08))
+    for tooth in range(ENCODER_KNURL_TEETH):
+        angle = 2 * math.pi * tooth / ENCODER_KNURL_TEETH
+        dx, dy = math.cos(angle), math.sin(angle)
+        painter.drawLine(QPointF(shaft * 0.8 * dx, shaft * 0.8 * dy), QPointF(shaft * dx, shaft * dy))
+    painter.restore()
 
 
 def _paint_silk_corners(painter: QPainter, half_l: float, half_w: float, arm: float) -> None:

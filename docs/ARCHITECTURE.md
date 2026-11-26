@@ -1313,7 +1313,10 @@ and cast a shadow by their height; on the 1:1 sheet the same shapes are flat ink
 pads and its parts are all its own, so a pinout card that draws the part with no perfboard
 behind it shows the same module, and its shadows are darkening, not a colour that assumes
 green substrate. The pads a module draws are its pin ends, so `ComponentItem` does not paint
-its own over them. Both views paint from ONE table,
+its own over them. What a layout prints runs along the part, and where it runs up or down
+the screen it reads from the board's right side, as boards print it and as the 3D view lays
+it (`_paint_art_print`); the encoder breakout's "RGB" up its edge was the first such print,
+and the two views had it turned opposite ways. Both views paint from ONE table,
 `moduleart.ART_COLOURS`, so a trimmer is the same blue in each, and the names beside the pins
 stop at parts both views show — the block it replaced said nothing about which way round a
 module was, and the names stopped short of nothing visible.

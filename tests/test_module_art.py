@@ -66,9 +66,6 @@ DRAWN_AS_THE_BLOCK: dict[str, str] = {
     # resistor packs, the JST-SH sockets), but no layout has been drawn from it yet, and a
     # layout is never invented ahead of the measuring.
     "adafruit-pcf8574-qt": "Adafruit's Eagle board is not yet drawn as a layout",
-    # SparkFun's Eagle board places the encoder and its sockets, but no layout has been drawn
-    # from it, and the encoder is not a chip any art kind knows.
-    "sparkfun-encoder-breakout": "no layout drawn from SparkFun's Eagle board",
     "esp32-cam": (
         "AI-Thinker publishes no drawing of the board, and the only pictures of it are renders "
         "and the community's footprints: the headers are measured, the camera, the FPC "
@@ -152,6 +149,8 @@ def _footprint(footprint_id: str):
         ("SparkFun Soil Moisture Sensor", "sparkfun-soil-moisture"),
         ("Adafruit 1.14 TFT ST7789", "adafruit-tft-1-14"),
         ("SparkFun Thumb Joystick Breakout", "sparkfun-thumb-joystick"),
+        ("SparkFun BOB-11722", "sparkfun-encoder-breakout"),
+        ("Rotary Encoder Breakout - Illuminated", "sparkfun-encoder-breakout"),
         ("ESP32-S3-DevKitC-1", "esp32-s3-devkitc-1"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
@@ -841,6 +840,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-soil-moisture": SPARKFUN_RED,
         "adafruit-tft-1-14": ADAFRUIT_BLACK,
         "sparkfun-thumb-joystick": SPARKFUN_RED,
+        "sparkfun-encoder-breakout": SPARKFUN_RED,
         "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,

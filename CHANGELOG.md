@@ -219,7 +219,10 @@ closed without a bump.
   dimple by pin 1 and its number lasered along it. Lit and shadowed on screen, flat on the
   1:1 sheet; nothing is printed the part does not carry. Each
   module is painted once per zoom and stretched while a zoom moves, so a board full of
-  modules repaints faster than before rather than slower.
+  modules repaints faster than before rather than slower. SparkFun's illuminated rotary
+  encoder breakout is drawn as itself too: the encoder's base and steel bracket, its M9
+  bushing and the clear knurled shaft its LEDs light, from SparkFun's board and the
+  encoder's maker drawing.
 - **The command palette says where everything is.** With nothing typed, Ctrl+K opens on
   the commands last run from it, the files last opened and what the step bar's current step
   suggests ("Suggested for Wiring"), then each menu as its own section; with something

@@ -111,6 +111,12 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:                       ``GULL_WING_LEGS`` as the TSSOP is.
 #:  * ``msop10``      -- a 10-leg MSOP (TI's DGS: 3.0 mm body, 4.9 mm over the legs, five a
 #:                       side 0.5 mm apart): the ADS1115's. Drawn from ``GULL_WING_LEGS`` too.
+#:  * ``encoder``     -- a 12 mm rotary encoder standing on the module, its shaft up:
+#:                       ``length`` x ``width`` is its moulded base, from its LED pins at
+#:                       the ``facing`` end to its A C B pins at the other, ``height`` the
+#:                       tip of its shaft; the steel bracket over the base with its legs
+#:                       down its two sides, the threaded bushing and the clear knurled
+#:                       shaft its LEDs light are ``ENCODER_MM``.
 ArtKind = Literal[
     "can",
     "inductor",
@@ -149,6 +155,8 @@ ArtKind = Literal[
     "plate",
     "qfn",
     "tqfp32",
+    # A 12 mm rotary encoder standing up, shaft and all: an illuminated one's clear shaft.
+    "encoder",
     "rf-module",
     # A plain metal can soldered straight onto the module's board, over what it shields --
     # not a radio module's own board under its can.
@@ -294,6 +302,8 @@ ART_COLOURS: dict[str, str] = {
     "solder": "#b5babf",
     "pin-tip": "#e4e7ea",
     "gold": "#d1a654",
+    # An illuminated encoder's clear shaft, frosted by its knurl, as its LEDs shine up it.
+    "shaft": "#dfe6ea",
 }
 
 #: A screw terminal's wire mouth, per way: how wide, and from how high to how high up its
@@ -305,6 +315,20 @@ TERMINAL_SCREW_MM = 3.0
 #: (KiCad's SM04B-SRSS-TB model, 5.05 mm overall against its 4.25 mm housing), and how
 #: far apart they are.
 JST_SH_TAILS_MM = 0.8
+#: A 12 mm illuminated rotary encoder, off Top-Up's drawing EC12PSD-062 (SparkFun COM-15141):
+#: how far its steel bracket's top runs from one pin row towards the other, how far its legs
+#: stand out of the base's sides (14 mm over them against the 12.4 mm base) and how wide
+#: each is, how tall the bracket stands, and the M9 bushing's and the 6 mm shaft's
+#: diameters and the bushing's height. The shaft is the rest, to the part's height.
+ENCODER_MM: dict[str, float] = {
+    "bracket": 10.2,
+    "leg-out": 0.8,
+    "leg-wide": 2.0,
+    "frame": 7.8,
+    "bushing": 9.0,
+    "bushing-tall": 7.0,
+    "shaft": 6.0,
+}
 JST_SH_PITCH_MM = 1.0
 
 #: How far a module's board may be from the reference a layout was drawn on, either way, as a
@@ -1349,6 +1373,39 @@ SPARKFUN_THUMB_JOYSTICK_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's illuminated rotary encoder breakout (BOB-11722) with the RGB encoder on it
+#: (COM-15141), read off SparkFun's own Eagle board and seen from above with the five-pin
+#: header along the top edge, RED at its left (``landmark``), and the three-pin one along the
+#: bottom: the encoder's place is the board's ENCODER_LED_3_KIT, 1.905 mm off the board's
+#: middle towards the five pins, its moulded base 12.4 x 13.4 mm as the package's outline,
+#: its LED pins towards the five-pin header and its A C B pins towards the three. What
+#: stands on it -- the bracket, the M9 bushing and the 6 mm shaft, 25.3 mm from the board to
+#: the tip -- is Top-Up's drawing EC12PSD-062 (``ENCODER_MM``). The "RGB" up the right edge
+#: is the board's own silkscreen; its pin names are left to the app's own, the OSHW logo is
+#: under the encoder and the second encoder's footprint is on the back, so none is drawn.
+SPARKFUN_ENCODER_MODULE = ModuleArt(
+    key="sparkfun-encoder-breakout",
+    board_colour=SPARKFUN_RED,
+    names=("bob-11722", "rotary encoder breakout"),
+    board=(15.24, 27.94),
+    pins=8,
+    frame="columns",
+    landmark=("RED", -1, 1),
+    parts=(
+        ArtPart("encoder", 0.0, 1.905, 13.4, 12.4, 25.3, along_v=True, facing=1),
+        # The board's own "RGB", up its right edge below the encoder: which of the two
+        # encoders it takes is fitted on this side.
+        ArtPart("silk", 6.35, -7.62, 4.6, 1.778, 0.0, along_v=True, text="RGB"),
+    ),
+    source=(
+        "SparkFun's Eagle board for the illuminated rotary encoder breakout, github sparkfun/"
+        "Rotary_Encoder_Breakout-Illuminated, CC BY-SA 4.0 (the outline, both headers, the "
+        "encoder's place and its package outline, the RGB on the silkscreen); Top-Up Industry's drawing EC12PSD-062 rev "
+        "B of the encoder, hosted by SparkFun for COM-15141 (the bracket, the M9 bushing, the "
+        "6 mm shaft and the 25.3 mm to its tip)"
+    ),
+)
+
 #: Adafruit's SCD-40 / SCD-41 CO2 sensor breakout, read off Adafruit's own Eagle board
 #: (Adafruit-SCD-4x-PCB, 'Adafruit SCD-41') and seen from above with the five-pin header along
 #: the top, VIN at the right (``pin_one``): the regulator and its two 10 uF capacitors beside
@@ -1982,6 +2039,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_SOIL_MODULE,
     ADAFRUIT_TFT_1_14_MODULE,
     SPARKFUN_THUMB_JOYSTICK_MODULE,
+    SPARKFUN_ENCODER_MODULE,
     ADAFRUIT_BMP280_QT_MODULE,
     ADAFRUIT_BME280_MODULE,
     ADAFRUIT_BMP280_MODULE,
