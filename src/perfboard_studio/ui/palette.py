@@ -29,7 +29,17 @@ from PySide6.QtCore import (
     Qt,
     QVariantAnimation,
 )
-from PySide6.QtGui import QColor, QIcon, QKeyEvent, QPainter
+from PySide6.QtGui import (
+    QColor,
+    QHideEvent,
+    QIcon,
+    QKeyEvent,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QShowEvent,
+    QWindow,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -59,6 +69,9 @@ ALSO = "paletteAlso"
 #: whatever was asked for runs at once, and nothing should stand between Enter and it.
 DROP_PX = 10
 OPEN_MS = 160
+
+#: The key that opens the palette, and closes it again while it is open.
+SHORTCUT = "Ctrl+K"
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +161,14 @@ class _Row(QStyledItemDelegate):
 
 
 class CommandPalette(QFrame):
-    """The field and the list, floating at the top of the window while it is open."""
+    """The field and the list, floating at the top of the window while it is open.
+
+    It goes away the way a palette does, not only the way it came: a click anywhere outside
+    it (and the click still lands), Escape or ``SHORTCUT`` with the keyboard anywhere in it,
+    or the window losing the foreground. It used to close only on Escape in the field, so a
+    click on the board left it standing and Escape from the list did nothing. Those are
+    watched through an application-wide event filter that is there only while it is open.
+    """
 
     def __init__(self, parent: QWidget, entries: Callable[[], list[Entry]]) -> None:
         super().__init__(parent)
@@ -174,6 +194,7 @@ class CommandPalette(QFrame):
         layout.addWidget(self.list)
         self.setFixedWidth(WIDTH)
         self._opening: QVariantAnimation | None = None
+        self._watching = False
         self.hide()
 
     # -- opening and closing ---------------------------------------------------
@@ -197,6 +218,13 @@ class CommandPalette(QFrame):
         self.raise_()
         self.field.setFocus()
         self._drop_in()
+
+    def toggle(self, kinds: frozenset[str] | None = None) -> None:
+        """Close it if it is open, open it if not: what its key does."""
+        if self.isHidden():
+            self.open(kinds)
+        else:
+            self.close_palette()
 
     def _drop_in(self) -> None:
         """Come down the last few pixels into place as the shadow under it deepens: the
@@ -239,10 +267,62 @@ class CommandPalette(QFrame):
 
     def close_palette(self) -> None:
         self._stop_opening()
+        # The keyboard goes back to the window only if it was in here: a click outside has
+        # already given it to whatever was clicked, and taking it back would undo that.
+        focus = QApplication.focusWidget()
+        had_focus = focus is not None and (focus is self or self.isAncestorOf(focus))
         self.hide()
         parent = self.parentWidget()
-        if parent is not None:
+        if parent is not None and had_focus:
             parent.setFocus()
+
+    # Shown and hidden rather than opened and closed: a window closed with the palette up
+    # hides it too, and must not leave it listening to the rest of the application.
+    def showEvent(self, event: QShowEvent) -> None:
+        self._watch(True)
+        super().showEvent(event)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        self._watch(False)
+        super().hideEvent(event)
+
+    def _watch(self, on: bool) -> None:
+        """Hear every click, key and deactivation in the application while open, and none
+        of them once closed."""
+        app = QApplication.instance()
+        if app is None or on == self._watching:
+            return
+        if on:
+            app.installEventFilter(self)
+        else:
+            app.removeEventFilter(self)
+        self._watching = on
+
+    def _is_inside(self, watched: QObject) -> bool:
+        return isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched))
+
+    def _closes_on(self, watched: QObject, event: QEvent) -> bool:
+        """Whether ``event``, on its way to ``watched``, is one the palette closes on."""
+        kind = event.type()
+        if kind == QEvent.Type.MouseButtonPress:
+            assert isinstance(event, QMouseEvent)
+            # A popup of the palette's own -- the field's right-click menu -- is outside
+            # its rectangle and still part of using it.
+            if isinstance(watched, QWidget) and watched.window().windowType() == Qt.WindowType.Popup:
+                return False
+            if isinstance(watched, QWindow) and watched.type() == Qt.WindowType.Popup:
+                return False
+            at = self.mapFromGlobal(event.globalPosition().toPoint())
+            return not self.rect().contains(at)
+        if kind == QEvent.Type.WindowDeactivate:
+            return watched is self.window()
+        return False
+
+    def _is_closing_key(self, event: QKeyEvent) -> bool:
+        if event.key() == Qt.Key.Key_Escape and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            return True
+        pressed = QKeySequence(event.keyCombination())
+        return pressed.matches(QKeySequence(SHORTCUT)) == QKeySequence.SequenceMatch.ExactMatch
 
     # -- the list ----------------------------------------------------------------
 
@@ -281,8 +361,26 @@ class CommandPalette(QFrame):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         """The field keeps the keyboard; the arrows move through the list, Enter runs and
-        Escape closes."""
-        if watched is self.field and event.type() == QEvent.Type.KeyPress:
+        Escape closes. Application-wide while open (``_watch``): a click outside closes it
+        and goes on to what was clicked, Escape or ``SHORTCUT`` with the keyboard anywhere
+        in it closes it, and so does the window losing the foreground."""
+        if self.isHidden():
+            return False
+        kind = event.type()
+        if kind in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress) and self._is_inside(watched):
+            assert isinstance(event, QKeyEvent)
+            if self._is_closing_key(event):
+                if kind == QEvent.Type.ShortcutOverride:
+                    # Claimed, so the window's own Escape and Ctrl+K stand aside and the
+                    # key comes here as a press.
+                    event.accept()
+                    return True
+                self.close_palette()
+                return True
+        if self._closes_on(watched, event):
+            self.close_palette()
+            return False
+        if watched is self.field and kind == QEvent.Type.KeyPress:
             assert isinstance(event, QKeyEvent)
             key = event.key()
             if key == Qt.Key.Key_Escape:

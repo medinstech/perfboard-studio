@@ -466,6 +466,7 @@ from .inspector import (
 )
 from .numberbox import NumberBox
 from .palette import ALSO as PALETTE_ALSO
+from .palette import SHORTCUT as PALETTE_SHORTCUT
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
 from .partnames import footprint_label
@@ -3772,8 +3773,9 @@ class MainWindow(QMainWindow):
         # the window and in no menu -- it is the way INTO the menus.
         self.command_palette = CommandPalette(self, self._palette_entries)
         self.act_palette = QAction(t("Search Commands…"), self)
-        self.act_palette.setShortcut(QKeySequence("Ctrl+K"))
-        self.act_palette.triggered.connect(lambda _checked=False: self.command_palette.open())
+        self.act_palette.setShortcut(QKeySequence(PALETTE_SHORTCUT))
+        # Its key closes it again: a palette is put away the way it was called.
+        self.act_palette.triggered.connect(lambda _checked=False: self.command_palette.toggle())
         self.addAction(self.act_palette)
         self.header = HeaderBar(
             self.workflow_bar,
@@ -15722,7 +15724,7 @@ class MainWindow(QMainWindow):
         if not circuit_parts(document):
             self.statusBar().showMessage(t("There are no parts on this board yet."), 6000)
             return
-        self.command_palette.open(frozenset({"part"}))
+        self.command_palette.toggle(frozenset({"part"}))
 
     #: The status bar's one offered action (``_offer_in_status``), made when first needed.
     _status_offer: QToolButton | None = None
