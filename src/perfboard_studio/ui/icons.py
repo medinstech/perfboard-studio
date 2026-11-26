@@ -84,10 +84,33 @@ def _pad(painter: QPainter, x: float, y: float, r: float = 11.0) -> None:
     painter.drawEllipse(QPointF(x, y), r, r)
 
 
-def _arrow_head(painter: QPainter, tip: QPointF, dx: float, dy: float) -> None:
-    """A two-stroke head at ``tip``, opening back along (dx, dy)."""
-    painter.drawLine(tip, QPointF(tip.x() + dx, tip.y() + dy))
-    painter.drawLine(tip, QPointF(tip.x() + dy, tip.y() - dx))
+def _dashed_segment(
+    painter: QPainter,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    dashes: int = 3,
+    ratio: float = 0.52,
+) -> None:
+    """Explicit round-cap dashes along a segment so Qt dash rounding never drifts at 22 px."""
+    dx, dy = x1 - x0, y1 - y0
+    step = 1.0 / dashes
+    for index in range(dashes):
+        t0 = index * step + step * (1.0 - ratio) * 0.5
+        t1 = t0 + step * ratio
+        painter.drawLine(QPointF(x0 + dx * t0, y0 + dy * t0), QPointF(x0 + dx * t1, y0 + dy * t1))
+
+
+def _tray(painter: QPainter) -> None:
+    """Open U-shaped tray shared by the Import and Export pair."""
+    tray = QPainterPath(QPointF(16, 58))
+    tray.lineTo(QPointF(16, 76))
+    tray.quadTo(QPointF(16, 84), QPointF(24, 84))
+    tray.lineTo(QPointF(76, 84))
+    tray.quadTo(QPointF(84, 84), QPointF(84, 76))
+    tray.lineTo(QPointF(84, 58))
+    painter.drawPath(tray)
 
 
 # ---------------------------------------------------------------------------
@@ -111,16 +134,14 @@ def _turn_arrow(p: QPainter, leftward: bool) -> None:
     sign = 1.0 if leftward else -1.0
 
     def x(value: float) -> float:
-        return 50 + sign * (value - 50)
+        return 50.0 + sign * (value - 50.0)
 
-    path = QPainterPath(QPointF(x(78), 74))
-    path.cubicTo(QPointF(x(88), 26), QPointF(x(34), 18), QPointF(x(24), 46))
+    path = QPainterPath(QPointF(x(83), 80))
+    path.cubicTo(QPointF(x(88), 24), QPointF(x(32), 14), QPointF(x(17), 45))
     p.drawPath(path)
-    # The head sits on the tip and opens back along the curve, which at this point is
-    # heading down and outwards.
-    tip = QPointF(x(24), 46)
-    p.drawLine(tip, QPointF(x(46), 42))
-    p.drawLine(tip, QPointF(x(26), 22))
+    tip = QPointF(x(17), 45)
+    p.drawLine(tip, QPointF(x(42), 45))
+    p.drawLine(tip, QPointF(x(19), 20))
 
 
 def _undo(p: QPainter) -> None:
@@ -143,12 +164,12 @@ def _redo(p: QPainter) -> None:
 def _beads(p: QPainter) -> None:
     """Three pads in a row with solder flowed along them: a bead on every pad it crosses,
     which is what a solder trace is and a wire is not."""
-    p.setPen(_pen(_ink.body, 13))
-    p.drawLine(QPointF(18, 50), QPointF(82, 50))
+    p.setPen(_pen(_ink.body, 11.5))
+    p.drawLine(QPointF(22, 50), QPointF(78, 50))
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(_ink.body))
-    for x in (18.0, 50.0, 82.0):
-        p.drawEllipse(QPointF(x, 50), 15, 15)
+    for x in (22.0, 50.0, 78.0):
+        p.drawEllipse(QPointF(x, 50), 13.0, 13.0)
     p.setBrush(Qt.BrushStyle.NoBrush)
 
 
@@ -157,8 +178,8 @@ def _solder_trace(p: QPainter) -> None:
     # The holes, left open: a bead sits on a pad, around its hole.
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(theme.ACTIVE.bg_raised))
-    for x in (18.0, 50.0, 82.0):
-        p.drawEllipse(QPointF(x, 50), 4.5, 4.5)
+    for x in (22.0, 50.0, 78.0):
+        p.drawEllipse(QPointF(x, 50), 4.0, 4.0)
     p.setBrush(Qt.BrushStyle.NoBrush)
 
 
@@ -166,25 +187,25 @@ def _solder_trace_wired(p: QPainter) -> None:
     """The same beads with the wire they are flowed over showing through: the whole
     difference between the two."""
     _beads(p)
-    p.setPen(_pen(_ink.accent, 6))
-    p.drawLine(QPointF(8, 50), QPointF(92, 50))
+    p.setPen(_pen(_ink.accent, 5.5))
+    p.drawLine(QPointF(14, 50), QPointF(86, 50))
 
 
 def _staple() -> QPainterPath:
     """A wire bent up out of one hole, across, and down into another."""
-    path = QPainterPath(QPointF(18, 70))
-    path.lineTo(QPointF(18, 42))
-    path.quadTo(QPointF(18, 22), QPointF(38, 22))
-    path.lineTo(QPointF(62, 22))
-    path.quadTo(QPointF(82, 22), QPointF(82, 42))
-    path.lineTo(QPointF(82, 70))
+    path = QPainterPath(QPointF(20, 64))
+    path.lineTo(QPointF(20, 38))
+    path.quadTo(QPointF(20, 20), QPointF(38, 20))
+    path.lineTo(QPointF(62, 20))
+    path.quadTo(QPointF(80, 20), QPointF(80, 38))
+    path.lineTo(QPointF(80, 64))
     return path
 
 
 def _bare_wire(p: QPainter) -> None:
-    _pad(p, 18, 80, 10)
-    _pad(p, 82, 80, 10)
-    p.setPen(_pen(_ink.body, 6))
+    _pad(p, 20, 74, 9.5)
+    _pad(p, 80, 74, 9.5)
+    p.setPen(_pen(_ink.body, 6.5))
     p.drawPath(_staple())
 
 
@@ -192,35 +213,36 @@ def _insulated_wire(p: QPainter) -> None:
     """The same bent wire in its sleeve, bare only where it goes into the pads -- the
     sleeve is what lets it cross other copper, so it is the accent."""
     _bare_wire(p)
-    sleeve = QPainterPath(QPointF(18, 56))
-    sleeve.lineTo(QPointF(18, 42))
-    sleeve.quadTo(QPointF(18, 22), QPointF(38, 22))
-    sleeve.lineTo(QPointF(62, 22))
-    sleeve.quadTo(QPointF(82, 22), QPointF(82, 42))
-    sleeve.lineTo(QPointF(82, 56))
-    p.setPen(_pen(_ink.accent, 15))
+    sleeve = QPainterPath(QPointF(20, 52))
+    sleeve.lineTo(QPointF(20, 38))
+    sleeve.quadTo(QPointF(20, 20), QPointF(38, 20))
+    sleeve.lineTo(QPointF(62, 20))
+    sleeve.quadTo(QPointF(80, 20), QPointF(80, 38))
+    sleeve.lineTo(QPointF(80, 52))
+    p.setPen(_pen(_ink.accent, 14.0))
     p.drawPath(sleeve)
 
 
 def _top_jumper(p: QPainter) -> None:
     """A wire arching over a part, from one of its pads to the other."""
-    _pad(p, 12, 84, 9)
-    _pad(p, 88, 84, 9)
-    p.setPen(_pen(_ink.body, 6))
-    p.drawRoundedRect(QRectF(34, 56, 32, 28), 4, 4)
-    arch = QPainterPath(QPointF(12, 76))
-    arch.cubicTo(QPointF(12, 6), QPointF(88, 6), QPointF(88, 76))
-    p.setPen(_pen(_ink.accent, 7))
+    _pad(p, 20, 73, 8.5)
+    _pad(p, 80, 73, 8.5)
+    p.setPen(_pen(_ink.body, 6.0))
+    p.drawRoundedRect(QRectF(36, 51, 28, 22), 4, 4)
+    arch = QPainterPath(QPointF(20, 65))
+    arch.cubicTo(QPointF(20, -2), QPointF(80, -2), QPointF(80, 65))
+    p.setPen(_pen(_ink.accent, 7.0))
     p.drawPath(arch)
 
 
 def _new_net(p: QPainter) -> None:
-    _pad(p, 30, 74, 10)
-    _pad(p, 76, 40, 10)
-    p.drawLine(QPointF(38, 68), QPointF(68, 46))
-    p.setPen(_pen(_ink.accent, 10))
-    p.drawLine(QPointF(14, 26), QPointF(42, 26))
-    p.drawLine(QPointF(28, 12), QPointF(28, 40))
+    """A new net: two connected pads and a balanced accent plus in the open corner."""
+    _pad(p, 26, 74, 9.5)
+    _pad(p, 76, 46, 9.5)
+    p.drawLine(QPointF(34.5, 69.2), QPointF(67.5, 50.8))
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(16, 28), QPointF(40, 28))
+    p.drawLine(QPointF(28, 16), QPointF(28, 40))
 
 
 def _connect(p: QPainter) -> None:
@@ -245,69 +267,79 @@ def _autoroute(p: QPainter) -> None:
 
 
 def _autoplace(p: QPainter) -> None:
-    """A part moved into its place: where it was, where it goes, and the move."""
-    pen = _pen(_ink.body, 6)
-    pen.setStyle(Qt.PenStyle.DashLine)
-    p.setPen(pen)
-    p.drawRoundedRect(QRectF(10, 14, 36, 24), 4, 4)
-    p.setPen(_pen(_ink.body))
-    p.drawRoundedRect(QRectF(54, 58, 36, 24), 4, 4)
-    p.setPen(_pen(_ink.accent, 7))
-    p.drawLine(QPointF(40, 44), QPointF(62, 56))
-    p.drawLine(QPointF(62, 56), QPointF(44, 56))
-    p.drawLine(QPointF(62, 56), QPointF(62, 38))
+    """Auto-arrange / Auto-place: neatly aligned component blocks with an accent sparkle."""
+    p.drawRoundedRect(QRectF(16, 18, 28, 26), 5, 5)
+    p.drawRoundedRect(QRectF(16, 56, 28, 28), 5, 5)
+    p.drawRoundedRect(QRectF(56, 52, 28, 32), 5, 5)
+    cx, cy, r, w = 70.0, 29.0, 17.5, 4.6
+    spark = QPainterPath(QPointF(cx, cy - r))
+    spark.lineTo(QPointF(cx + w, cy - w))
+    spark.lineTo(QPointF(cx + r, cy))
+    spark.lineTo(QPointF(cx + w, cy + w))
+    spark.lineTo(QPointF(cx, cy + r))
+    spark.lineTo(QPointF(cx - w, cy + w))
+    spark.lineTo(QPointF(cx - r, cy))
+    spark.lineTo(QPointF(cx - w, cy - w))
+    spark.closeSubpath()
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(_ink.accent))
+    p.drawPath(spark)
+    p.setBrush(Qt.BrushStyle.NoBrush)
 
 
 def _rotate(p: QPainter) -> None:
-    p.drawArc(QRectF(20, 20, 60, 60), 40 * 16, 270 * 16)
-    _arrow_head(p, QPointF(72, 26), -4, 20)
+    """Clockwise circular arrow with a crisp right-angle head."""
+    p.drawArc(QRectF(20, 20, 62, 62), 40 * 16, 275 * 16)
+    p.setPen(_pen(_ink.accent, STROKE))
+    tip = QPointF(76, 31)
+    p.drawLine(tip, QPointF(76, 15))
+    p.drawLine(tip, QPointF(60, 31))
 
 
 def _mirror(p: QPainter) -> None:
-    pen = _pen(_ink.body, 5)
-    pen.setStyle(Qt.PenStyle.DashLine)
-    p.setPen(pen)
-    p.drawLine(QPointF(50, 10), QPointF(50, 90))
-    p.setPen(_pen(_ink.body))
-    for direction in (-1, 1):
-        path = QPainterPath(QPointF(50 + 12 * direction, 24))
-        path.lineTo(QPointF(50 + 34 * direction, 50))
-        path.lineTo(QPointF(50 + 12 * direction, 76))
-        path.closeSubpath()
-        p.drawPath(path)
+    """Horizontal reflection across a dashed centre axis: solid left, accent outline right."""
+    p.setPen(_pen(_ink.body, 6.0))
+    for y0, y1 in ((15, 27), (44, 56), (73, 85)):
+        p.drawLine(QPointF(50, y0), QPointF(50, y1))
+
+    left = QPainterPath(QPointF(37, 24))
+    left.lineTo(QPointF(16, 76))
+    left.lineTo(QPointF(37, 76))
+    left.closeSubpath()
+    p.setPen(_pen(_ink.body, STROKE))
+    p.setBrush(QColor(_ink.body))
+    p.drawPath(left)
+
+    right = QPainterPath(QPointF(63, 24))
+    right.lineTo(QPointF(84, 76))
+    right.lineTo(QPointF(63, 76))
+    right.closeSubpath()
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawPath(right)
 
 
 def _flip(p: QPainter) -> None:
-    """The board turned over: the face you are on, the face you would get, and the turn.
-
-    Drawn as two boards side by side rather than one board with an arrow through it,
-    because the thing being switched is WHICH SIDE you are looking at, and a picture of a
-    single board says nothing about there being two of them.
-    """
-    p.drawRoundedRect(QRectF(10, 44, 34, 44), 5, 5)
-    pen = _pen(_ink.body, 6)
-    pen.setStyle(Qt.PenStyle.DashLine)
-    p.setPen(pen)
-    p.drawRoundedRect(QRectF(56, 44, 34, 44), 5, 5)
-    p.setPen(_pen(_ink.accent, 7))
-    path = QPainterPath(QPointF(20, 36))
-    path.cubicTo(QPointF(34, 8), QPointF(66, 8), QPointF(80, 36))
-    p.drawPath(path)
-    p.drawLine(QPointF(80, 36), QPointF(62, 32))
-    p.drawLine(QPointF(80, 36), QPointF(80, 16))
+    """The board turned over: a horizontal board slab and an accent arrow wrapping around
+    its edge from the top face to the underside."""
+    p.drawRoundedRect(QRectF(16, 40, 44, 14), 5, 5)
+    p.setPen(_pen(_ink.accent, STROKE))
+    arc = QPainterPath(QPointF(44, 20))
+    arc.cubicTo(QPointF(96, 20), QPointF(96, 74), QPointF(44, 74))
+    p.drawPath(arc)
+    tip = QPointF(44, 74)
+    p.drawLine(tip, QPointF(56, 64))
+    p.drawLine(tip, QPointF(56, 84))
 
 
 def _ratsnest(p: QPainter) -> None:
-    for x, y in ((22, 30), (78, 26), (34, 78), (76, 74)):
-        p.setBrush(QColor(_ink.body))
-        p.drawEllipse(QPointF(x, y), 7, 7)
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    pen = _pen(_ink.accent, 6)
-    pen.setStyle(Qt.PenStyle.DashLine)
-    p.setPen(pen)
-    p.drawLine(QPointF(22, 30), QPointF(78, 26))
-    p.drawLine(QPointF(22, 30), QPointF(34, 78))
-    p.drawLine(QPointF(34, 78), QPointF(76, 74))
+    """Four open pads (matching Connect) joined by crisp dashed airwires."""
+    for x, y in ((24, 24), (76, 24), (24, 76), (76, 76)):
+        _pad(p, x, y, 8.5)
+    p.setPen(_pen(_ink.accent, 6.5))
+    _dashed_segment(p, 36, 24, 64, 24, dashes=2, ratio=0.52)
+    _dashed_segment(p, 36, 76, 64, 76, dashes=2, ratio=0.52)
+    _dashed_segment(p, 66, 34, 34, 66, dashes=3, ratio=0.50)
 
 
 def _cube(p: QPainter) -> None:
@@ -344,11 +376,12 @@ def _delete(p: QPainter) -> None:
 
 
 def _import(p: QPainter) -> None:
-    """A netlist arriving from somewhere else: a sheet, and an arrow into the board."""
-    p.drawRoundedRect(QRectF(12, 14, 44, 56), 5, 5)
-    p.setPen(_pen(_ink.accent, 7))
-    p.drawLine(QPointF(46, 78), QPointF(84, 78))
-    _arrow_head(p, QPointF(86, 78), -16, -8)
+    """Import into the project: an open tray with an accent arrow arriving from above."""
+    _tray(p)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(50, 16), QPointF(50, 62))
+    p.drawLine(QPointF(34, 46), QPointF(50, 62))
+    p.drawLine(QPointF(66, 46), QPointF(50, 62))
 
 
 def _guide(p: QPainter) -> None:
@@ -387,71 +420,89 @@ def _schematic(p: QPainter) -> None:
 
 
 def _sch_add(p: QPainter) -> None:
-    """Adding a part to the design: a symbol outline and a plus."""
-    p.drawRect(QRectF(14, 30, 46, 40))
-    p.drawLine(QPointF(6, 50), QPointF(14, 50))
-    p.drawLine(QPointF(60, 50), QPointF(68, 50))
-    p.setPen(_pen(_ink.accent, 9))
-    p.drawLine(QPointF(80, 20), QPointF(80, 52))
-    p.drawLine(QPointF(64, 36), QPointF(96, 36))
+    """Adding a part to the design: a rounded symbol box with leads and a clean accent plus."""
+    p.drawRoundedRect(QRectF(22, 40, 38, 40), 6, 6)
+    p.drawLine(QPointF(14, 60), QPointF(22, 60))
+    p.drawLine(QPointF(60, 60), QPointF(68, 60))
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(74, 20), QPointF(74, 44))
+    p.drawLine(QPointF(62, 32), QPointF(86, 32))
 
 
 def _sch_place(p: QPainter) -> None:
-    """The design going onto the board: a symbol, an arrow, a grid of holes."""
-    p.drawRect(QRectF(8, 34, 28, 26))
-    p.drawRoundedRect(QRectF(60, 26, 34, 44), 4, 4)
-    for x in (70, 84):
-        for y in (38, 50, 62):
-            p.drawEllipse(QPointF(x, y), 3.5, 3.5)
-    p.setPen(_pen(_ink.accent, 7))
-    p.drawLine(QPointF(38, 47), QPointF(54, 47))
-    _arrow_head(p, QPointF(56, 47), -12, -7)
+    """The design going onto the board: a perfboard substrate with holes and a downward arrow."""
+    p.drawRoundedRect(QRectF(18, 46, 64, 38), 7, 7)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(_ink.body))
+    for x in (34.0, 50.0, 66.0):
+        p.drawEllipse(QPointF(x, 68), 4.5, 4.5)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(50, 16), QPointF(50, 48))
+    p.drawLine(QPointF(36, 34), QPointF(50, 48))
+    p.drawLine(QPointF(64, 34), QPointF(50, 48))
 
 
 def _float(p: QPainter) -> None:
-    """A panel coming out of the window: a frame, and a smaller one lifted off it."""
-    p.drawRect(QRectF(10, 24, 50, 46))
-    p.setPen(_pen(_ink.accent, 7))
-    p.drawRect(QRectF(44, 44, 46, 38))
-    p.drawLine(QPointF(44, 54), QPointF(90, 54))
+    """A panel coming out of the window: an open frame with an arrow stepping out top-right."""
+    frame = QPainterPath(QPointF(48, 24))
+    frame.lineTo(QPointF(24, 24))
+    frame.quadTo(QPointF(16, 24), QPointF(16, 32))
+    frame.lineTo(QPointF(16, 76))
+    frame.quadTo(QPointF(16, 84), QPointF(24, 84))
+    frame.lineTo(QPointF(68, 84))
+    frame.quadTo(QPointF(76, 84), QPointF(76, 76))
+    frame.lineTo(QPointF(76, 52))
+    p.drawPath(frame)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(46, 54), QPointF(84, 16))
+    head = QPainterPath(QPointF(62, 16))
+    head.lineTo(QPointF(84, 16))
+    head.lineTo(QPointF(84, 38))
+    p.drawPath(head)
 
 
 def _export(p: QPainter) -> None:
-    """A sheet and an arrow leaving it."""
-    p.drawRoundedRect(QRectF(12, 14, 46, 72), 5, 5)
-    p.setPen(_pen(_ink.accent, 7))
-    p.drawLine(QPointF(52, 50), QPointF(90, 50))
-    _arrow_head(p, QPointF(92, 50), -16, -8)
+    """Export out of the project: the matching tray with an accent arrow leaving upward."""
+    _tray(p)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(50, 62), QPointF(50, 16))
+    p.drawLine(QPointF(34, 32), QPointF(50, 16))
+    p.drawLine(QPointF(66, 32), QPointF(50, 16))
 
 
 def _label(p: QPainter) -> None:
-    """A net label: the pointed tag a name is written in, on a stub of wire."""
-    p.drawLine(QPointF(8, 50), QPointF(24, 50))
-    path = QPainterPath(QPointF(24, 32))
-    path.lineTo(QPointF(78, 32))
-    path.lineTo(QPointF(94, 50))
-    path.lineTo(QPointF(78, 68))
-    path.lineTo(QPointF(24, 68))
-    path.closeSubpath()
-    p.drawPath(path)
+    """A net label: the pointed flag a name is written in, on a stub of wire."""
+    p.drawLine(QPointF(14, 50), QPointF(24, 50))
+    flag = QPainterPath(QPointF(24, 28))
+    flag.lineTo(QPointF(68, 28))
+    flag.lineTo(QPointF(86, 50))
+    flag.lineTo(QPointF(68, 72))
+    flag.lineTo(QPointF(24, 72))
+    flag.closeSubpath()
+    p.drawPath(flag)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(38, 50), QPointF(62, 50))
 
 
 def _ground(p: QPainter) -> None:
     """A ground: a stem down from a pin, and three shrinking bars under it -- the glyph the
     sheet itself draws, so the button that puts one down shows what it puts down."""
-    p.drawLine(QPointF(50, 10), QPointF(50, 46))
-    p.drawLine(QPointF(18, 46), QPointF(82, 46))
-    p.drawLine(QPointF(30, 64), QPointF(70, 64))
-    p.drawLine(QPointF(42, 82), QPointF(58, 82))
+    p.drawLine(QPointF(50, 14), QPointF(50, 50))
+    p.drawLine(QPointF(18, 50), QPointF(82, 50))
+    p.drawLine(QPointF(30, 68), QPointF(70, 68))
+    p.drawLine(QPointF(42, 86), QPointF(58, 86))
 
 
 def _supply(p: QPainter) -> None:
-    """A supply: a stem up from a pin to one bar across it, the glyph the sheet draws."""
-    p.drawLine(QPointF(50, 90), QPointF(50, 30))
-    p.drawLine(QPointF(20, 30), QPointF(80, 30))
+    """A supply rail: a stem up into an upward VCC rail triangle, pairing with Ground."""
+    p.drawLine(QPointF(50, 84), QPointF(50, 46))
+    tri = QPainterPath(QPointF(50, 16))
+    tri.lineTo(QPointF(78, 46))
+    tri.lineTo(QPointF(22, 46))
+    tri.closeSubpath()
     p.setPen(_pen(_ink.accent, STROKE))
-    p.drawLine(QPointF(38, 14), QPointF(62, 14))
-    p.drawLine(QPointF(50, 4), QPointF(50, 24))
+    p.drawPath(tri)
 
 
 def _text(p: QPainter) -> None:
@@ -464,10 +515,10 @@ def _text(p: QPainter) -> None:
 
 
 def _shape(p: QPainter) -> None:
-    """A rectangle and a circle: the two shapes an annotation is made of."""
-    p.drawRect(QRectF(10, 28, 48, 40))
-    p.setPen(_pen(_ink.accent, 7))
-    p.drawEllipse(QPointF(70, 62), 22, 22)
+    """A rounded square and a circle: the two shapes an annotation is made of."""
+    p.drawRoundedRect(QRectF(16, 16, 44, 44), 7, 7)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawEllipse(QPointF(64, 64), 20, 20)
 
 
 def _arrow(p: QPainter) -> None:
@@ -495,17 +546,21 @@ def _measure(p: QPainter) -> None:
 
 
 def _show(p: QPainter) -> None:
-    """Two sheets stacked: what is drawn on the board, layer by layer."""
-    sheet = QPainterPath(QPointF(50, 16))
-    sheet.lineTo(QPointF(86, 36))
-    sheet.lineTo(QPointF(50, 56))
-    sheet.lineTo(QPointF(14, 36))
-    sheet.closeSubpath()
-    p.drawPath(sheet)
-    under = QPainterPath(QPointF(14, 58))
-    under.lineTo(QPointF(50, 78))
-    under.lineTo(QPointF(86, 58))
-    p.drawPath(under)
+    """Three stacked layers: what is drawn on the board, layer by layer."""
+    top = QPainterPath(QPointF(50, 16))
+    top.lineTo(QPointF(84, 33))
+    top.lineTo(QPointF(50, 50))
+    top.lineTo(QPointF(16, 33))
+    top.closeSubpath()
+    p.drawPath(top)
+    mid = QPainterPath(QPointF(16, 50))
+    mid.lineTo(QPointF(50, 67))
+    mid.lineTo(QPointF(84, 50))
+    p.drawPath(mid)
+    bot = QPainterPath(QPointF(16, 67))
+    bot.lineTo(QPointF(50, 84))
+    bot.lineTo(QPointF(84, 67))
+    p.drawPath(bot)
 
 
 def _zoom(p: QPainter, inward: bool) -> None:
@@ -566,28 +621,37 @@ def _next_step(p: QPainter) -> None:
 
 
 def _clear(p: QPainter) -> None:
-    """A tick struck through: the ticks taken off."""
-    tick = QPainterPath(QPointF(18, 52))
-    tick.lineTo(QPointF(40, 74))
-    tick.lineTo(QPointF(82, 28))
-    p.drawPath(tick)
-    p.drawLine(QPointF(20, 20), QPointF(80, 80))
+    """A circle with a cross: clears progress ticks and dismisses canvas hints."""
+    p.drawEllipse(QPointF(50, 50), 34, 34)
+    p.setPen(_pen(_ink.accent, STROKE))
+    p.drawLine(QPointF(37, 37), QPointF(63, 63))
+    p.drawLine(QPointF(63, 37), QPointF(37, 63))
 
 
 def _exploded(p: QPainter) -> None:
-    """Two parts lifted off a board, with the line down to where they go."""
-    p.drawLine(QPointF(10, 84), QPointF(90, 84))
-    p.drawRect(QRectF(18, 20, 24, 18))
-    p.drawRect(QRectF(58, 34, 24, 18))
-    for x, top in ((30, 38), (70, 52)):
-        p.drawLine(QPointF(x, top + 6), QPointF(x, 78))
+    """An isometric component layer lifted off the board with accent lift guides."""
+    board = QPainterPath(QPointF(50, 62))
+    board.lineTo(QPointF(84, 73))
+    board.lineTo(QPointF(50, 84))
+    board.lineTo(QPointF(16, 73))
+    board.closeSubpath()
+    p.drawPath(board)
+    part = QPainterPath(QPointF(50, 16))
+    part.lineTo(QPointF(76, 26))
+    part.lineTo(QPointF(50, 36))
+    part.lineTo(QPointF(24, 26))
+    part.closeSubpath()
+    p.drawPath(part)
+    p.setPen(_pen(_ink.accent, 6.5))
+    p.drawLine(QPointF(28, 43), QPointF(28, 56))
+    p.drawLine(QPointF(72, 43), QPointF(72, 56))
 
 
 def _camera(p: QPainter) -> None:
     """A camera: put the 3D camera back where it starts."""
-    p.drawRoundedRect(QRectF(12, 32, 76, 50), 8, 8)
-    p.drawRect(QRectF(34, 20, 24, 12))
-    p.drawEllipse(QPointF(50, 57), 15, 15)
+    p.drawRoundedRect(QRectF(14, 32, 72, 50), 8, 8)
+    p.drawRoundedRect(QRectF(36, 20, 28, 12), 3, 3)
+    p.drawEllipse(QPointF(50, 57), 14, 14)
 
 
 def _home(p: QPainter) -> None:

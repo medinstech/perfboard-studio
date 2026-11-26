@@ -287,8 +287,9 @@ class FloatingBar(QFrame):
 
     def add_separator(self) -> None:
         line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine if self._vertical else QFrame.Shape.VLine)
-        line.setFrameShadow(QFrame.Shadow.Plain)
+        line.setProperty("separator", True)
+        line.setFrameShape(QFrame.Shape.NoFrame)
+        line.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         line.setFixedSize(QSize(22, 1) if self._vertical else QSize(1, 22))
         self._layout.addWidget(line, 0, Qt.AlignmentFlag.AlignCenter)
         self._separators.append(line)

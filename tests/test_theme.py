@@ -539,6 +539,64 @@ def test_a_checked_tool_has_its_own_picture() -> None:
     assert DARK.accent_text in inks
 
 
+def test_every_toolbar_icon_has_clean_margins_and_centering() -> None:
+    """No toolbar icon clips the pixmap edge, and every audited/redrawn icon stays centred
+    with breathing room inside the 22 px @2x canvas in both themes."""
+    audited = {
+        "rotate", "flip", "mirror", "supply", "clear", "exploded", "sch-place", "float",
+        "import", "export", "autoplace", "new-net", "label", "shape", "show", "ratsnest",
+        "sch-add", "top-jumper", "solder-trace", "solder-trace-wired", "bare-wire",
+        "insulated-wire", "ground", "undo", "redo", "camera",
+    }
+    size = QSize(icons.SIZE, icons.SIZE)
+    prev = theme.ACTIVE
+    try:
+        for tokens in (DARK, LIGHT):
+            theme.ACTIVE = tokens
+            for name in icons.DRAWINGS:
+                img = icons.icon(name).pixmap(size, QIcon.Mode.Normal, QIcon.State.Off).toImage()
+                w, h = img.width(), img.height()
+                xs = [x for y in range(h) for x in range(w) if img.pixelColor(x, y).alpha() > 16]
+                ys = [y for y in range(h) for x in range(w) if img.pixelColor(x, y).alpha() > 16]
+                assert xs and ys, f"{tokens.name}:{name} rendered blank"
+                x0, x1 = min(xs), max(xs)
+                y0, y1 = min(ys), max(ys)
+                margin = min(x0, y0, (w - 1) - x1, (h - 1) - y1)
+                cx_off = ((x0 + x1) / 2.0 - (w - 1) / 2.0) / 2.0
+                cy_off = ((y0 + y1) / 2.0 - (h - 1) / 2.0) / 2.0
+                assert margin >= 1, f"{tokens.name}:{name} touches edge ({x0},{y0},{x1},{y1})"
+                if name in audited:
+                    assert margin >= 3, f"{tokens.name}:{name} tight margin {margin}px"
+                    assert abs(cx_off) <= 0.5, f"{tokens.name}:{name} cx_off={cx_off:+.2f}"
+                    assert abs(cy_off) <= 0.5, f"{tokens.name}:{name} cy_off={cy_off:+.2f}"
+    finally:
+        theme.ACTIVE = prev
+
+
+def test_floating_bar_separators_and_menu_indicators_are_styled() -> None:
+    """FloatingBar hairlines use theme border_strong instead of Fusion's WindowText, and
+    InstantPopup/DelayedPopup menu chevrons are positioned cleanly in the stylesheet."""
+    from PySide6.QtWidgets import QFrame, QWidget
+
+    from perfboard_studio.ui.canvastools import FloatingBar
+
+    host = QWidget()
+    bar = FloatingBar(host, Qt.Corner.TopLeftCorner, vertical=False, name="testBar")
+    bar.add_separator()
+    assert len(bar._separators) == 1
+    sep = bar._separators[0]
+    assert sep.property("separator") is True
+    assert sep.frameShape() == QFrame.Shape.NoFrame
+
+    arrows = {k: f"/tmp/{k}.png" for k in ("up", "down", "up-disabled", "down-disabled")}
+    for tokens in (DARK, LIGHT):
+        sheet = theme.stylesheet(tokens, arrows)
+        assert 'QFrame[floating="true"] QFrame[separator="true"]' in sheet
+        assert 'QFrame[floating="true"] QToolButton[popupMode="2"]::menu-indicator' in sheet
+        assert 'QFrame[floating="true"] QToolButton[popupMode="0"]::menu-indicator' in sheet
+    host.close()
+
+
 # -- nothing styles the chrome but theme.py ---------------------------------------------------
 #
 # The tokens end colour drift only if nothing goes round them. Four things went round them

@@ -784,6 +784,13 @@ QFrame[floating="true"] QToolButton {{
 }}
 QFrame[floating="true"] QToolButton:hover {{ background: {k.bg_hover}; }}
 QFrame[floating="true"] QToolButton:checked {{ background: {k.accent_subtle}; color: {k.accent_text}; }}
+QFrame[floating="true"] QFrame[separator="true"] {{
+    background: {k.border_strong};
+    border: none;
+}}
+QFrame[floating="true"] QToolButton[popupMode="2"] {{
+    padding-right: {s["xl"] + 2}px;
+}}
 QLabel#toastMessage {{
     background: transparent;
     color: {k.text};
@@ -1020,6 +1027,29 @@ QComboBox::down-arrow:disabled, QSpinBox::down-arrow:disabled,
 QDoubleSpinBox::down-arrow:disabled {{ image: url({arrows["down-disabled"]}); }}
 QSpinBox::up-arrow:disabled, QDoubleSpinBox::up-arrow:disabled {{
     image: url({arrows["up-disabled"]});
+}}
+QFrame[floating="true"] QToolButton[popupMode="2"]::menu-indicator {{
+    image: url({arrows["down"]});
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    right: {s["xs"] + 1}px;
+    width: {ARROW_PX}px;
+    height: {ARROW_PX}px;
+}}
+QFrame[floating="true"] QToolButton[popupMode="2"]::menu-indicator:disabled {{
+    image: url({arrows["down-disabled"]});
+}}
+QFrame[floating="true"] QToolButton[popupMode="0"]::menu-indicator {{
+    image: url({arrows["down"]});
+    subcontrol-origin: padding;
+    subcontrol-position: right bottom;
+    right: 1px;
+    bottom: 1px;
+    width: 7px;
+    height: 7px;
+}}
+QFrame[floating="true"] QToolButton[popupMode="0"]::menu-indicator:disabled {{
+    image: url({arrows["down-disabled"]});
 }}
 """
 

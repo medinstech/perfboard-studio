@@ -190,6 +190,15 @@ closed without a bump.
   beside the name and its key drawn as keycaps, and a footer says which keys move, run and
   close. The arrows step over the headers. Holding Ctrl+K no longer flips it open and shut.
 
+- **Toolbar icons and floating canvas bars are redrawn and aligned.** Seventeen ambiguous
+  toolbar icons (`rotate`, `flip`, `mirror`, `supply`, `clear`, `exploded`, `sch-place`,
+  `float`, `import`, `export`, `autoplace`, `new-net`, `label`, `shape`, `show`,
+  `ratsnest`, `sch-add`) were redrawn in a single round-cap vector language, and nine more
+  (`top-jumper`, `solder-trace`, `solder-trace-wired`, `bare-wire`, `insulated-wire`,
+  `ground`, `undo`, `redo`, `camera`) were centred, given clean margins and scaled to match
+  their neighbours. Floating canvas bar separators now paint as quiet `border_strong`
+  hairlines instead of bright `WindowText`, the `Show` menu chevron sits centred beside its
+  label, and flyout tool buttons tuck a compact indicator into their bottom-right corner.
 - **Switching between dark and light themes happens live, with no restart and no dialog.**
   Choosing Dark or Light from View ▸ Theme or the header toggle immediately re-applies the
   application palette and stylesheet and recolours the header, Home, docks, icons, Inspector,
