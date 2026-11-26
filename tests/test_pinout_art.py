@@ -22,7 +22,12 @@ from perfboard_studio.pinout_export import PINOUT_LIGHT, pinout_svg
 from perfboard_studio.ui import view2d
 from perfboard_studio.ui.moduleart import ART_COLOURS
 from perfboard_studio.ui.pinoutart import UNITS_PER_MM, card_ink, part_art_svg
-from perfboard_studio.ui.pinoutview import PinoutDialog, card_of_part_row, save_folder
+from perfboard_studio.ui.pinoutview import (
+    PinoutDialog,
+    card_of_part_row,
+    offer_pinout_on,
+    save_folder,
+)
 
 LOOKUP = footprint_lookup()
 
@@ -141,6 +146,33 @@ def test_the_dialog_repaints_its_card_when_the_palette_changes() -> None:
     dialog.view.setPalette(light)
     assert 'fill="#fbfbfc"' in dialog.view.svg()
     dialog.deleteLater()
+
+
+def test_a_right_click_menu_is_freed_when_it_closes() -> None:
+    """Each right-click makes its menu; closed, it goes, rather than one per click staying
+    parented to the tree for as long as the tree lives."""
+    from PySide6.QtCore import QEvent, QPoint
+    from PySide6.QtWidgets import QMenu, QTreeWidget, QTreeWidgetItem
+
+    tree = QTreeWidget()
+    QTreeWidgetItem(tree, ["U1"])
+    tree.show()
+    QApplication.processEvents()
+    shown: list[str] = []
+    offer_pinout_on(tree, lambda item: _card("attiny85"), lambda card: shown.append(card.part_id))
+    pos = tree.visualItemRect(tree.topLevelItem(0)).center()
+    for _ in range(3):
+        tree.customContextMenuRequested.emit(QPoint(pos))
+        menus = tree.findChildren(QMenu)
+        assert len(menus) == 1
+        menus[0].close()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert tree.findChildren(QMenu) == []
+    tree.customContextMenuRequested.emit(QPoint(pos))
+    tree.findChildren(QMenu)[0].actions()[0].trigger()
+    assert shown == ["attiny85"]
+    tree.findChildren(QMenu)[0].close()
+    tree.deleteLater()
 
 
 def test_escape_closes_the_dialog() -> None:

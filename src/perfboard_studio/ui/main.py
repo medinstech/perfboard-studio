@@ -17936,7 +17936,10 @@ class MainWindow(QMainWindow):
         """A part's pinout card, from a right-click in the Library or Parts, or the link in
         Properties: in the window's language, saved into the project's ``outputs/``."""
         folder = save_folder(self.current_path)
-        PinoutDialog(card, self.lookup, self._guide_language(), folder, self).exec()
+        dialog = PinoutDialog(card, self.lookup, self._guide_language(), folder, self)
+        dialog.exec()
+        # Parented to the window, it would otherwise live as long as the window does.
+        dialog.deleteLater()
 
     def on_save(self) -> bool:
         """Save, returning whether it happened. The bool is what the close guard needs."""

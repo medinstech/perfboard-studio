@@ -319,7 +319,7 @@ def _write_pinouts(doc: PerfDocument, lookup: FootprintLookup, out_dir: Path) ->
             card, language=guide_language(language()), art=part_art_svg(card, lookup)
         )
         name = f"pinout-{component.ref}.svg"
-        (out_dir / name).write_text(svg, encoding="utf-8")
+        (out_dir / name).write_text(svg, encoding="utf-8", newline="\n")
         written.append(name)
     if written:
         print(f"pinouts      {len(written)} -> {', '.join(written)}")

@@ -80,6 +80,9 @@ def test_one_board_prints_what_it_always_printed(tmp_path, monkeypatch, capsys) 
     sections = [line.split()[0] for line in printed.splitlines() if line.strip()]
     assert sections == ONE_BOARD_SECTIONS
     assert "boards " not in printed and "===" not in printed and "the system's" not in printed
+    # The pinout cards are LF on every platform, like the window's Save SVG.
+    pinouts = sorted(out.glob("pinout-*.svg"))
+    assert pinouts and not [p.name for p in pinouts if b"\r\n" in p.read_bytes()]
     assert not [p for p in out.iterdir() if p.is_dir()], "a single board writes no board folder"
 
 

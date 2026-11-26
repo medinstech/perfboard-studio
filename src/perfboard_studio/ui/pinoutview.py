@@ -144,7 +144,7 @@ class PinoutDialog(QDialog):
         self.save.setAutoDefault(False)
         buttons.addButton(self.save, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.rejected.connect(self.reject)
-        self.save.clicked.connect(lambda: self.on_save())
+        self.save.clicked.connect(self._on_save_clicked)
         layout = QVBoxLayout(self)
         layout.addWidget(scroll, 1)
         layout.addWidget(buttons)
@@ -155,6 +155,11 @@ class PinoutDialog(QDialog):
             width = min(width, int(screen.width() * 0.9))
             height = min(height, int(screen.height() * 0.85))
         self.resize(width, height)
+
+    def _on_save_clicked(self) -> None:
+        # A slot of its own rather than a lambda: a lambda holding the dialog, connected to
+        # its own button, is a cycle the collector may break at exit, after Qt is gone.
+        self.on_save()
 
     def file_svg(self) -> str:
         """What Save SVG writes: the light card with the fonts any browser falls back on."""
@@ -197,7 +202,10 @@ def offer_pinout_on(
         card = card_for(item) if item is not None else None
         if card is None:
             return
+        # One menu per right-click, freed when it closes: parented to the tree and never
+        # deleted, every click left one behind, its action's closure holding the window.
         menu = QMenu(tree)
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         action = menu.addAction(t("Show Pinout…"))
         action.triggered.connect(lambda: show(card))
         menu.popup(tree.viewport().mapToGlobal(pos))
