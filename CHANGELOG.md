@@ -34,7 +34,7 @@ closed without a bump.
   Show Pin Names and Show Labels on the Board are now remembered between sessions like the
   other Show items.
 - **A part from the sheet is the part in hand on the board.** A part put on the sheet (Enter,
-  a double-click or a drop) and a part still off the board picked in the Part List come onto
+  a double-click or a drop) and a part still off the board picked in the Part List with the board in front come onto
   the board in hand, their reference and value over the ghost; a click places THAT part under
   its own reference, one undo step, and the next part still off the board comes into hand, by
   reference in natural order (C1, C2, C10, R1), with the banner counting what is left. R turns

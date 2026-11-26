@@ -283,6 +283,13 @@ def test_a_part_still_in_the_design_opens_the_sheet_on_its_symbol(window) -> Non
     assert window.statusBar().currentMessage() == (
         "R2 is in the design, not on the board yet. Place on the Board puts it there."
     )
+    # Nothing came into hand on the board behind it, then or when it is opened.
+    assert window.scene.armed_part_id is None
+    assert "Click a hole to place" not in window.label_place_hint.text()
+    window.show_board()
+    QApplication.processEvents()
+    assert window.board_is_showing()
+    assert window.scene.armed_part_id is None
 
 
 def test_resetting_the_layout_puts_it_back_behind_nets(window) -> None:  # type: ignore[no-untyped-def]

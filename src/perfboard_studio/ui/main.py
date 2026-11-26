@@ -8306,13 +8306,14 @@ class MainWindow(QMainWindow):
     def _on_part_list_design_part(self, part_id: str) -> None:
         """A part still in the design was picked in the Part List. With the board in front
         it comes into hand there, to be clicked down; otherwise the sheet, the one view that
-        has it, comes forward with its symbol selected."""
+        has it, comes forward with its symbol selected -- and nothing is put in hand on a
+        board nobody is looking at, to be found stuck to the pointer when it is opened."""
         part = next((p for p in self.bus.document.parts if p.id == part_id), None)
         if part is None:
             return
-        self.scene.arm_part(part.id)
         if self.board_is_showing():
             # With the board in front the part comes into hand there, to be clicked down.
+            self.scene.arm_part(part.id)
             return
         self.show_schematic()
         self._schematic_ref = part.ref
