@@ -11,7 +11,9 @@ from perfboard_studio.catalog import CATALOG
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.pinout import PinoutCard, pinout_card
 from perfboard_studio.pinout_export import (
+    FOOT_MIN_W,
     GROUP_OF,
+    MARGIN,
     PINOUT_DARK,
     PINOUT_LIGHT,
     WARNING_WORDS,
@@ -199,3 +201,71 @@ def test_a_card_with_nothing_to_say_below_its_part_has_no_rule_over_an_empty_foo
     border = f'stroke="{PINOUT_LIGHT.border}"'
     assert pinout_svg(_card("ne555")).count(border) == 1
     assert pinout_svg(_card("atmega328p")).count(border) == 2
+
+
+def test_one_row_of_pins_fans_out_both_ways_and_no_label_crosses_a_leader() -> None:
+    """A GY-521's eight pins in one row: the four on the left are labelled out to the left,
+    the four on the right out to the right, each half's outermost pin nearest the board --
+    four steps deep where one staircase was eight."""
+    card = _card("gy-521")
+    svg = pinout_svg(card, art=ART)  # with art in the middle, every pad carries its tag
+    pins = sorted(card.pins, key=lambda p: p.x)
+    assert {p.side for p in pins} == {"below"}
+    rows = set()
+    for index, pin in enumerate(pins):
+        tag_x, _ = _label_at(svg, pin.number)
+        name_x, name_y = _label_at(svg, pin.name)
+        assert (name_x < tag_x) == (index < 4), pin.name
+        rows.add(name_y)
+    assert len(rows) == 4
+    # Deeper toward the middle on both halves, so a label never runs over a leader that
+    # goes on down past it.
+    depth = [_label_at(svg, p.name)[1] for p in pins]
+    assert depth[:4] == sorted(depth[:4])
+    assert depth[4:] == sorted(depth[4:], reverse=True)
+
+
+def test_each_row_of_a_part_with_two_fans_on_its_own() -> None:
+    # A PCF8574 QT's ten pins along the top and six along the bottom: each row splits.
+    svg = pinout_svg(_card("adafruit-pcf8574-qt"), art=ART)
+    assert _label_at(svg, "P7")[0] < _label_at(svg, "2")[0]
+    assert _label_at(svg, "P0")[0] > _label_at(svg, "9")[0]
+
+
+def _width(svg: str) -> float:
+    return float(ET.fromstring(svg).get("width") or 0)
+
+
+def test_the_foot_is_wrapped_to_the_card_rather_than_widening_it() -> None:
+    """The PCF8574 QT's pad-number note used to set the card's width at twice its drawing;
+    it is wrapped now, and the card is as wide as its heading."""
+    card = _card("adafruit-pcf8574-qt")
+    svg = pinout_svg(card)
+    width = _width(svg)
+    assert width < 520
+    note = [t for t in _texts(svg) if t.startswith("The small framed numbers")]
+    assert len(note) == 1 and "printed on the board." not in note[0]
+    assert "printed on the board." in " ".join(_texts(svg))
+    # The rule over the foot runs the card's width.
+    rule = re.search(
+        rf'<line x1="{MARGIN:g}" y1="[-\d.]+" x2="([-\d.]+)"[^>]*stroke="{PINOUT_LIGHT.border}"',
+        svg,
+    )
+    assert rule is not None and float(rule.group(1)) == pytest.approx(width - MARGIN, abs=1)
+
+
+def test_a_card_with_no_foot_is_as_narrow_as_its_drawing() -> None:
+    assert _width(pinout_svg(_card("bc547"))) < 2 * MARGIN + FOOT_MIN_W
+
+
+def test_a_card_widened_by_its_heading_has_its_part_in_the_middle() -> None:
+    """The PCF8574 QT's title is wider than the board and its labels: the board stands in
+    the middle of the card rather than against its left edge."""
+    svg = pinout_svg(_card("adafruit-pcf8574-qt"), art=ART)
+    width = _width(svg)
+    placed = re.search(r'<g transform="translate\(([-\d.]+) [-\d.]+\) scale\(([-\d.]+)', svg)
+    assert placed is not None
+    left = float(placed.group(1))
+    right = left + 100 * float(placed.group(2))  # ART's viewBox is 100 wide
+    assert left - MARGIN > 20
+    assert (left + right) / 2 == pytest.approx(width / 2, abs=40)

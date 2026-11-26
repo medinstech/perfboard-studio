@@ -193,16 +193,34 @@ LEADER = 10.0
 WARNING_W = 16.0
 TAG_W = 18.0
 TAG_SLOT = 24.0
-#: Labels above or below the part go down (or up) a staircase, one pin to a step, the
-#: leftmost pin's furthest out, so no label crosses another pin's leader.
+#: Labels above or below the part go down (or up) a staircase, one pin to a step, so no
+#: label crosses another pin's leader. One row of pins fans out: its left half steps out to
+#: the left and its right half to the right, each with its outermost pin nearest the part,
+#: which makes the card about half as tall as one staircase would.
 STAIR = CHIP_H + 7.0
 TAG_H = 14.0
+#: The narrowest the foot's text is wrapped to, on a card whose drawing is narrower still.
+FOOT_MIN_W = 300.0
 
 
 def _text_width(text: str, size: float) -> float:
     """A label's width, estimated: the engine has no font metrics, and a chip a little too
     wide reads better than one its text spills out of."""
     return len(text) * size * 0.58
+
+
+def _wrap(text: str, size: float, limit: float) -> list[str]:
+    """``text`` in lines no wider than ``limit`` (estimated), broken between words."""
+    lines: list[str] = []
+    line = ""
+    for word in text.split():
+        tried = f"{line} {word}" if line else word
+        if line and _text_width(tried, size) > limit:
+            lines.append(line)
+            line = word
+        else:
+            line = tried
+    return [*lines, line] if line else lines
 
 
 def _chip_width(text: str, size: float = LABEL_PX) -> float:
@@ -362,13 +380,33 @@ def pinout_svg(
     def stair(side: str) -> list[PinoutPin]:
         return sorted((p for p in pins if p.side == side), key=lambda p: (p.x, p.y))
 
+    def own_width(pin: PinoutPin) -> float:
+        return 6.0 + WARNING_W * len(pin.warnings) if pin.warnings else 0.0
+
+    def fan(side: str) -> tuple[list[PinoutPin], list[PinoutPin]]:
+        """The pins whose labels go out to the left and to the right, each list in the
+        order of its steps, the first nearest the part. One row of two or more pins splits
+        down the middle; anything else is one staircase going right."""
+        steps = stair(side)
+        one_row = len(steps) > 1 and max(p.y for p in steps) - min(p.y for p in steps) < 0.5
+        if not one_row:
+            return [], list(reversed(steps))
+        cut = (len(steps) + 1) // 2
+        return steps[:cut], list(reversed(steps[cut:]))
+
     def stair_height(side: str) -> float:
-        count = len(stair(side))
+        count = max(len(half) for half in fan(side))
         return (TAG_H + 6 if tagged else 0.0) + LEADER + count * STAIR if count else 0.0
 
     warn_slot = 6.0 + WARNING_W * max((len(p.warnings) for p in pins), default=0)
     fx0, fx1, fy0, fy1 = card.frame
-    ox = MARGIN + side_width("left") - fx0 * MM
+    # The left half of a fanned row reaches out past the frame's left edge.
+    reach = max(
+        (6 + own_width(p) + chips_width(p) - (p.x - fx0) * MM
+         for side in ("above", "below") for p in fan(side)[0]),
+        default=0.0,
+    )
+    ox = MARGIN + max(side_width("left"), reach) - fx0 * MM
     oy = MARGIN + HEADER + stair_height("above") - fy0 * MM
 
     def px(mm: float) -> float:
@@ -379,12 +417,10 @@ def pinout_svg(
 
     width = px(fx1) + side_width("right") + MARGIN
     for side in ("above", "below"):
-        for pin in stair(side):
-            own = 6.0 + WARNING_W * len(pin.warnings) if pin.warnings else 0.0
-            width = max(width, px(pin.x) + 6 + own + chips_width(pin) + MARGIN)
+        for pin in fan(side)[1]:
+            width = max(width, px(pin.x) + 6 + own_width(pin) + chips_width(pin) + MARGIN)
 
     # -- the heading -------------------------------------------------------------------
-    page.text(MARGIN, MARGIN + 16, card.title, ink.text, size=18, bold=True)
     facts: list[str] = []
     if card.mcu_name:
         facts.append(card.mcu_name)
@@ -393,7 +429,24 @@ def pinout_svg(
         if card.logic.pin_max_ma is not None:
             facts.append(say("at most {ma} mA per pin", ma=f"{card.logic.pin_max_ma:g}"))
     facts.append(say("seen from above"))
-    page.text(MARGIN, MARGIN + 38, "  ·  ".join(facts), ink.muted, size=12)
+    subtitle = "  ·  ".join(facts)
+    # The card is as wide as its drawing or its heading; the foot is wrapped to fit it, and
+    # widens a narrow card only when there is a foot to wrap.
+    footed = bool(
+        card.warnings or card.documents or card.any_pin or "pcint" in card.kinds
+        or not card.numbered_by_maker
+    )
+    drawn = width
+    width = max(
+        width,
+        MARGIN + _text_width(card.title, 18) + MARGIN,
+        MARGIN + _text_width(subtitle, 12) + MARGIN,
+        MARGIN + FOOT_MIN_W + MARGIN if footed else 0.0,
+    )
+    # A card made wider by its heading or its foot has the part and its labels in the middle.
+    ox += (width - drawn) / 2
+    page.text(MARGIN, MARGIN + 16, card.title, ink.text, size=18, bold=True)
+    page.text(MARGIN, MARGIN + 38, subtitle, ink.muted, size=12)
 
     # -- the middle --------------------------------------------------------------------
     bx0, bx1, by0, by1 = card.body
@@ -499,19 +552,19 @@ def pinout_svg(
         row(pin, y, cursor + sign * LEADER, sign, warn_slot)
     # ...and down (or up) the staircase from the frame's bottom (or top) edge.
     for side, sign in (("above", -1.0), ("below", 1.0)):
-        steps = stair(side)
         edge = py(fy0) if sign < 0 else py(fy1)
-        for index, pin in enumerate(steps):
-            x = px(pin.x)
-            start = edge + sign * 3
-            if tagged:
-                tag(x, start + sign * TAG_H / 2, pin.number)
-                start += sign * (TAG_H + 3)
-            y = start + sign * (LEADER + (len(steps) - 1 - index) * STAIR + CHIP_H / 2)
-            page.line(x, start, x, y, ink.leader)
-            page.line(x, y, x + 6, y, ink.leader)
-            own = 6.0 + WARNING_W * len(pin.warnings) if pin.warnings else 0.0
-            row(pin, y, x + 6, 1.0, own)
+        left, right = fan(side)
+        for half, going in ((left, -1.0), (right, 1.0)):
+            for depth, pin in enumerate(half):
+                x = px(pin.x)
+                start = edge + sign * 3
+                if tagged:
+                    tag(x, start + sign * TAG_H / 2, pin.number)
+                    start += sign * (TAG_H + 3)
+                y = start + sign * (LEADER + depth * STAIR + CHIP_H / 2)
+                page.line(x, start, x, y, ink.leader)
+                page.line(x, y, x + going * 6, y, ink.leader)
+                row(pin, y, x + going * 6, going, own_width(pin))
 
     # -- the legend, the notes, the warnings and the documents ---------------------------
     groups = _groups(card.kinds)
@@ -554,24 +607,27 @@ def pinout_svg(
         page.text(x + 20, y, words, ink.text, size=11.5)
         x += step + 14
     y += 24 if groups else 0
+    room = width - 2 * MARGIN
     for note in notes:
-        page.text(MARGIN, y, note, ink.muted, size=11)
-        y += 20
+        for part in _wrap(note, 11, room):
+            page.text(MARGIN, y, part, ink.muted, size=11)
+            y += 17
+        y += 3
     y += 2
     for number, words in enumerate(lines, start=1):
         page.warning(MARGIN + 7, y - 4, number)
-        page.text(MARGIN + 22, y, words, ink.text, size=11.5)
-        y += 21
+        for part in _wrap(words, 11.5, room - 22):
+            page.text(MARGIN + 22, y, part, ink.text, size=11.5)
+            y += 17
+        y += 4
     if card.documents:
         y += 6
         named = "; ".join(document_title(d, say) for d in card.documents)
-        page.text(MARGIN, y, say("Read from: {documents}", documents=named), ink.faint, size=10)
-        y += 4
+        for part in _wrap(say("Read from: {documents}", documents=named), 10, room):
+            page.text(MARGIN, y, part, ink.faint, size=10)
+            y += 14
+        y -= 10
     height = y + MARGIN
-    widest_line = max(
-        [_text_width(n, 11) for n in notes] + [_text_width(w, 11.5) + 22 for w in lines] + [0.0]
-    )
-    width = max(width, MARGIN + widest_line + MARGIN)
 
     head = (
         f'<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny" '

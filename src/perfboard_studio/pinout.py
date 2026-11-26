@@ -139,7 +139,9 @@ def _sides(pins: list[PinoutPin]) -> list[PinoutPin]:
     Then a header of two columns -- an nRF24L01's 2 x 4 at one end of its board -- sends its
     left column's labels left and its right column's right, as every pinout of one does;
     anything else goes out above and below, the top row's labels above and every other
-    row's below, one pin to a step.
+    row's below. ``pinout_export`` draws a side that is one row as a fan, its left half's
+    labels out to the left and its right half's to the right, and anything else as one
+    staircase, a pin to a step.
     """
     if not _collide(pins):
         return pins
