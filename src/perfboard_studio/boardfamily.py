@@ -807,12 +807,16 @@ def matching_preset(board: Board) -> BoardPreset | None:
 
     Keyed on the grid and the family and not on the border, because a board that has been
     given a legend may have had its border raised to fit one and is still the same product.
+    The family's board TYPE is part of the key: a stripboard whose grid is a stock
+    perfboard's (``board_from_preset`` keeps the type it is given) is cut from a sheet of
+    stripboard, and was told to take the perfboard with its screw holes already in it.
     """
     for preset in STANDARD_PRESETS:
         if (
             preset.cols == board.cols
             and preset.rows == board.rows
             and preset.single_sided == board.single_sided
+            and preset.product.type == board.type
         ):
             return preset
     return None

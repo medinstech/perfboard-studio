@@ -1473,6 +1473,26 @@ def test_a_stock_board_is_taken_not_cut_and_its_own_holes_are_not_drilled() -> N
     assert "drill the 1 mounting hole" in prep.summary
 
 
+def test_a_stripboard_of_a_stock_size_is_cut_not_taken() -> None:
+    """The stock board is matched on its type as well as its grid: a stripboard at a stock
+    perfboard's size was told to take the perfboard, its screw holes already in it."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, matching_preset
+    from perfboard_studio.commands import document_on_preset
+
+    preset = next(p for p in STANDARD_PRESETS if p.name == "5 x 7 cm" and not p.single_sided)
+    doc = document_on_preset(make_doc(components=(component("R1", "r-axial-4", hole(2, 2)),)), preset)
+    assert matching_preset(doc.board) == preset
+    strips = dataclasses.replace(
+        doc, board=dataclasses.replace(doc.board, type="stripboard", strip_axis="horizontal")
+    )
+    assert matching_preset(strips.board) is None
+    prep = build_guide(strips, REGISTRY).phases[0]
+    kinds = [task.kind for task in prep.tasks]
+    assert kinds[0] == "cut-board" and "stock-board" not in kinds
+    drill = next(task for task in prep.tasks if task.kind == "drill")
+    assert len(drill.holes) == len(doc.mounting_holes), "every screw hole is drilled"
+
+
 def test_each_ic_is_fitted_on_its_own_pin_one_between_the_checks_and_power() -> None:
     doc = make_doc(components=(
         component("U2", "dip-8", hole(12, 3), value="LM358"),

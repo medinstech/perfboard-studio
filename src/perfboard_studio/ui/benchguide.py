@@ -1557,10 +1557,20 @@ class AssemblyMode:
 
     It keeps the window, never a function of it: a lambda holding the window outlived
     QApplication and crashed the interpreter at exit on CI's PySide6.
+
+    ``keep`` are docks that are no panel and never step aside -- the update strip, which
+    is up exactly when its bar is (``MainWindow._sync_update_strip``). Put aside with the
+    panels, it came back with them even when the release had been dismissed meanwhile.
     """
 
     def __init__(
-        self, window: QMainWindow, guide: QDockWidget, board: QDockWidget, state_version: int
+        self,
+        window: QMainWindow,
+        guide: QDockWidget,
+        board: QDockWidget,
+        state_version: int,
+        *,
+        keep: tuple[QDockWidget, ...] = (),
     ) -> None:
         self._window = window
         self._guide = guide
@@ -1568,6 +1578,7 @@ class AssemblyMode:
         #: layout somebody chose, beside the board, and nothing steps aside for it.
         self._board = board
         self._version = state_version
+        self._keep = keep
         self._photo: QByteArray | None = None
         self._hidden: list[QDockWidget] = []
         self._fronts: list[QDockWidget] = []
@@ -1614,7 +1625,8 @@ class AssemblyMode:
             return
         others = [
             dock for dock in window.findChildren(QDockWidget)
-            if dock not in group and not dock.isHidden() and not dock.isFloating()
+            if dock not in group and dock not in self._keep
+            and not dock.isHidden() and not dock.isFloating()
         ]
         if not others:
             return

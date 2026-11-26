@@ -18780,6 +18780,43 @@ def test_assembly_mode_puts_the_panels_aside_and_back_as_they_were() -> None:
         _close(window)
 
 
+def test_a_release_dismissed_on_the_bench_stays_dismissed_off_it() -> None:
+    """The update strip is no panel: it stays up over the bench while it announces, and a
+    release hidden there is not brought back by the panels coming back."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.updates import Release
+
+    def settle() -> None:
+        for _ in range(6):
+            QApplication.processEvents()
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.resize(1600, 1000)
+        window.show()
+        settle()
+        window._update_asked_by_hand = True
+        window._on_update_checked(Release(version="99.0.0", tag="v99.0.0", url="x"))
+        settle()
+        assert not window.update_strip.isHidden()
+
+        window._raise_view(window.dock_guide)
+        settle()
+        assert window._assembly.active
+        assert not window.update_strip.isHidden(), "news over the bench, not a panel put aside"
+
+        window.update_bar.act_hide.click()
+        settle()
+        assert window.update_strip.isHidden()
+        window._raise_view(window.dock_board)
+        settle()
+        assert not window._assembly.active
+        assert window.update_strip.isHidden(), "the dismissed release came back with the panels"
+    finally:
+        _close(window)
+
+
 def test_a_check_ticked_on_the_bench_is_kept_with_the_steps() -> None:
     """The phase's checks are Ω items to tick on the bench, kept in the one store."""
     from PySide6.QtWidgets import QCheckBox

@@ -10645,7 +10645,9 @@ class MainWindow(QMainWindow):
         self._guide_pages_widget: QStackedWidget | None = None
         # Assembly mode: the editing panels step aside while the guide is in front, and the
         # layout saved or photographed meanwhile is the one they were in (``ui/benchguide.py``).
-        self._assembly = AssemblyMode(self, dock, self.dock_board, WINDOW_STATE_VERSION)
+        self._assembly = AssemblyMode(
+            self, dock, self.dock_board, WINDOW_STATE_VERSION, keep=(self.update_strip,)
+        )
 
     @property
     def guide_built(self) -> bool:
