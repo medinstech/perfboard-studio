@@ -497,13 +497,36 @@ class CommandPalette(QFrame):
         self._refilter("")
         parent = self.parentWidget()
         if parent is not None:
-            self.list.setFixedHeight(ROW_PX * VISIBLE_ROWS + 8)
+            self.list.setFixedHeight(self._list_height())
             self.adjustSize()
             self.move(QPoint((parent.width() - self.width()) // 2, theme.SPACE["2xl"] * 3))
         self.show()
         self.raise_()
         self.field.setFocus()
         self._drop_in()
+
+    def _list_height(self) -> int:
+        """Fit whole items inside the max height so the bottom visible row is never sliced."""
+        budget = ROW_PX * VISIBLE_ROWS
+        count = self.list.count()
+        if count == 0:
+            return budget
+        total = 0
+        last_was_header = False
+        last_header_h = 0
+        for row in range(count):
+            item = self.list.item(row)
+            is_header = bool(item is not None and item.data(ROLE_HEADER))
+            h = (HEADER_PX - theme.SPACE["md"] if row == 0 else HEADER_PX) if is_header else ROW_PX
+            if total + h > budget:
+                break
+            total += h
+            last_was_header = is_header
+            last_header_h = h
+        if last_was_header and total > last_header_h:
+            total -= last_header_h
+        frame = self.list.frameWidth() * 2
+        return max(ROW_PX * 3, total) + frame
 
     def toggle(self, kinds: frozenset[str] | None = None) -> None:
         """Close it if it is open, open it if not: what its key does."""
@@ -665,6 +688,9 @@ class CommandPalette(QFrame):
                 self.list.addItem(item)
         self.list.scrollToTop()
         self._step_to(0, 1)
+        if self.isVisible():
+            self.list.setFixedHeight(self._list_height())
+            self.adjustSize()
 
     def _is_row(self, row: int) -> bool:
         item = self.list.item(row)

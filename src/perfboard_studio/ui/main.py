@@ -4890,7 +4890,7 @@ class MainWindow(QMainWindow):
     #: opens at. Proportions rather than promises -- they are applied once and the user
     #: owns the layout afterwards -- but the ratios between them are the layout, so they
     #: live together in one place.
-    LAYOUT_LEFT_WIDTH = 300
+    LAYOUT_LEFT_WIDTH = 328
     LAYOUT_RIGHT_WIDTH = 460
     LAYOUT_DRC_HEIGHT = 200
     #: How long the Problems drawer takes to slide open or fold, when motion is on.
@@ -16558,7 +16558,7 @@ class MainWindow(QMainWindow):
         box.setWindowTitle(title)
         box.setText(body)
         go = box.addButton(verb, QMessageBox.ButtonRole.DestructiveRole)
-        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+        cancel = box.addButton(t("Cancel"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(cancel)
         box.setEscapeButton(cancel)
         theme.mark_destructive(box)

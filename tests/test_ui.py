@@ -12993,6 +12993,37 @@ def test_a_confirmation_puts_cancel_under_enter(monkeypatch) -> None:
         _close(window)
 
 
+def test_a_confirmation_translates_cancel_in_turkish(monkeypatch) -> None:
+    """#8: Cancel in _confirm uses i18n ('İptal' in TR) instead of Qt's untranslated
+    StandardButton.Cancel, and stays the default button."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from perfboard_studio.ui import i18n
+
+    before = i18n.language()
+    i18n.set_language("tr")
+    try:
+        window = _window_on(_load_dense())
+        seen: dict[str, str] = {}
+
+        def fake_exec(self):
+            seen["default"] = self.defaultButton().text()
+            seen["buttons"] = "|".join(b.text() for b in self.buttons())
+            return 0
+
+        monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+        monkeypatch.setattr(QMessageBox, "clickedButton", lambda self: None)
+        try:
+            assert window._confirm("Parçaları Sil", "R1 silinsin mi?", "Sil") is False
+            assert seen["default"] == "İptal"
+            assert "Cancel" not in seen["buttons"]
+            assert "Sil" in seen["buttons"]
+        finally:
+            _close(window)
+    finally:
+        i18n.set_language(before)
+
+
 def test_flipping_keeps_the_view_on_the_same_part_of_the_board() -> None:
     """The scene is mirrored about the hole span's midpoint, so a flip while zoomed in on
     the left edge used to show the right edge."""

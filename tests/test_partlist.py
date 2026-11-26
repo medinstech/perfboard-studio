@@ -295,3 +295,88 @@ def test_resetting_the_layout_puts_it_back_behind_nets(window) -> None:  # type:
         window.dock_part_list, window.dock_nets,
     }
     assert window._part_list_showing is False
+
+
+def test_columns_never_crush_package_or_clip_position_in_turkish(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """#7: Width priority: Reference, Value and Position are never elided; Package stretches
+    with a >= 64 px floor and full-name tooltip; State hides first when narrow and moves into
+    the row's tooltip, reappearing when the panel is widened."""
+    from pathlib import Path
+
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio import persist
+    from perfboard_studio.ui import autosave as autosave_module
+    from perfboard_studio.ui import i18n
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui.partlist import VALUE
+
+    before = i18n.language()
+    i18n.set_language("tr")
+    try:
+        for example in ("ne555-astable", "atmega328-relay"):
+            store = QSettings(str(tmp_path / f"{example}.ini"), QSettings.Format.IniFormat)
+            monkeypatch.setattr(main_module, "app_settings", lambda s=store: s)
+            monkeypatch.setattr(autosave_module, "default_directory", lambda: tmp_path / "rec")
+            doc_path = Path(__file__).resolve().parents[1] / "examples" / f"{example}.perf"
+            doc = persist.parse_document_or_throw(doc_path.read_text(encoding="utf-8"))
+            win = main_module.MainWindow(doc)
+            try:
+                win.resize(1440, 900)
+                win.show()
+                win.dock_part_list.show()
+                win.dock_part_list.raise_()
+                for _ in range(6):
+                    QApplication.processEvents()
+                tree = win.part_list.tree
+                assert not tree.isColumnHidden(FOOTPRINT), example
+                assert not tree.isColumnHidden(POSITION), example
+                # Reference, Value, Position are never elided (width >= header & content).
+                for col in (REF, VALUE, POSITION):
+                    needed = max(
+                        win.part_list._header_width(col),
+                        win.part_list._content_width(col),
+                    )
+                    assert tree.columnWidth(col) >= needed, (example, col)
+                # Package has at least 64 px and >= header width, with full text in tooltip.
+                assert tree.columnWidth(FOOTPRINT) >= max(
+                    win.part_list._header_width(FOOTPRINT), 64
+                ), example
+                first = tree.topLevelItem(0)
+                assert first is not None and first.text(FOOTPRINT) in first.toolTip(FOOTPRINT)
+                # When State hides to protect Package and Position (e.g. wide values at default
+                # width), its text moves into the row tooltip.
+                if tree.isColumnHidden(STATE):
+                    turned = next(
+                        tree.topLevelItem(i)
+                        for i in range(tree.topLevelItemCount())
+                        if tree.topLevelItem(i).text(STATE)
+                    )
+                    assert turned.text(STATE) in turned.toolTip(REF)
+                    assert turned.text(STATE) in turned.toolTip(FOOTPRINT)
+
+                # Narrowing hides State first and puts its text in the row tooltip; widening
+                # brings State back and stretches Package.
+                panel = _panel(doc)
+                panel.resize(260, 400)
+                panel.show()
+                QApplication.processEvents()
+                assert panel.tree.isColumnHidden(STATE), example
+                narrow_turned = next(
+                    panel.tree.topLevelItem(i)
+                    for i in range(panel.tree.topLevelItemCount())
+                    if panel.tree.topLevelItem(i).text(STATE)
+                )
+                assert narrow_turned.text(STATE) in narrow_turned.toolTip(REF)
+                assert narrow_turned.text(STATE) in narrow_turned.toolTip(FOOTPRINT)
+                narrow_pkg = panel.tree.columnWidth(FOOTPRINT)
+                panel.resize(620, 400)
+                QApplication.processEvents()
+                assert not panel.tree.isColumnHidden(STATE), example
+                assert panel.tree.columnWidth(FOOTPRINT) > narrow_pkg, example
+                panel.close()
+            finally:
+                win._saved_document = win.bus.document
+                win.close()
+    finally:
+        i18n.set_language(before)

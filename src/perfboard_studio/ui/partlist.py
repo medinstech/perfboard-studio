@@ -17,8 +17,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -86,7 +86,7 @@ class PartListPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(4, 6, 4, 6)
         layout.setSpacing(6)
 
         self.filter = QLineEdit()
@@ -110,15 +110,118 @@ class PartListPanel(QWidget):
         self.tree.setSortingEnabled(True)
         self.tree.sortByColumn(REF, Qt.SortOrder.AscendingOrder)
         header = self.tree.header()
-        header.setSectionResizeMode(FOOTPRINT, QHeaderView.ResizeMode.Stretch)
-        for column in (REF, VALUE, POSITION, STATE):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        header.setStretchLastSection(False)
+        header.setMinimumSectionSize(24)
+        for column in (REF, VALUE, FOOTPRINT, POSITION, STATE):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
         # A CLICK, not a selection change: the board's selection is shown here too, and a
         # list that answered its own reflection would send the window to the part it had
         # just been told about. Activation is Enter, for whoever walks it with the keys.
         self.tree.itemClicked.connect(self._chosen)
         self.tree.itemActivated.connect(self._chosen)
+        header.sortIndicatorChanged.connect(self._on_sort_changed)
+        self.tree.viewport().installEventFilter(self)
         layout.addWidget(self.tree)
+
+    def _on_sort_changed(self, _index: int, _order: Qt.SortOrder) -> None:
+        self._fit_columns()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._fit_columns()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.tree.viewport() and event.type() == QEvent.Type.Resize:
+            self._fit_columns()
+        return super().eventFilter(watched, event)
+
+    def _header_width(self, column: int) -> int:
+        header = self.tree.header()
+        item = self.tree.headerItem()
+        label = item.text(column) if item is not None else ""
+        # QHeaderView::section is styled at CAPTION_PX in theme.py.
+        font = QFont(header.font())
+        font.setPixelSize(theme.CAPTION_PX)
+        fm = QFontMetrics(font)
+        # Horizontal section padding (2 * 6 px) + Fusion header margin + sort arrow room.
+        extra = 28 if self.tree.sortColumn() == column else 18
+        return fm.horizontalAdvance(label) + extra
+
+    def _content_width(self, column: int) -> int:
+        fm = self.tree.fontMetrics()
+        widest = 0
+        for index in range(self.tree.topLevelItemCount()):
+            row = self.tree.topLevelItem(index)
+            if row is not None and not row.isHidden():
+                widest = max(widest, fm.horizontalAdvance(row.text(column)))
+        # QTreeView::item horizontal padding (2 * 4 px) + Fusion focus-frame margin + safety
+        # so Reference, Value and Position cells never trigger Qt's right-hand ellipsis.
+        return widest + 18 if widest else 0
+
+    def _fit_columns(self) -> None:
+        """Priority order: Reference, Value and Position are never elided; Package stretches
+        with a >= 64 px floor and full-name tooltip; State hides first when narrow and moves
+        into the row's tooltip."""
+        has_state = any(
+            (row := self.tree.topLevelItem(i)) is not None and bool(row.text(STATE))
+            for i in range(self.tree.topLevelItemCount())
+        )
+        ref_w = max(self._header_width(REF), self._content_width(REF))
+        val_w = max(self._header_width(VALUE), self._content_width(VALUE))
+        pos_w = max(self._header_width(POSITION), self._content_width(POSITION))
+        pkg_min = max(self._header_width(FOOTPRINT), 64)
+        state_w = (
+            max(self._header_width(STATE), self._content_width(STATE))
+            if has_state
+            else 0
+        )
+
+        viewport_w = self.tree.viewport().width()
+        show_state = has_state and (
+            viewport_w <= 40 or (ref_w + val_w + pkg_min + pos_w + state_w <= viewport_w)
+        )
+        self.tree.setColumnHidden(STATE, not show_state)
+
+        effective_state_w = state_w if show_state else 0
+        if viewport_w > 40:
+            pkg_w = max(pkg_min, viewport_w - ref_w - val_w - pos_w - effective_state_w)
+        else:
+            pkg_w = pkg_min
+
+        self.tree.setColumnWidth(REF, ref_w)
+        self.tree.setColumnWidth(VALUE, val_w)
+        self.tree.setColumnWidth(FOOTPRINT, pkg_w)
+        self.tree.setColumnWidth(POSITION, pos_w)
+        if show_state:
+            self.tree.setColumnWidth(STATE, state_w)
+
+        self._sync_row_tooltips(state_hidden=not show_state)
+
+    def _sync_row_tooltips(self, *, state_hidden: bool) -> None:
+        """Keep the full package name on Package's tooltip, and surface hidden State text
+        in the row's tooltip when the State column is folded away."""
+        for index in range(self.tree.topLevelItemCount()):
+            row = self.tree.topLevelItem(index)
+            if row is None:
+                continue
+            shown = row.text(FOOTPRINT)
+            footprint_id = str(row.data(FOOTPRINT, _ID) or "")
+            pkg_tip = (
+                f"{shown} ({footprint_id})"
+                if footprint_id and footprint_id != shown
+                else shown
+            )
+            state_text = row.text(STATE)
+            if row.data(REF, _KIND) == PLACED:
+                row_tip = state_text if (state_hidden and state_text) else ""
+                for col in (REF, VALUE, POSITION):
+                    row.setToolTip(col, row_tip)
+                row.setToolTip(
+                    FOOTPRINT,
+                    f"{pkg_tip}\n{state_text}" if (state_hidden and state_text) else pkg_tip,
+                )
+            else:
+                row.setToolTip(FOOTPRINT, pkg_tip)
 
     # -- filling ----------------------------------------------------------------------
 
@@ -268,6 +371,7 @@ class PartListPanel(QWidget):
             said = [item.text(column) for column in range(self.tree.columnCount())]
             said.append(str(item.data(FOOTPRINT, _ID) or ""))
             item.setHidden(bool(needle) and not any(needle in text.casefold() for text in said))
+        self._fit_columns()
 
     def rows(self) -> list[tuple[str, ...]]:
         """What the list shows, top to bottom and hidden rows left out: for tests, and for
