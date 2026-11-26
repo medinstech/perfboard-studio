@@ -193,6 +193,14 @@ closed without a bump.
 
 ### Changed
 
+- **Modules and chips in 2D look like the parts.** A recognised module's chips are moulded
+  black with tin legs and their number lasered on, its cans brushed metal with the name
+  etched in, its crystals and USB sockets metal, its own silkscreen printed, and each plated
+  hole shows the header pin's tip in its solder -- gold on Adafruit's boards. A DIP has the
+  dimple by pin 1 and its number lasered along it. Lit and shadowed on screen, flat on the
+  1:1 sheet; nothing is printed the part does not carry. Each
+  module is painted once per zoom and stretched while a zoom moves, so a board full of
+  modules repaints faster than before rather than slower.
 - **The command palette says where everything is.** With nothing typed, Ctrl+K opens on
   the commands last run from it, the files last opened and what the step bar's current step
   suggests ("Suggested for Wiring"), then each menu as its own section; with something

@@ -1299,8 +1299,21 @@ ids. Five rules hold it, each pinned in
 A new module is an entry in `MODULE_ARTS` with datasheet sizes, drawn from the kinds
 `view3d._ART_BUILDERS` knows (`test_every_kind_of_part_has_a_builder`);
 `test_every_layout_is_tested` makes sure it is measured. **The 2D view draws the same
-layout from above** (`view2d._paint_module_art`): a can is a circle, a chip a dark rectangle
-with its legs, a radio module its can and antenna, no text. Both views paint from ONE table,
+layout from above** (`view2d._paint_module_art`), illustrated -- chosen 2026-11-26 from three
+rendered candidates (today's flat shapes, refined, illustrated): a chip is moulded black with
+its legs in tin and its number lasered on it, a can is brushed metal with its name etched in,
+a crystal and a USB socket are metal, the board's own silkscreen is printed, and each plated
+hole has the header pin's square tip up through it in its cone of solder, gold on the boards
+whose maker plates them so (`moduleart.module_pad_plating`). What the layout says is printed
+on a part is printed, and nothing it does not say: no guessed "103" on a chip resistor, and
+no FCC ID on the WROOM's can, which was unreadable at every zoom and is certification data,
+not something the builder needs. On screen the parts are lit as the bodies are (`_ArtLook`)
+and cast a shadow by their height; on the 1:1 sheet the same shapes are flat ink, gated on
+`_on_paper` like every other effect. **A module's drawing stands on its own**: its board, its
+pads and its parts are all its own, so a pinout card that draws the part with no perfboard
+behind it shows the same module, and its shadows are darkening, not a colour that assumes
+green substrate. The pads a module draws are its pin ends, so `ComponentItem` does not paint
+its own over them. Both views paint from ONE table,
 `moduleart.ART_COLOURS`, so a trimmer is the same blue in each, and the names beside the pins
 stop at parts both views show — the block it replaced said nothing about which way round a
 module was, and the names stopped short of nothing visible.
@@ -3255,6 +3268,23 @@ the complaint. `tests/test_board_look.py` holds the screen and the paper apart w
 differ, and to one pad image where they agree.
 The shadow and the light are overlays on the body's outline, so `bodies.BODY_STYLES`
 stays the one colour table the 3D view and the guide share.
+
+**A module's art is painted once per zoom** (`view2d.ArtCache`). The illustrated modules are
+a few hundred gradients each, and painted directly on a board of 24 modules (8 devkits, 16
+breakouts) they made a frame cost more than the flat art they replaced. Each item keeps one
+image of its board, art and pads, at the view's scale and turn and the quarter pixel it lands
+on, so panning keeps it; measured on that board with the machine shared with other jobs, a
+steady frame went from 68-108 ms on the flat art to 44-59 ms. The first attempt filled an
+image at every new scale, and a zoom in progress -- a new scale every frame -- went to
+105-134 ms a frame, worse than painting. So a new scale is served from the image already
+held, stretched (up to `ART_CACHE_STRETCH` either way): zoom frames 51-71 ms against the
+flat art's 96-110. Each stretched part restarts the scene's `art_refresh` timer, and once
+the zoom has been still for `ART_REFRESH_MS` the scene paints again and each image is filled
+at the scale it settled on: one frame of 115-131 ms, against about 100 for the flat art. The
+cache serves only the raster engine: the 1:1 PDF and an SVG are painted in vectors as
+before, which `test_a_modules_art_is_never_cached_on_paper` holds. The edge light round a
+board is a pen half its width inside the outline rather than a clip path, which was 136
+clips a frame.
 
 ## A solder run is IN the surface and a wire is ON it
 

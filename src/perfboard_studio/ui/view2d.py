@@ -27,7 +27,7 @@ import html
 import math
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Any, NamedTuple, cast
 
@@ -41,6 +41,7 @@ from PySide6.QtCore import (
     QRect,
     QRectF,
     Qt,
+    QTimer,
     QVariantAnimation,
     Signal,
 )
@@ -52,12 +53,15 @@ from PySide6.QtGui import (
     QDragLeaveEvent,
     QDragMoveEvent,
     QDropEvent,
+    QFont,
     QFontMetricsF,
+    QImage,
     QKeyEvent,
     QLinearGradient,
     QMouseEvent,
     QNativeGestureEvent,
     QPagedPaintDevice,
+    QPaintEngine,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
@@ -257,7 +261,9 @@ from .moduleart import (
     fit_module_art,
     fit_standing_board,
     gull_wing_dot,
+    module_pad_plating,
 )
+from .moduleart import outline as art_outline
 from .offboard import OffBoardItem, things_for
 from .partnames import footprint_label
 from .scenetext import (
@@ -3564,6 +3570,7 @@ def _paint_top_marking(
     rect: QRectF | None = None,
     from_below: bool = False,
     names: tuple[PinLabel, ...] = (),
+    pitch: float | None = None,
 ) -> None:
     """What a part says on its top: its value, as the part carries it -- a DIP's part number
     along the package, a sealed relay's part number over the contact diagram moulded beside
@@ -3572,8 +3579,14 @@ def _paint_top_marking(
     where the print goes when the measured top view says (``TopView.marking``): on the
     case's flat top, inside the shoulders, rather than across the whole body DRC measures.
     A DIP's part number in capitals, as chips are lasered; anything else as the document
-    has it, as the 3D view prints it -- "16MHz" in capitals is a different unit."""
+    has it, as the 3D view prints it -- "16MHz" in capitals is a different unit. A DIP's is
+    lasered, in the chip face (``_paint_laser_text``), beside the dimple moulded by pin 1
+    (``_paint_dip_dimple``, given the ``pitch`` the pins are at)."""
     archetype = footprint.body.archetype
+    if archetype == "dip" and rect is not None and pitch is not None and not any(
+        label.on_body for label in names
+    ):
+        _paint_dip_dimple(painter, footprint, rect, pitch)
     text = comp.value.strip()
     if archetype not in TOP_PRINTED_ARCHETYPES or not text:
         return
@@ -3616,6 +3629,14 @@ def _paint_top_marking(
             max_width_mm=long_side * 0.62,
         )
         _paint_relay_diagram(painter, ink, height)
+    elif archetype == "dip":
+        painter.rotate(rotation)
+        _paint_laser_text(
+            painter,
+            text.upper(),
+            min(TOP_MARKING_MM, package_short * 0.16, short_side * 0.7),
+            long_side * TOP_MARKING_SHARE,
+        )
     else:
         draw_physical_label(
             painter,
@@ -3628,6 +3649,32 @@ def _paint_top_marking(
             max_width_mm=long_side * (0.45 if archetype == "crystal-hc49" else TOP_MARKING_SHARE),
             rotation_deg=rotation,
         )
+    painter.restore()
+
+
+#: A DIP's pin-1 dimple: its radius against the flat top's short side, and how far in from
+#: the top's corner by pin 1 it sits, in radii.
+DIP_DIMPLE_SHARE = 0.09
+DIP_DIMPLE_INSET = 2.0
+
+
+def _paint_dip_dimple(painter: QPainter, footprint: Footprint, top: QRectF, pitch: float) -> None:
+    """The round dimple a DIP is moulded with in the corner of its top by pin 1, beside the
+    notch: the mark people who do not look for the notch look for. A shade lighter than the
+    case, its rim darker -- an indent, not a printed dot."""
+    one = next((pin for pin in footprint.pins if pin.number == "1"), None)
+    if one is None:
+        return
+    centre = top.center()
+    radius = min(top.width(), top.height()) * DIP_DIMPLE_SHARE
+    inset = radius * DIP_DIMPLE_INSET
+    x = centre.x() + math.copysign(top.width() / 2 - inset, one.d_col * pitch - centre.x())
+    y = centre.y() + math.copysign(top.height() / 2 - inset, one.d_row * pitch - centre.y())
+    fill = QColor(style_for(footprint).fill)
+    painter.save()
+    painter.setPen(QPen(fill.darker(250), 0.06))
+    painter.setBrush(QBrush(fill.lighter(160)))
+    painter.drawEllipse(QPointF(x, y), radius, radius)
     painter.restore()
 
 
@@ -3843,13 +3890,19 @@ def _paint_body(
     pitch: float,
     bands: tuple[str, ...] | None = None,
     art: tuple[PlacedArt, ...] | None = None,
-) -> None:
+    art_cache: ArtCache | None = None,
+) -> bool:
+    """Paint the body in the part's own frame; True when that included its pins' pads
+    (a recognised module's plated holes), which the item then leaves out."""
     rect = _body_rect(placement)
     path = _body_path(footprint, placement, keyed, pitch)
+    angle = right_angle_for(footprint, pitch)
+    if footprint.body.archetype == "module-board" and art and angle is None:
+        _paint_module_board(painter, footprint, path, QColor(style.fill), selected, pitch, art, art_cache)
+        return True
     on_screen = not _on_paper(painter)
     if on_screen:
         _paint_contact_shadow(painter, path)
-    angle = right_angle_for(footprint, pitch)
     if angle is not None:
         _paint_right_angle_pins(painter, footprint, angle, pitch, QColor(style.accent))
 
@@ -4055,6 +4108,7 @@ def _paint_body(
         painter.setPen(QPen(QColor(style.edge), 0.14))
         painter.setBrush(QBrush(accent))
         painter.drawEllipse(rect.center(), radius, radius)
+    return False
 
 
 def _paint_pot_shaft(painter: QPainter, rect: QRectF, style: BodyStyle) -> None:
@@ -4134,8 +4188,11 @@ def _paint_adapter(
 # were the same -- and the module's pin names stopped short of parts this view did not
 # show. Each part is the shape it has from above, in ``moduleart.ART_COLOURS``, the table
 # the 3D view paints with: a can is a circle, a chip a dark rectangle with its legs, a radio
-# module its can and its antenna. No text: at this size it is noise, and the names beside
-# the pins are what this view is for.
+# module its can and its antenna. What the layout says is printed on a part -- a chip's
+# number, a can's name, the board's own silkscreen -- is printed, in the inks the 3D view
+# uses, and nothing it does not say: no guessed value on a resistor, no certification ids.
+# On screen the parts are lit as the bodies are (``_ArtLook``) and the whole board is
+# painted once per zoom (``ArtCache``); on the 1:1 sheet they are flat.
 
 
 def _art_colour(name: str) -> QColor:
@@ -4219,24 +4276,267 @@ def _paint_plus_mark(painter: QPainter, footprint: Footprint, pitch: float) -> N
     painter.restore()
 
 
+#: The hairline round each part of a module's art.
+ART_EDGE = QColor("#0c0d10")
+#: A part's shadow on its module's board, on screen: how far it falls for a part of no
+#: height, how much further per millimetre the part stands, at most, and its two steps'
+#: darkness -- far and near. Much less than a body's contact shadow: these stand a
+#: millimetre or two, on a board that is itself already lifted off the perfboard.
+ART_SHADOW_BASE_MM = 0.08
+ART_SHADOW_PER_MM = 0.06
+ART_SHADOW_MAX_MM = 0.35
+ART_SHADOW_ALPHA = (22, 34)
+#: The rim of a pin-1 dimple catching the light, over the dot's own colour.
+DIMPLE_RIM_ALPHA = 45
+#: What is lasered on a chip and etched on a can, in the inks ``view3d`` prints them in
+#: (``ART_COLOURS["ink"]`` and ``["etch"]``), let into the surface rather than over it.
+ART_PRINT_ALPHA = 175
+ART_ETCH_ALPHA = 215
+#: A radio module's name on its can, and the room it leaves the can either side.
+RF_NAME_MM = 1.15
+RF_CAN_CORNER_MM = 0.5
+#: A QFN's pads where they show along its sides.
+QFN_PAD_PITCH_MM = 0.5
+#: Silkscreen on a module's board: its print, the corners round a chip and their gap.
+SILK_TEXT_MM = 1.0
+SILK_LINE_MM = 0.15
+SILK_GAP_MM = 0.4
+#: A module's plated holes, from above: the ring's radius and the header pin's tip.
+MODULE_PAD_MM = 0.82
+MODULE_PIN_TIP_MM = 0.64
+#: The lit edge of a module's own board, on screen.
+MODULE_EDGE_LIGHT_MM = 0.35
+MODULE_EDGE_LIGHT_ALPHA = 70
+#: The art cache's margin round the board for its contact shadow, and the largest image it
+#: keeps: past that -- a module filling a deep zoom -- it is painted as it always was.
+ART_CACHE_MARGIN_MM = 0.8
+ART_CACHE_MAX_PX = 2048 * 2048
+#: The sub-pixel steps a cached image is drawn at: a quarter of a pixel off at most.
+ART_CACHE_PHASES = 4
+#: How far an image held at one zoom is stretched to stand in for another while the zoom
+#: is moving, before the part is painted directly instead (a factor, either way).
+ART_CACHE_STRETCH = 2.0
+#: How long a zoom must have settled before the stretched images are painted afresh.
+ART_REFRESH_MS = 120
+
+
 def _paint_module_art(painter: QPainter, parts: Sequence[PlacedArt]) -> None:
     """Each part in its own frame: its own axis along x, its feature (a can's stripe, a
-    regulator's legs, an antenna) at +x, as ``view3d``'s builders have it."""
-    painter.setPen(QPen(QColor("#0c0d10"), 0.05))
+    regulator's legs, an antenna) at +x, as ``view3d``'s builders have it.
+
+    On screen each part that stands up off the board casts a small shadow down and to the
+    right, metal catches the light and a package's top falls off from its lit corner
+    (``_ArtLook``); on the 1:1 sheet all of that is left off and the parts are flat, as
+    every other body on the print is."""
+    look = _ArtLook(lit=not _on_paper(painter))
+    if look.lit:
+        _paint_art_shadows(painter, parts)
+    painter.setPen(QPen(ART_EDGE, 0.05))
     for part in parts:
-        if part.kind == "silk":
-            continue
         painter.save()
         painter.translate(part.x, part.y)
         if part.axis == "y":
             painter.rotate(90)
+        length, width = (part.size_x, part.size_y) if part.axis == "x" else (part.size_y, part.size_x)
+        if part.kind == "silk":
+            # Silkscreen the layout measured: the board's white ink, never upside down.
+            _paint_art_print(
+                painter, part.text, min(SILK_TEXT_MM, width * 0.8), length,
+                QColor(BODY_STYLES["module-board"].accent),
+            )
+            painter.restore()
+            continue
         if part.facing < 0:
             # Mirrored along the axis rather than turned round: what is ACROSS the part --
             # a chip's pin-1 dot, a transistor's two legs -- stays on the side it is on.
             painter.scale(-1, 1)
-        length, width = (part.size_x, part.size_y) if part.axis == "x" else (part.size_y, part.size_x)
-        _paint_art_part(painter, part, length, width)
+        _paint_art_part(painter, part, length, width, look)
         painter.restore()
+
+
+@dataclass(frozen=True, slots=True)
+class _ArtLook:
+    """How a module's parts are lit: on screen (``lit``) brushed metal, a moulded top and an
+    edge catching the light from the top left; on paper, flat. Each brush keeps the part's
+    own colour at its middle, so the part is still the colour ``ART_COLOURS`` gives it."""
+
+    lit: bool
+
+    def metal(self, rect: QRectF, base: QColor) -> QBrush:
+        """Brushed metal: a bright band across the diagonal, falling off to either end."""
+        if not self.lit:
+            return QBrush(base)
+        gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        gradient.setColorAt(0.0, base.lighter(106))
+        gradient.setColorAt(0.3, base.lighter(118))
+        gradient.setColorAt(0.5, base)
+        gradient.setColorAt(0.72, base.darker(104))
+        gradient.setColorAt(1.0, base.darker(116))
+        return QBrush(gradient)
+
+    def moulded(self, rect: QRectF, base: QColor) -> QBrush:
+        """A package's top: lighter at its lit corner, falling off to the shaded one."""
+        if not self.lit:
+            return QBrush(base)
+        gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        gradient.setColorAt(0.0, base.lighter(150))
+        gradient.setColorAt(0.55, base)
+        gradient.setColorAt(1.0, base.darker(130))
+        return QBrush(gradient)
+
+    def domed(self, centre: QPointF, radius: float, base: QColor, rise: int = 125) -> QBrush:
+        """Something round and raised -- a button's stem, a plated ring: lit off-centre."""
+        if not self.lit:
+            return QBrush(base)
+        gradient = QRadialGradient(
+            QPointF(centre.x() - radius * 0.35, centre.y() - radius * 0.35), radius * 1.4
+        )
+        gradient.setColorAt(0.0, base.lighter(rise))
+        gradient.setColorAt(1.0, base.darker(115))
+        return QBrush(gradient)
+
+    def bevel(
+        self, painter: QPainter, rect: QRectF, width: float, strength: int, radius: float = 0.0
+    ) -> None:
+        """The edge of a box catching the light (``_paint_edge_light``), on screen only."""
+        if self.lit:
+            _paint_edge_light(painter, rect, width, strength, radius)
+
+
+def _paint_edge_light(
+    painter: QPainter, rect: QRectF, width: float, strength: int, radius: float = 0.0
+) -> None:
+    """The edge of a box catching the light: brighter along its top left and darker along
+    its bottom right ON SCREEN, whichever way the part is turned, ``width`` into it."""
+    towards = _screen_offset(painter, -1.0, -1.0)
+    length = math.hypot(towards.x(), towards.y()) or 1.0
+    ux, uy = towards.x() / length, towards.y() / length
+    centre = rect.center()
+    reach = max(rect.width(), rect.height()) / 2
+    gradient = QLinearGradient(
+        QPointF(centre.x() + ux * reach, centre.y() + uy * reach),
+        QPointF(centre.x() - ux * reach, centre.y() - uy * reach),
+    )
+    gradient.setColorAt(0.0, QColor(255, 255, 255, strength))
+    gradient.setColorAt(0.5, QColor(255, 255, 255, 0))
+    gradient.setColorAt(0.5001, QColor(0, 0, 0, 0))
+    gradient.setColorAt(1.0, QColor(0, 0, 0, min(255, round(strength * 1.2))))
+    # A pen ``width`` wide round the outline drawn half that in: the band a clip would leave
+    # of a pen twice as wide, without a clip path per part per frame.
+    inner = rect.adjusted(width / 2, width / 2, -width / 2, -width / 2)
+    painter.save()
+    pen = QPen(QBrush(gradient), width)
+    pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    if radius:
+        corner = max(radius - width / 2, 0.0)
+        painter.drawRoundedRect(inner, corner, corner)
+    else:
+        painter.drawRect(inner)
+    painter.restore()
+
+
+#: The parts whose legs lie flat on the board: only their moulding casts a shadow.
+_LEGGED_KINDS = frozenset({"soic8", "sot223", *SOT23_LEGS, *GULL_WING_LEGS})
+#: Printed on the board or let into it rather than standing on it: no shadow.
+_FLAT_KINDS = frozenset({"silk", "hole", "pads", "pcb-antenna", "plate"})
+
+
+def _paint_art_shadows(painter: QPainter, parts: Sequence[PlacedArt]) -> None:
+    """A soft two-step shadow under each part, down and to the right on screen, longer for
+    a taller part -- the contact shadow every body on the board has, at a part's scale."""
+    painter.save()
+    painter.setPen(Qt.PenStyle.NoPen)
+    for part in parts:
+        if part.kind in _FLAT_KINDS or part.height <= 0:
+            continue
+        reach = min(ART_SHADOW_BASE_MM + part.height * ART_SHADOW_PER_MM, ART_SHADOW_MAX_MM)
+        size_x, size_y = part.size_x, part.size_y
+        if part.kind in _LEGGED_KINDS:
+            # Under the moulding only: the legs lie on the board and cast nothing.
+            if part.axis == "x":
+                size_y *= 0.6
+            else:
+                size_x *= 0.6
+        path = QPainterPath()
+        if part.diagonal:
+            corners = art_outline(part)
+            path.moveTo(QPointF(*corners[0]))
+            for corner in corners[1:]:
+                path.lineTo(QPointF(*corner))
+            path.closeSubpath()
+        elif part.kind in ("can", "capsule"):
+            path.addEllipse(QPointF(part.x, part.y), size_x / 2, size_y / 2)
+        else:
+            path.addRect(QRectF(part.x - size_x / 2, part.y - size_y / 2, size_x, size_y))
+        for share, alpha in zip((1.0, 0.5), ART_SHADOW_ALPHA, strict=True):
+            painter.setBrush(QColor(0, 0, 0, alpha))
+            painter.drawPath(path.translated(_screen_offset(painter, reach * share, reach * share * 1.2)))
+    painter.restore()
+
+
+#: The face chips are lasered in: a plain sans with lining figures. The interface's own
+#: face set "0805" in old-style figures, which no chip carries.
+_LASER_FONT_PX = 64
+_laser_font: QFont | None = None
+
+
+def _paint_laser_text(painter: QPainter, text: str, height: float, room: float) -> None:
+    """``text`` centred on the painter's origin, its capitals ``height`` mm tall and the
+    whole no wider than ``room`` -- as ``scenetext.draw_physical_label``, in the laser face."""
+    global _laser_font
+    if _laser_font is None:
+        _laser_font = QFont("Arial")
+        _laser_font.setStyleHint(QFont.StyleHint.SansSerif)
+        _laser_font.setPixelSize(_LASER_FONT_PX)
+    metrics = QFontMetricsF(_laser_font)
+    cap = metrics.capHeight() or _LASER_FONT_PX * 0.7
+    scale = height / cap
+    width = max(metrics.horizontalAdvance(text), 1.0)
+    if width * scale > room:
+        scale = room / width
+    painter.save()
+    painter.scale(scale, scale)
+    painter.setFont(_laser_font)
+    line = metrics.height()
+    painter.drawText(QRectF(-width, -line, 2 * width, 2 * line), int(Qt.AlignmentFlag.AlignCenter), text)
+    painter.restore()
+
+
+def _paint_art_print(
+    painter: QPainter,
+    text: str,
+    height: float,
+    room: float,
+    ink: QColor,
+    at: QPointF | None = None,
+    rotation: float = 0.0,
+) -> None:
+    """What is printed on a part or on the board, in the part's own frame along its axis:
+    turned the right way up and unmirrored on screen, as a reader holds the board. It is
+    physical, so it scales with the board and is on the 1:1 sheet too."""
+    if not text:
+        return
+    painter.save()
+    if at is not None:
+        painter.translate(at)
+    painter.rotate(rotation)
+    world = painter.worldTransform()
+    if world.determinant() < 0:
+        painter.scale(1.0, -1.0)
+        world = painter.worldTransform()
+    if 90.0 < math.degrees(math.atan2(world.m12(), world.m11())) % 360.0 <= 270.0:
+        painter.rotate(180.0)
+    painter.setPen(ink)
+    _paint_laser_text(painter, text, height, room)
+    painter.restore()
+
+
+def _art_ink(name: str, alpha: int) -> QColor:
+    colour = _art_colour(name)
+    colour.setAlpha(alpha)
+    return colour
 
 
 def _dot_side(part: PlacedArt) -> float:
@@ -4246,89 +4546,135 @@ def _dot_side(part: PlacedArt) -> float:
     return float(part.across) if part.axis == "x" else -float(part.across)
 
 
-def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: float) -> None:
+def _paint_dimple(painter: QPainter, at: QPointF, radius: float) -> None:
+    """A pin-1 dot moulded in a chip's top: the dot's colour, its rim catching the light."""
+    painter.save()
+    painter.setPen(QPen(QColor(255, 255, 255, DIMPLE_RIM_ALPHA), radius * 0.2))
+    painter.setBrush(QBrush(_art_colour("dot")))
+    painter.drawEllipse(at, radius, radius)
+    painter.restore()
+
+
+def _paint_art_part(
+    painter: QPainter, part: PlacedArt, length: float, width: float, look: _ArtLook
+) -> None:
     half_l, half_w = length / 2, width / 2
     kind = part.kind
     pin_one = _dot_side(part)
+    edge = QPen(ART_EDGE, 0.05)
+    epoxy = _art_colour("epoxy")
+    ink = _art_ink("ink", ART_PRINT_ALPHA)
     if kind == "can":
         style = BODY_STYLES["radial-electrolytic"]
         radius = min(length, width) / 2
-        painter.setBrush(QBrush(QColor(style.fill)))
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), radius, QColor(style.fill), 135))
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         painter.setBrush(QBrush(QColor(style.accent)))
         painter.drawPie(QRectF(-radius, -radius, 2 * radius, 2 * radius), -40 * 16, 80 * 16)
-        painter.setBrush(QBrush(QColor(style.accent).darker(115)))
-        painter.drawEllipse(QPointF(0.0, 0.0), radius - 0.75, radius - 0.75)
+        cap_radius = radius - 0.75
+        painter.setBrush(
+            look.metal(
+                QRectF(-cap_radius, -cap_radius, 2 * cap_radius, 2 * cap_radius),
+                QColor(style.accent).darker(115),
+            )
+        )
+        painter.drawEllipse(QPointF(0.0, 0.0), cap_radius, cap_radius)
     elif kind == "capsule":
         radius = min(length, width) / 2
         steel = _art_colour("shield")
-        painter.setBrush(QBrush(steel.darker(112)))
+        painter.setBrush(look.metal(QRectF(-radius, -radius, 2 * radius, 2 * radius), steel.darker(112)))
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
-        painter.setBrush(QBrush(QColor(part.colour) if part.colour else steel))
+        inner = QColor(part.colour) if part.colour else steel
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), radius - 0.6, inner, 112))
         painter.drawEllipse(QPointF(0.0, 0.0), radius - 0.6, radius - 0.6)
     elif kind == "inductor":
         side = min(length, width)
         corner = min(1.6, side * 0.14)
-        painter.setBrush(QBrush(_art_colour("ferrite")))
-        painter.drawRoundedRect(QRectF(-side / 2, -side / 2, side, side), corner, corner)
-        painter.setBrush(QBrush(_art_colour("ferrite-top")))
+        body = QRectF(-side / 2, -side / 2, side, side)
+        painter.setBrush(look.moulded(body, _art_colour("ferrite")))
+        painter.drawRoundedRect(body, corner, corner)
+        look.bevel(painter, body, 0.3, 45, corner)
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), side * 0.36, _art_colour("ferrite-top"), 130))
         painter.drawEllipse(QPointF(0.0, 0.0), side * 0.36, side * 0.36)
     elif kind == "to263":
-        tab, legs = 1.3, 2.5
-        _art_box(painter, -half_l, -half_l + tab + 0.6, half_w * 0.86, LEAD)
-        _art_legs(painter, half_l - legs, half_l, [(i - 2) * 1.7 for i in range(5)], 0.8)
-        _art_box(painter, -half_l + tab, half_l - legs, half_w, _art_colour("epoxy"))
-    elif kind == "sot223":
-        body = 3.5
-        _art_legs(painter, body / 2, half_l, [-2.3, 0.0, 2.3], 0.7)
-        _art_legs(painter, -half_l, -body / 2, [0.0], width * 0.47)
-        _art_box(painter, -body / 2, body / 2, half_w, _art_colour("epoxy"))
-    elif kind in SOT23_LEGS:
-        body = length * 0.55
-        back, front = SOT23_LEGS[kind]
-        _art_legs(painter, -half_l, -body / 2, [width * at for at in back], 0.4)
-        _art_legs(painter, body / 2, half_l, [width * at for at in front], 0.4)
-        _art_box(painter, -body / 2, body / 2, half_w, _art_colour("epoxy"))
+        tab, tails = 1.3, 2.5
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(look.metal(QRectF(-half_l, -half_w, length, width), LEAD))
+        painter.drawRect(QRectF(-half_l, -half_w * 0.86, tab + 0.6, half_w * 1.72))
+        for index in range(5):
+            painter.drawRect(QRectF(half_l - tails, (index - 2) * 1.7 - 0.4, tails, 0.8))
+        top = QRectF(-half_l + tab, -half_w, length - tab - tails, width)
+        painter.setPen(edge)
+        painter.setBrush(look.moulded(top, epoxy))
+        painter.drawRect(top)
+        look.bevel(painter, top, 0.25, 50)
+        _paint_art_print(painter, part.text, min(1.0, width * 0.12), top.height() * 0.8, ink, top.center(), 90)
+    elif kind == "sot223" or kind in SOT23_LEGS:
+        if kind == "sot223":
+            moulding_mm = 3.5
+            runs = [(moulding_mm / 2, half_l, across, 0.7) for across in (-2.3, 0.0, 2.3)]
+            runs.append((-half_l, -moulding_mm / 2, 0.0, width * 0.47))
+        else:
+            moulding_mm = length * 0.55
+            rear, front = SOT23_LEGS[kind]
+            runs = [(-half_l, -moulding_mm / 2, width * at, 0.4) for at in rear]
+            runs += [(moulding_mm / 2, half_l, width * at, 0.4) for at in front]
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(look.metal(QRectF(-half_l, -half_w, length, width), LEAD))
+        for x0, x1, across, wide in runs:
+            painter.drawRect(QRectF(x0, across - wide / 2, x1 - x0, wide))
+        top = QRectF(-moulding_mm / 2, -half_w, moulding_mm, width)
+        painter.setPen(edge)
+        painter.setBrush(look.moulded(top, epoxy))
+        painter.drawRect(top)
+        look.bevel(painter, top, 0.12, 50)
+        _paint_art_print(painter, part.text, min(0.5, moulding_mm * 0.2), width * 0.8, ink, rotation=90)
     elif kind == "trimpot":
         screw = min(1.1, width * 0.25)
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("trimmer"))
-        painter.setBrush(QBrush(_art_colour("brass")))
-        painter.drawEllipse(QPointF(half_l - screw - 0.45, 0.0), screw, screw)
-    elif kind == "soic8":
-        body_half = half_w - 1.05
-        for side in (-1.0, 1.0):
-            for along in (-1.905, -0.635, 0.635, 1.905):
-                painter.setBrush(QBrush(LEAD))
-                painter.drawRect(QRectF(along - 0.21, min(side * body_half, side * half_w), 0.42, 1.05))
-        _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
-        if pin_one:
-            painter.setBrush(QBrush(_art_colour("dot")))
-            painter.drawEllipse(QPointF(half_l - 0.75, pin_one * (body_half - 0.7)), 0.32, 0.32)
-    elif kind in GULL_WING_LEGS:
-        legs, pitch, reach = GULL_WING_LEGS[kind]
+        body = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.moulded(body, _art_colour("trimmer")))
+        painter.drawRect(body)
+        look.bevel(painter, body, 0.2, 45)
+        centre = QPointF(half_l - screw - 0.45, 0.0)
+        painter.setBrush(look.domed(centre, screw, _art_colour("brass"), 135))
+        painter.drawEllipse(centre, screw, screw)
+    elif kind == "soic8" or kind in GULL_WING_LEGS:
+        if kind == "soic8":
+            legs, pitch, reach, leg = 4, 1.27, 1.05, 0.42
+        else:
+            legs, pitch, reach = GULL_WING_LEGS[kind]
+            leg = 0.3
         body_half = half_w - reach
-        painter.setBrush(QBrush(LEAD))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(look.metal(QRectF(-half_l, -half_w, length, width), LEAD))
         for index in range(legs):
             along = (index - (legs - 1) / 2) * pitch
             for side in (-1.0, 1.0):
-                painter.drawRect(
-                    QRectF(along - 0.15, min(side * body_half, side * half_w), 0.3, reach)
-                )
-        _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
+                painter.drawRect(QRectF(along - leg / 2, min(side * body_half, side * half_w), leg, reach))
+        top = QRectF(-half_l, -body_half, length, 2 * body_half)
+        painter.setPen(edge)
+        painter.setBrush(look.moulded(top, epoxy))
+        painter.drawRect(top)
+        look.bevel(painter, top, 0.15, 50)
         if pin_one:
-            painter.setBrush(QBrush(_art_colour("dot")))
-            end, side, radius = gull_wing_dot(body_half)
-            painter.drawEllipse(
-                QPointF(half_l - end, pin_one * (body_half - side)), radius, radius
-            )
+            if kind == "soic8":
+                _paint_dimple(painter, QPointF(half_l - 0.75, pin_one * (body_half - 0.7)), 0.32)
+            else:
+                end, side, radius = gull_wing_dot(body_half)
+                _paint_dimple(painter, QPointF(half_l - end, pin_one * (body_half - side)), radius)
+        _paint_art_print(painter, part.text, min(TOP_MARKING_MM * 0.8, body_half * 0.5), length * 0.7, ink)
     elif kind == "shield":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("shield"))
-        rim = min(0.35, min(length, width) * 0.05)
-        _art_box(painter, -half_l + rim, half_l - rim, half_w - rim, _art_colour("shield").darker(106))
+        can = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.metal(can, _art_colour("shield")))
+        painter.drawRect(can)
+        look.bevel(painter, can, min(0.35, min(length, width) * 0.05), 70)
+        _paint_art_print(
+            painter, part.text, min(1.0, width * 0.1), length * 0.8, _art_ink("etch", ART_ETCH_ALPHA)
+        )
     elif kind == "ufl":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("package"))
         ring = min(length, width) * 0.38
-        painter.setBrush(QBrush(_art_colour("brass")))
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), ring, _art_colour("brass"), 135))
         painter.drawEllipse(QPointF(0.0, 0.0), ring, ring)
         painter.setBrush(QBrush(_art_colour("mouth")))
         painter.drawEllipse(QPointF(0.0, 0.0), ring * 0.6, ring * 0.6)
@@ -4339,103 +4685,200 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         if part.diagonal:
             # A corner along the axis, as the TQFP's: the chip's own (1, 1) corner on +x.
             painter.rotate(-45)
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("epoxy"))
+        # The tinned ends of its pads, just showing along each side.
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(LEAD))
+        count = max(int(length / QFN_PAD_PITCH_MM) - 2, 3)
+        for index in range(count):
+            along = (index - (count - 1) / 2) * (length - 0.8) / (count - 1)
+            for pad in (
+                QRectF(along - 0.1, -half_w - 0.12, 0.2, 0.25),
+                QRectF(along - 0.1, half_w - 0.13, 0.2, 0.25),
+                QRectF(-half_l - 0.12, along - 0.1, 0.25, 0.2),
+                QRectF(half_l - 0.13, along - 0.1, 0.25, 0.2),
+            ):
+                painter.drawRect(pad)
+        top = QRectF(-half_l + 0.08, -half_w + 0.08, length - 0.16, width - 0.16)
+        painter.setPen(edge)
+        painter.setBrush(look.moulded(top, epoxy))
+        painter.drawRect(top)
+        look.bevel(painter, top, 0.14, 50)
         if part.diagonal:
-            painter.setBrush(QBrush(_art_colour("dot")))
-            painter.drawEllipse(QPointF(half_l - dot * 2.2, half_w - dot * 2.2), dot, dot)
+            _paint_dimple(painter, QPointF(half_l - dot * 2.2, half_w - dot * 2.2), dot)
         elif pin_one:
-            painter.setBrush(QBrush(_art_colour("dot")))
-            painter.drawEllipse(QPointF(half_l - dot * 2.2, pin_one * (half_w - dot * 2.2)), dot, dot)
+            _paint_dimple(painter, QPointF(half_l - dot * 2.2, pin_one * (half_w - dot * 2.2)), dot)
+        _paint_art_print(painter, part.text, min(0.55, width * 0.12), length * 0.82, ink)
+        _paint_silk_corners(painter, half_l, half_w, min(1.0, length * 0.2))
     elif kind == "tqfp32":
         if part.diagonal:
             # A corner along the axis: the chip's own (1, 1) corner, turned onto +x.
             painter.rotate(-45)
-        body = TQFP32_BODY_MM / 2
+        quad = TQFP32_BODY_MM / 2
         offsets = [
             (index - (TQFP32_LEGS_PER_SIDE - 1) / 2) * TQFP32_PITCH_MM
             for index in range(TQFP32_LEGS_PER_SIDE)
         ]
-        painter.setBrush(QBrush(LEAD))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(look.metal(QRectF(-half_l, -half_l, length, length), LEAD))
         for offset in offsets:
             for x0, y0, w, h in (
-                (body, offset - TQFP32_LEG_MM / 2, half_l - body, TQFP32_LEG_MM),
-                (-half_l, offset - TQFP32_LEG_MM / 2, half_l - body, TQFP32_LEG_MM),
-                (offset - TQFP32_LEG_MM / 2, body, TQFP32_LEG_MM, half_l - body),
-                (offset - TQFP32_LEG_MM / 2, -half_l, TQFP32_LEG_MM, half_l - body),
+                (quad, offset - TQFP32_LEG_MM / 2, half_l - quad, TQFP32_LEG_MM),
+                (-half_l, offset - TQFP32_LEG_MM / 2, half_l - quad, TQFP32_LEG_MM),
+                (offset - TQFP32_LEG_MM / 2, quad, TQFP32_LEG_MM, half_l - quad),
+                (offset - TQFP32_LEG_MM / 2, -half_l, TQFP32_LEG_MM, half_l - quad),
             ):
                 painter.drawRect(QRectF(x0, y0, w, h))
-        painter.setBrush(QBrush(_art_colour("epoxy")))
-        painter.drawRect(QRectF(-body, -body, 2 * body, 2 * body))
+        top = QRectF(-quad, -quad, 2 * quad, 2 * quad)
+        painter.setPen(edge)
+        painter.setBrush(look.moulded(top, epoxy))
+        painter.drawRect(top)
+        look.bevel(painter, top, 0.18, 55)
         # Turned on its corner, that corner is its feature's; square, its pin-1 corner.
-        corner = body - 1.0
+        corner = quad - 1.0
         if part.diagonal or pin_one:
-            painter.setBrush(QBrush(_art_colour("dot")))
-            painter.drawEllipse(QPointF(corner, corner if part.diagonal else pin_one * corner), 0.4, 0.4)
+            _paint_dimple(painter, QPointF(corner, corner if part.diagonal else pin_one * corner), 0.4)
+        _paint_art_print(painter, part.text, 0.62, quad * 1.6, ink)
     elif kind == "rf-module":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("rf-board"))
-        _art_box(
-            painter, -half_l + part.inset, half_l - part.antenna, half_w - part.inset,
-            _art_colour("shield"),
+        board = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(QBrush(_art_colour("rf-board")))
+        painter.drawRect(board)
+        look.bevel(painter, board, 0.2, 30)
+        can = QRectF(
+            -half_l + part.inset, -half_w + part.inset,
+            length - part.antenna - part.inset, width - 2 * part.inset,
         )
-        # The antenna: a row of teeth on a feed line, as ``view3d._art_rf_module`` prints it.
+        steel = _art_colour("shield")
+        painter.setPen(QPen(steel.darker(140), 0.08))
+        painter.setBrush(look.metal(can, steel))
+        painter.drawRoundedRect(can, RF_CAN_CORNER_MM, RF_CAN_CORNER_MM)
+        look.bevel(painter, can, 0.3, 90, RF_CAN_CORNER_MM)
+        # The antenna: a meander on the bare end, as ``view3d._art_rf_module`` prints it.
         teeth, reach, depth = 5, width * 0.8, part.antenna * 0.55
         near = half_l - part.antenna / 2 - depth / 2
+        far = near + depth
         step = reach / (2 * teeth - 1)
-        trace = QPen(_art_colour("antenna"), 0.35)
-        trace.setCapStyle(Qt.PenCapStyle.FlatCap)
-        painter.setPen(trace)
-        painter.drawLine(QPointF(near, -reach / 2), QPointF(near, reach / 2))
+        trace = QPen(_art_colour("antenna"), 0.4)
+        trace.setCapStyle(Qt.PenCapStyle.SquareCap)
+        trace.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        meander = QPainterPath(QPointF(near, -reach / 2))
         for index in range(2 * teeth):
             across = -reach / 2 + index * step
-            painter.drawLine(QPointF(near, across), QPointF(near + depth, across))
-            if index % 2 == 0:
-                painter.drawLine(QPointF(near + depth, across), QPointF(near + depth, across + step))
-        painter.setPen(QPen(QColor("#0c0d10"), 0.05))
+            enter, leave = (near, far) if index % 2 == 0 else (far, near)
+            meander.lineTo(enter, across)
+            meander.lineTo(leave, across)
+            if index < 2 * teeth - 1:
+                meander.lineTo(leave, across + step)
+        painter.setPen(trace)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(meander)
+        painter.setPen(edge)
+        # The module's name etched across the can, on its antenna side of the middle, where
+        # the maker puts it. Only the name: the certification ids under it are unreadable at
+        # any zoom, and not what the builder needs.
+        _paint_art_print(
+            painter, part.text, min(RF_NAME_MM, can.height() * 0.07), can.height() * 0.86,
+            _art_ink("etch", ART_ETCH_ALPHA), QPointF(can.center().x() + can.width() * 0.1, 0.0), 90,
+        )
     elif kind == "usb":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("usb"))
-        _art_box(painter, half_l - 0.35, half_l, half_w * 0.82, _art_colour("mouth"))
+        steel = _art_colour("usb")
+        # The tabs either side that the shell is soldered down by, then the shell itself.
+        tab = min(1.1, length * 0.14)
+        painter.setPen(QPen(steel.darker(150), 0.06))
+        painter.setBrush(QBrush(steel.darker(112)))
+        painter.drawRect(QRectF(-half_l * 0.45 - tab / 2, -half_w, tab, 0.55))
+        painter.drawRect(QRectF(-half_l * 0.45 - tab / 2, half_w - 0.55, tab, 0.55))
+        shell = QRectF(-half_l, -half_w * 0.92, length, 2 * half_w * 0.92)
+        painter.setBrush(look.metal(shell, steel))
+        painter.drawRoundedRect(shell, 0.35, 0.35)
+        look.bevel(painter, shell, 0.22, 80, 0.35)
+        # The seam the shell is folded along, and the dark of the mouth at the board's edge.
+        painter.setPen(QPen(steel.darker(135), 0.08))
+        painter.drawLine(QPointF(-half_l + 0.6, 0.0), QPointF(half_l - 1.0, 0.0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(_art_colour("mouth")))
+        painter.drawRect(QRectF(half_l - 0.45, -half_w * 0.7, 0.45, 2 * half_w * 0.7))
+        painter.setPen(edge)
     elif kind == "button":
         coloured = bool(part.colour)
-        cap_colour = QColor(part.colour) if coloured else _art_colour("switch")
-        _art_box(painter, -half_l, half_l, half_w, cap_colour.darker(113) if coloured else cap_colour)
-        if not coloured:
-            _art_box(painter, -half_l + 0.25, half_l - 0.25, half_w - 0.25, _art_colour("frame"))
-        painter.setBrush(QBrush(cap_colour))
+        frame = QRectF(-half_l, -half_w, length, width)
+        if coloured:
+            painter.setBrush(look.moulded(frame, QColor(part.colour).darker(113)))
+            painter.drawRect(frame)
+            look.bevel(painter, frame, 0.15, 40)
+        else:
+            # A tact switch from above: its dark base, the steel cover over it, and the
+            # round stem up through the cover.
+            painter.setBrush(QBrush(_art_colour("switch")))
+            painter.drawRect(frame)
+            cover = frame.adjusted(0.18, 0.18, -0.18, -0.18)
+            painter.setBrush(look.metal(cover, _art_colour("frame")))
+            painter.drawRect(cover)
+            look.bevel(painter, cover, 0.15, 70)
         radius = min(length, width) * 0.3
+        stem = QColor(part.colour) if coloured else _art_colour("switch")
+        painter.setPen(QPen(stem.darker(160) if coloured else ART_EDGE, 0.07))
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), radius, stem, 108 if coloured else 160))
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
+        painter.setPen(edge)
     elif kind == "side-button":
         cap = min(0.6, length / 3)
-        _art_box(painter, -half_l, half_l - cap, half_w, _art_colour("frame"))
+        body = QRectF(-half_l, -half_w, length - cap, width)
+        painter.setBrush(look.metal(body, _art_colour("frame")))
+        painter.drawRect(body)
+        look.bevel(painter, body, 0.12, 50)
         _art_box(painter, half_l - cap, half_l, half_w * 0.4, _art_colour("switch"))
     elif kind == "led":
         lens = QColor(part.colour) if part.colour else _art_colour("lens")
         if abs(length - width) < 0.3:
             _art_box(painter, -half_l, half_l, half_w, _art_colour("package"))
-            painter.setBrush(QBrush(lens))
             radius = min(length, width) * 0.36
+            painter.setBrush(look.domed(QPointF(0.0, 0.0), radius, lens, 135))
             painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         else:
+            # An 0603/0805 LED: tinned ends, and its lens between them, glowing at its
+            # middle on screen. No cathode mark: the layout does not say which end it is.
             cap = min(0.3, length * 0.2)
-            _art_box(painter, -half_l, half_l, half_w, LEAD)
-            _art_box(painter, -half_l + cap, half_l - cap, half_w, lens)
-            die = min(length, width) * 0.15
-            _art_box(painter, -die, die, die, _art_colour("dot"))
+            painter.setBrush(look.metal(QRectF(-half_l, -half_w, length, width), LEAD))
+            painter.drawRect(QRectF(-half_l, -half_w, length, width))
+            body = QRectF(-half_l + cap, -half_w, length - 2 * cap, width)
+            if look.lit:
+                glow = QRadialGradient(body.center(), max(body.width(), body.height()) * 0.6)
+                glow.setColorAt(0.0, lens.lighter(135))
+                glow.setColorAt(1.0, lens)
+                painter.setBrush(QBrush(glow))
+            else:
+                painter.setBrush(QBrush(lens))
+            painter.drawRect(body)
     elif kind == "crystal":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("ceramic"))
-        _art_box(painter, -half_l + 0.15, half_l - 0.15, half_w - 0.15, _art_colour("shield"))
+        base = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(QBrush(_art_colour("ceramic")))
+        painter.drawRect(base)
+        lid = base.adjusted(0.15, 0.15, -0.15, -0.15)
+        painter.setBrush(look.metal(lid, _art_colour("shield")))
+        painter.drawRect(lid)
+        look.bevel(painter, lid, 0.12, 60)
     elif kind == "sma":
         # A tantalum is the colour it is moulded in, its band a darker shade of it.
-        moulding = QColor(part.colour) if part.colour else _art_colour("epoxy")
-        _art_box(painter, -half_l, half_l, half_w, moulding)
+        moulding = QColor(part.colour) if part.colour else epoxy
+        body = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.moulded(body, moulding))
+        painter.drawRect(body)
+        look.bevel(painter, body, 0.1, 40)
         band = moulding.darker(TANTALUM_BAND_SHADE) if part.colour else _art_colour("band")
-        _art_box(painter, half_l - 1.1, half_l - 0.4, half_w, band)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(band))
+        painter.drawRect(QRectF(half_l - 1.1, -half_w, 0.7, width))
+        painter.setPen(edge)
     elif kind == "hole":
         radius = min(length, width) / 2
         ring = part.inset or HOLE_EDGE_MM
-        painter.setBrush(QBrush(QColor(part.colour) if part.colour else _art_colour("hole-edge")))
+        plated = QColor(part.colour) if part.colour else _art_colour("hole-edge")
+        painter.setPen(QPen(plated.darker(150), 0.06))
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), radius, plated))
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         painter.setBrush(QBrush(_art_colour("hole")))
         painter.drawEllipse(QPointF(0.0, 0.0), radius - ring, radius - ring)
+        painter.setPen(edge)
     elif kind == "plate":
         _art_box(painter, -half_l, half_l, half_w, QColor(part.colour) if part.colour else _art_colour("plate"))
     elif kind == "terminal":
@@ -4444,15 +4887,19 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         ways = max(round(width / part.pitch), 1) if part.pitch else 1
         step = width / ways
         mouth_wide = TERMINAL_MOUTH_MM[0]
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("terminal"))
+        block = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.moulded(block, _art_colour("terminal")))
+        painter.drawRect(block)
+        look.bevel(painter, block, 0.2, 40)
         radius = min(TERMINAL_SCREW_MM, step * 0.86) / 2
         for way in range(ways):
             across = (way - (ways - 1) / 2) * step
             painter.setBrush(QBrush(_art_colour("mouth")))
             painter.drawRect(QRectF(half_l - 0.35, across - mouth_wide / 2, 0.35, mouth_wide))
             painter.drawRect(QRectF(-half_l + 0.8, across - mouth_wide / 2, 0.4, mouth_wide))
-            painter.setBrush(QBrush(_art_colour("screw")))
-            painter.drawEllipse(QPointF(-0.1, across), radius, radius)
+            head = QPointF(-0.1, across)
+            painter.setBrush(look.domed(head, radius, _art_colour("screw"), 130))
+            painter.drawEllipse(head, radius, radius)
             painter.save()
             painter.setPen(QPen(_art_colour("mouth"), 0.3))
             painter.drawLine(QPointF(-0.1 - radius * 0.7, across), QPointF(-0.1 + radius * 0.7, across))
@@ -4466,7 +4913,10 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
             [(index - 1.5) * JST_SH_PITCH_MM for index in range(4)], 0.3,
         )
         housing = QColor(part.colour) if part.colour else _art_colour("jst")
-        _art_box(painter, -half_l, half_l, half_w, housing)
+        body = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.moulded(body, housing))
+        painter.drawRect(body)
+        look.bevel(painter, body, 0.12, 40)
         _art_box(painter, half_l - 0.45, half_l, half_w * 0.68, _art_colour("mouth"))
     elif kind == "fresnel":
         # The square foot, the dome on it, and the facets a Fresnel lens is moulded in: a
@@ -4475,7 +4925,7 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         painter.setBrush(QBrush(lens.darker(108)))
         painter.drawRoundedRect(QRectF(-half_l, -half_w, length, width), 0.8, 0.8)
         dome = min(FRESNEL_DOME_MM, length, width) / 2
-        painter.setBrush(QBrush(lens))
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), dome, lens, 106))
         painter.drawEllipse(QPointF(0.0, 0.0), dome, dome)
         painter.save()
         painter.setPen(QPen(lens.darker(118), 0.12))
@@ -4489,7 +4939,9 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
             painter.drawLine(tip, QPointF(tip.x() / 0.42 * 0.97, tip.y() / 0.42 * 0.97))
         painter.restore()
     elif kind == "oled":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("glass"))
+        glass = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.moulded(glass, _art_colour("glass")))
+        painter.drawRect(glass)
         view_across, view_along = OLED_VIEW_MM
         # The viewing area sits in the glass short of its ledge, at +x.
         middle = -OLED_LEDGE_MM / 2
@@ -4497,6 +4949,7 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
             painter, middle - view_along / 2, middle + view_along / 2, view_across / 2,
             _art_colour("oled-view"),
         )
+        look.bevel(painter, glass, 0.3, 45)
     elif kind == "pcb-antenna":
         # A meander across the part, its own axis along x: strokes ``pitch`` apart, each
         # running the width of the part and joined at alternate ends.
@@ -4506,48 +4959,273 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         pitch = part.pitch or 1.0
         turns = max(int(length // pitch), 1)
         start = -half_l + (length - turns * pitch) / 2
-        edge = half_w - PCB_ANTENNA_TRACE_MM
+        reach = half_w - PCB_ANTENNA_TRACE_MM
         for index in range(turns + 1):
             at = start + index * pitch
-            painter.drawLine(QPointF(at, -edge), QPointF(at, edge))
+            painter.drawLine(QPointF(at, -reach), QPointF(at, reach))
             if index < turns:
-                end = edge if index % 2 == 0 else -edge
+                end = reach if index % 2 == 0 else -reach
                 painter.drawLine(QPointF(at, end), QPointF(at + pitch, end))
-        painter.setPen(QPen(QColor("#0c0d10"), 0.05))
+        painter.setPen(edge)
     elif kind == "hc49":
         # From above, the can's top: round-ended, its crimped rim a shade darker round it.
+        can = QRectF(-half_l, -half_w, length, width)
         painter.setBrush(QBrush(_art_colour("shield").darker(118)))
-        painter.drawRoundedRect(QRectF(-half_l, -half_w, length, width), half_w, half_w)
+        painter.drawRoundedRect(can, half_w, half_w)
         rim = min(0.35, half_w * 0.2)
-        painter.setBrush(QBrush(_art_colour("shield")))
-        painter.drawRoundedRect(
-            QRectF(-half_l + rim, -half_w + rim, length - 2 * rim, width - 2 * rim),
-            half_w - rim, half_w - rim,
-        )
+        top = can.adjusted(rim, rim, -rim, -rim)
+        painter.setBrush(look.metal(top, _art_colour("shield")))
+        painter.drawRoundedRect(top, half_w - rim, half_w - rim)
     elif kind == "flex":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("flex"))
         _art_box(painter, -half_l, half_l, half_w * 0.8, _art_colour("flex-stiffener"))
     elif kind == "trimmer":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("trimmer-base"))
+        body = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.moulded(body, _art_colour("trimmer-base")))
+        painter.drawRect(body)
+        look.bevel(painter, body, 0.12, 40)
         radius = min(length, width) * 0.4
-        painter.setBrush(QBrush(_art_colour("rotor")))
+        painter.setBrush(look.domed(QPointF(0.0, 0.0), radius, _art_colour("rotor"), 130))
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         _art_box(painter, -radius * 0.7, radius * 0.7, radius * 0.14, _art_colour("slot"))
     elif kind in ("chip-r", "chip-c"):
+        # Tinned ends and the body between: a resistor's black, a capacitor's tan ceramic.
+        # No value printed on it: the layout does not say it, and a guessed one would.
         cap = min(0.4, length * 0.2)
-        _art_box(painter, -half_l, half_l, half_w, LEAD)
-        filling = _art_colour("resistor" if kind == "chip-r" else "mlcc")
-        _art_box(painter, -half_l + cap, half_l - cap, half_w, filling)
+        ends = QRectF(-half_l, -half_w, length, width)
+        painter.setBrush(look.metal(ends, LEAD))
+        painter.drawRect(ends)
+        body = QRectF(-half_l + cap, -half_w, length - 2 * cap, width)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(look.moulded(body, _art_colour("resistor" if kind == "chip-r" else "mlcc")))
+        painter.drawRect(body)
+        painter.setPen(edge)
     elif kind == "pads":
+        # A header nobody fitted (a Nano's ICSP): its plated holes, open, pin 1 square.
         along_count = max(round(length / 2.54), 1)
         across_count = max(round(width / 2.54), 1)
         for a in range(along_count):
             for b in range(across_count):
                 centre = QPointF((a - (along_count - 1) / 2) * 2.54, (b - (across_count - 1) / 2) * 2.54)
-                painter.setBrush(QBrush(LEAD))
-                painter.drawEllipse(centre, 0.85, 0.85)
-                painter.setBrush(QBrush(_art_colour("mouth")))
-                painter.drawEllipse(centre, 0.5, 0.5)
+                _paint_plated_pad(
+                    painter, centre, 0.85, _art_colour("tin"), square=a == 0 and b == 0, pin=False,
+                    lit=look.lit,
+                )
+        painter.setPen(edge)
+
+
+def _paint_silk_corners(painter: QPainter, half_l: float, half_w: float, arm: float) -> None:
+    """The silkscreen corners a board prints round a chip, just outside its pads."""
+    pen = QPen(QColor(BODY_STYLES["module-board"].accent), SILK_LINE_MM)
+    pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+    painter.save()
+    painter.setPen(pen)
+    x, y = half_l + SILK_GAP_MM, half_w + SILK_GAP_MM
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            painter.drawLine(QPointF(sx * x, sy * y), QPointF(sx * (x - arm), sy * y))
+            painter.drawLine(QPointF(sx * x, sy * y), QPointF(sx * x, sy * (y - arm)))
+    painter.restore()
+
+
+def _paint_plated_pad(
+    painter: QPainter,
+    centre: QPointF,
+    radius: float,
+    plating: QColor,
+    *,
+    square: bool,
+    pin: bool,
+    lit: bool,
+    selected: bool = False,
+) -> None:
+    """A plated hole in a module's board, from above: its ring (square for pin 1), and the
+    header pin up through it in its cone of solder -- or, with no pin, the open bore."""
+    if selected:
+        painter.setPen(QPen(SELECTED, 0.16))
+    else:
+        painter.setPen(QPen(plating.darker(170), 0.07))
+    painter.setBrush(_ArtLook(lit).domed(centre, radius, plating, 122))
+    ring = QRectF(centre.x() - radius, centre.y() - radius, 2 * radius, 2 * radius)
+    if square:
+        painter.drawRect(ring)
+    else:
+        painter.drawEllipse(ring)
+    painter.setPen(Qt.PenStyle.NoPen)
+    if not pin:
+        painter.setBrush(QBrush(_art_colour("hole")))
+        painter.drawEllipse(centre, radius * 0.5, radius * 0.5)
+        return
+    painter.setBrush(QBrush(_art_colour("solder")))
+    painter.drawEllipse(centre, radius * 0.72, radius * 0.72)
+    tip = MODULE_PIN_TIP_MM / 2
+    painter.setPen(QPen(_art_colour("solder").darker(140), 0.05))
+    painter.setBrush(QBrush(_art_colour("pin-tip")))
+    painter.drawRect(QRectF(centre.x() - tip, centre.y() - tip, 2 * tip, 2 * tip))
+
+
+def _paint_module_board(
+    painter: QPainter,
+    footprint: Footprint,
+    path: QPainterPath,
+    fill: QColor,
+    selected: bool,
+    pitch: float,
+    art: Sequence[PlacedArt],
+    cache: ArtCache | None,
+) -> None:
+    """A recognised module from above: its board, what stands on it and its header pins in
+    their plated holes, then its outline. On screen the first three come out of ``cache``
+    (``ArtCache``), painted once for the zoom and turn they are seen at; the outline, in
+    the selection's colour when selected, is drawn over them every time."""
+    if cache is None or not cache.paint(painter, footprint, path, fill, selected, pitch, art):
+        _paint_module_board_now(painter, footprint, path, fill, selected, pitch, art)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(SELECTED if selected else fill.darker(190), 0.2 if selected else 0.1))
+    painter.drawPath(path)
+
+
+def _paint_module_board_now(
+    painter: QPainter,
+    footprint: Footprint,
+    path: QPainterPath,
+    fill: QColor,
+    selected: bool,
+    pitch: float,
+    art: Sequence[PlacedArt],
+) -> None:
+    lit = not _on_paper(painter)
+    if lit:
+        _paint_contact_shadow(painter, path)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(fill))
+    painter.drawPath(path)
+    if lit:
+        _paint_body_light(painter, path)
+        # The board's edge: the solder mask catching the light along the top left, the cut
+        # FR4 a shade darker along the bottom right.
+        _paint_edge_light(painter, path.boundingRect(), MODULE_EDGE_LIGHT_MM, MODULE_EDGE_LIGHT_ALPHA)
+    painter.save()
+    # Inside the board, whatever the art says: what stands on a module never overhangs it
+    # here, as ``fit_module_art`` already keeps it from doing in the layout.
+    painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
+    _paint_module_art(painter, art)
+    painter.restore()
+    plating = QColor(module_pad_plating(fill.name()))
+    for pin in footprint.pins:
+        _paint_plated_pad(
+            painter, QPointF(pin.d_col * pitch, pin.d_row * pitch), MODULE_PAD_MM, plating,
+            square=pin.number == "1", pin=True, lit=lit, selected=selected,
+        )
+
+
+class ArtCache:
+    """A recognised module's board, art and pads, rasterised at the zoom and turn they were
+    last painted at, so a repaint is one image drawn rather than a few hundred gradients.
+
+    One image per part: kept while the view's scale and rotation, the part's colour and its
+    selection are what they were, and the quarter pixel it lands on. Panning keeps it.
+    A zoom in progress passes through a new scale every frame, and filling an image per part
+    per frame cost more than painting the parts: so a new scale is first served from the
+    image already held, scaled (``ART_CACHE_STRETCH``), and the item asks its scene to paint
+    it again once the zoom has settled (``stale``), when the second sight of that scale
+    fills the image afresh. With nothing held, the part is painted directly. Never on paper,
+    nor on any device that is not pixels -- the 1:1 PDF and an SVG are drawn as they always
+    were, in vectors -- nor past ``ART_CACHE_MAX_PX``, where it would cost more memory than
+    it saves time."""
+
+    __slots__ = ("_image", "_key", "_look", "_seen", "_to_local", "_turn", "stale")
+
+    def __init__(self) -> None:
+        self._key: tuple[object, ...] | None = None
+        self._image: QImage | None = None
+        #: The key without the view's transform: what the image shows, at any zoom.
+        self._look: tuple[object, ...] | None = None
+        #: The view's rotation and mirroring the image was drawn under, scale divided out.
+        self._turn: tuple[float, ...] | None = None
+        #: From the image's own (logical) pixels back to the part's frame.
+        self._to_local = QTransform()
+        #: The last key served stale, waiting to be asked for a second time.
+        self._seen: tuple[object, ...] | None = None
+        #: The last paint was a stretched image: the scene should paint it again soon.
+        self.stale = False
+
+    def paint(
+        self,
+        painter: QPainter,
+        footprint: Footprint,
+        path: QPainterPath,
+        fill: QColor,
+        selected: bool,
+        pitch: float,
+        art: Sequence[PlacedArt],
+    ) -> bool:
+        """Draw from the cache, filling it first if it is stale; False when this painter is
+        not one the cache serves, and the caller paints directly."""
+        self.stale = False
+        engine = painter.paintEngine()
+        if engine is None or engine.type() != QPaintEngine.Type.Raster or _on_paper(painter):
+            return False
+        ratio = painter.device().devicePixelRatioF() or 1.0
+        to_device = painter.combinedTransform() * QTransform.fromScale(ratio, ratio)
+        margin = ART_CACHE_MARGIN_MM
+        area = to_device.mapRect(path.boundingRect().adjusted(-margin, -margin, margin, margin))
+        width, height = math.ceil(area.width()) + 2, math.ceil(area.height()) + 2
+        if width * height > ART_CACHE_MAX_PX:
+            return False
+        left, top = math.floor(area.left()), math.floor(area.top())
+        phase_x = round((area.left() - left) * ART_CACHE_PHASES) / ART_CACHE_PHASES
+        phase_y = round((area.top() - top) * ART_CACHE_PHASES) / ART_CACHE_PHASES
+        # The selection's colour too: the pads take it, and a theme may change it.
+        look = (
+            fill.rgba(), SELECTED.rgba() if selected else 0, pitch, id(footprint), id(art),
+            int(painter.renderHints().value),
+        )
+        scale = math.sqrt(abs(to_device.determinant())) or 1.0
+        turn = tuple(round(m / scale, 3) for m in (to_device.m11(), to_device.m12(), to_device.m21(), to_device.m22()))
+        key = (
+            round(to_device.m11(), 6), round(to_device.m12(), 6),
+            round(to_device.m21(), 6), round(to_device.m22(), 6),
+            phase_x, phase_y, width, height, ratio, *look,
+        )
+        if key == self._key and self._image is not None:
+            painter.save()
+            painter.resetTransform()
+            painter.drawImage(QPointF(left / ratio, top / ratio), self._image)
+            painter.restore()
+            return True
+        if key != self._seen:
+            self._seen = key
+            if self._image is None or look != self._look or turn != self._turn:
+                return False
+            held = math.sqrt(abs(self._to_local.determinant())) * ratio
+            if not 1 / ART_CACHE_STRETCH <= held * scale <= ART_CACHE_STRETCH:
+                return False
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.setTransform(
+                QTransform.fromScale(ratio, ratio) * self._to_local * painter.transform()
+            )
+            painter.drawImage(QPointF(0, 0), self._image)
+            painter.restore()
+            self.stale = True
+            return True
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(0)
+        inner = QPainter(image)
+        inner.setRenderHints(painter.renderHints())
+        to_image = to_device * QTransform.fromTranslate(phase_x - area.left(), phase_y - area.top())
+        inner.setTransform(to_image)
+        _paint_module_board_now(inner, footprint, path, fill, selected, pitch, art)
+        inner.end()
+        image.setDevicePixelRatio(ratio)
+        self._key, self._image, self._look, self._turn = key, image, look, turn
+        self._to_local = to_image.inverted()[0]
+        painter.save()
+        painter.resetTransform()
+        painter.drawImage(QPointF(left / ratio, top / ratio), self._image)
+        painter.restore()
+        return True
 
 
 def _paint_wire_entries(
@@ -4736,6 +5414,8 @@ class ComponentItem(QGraphicsItem):
         self.standing = fit_standing_board(fp, comp, board.pitch)
         #: Its own board's colour, when that is not the module style's (a Pico is green).
         self.board_colour = board_colour_for(fp, comp, board.pitch)
+        #: The module's board and art as last painted (``ArtCache``).
+        self.art_cache = ArtCache()
         self._names_rect = self._pin_names_rect()
         self._leads_rect = self._flying_leads_rect()
         #: What a click on this part is (:meth:`shape`), worked out on first ask: the item is
@@ -5190,6 +5870,7 @@ class ComponentItem(QGraphicsItem):
         # not (``topview``'s parametric shapes stay a fallback for the data, not for this).
         view = top_view(self.fp, self.board.pitch)
         measured = view.source != "parametric"
+        pads_drawn = False
         if near:
             # Leads, in item coordinates: a line does not care which way its frame is turned,
             # and the endpoints already come from the shared transform. A measured view has
@@ -5216,13 +5897,14 @@ class ComponentItem(QGraphicsItem):
             if not off_board and measured:
                 _paint_top_view(painter, view, style, self.isSelected(), placement, bands)
                 _paint_top_marking(
-                    painter, self.fp, placement, self.comp, view.marking, from_below, names
+                    painter, self.fp, placement, self.comp, view.marking, from_below, names,
+                    self.board.pitch,
                 )
                 _paint_plus_mark(painter, self.fp, self.board.pitch)
             elif not off_board and self.standing is not None:
                 _paint_standing_board(painter, self.standing, style, self.isSelected())
             elif not off_board:
-                _paint_body(
+                pads_drawn = _paint_body(
                     painter,
                     self.fp,
                     placement,
@@ -5232,6 +5914,7 @@ class ComponentItem(QGraphicsItem):
                     self.board.pitch,
                     bands=bands,
                     art=self.art,
+                    art_cache=self.art_cache,
                 )
                 _paint_top_marking(
                     painter, self.fp, placement, self.comp, None, from_below, names
@@ -5242,7 +5925,11 @@ class ComponentItem(QGraphicsItem):
 
         # From the solder side the scene paints the lead ends over the copper instead
         # (LeadEndsLayerItem); a part in a scene without that layer still paints its own.
-        if near or getattr(self.scene(), "lead_ends_layer", None) is None:
+        if self.art_cache.stale:
+            refresh = getattr(self.scene(), "art_refresh", None)
+            if refresh is not None:
+                refresh.start()
+        if not pads_drawn and (near or getattr(self.scene(), "lead_ends_layer", None) is None):
             self._paint_pin_ends(painter, keyed)
 
     def _paint_pin_ends(self, painter: QPainter, keyed: tuple[float, float] | None) -> None:
@@ -5899,6 +6586,13 @@ class BoardScene(QGraphicsScene):
     ) -> None:
         super().__init__()
         self.lookup = lookup
+        #: Restarted by every part whose art was drawn stretched (``ArtCache``): when the
+        #: zoom has been still for ``ART_REFRESH_MS``, the scene is painted again and the
+        #: parts' images are filled at the scale it settled on.
+        self.art_refresh = QTimer(self)
+        self.art_refresh.setSingleShot(True)
+        self.art_refresh.setInterval(ART_REFRESH_MS)
+        self.art_refresh.timeout.connect(self.update)
         #: Draw the thing each part off the board is, beside the board (View > Parts Off the
         #: Board): the window's, on by default there; off in every picture, print and export,
         #: which show the board and only the board.

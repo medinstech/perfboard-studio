@@ -289,6 +289,11 @@ ART_COLOURS: dict[str, str] = {
     "terminal": "#2d63b4",
     "screw": "#c3c6ca",
     "jst": "#e9e4d4",
+    # A module's plated holes from above: the header pin's square tip up through each, in
+    # its cone of solder, and the gold of a board plated ENIG (``module_pad_plating``).
+    "solder": "#b5babf",
+    "pin-tip": "#e4e7ea",
+    "gold": "#d1a654",
 }
 
 #: A screw terminal's wire mouth, per way: how wide, and from how high to how high up its
@@ -2450,3 +2455,14 @@ def name_room(
             continue  # between the pin and where its name starts: under the pad ring
         room = min(room, nearest - start - NAME_CLEARANCE_MM)
     return max(room, 0.0)
+
+
+#: The board colours whose makers plate their holes in gold (ENIG) rather than tin: every
+#: Adafruit breakout in the photographs the layouts were drawn from.
+GOLD_PLATED_BOARDS = frozenset({ADAFRUIT_BLUE})
+
+
+def module_pad_plating(board_colour: str) -> str:
+    """What a module's plated holes look like from above, by the colour of its board:
+    gold where its maker plates them so, tin everywhere else."""
+    return ART_COLOURS["gold" if board_colour.lower() in GOLD_PLATED_BOARDS else "tin"]

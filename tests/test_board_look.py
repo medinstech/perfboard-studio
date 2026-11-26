@@ -150,17 +150,25 @@ def test_a_relay_a_crystal_and_a_pot_carry_their_value_and_a_transistor_does_not
     printed: list[str] = []
     real = view2d.draw_physical_label
     real_marking = view2d._paint_top_marking
+    # A DIP's number is lasered into the moulding (``_paint_laser_text``), the rest printed.
+    real_laser = view2d._paint_laser_text
 
     def marking(painter, footprint, placement, comp, *rest):  # type: ignore[no-untyped-def]
         def record(painter, centre, text, height_mm, *args, **kwargs):  # type: ignore[no-untyped-def]
             printed.append(text)
             return real(painter, centre, text, height_mm, *args, **kwargs)
 
+        def laser(painter, text, *args):  # type: ignore[no-untyped-def]
+            printed.append(text)
+            return real_laser(painter, text, *args)
+
         monkeypatch.setattr(view2d, "draw_physical_label", record)
+        monkeypatch.setattr(view2d, "_paint_laser_text", laser)
         try:
             real_marking(painter, footprint, placement, comp, *rest)
         finally:
             monkeypatch.setattr(view2d, "draw_physical_label", real)
+            monkeypatch.setattr(view2d, "_paint_laser_text", real_laser)
 
     monkeypatch.setattr(view2d, "_paint_top_marking", marking)
     _on_screen(view2d.BoardScene(_example("atmega328-relay"), LOOKUP, side="top"))
@@ -376,3 +384,44 @@ def test_a_sleeve_is_stripped_back_at_both_ends() -> None:
     assert sleeve[0] == QPointF(0.9, 0)
     assert sleeve[-1] == QPointF(5, 3.1)
     assert view2d._trimmed([QPointF(0, 0), QPointF(1.5, 0)], 0.9) == [], "no sleeve left"
+
+
+def _paint_at(scene: view2d.BoardScene, px_per_mm: float) -> None:
+    rect = scene.sceneRect()
+    image = QImage(round(rect.width() * 6), round(rect.height() * 6), QImage.Format.Format_ARGB32)
+    painter = QPainter(image)
+    painter.scale(px_per_mm / 6, px_per_mm / 6)
+    scene.render(painter, QRectF(0, 0, image.width(), image.height()), rect)
+    painter.end()
+
+
+def test_a_modules_art_is_cached_per_zoom_and_stretched_while_the_zoom_moves() -> None:
+    """Chosen 2026-11-26: the illustrated art costs a few hundred gradients a part, so a
+    module is rasterised once per zoom (``ArtCache``). A new zoom is first served from the
+    image already held, stretched, and the scene is asked to paint again once it settles,
+    when the second sight of that zoom fills the image afresh."""
+    scene = view2d.BoardScene(_example("nano-relay"), LOOKUP, side="top")
+    module = next(
+        item for item in scene.component_items.values()
+        if item.fp.body.archetype == "module-board" and item.art
+    )
+    cache = module.art_cache
+    _paint_at(scene, 6)
+    assert cache._image is None, "a scale seen once is painted directly"
+    _paint_at(scene, 6)
+    held = cache._image
+    assert held is not None and not cache.stale
+    _paint_at(scene, 6.6)
+    assert cache.stale and cache._image is held, "a new zoom is the held image, stretched"
+    assert scene.art_refresh.isActive(), "and the scene paints again when the zoom settles"
+    _paint_at(scene, 6.6)
+    assert cache._image is not held and not cache.stale
+
+
+def test_a_modules_art_is_never_cached_on_paper(tmp_path: Path) -> None:
+    """The 1:1 sheet is vectors as it always was: no raster of a module reaches it."""
+    doc = _example("nano-relay")
+    scene = view2d.BoardScene(doc, LOOKUP, side="top")
+    export_pdf(doc.board, scene, tmp_path / "board.pdf")
+    export_pdf(doc.board, scene, tmp_path / "board.pdf")
+    assert all(item.art_cache._image is None for item in scene.component_items.values())
