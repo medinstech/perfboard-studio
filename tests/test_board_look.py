@@ -222,6 +222,81 @@ def test_an_address_a_part_stands_on_is_said_again_outside_the_board() -> None:
     assert view2d.BoardScene(bare, LOOKUP, side="top").legend_echo is None
 
 
+def test_echoed_legend_and_ruler_labels_stay_outside_the_board_at_low_zoom() -> None:
+    """#10: draw_label aligns inside a box centred on the anchor, so LegendEchoItem and
+    HoleRulerItem must use AlignLeft/AlignRight/AlignTop/AlignBottom in draw_label's terms
+    with a device-pixel gap (RULER_GAP_PX). Verified on the pixels at 6 px/mm."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QColor, QImage, QPainter
+
+    doc = _example("atmega328-relay")
+    outline = view2d._outline_rect(doc.board)
+    px_per_mm = 6.0
+    pad_mm = 10.0
+    src = outline.adjusted(-pad_mm, -pad_mm, pad_mm, pad_mm)
+    width = round(src.width() * px_per_mm)
+    height = round(src.height() * px_per_mm)
+    left_edge = round((outline.left() - src.left()) * px_per_mm)
+    right_edge = round((outline.right() - src.left()) * px_per_mm)
+    top_edge = round((outline.top() - src.top()) * px_per_mm)
+    bottom_edge = round((outline.bottom() - src.top()) * px_per_mm)
+
+    def render_only(scene: view2d.BoardScene, target: object) -> QImage:
+        scene.setBackgroundBrush(QColor(255, 255, 255))
+        for item in scene.items():
+            item.setVisible(item is target)
+        img = QImage(width, height, QImage.Format.Format_ARGB32)
+        img.fill(QColor(255, 255, 255))
+        painter = QPainter(img)
+        scene.render(painter, QRectF(0, 0, width, height), src)
+        painter.end()
+        return img
+
+    # 1. LegendEchoItem: left and right echoed row numbers stay strictly outside the outline.
+    scene = view2d.BoardScene(doc, LOOKUP, side="top")
+    assert scene.legend_echo is not None
+    # Pre-populate hidden() while all components are visible, then render only LegendEchoItem.
+    scene.legend_echo._hidden = (
+        px_per_mm,
+        scene.legend_echo.hidden(QTransform.fromScale(px_per_mm, px_per_mm)),
+    )
+    echo_img = render_only(scene, scene.legend_echo)
+    ink = [
+        (x, y)
+        for y in range(height)
+        for x in range(width)
+        if echo_img.pixelColor(x, y).red() < 240
+    ]
+    assert ink, "LegendEchoItem drew no pixels"
+    inside = [
+        (x, y)
+        for x, y in ink
+        if left_edge - 2 <= x <= right_edge + 2 and top_edge - 2 <= y <= bottom_edge + 2
+    ]
+    assert inside == [], f"echoed legend ink overlapped board edge/interior: {inside[:10]}"
+    left_xs = [x for x, _y in ink if x < left_edge]
+    assert left_xs and max(left_xs) <= left_edge - 4, (max(left_xs) if left_xs else None, left_edge)
+
+    # 2. HoleRulerItem on an unlabelled board: column/row labels stay strictly outside.
+    bare = dataclasses.replace(doc, board=dataclasses.replace(doc.board, labels=None))
+    bare_scene = view2d.BoardScene(bare, LOOKUP, side="top")
+    ruler = next(i for i in bare_scene.items() if isinstance(i, view2d.HoleRulerItem))
+    ruler_img = render_only(bare_scene, ruler)
+    ruler_ink = [
+        (x, y)
+        for y in range(height)
+        for x in range(width)
+        if ruler_img.pixelColor(x, y).red() < 240
+    ]
+    assert ruler_ink, "HoleRulerItem drew no pixels"
+    ruler_inside = [
+        (x, y)
+        for x, y in ruler_ink
+        if left_edge - 2 <= x <= right_edge + 2 and top_edge - 2 <= y <= bottom_edge + 2
+    ]
+    assert ruler_inside == [], f"ruler ink overlapped board edge/interior: {ruler_inside[:10]}"
+
+
 def test_a_name_with_nowhere_else_to_go_still_crosses_the_legend() -> None:
     """Only a DIP has a top to print a name on. nano-relay's J2 stands on the first column
     with its names behind it, where the row numbers are: kept off the legend they were

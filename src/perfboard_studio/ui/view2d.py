@@ -579,6 +579,9 @@ NOTE_TOOLTIP_CHARS = 200
 #: hold their size while the board zooms, which is both what an annotation should do and
 #: what keeps them clear of the size below which some font engines draw nothing.
 RULER_LABEL_PX = 11
+#: Device-pixel gap between the board outline and ruler / echoed legend labels, so the
+#: clearance holds at low zoom (6 px/mm) instead of shrinking with scene millimetres.
+RULER_GAP_PX = 6.0
 REF_LABEL_PX = 12
 #: How a part's reference sits on its anchor (``ComponentItem.reference_anchor``): centred,
 #: and ABOVE the point in draw_label's terms, two device pixels clear. One pair for the
@@ -936,19 +939,23 @@ class HoleRulerItem(QGraphicsItem):
         scale = painter.transform().m11() or 1.0
         step = self._label_step(scale)
 
+        outline = _outline_rect(board)
         for col in range(board.cols):
             if col % step and (col + 1) % 5:
                 continue
             major = (col + 1) % 5 == 0 or col == 0
             painter.setPen(QPen(RULER_TEXT_MAJOR if major else RULER_TEXT))
             x = hole_to_screen(HoleCoord(col, 0), board, self.side).x()
+            # ``draw_label`` aligns inside a box centred on the anchor (see viewsch.label_alignment):
+            # AlignTop puts text ABOVE the anchor, AlignLeft puts text LEFT of it.
             draw_label(
                 painter,
-                QPointF(x, _outline_rect(board).top() - 1.4),
+                QPointF(x, outline.top()),
                 column_label(col),
                 RULER_LABEL_PX,
-                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
                 bold=major,
+                offset=QPointF(0.0, -RULER_GAP_PX),
             )
 
         for row in range(board.rows):
@@ -958,11 +965,12 @@ class HoleRulerItem(QGraphicsItem):
             painter.setPen(QPen(RULER_TEXT_MAJOR if major else RULER_TEXT))
             draw_label(
                 painter,
-                QPointF(_outline_rect(board).left() - 1.2, row * board.pitch),
+                QPointF(outline.left(), row * board.pitch),
                 row_label(row),
                 RULER_LABEL_PX,
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 bold=major,
+                offset=QPointF(-RULER_GAP_PX, 0.0),
             )
 
 
@@ -1023,27 +1031,31 @@ class LegendEchoItem(QGraphicsItem):
             self._hidden = (transform.m11(), self.hidden(transform))
         for centre, text, rotation in self._hidden[1]:
             if rotation:
-                # A row number, beside the edge it is printed along.
+                # A row number, beside the edge it is printed along. ``draw_label`` aligns
+                # inside a box centred on the anchor, so AlignLeft sits left of the anchor
+                # and AlignRight sits right of it (opposite of Qt's usual reading).
                 left = centre.x() < outline.center().x()
                 draw_label(
                     painter,
-                    QPointF(outline.left() - 1.2 if left else outline.right() + 1.2, centre.y()),
+                    QPointF(outline.left() if left else outline.right(), centre.y()),
                     text,
                     RULER_LABEL_PX,
-                    (Qt.AlignmentFlag.AlignRight if left else Qt.AlignmentFlag.AlignLeft)
+                    (Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight)
                     | Qt.AlignmentFlag.AlignVCenter,
                     bold=True,
+                    offset=QPointF(-RULER_GAP_PX if left else RULER_GAP_PX, 0.0),
                 )
             else:
                 top = centre.y() < outline.center().y()
                 draw_label(
                     painter,
-                    QPointF(centre.x(), outline.top() - 1.4 if top else outline.bottom() + 1.4),
+                    QPointF(centre.x(), outline.top() if top else outline.bottom()),
                     text,
                     RULER_LABEL_PX,
                     Qt.AlignmentFlag.AlignHCenter
-                    | (Qt.AlignmentFlag.AlignBottom if top else Qt.AlignmentFlag.AlignTop),
+                    | (Qt.AlignmentFlag.AlignTop if top else Qt.AlignmentFlag.AlignBottom),
                     bold=True,
+                    offset=QPointF(0.0, -RULER_GAP_PX if top else RULER_GAP_PX),
                 )
 
 
