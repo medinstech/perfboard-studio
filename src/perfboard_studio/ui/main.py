@@ -471,7 +471,7 @@ from .palette import PATH_SEP as PALETTE_PATH_SEP
 from .palette import RECENT_LIMIT as PALETTE_RECENT_LIMIT
 from .palette import SHORTCUT as PALETTE_SHORTCUT
 from .palette import CommandPalette, Entry
-from .partlist import PartListPanel
+from .partlist import PartListPanel, natural_key
 from .partnames import footprint_label
 from .plannercard import PlannerCard
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
@@ -7800,7 +7800,11 @@ class MainWindow(QMainWindow):
         return found[1]
 
     def _on_placement_armed(self, footprint_id: str) -> None:
-        self._armed_footprint_id: str | None = footprint_id or None
+        # Properties shows a LIBRARY part armed for placing; a design part in hand is
+        # already a part, and Properties goes on showing whatever it showed.
+        self._armed_footprint_id: str | None = (
+            None if self.scene.armed_part_id is not None else footprint_id or None
+        )
         # R and M turn an armed part, so they come on and go off with the arming.
         self._refresh_selection_state()
         if not footprint_id:
@@ -7818,6 +7822,10 @@ class MainWindow(QMainWindow):
         name = footprint_label(footprint.name) if footprint is not None else footprint_id
         ref = next_reference(self.bus.system_document, footprint_id, self.scene.placement_prefix)
         described = f"{self.scene.placement_value} {name}" if self.scene.placement_value else name
+        in_hand = self._part_in_hand()
+        if in_hand is not None:
+            ref = in_hand.ref
+            described = f"{in_hand.value} {name}" if in_hand.value else name
         self.label_place_hint.setText(
             f"{t('Click a hole to place')} <b>{ref}</b> ({described}). {t('Esc cancels.')}"
         )
@@ -7912,6 +7920,15 @@ class MainWindow(QMainWindow):
                 f"{t('Enter or right-click finishes, Esc cancels')}"
             )
 
+        in_hand = self._part_in_hand()
+        if in_hand is not None:
+            more = len(self.bus.document.parts) - 1
+            said = (
+                t("{ref} in hand · {count} more to place · click a hole, Esc stops")
+                if more
+                else t("{ref} in hand, the last one · click a hole, Esc stops")
+            )
+            return said.format(ref=in_hand.ref, count=more)
         footprint_id = self.scene.armed_footprint_id
         if footprint_id:
             footprint = self.lookup(footprint_id)
@@ -8105,6 +8122,18 @@ class MainWindow(QMainWindow):
             + t("Or drag a part here from the Library.")
         )
 
+    def _part_in_hand(self) -> SchematicPart | None:
+        """The design part ``BoardScene.arm_part`` put in hand, while it is still unplaced."""
+        part_id = self.scene.armed_part_id
+        return next((p for p in self.bus.document.parts if p.id == part_id), None)
+
+    def _hand_the_next_part(self) -> None:
+        """After a part in hand is placed, the next one off the board comes into hand:
+        the first by reference in natural order (C1, C2, ... C10, R1, U1), the order the
+        Part List sorts them in, so the walk can be followed there. None left, empty hand."""
+        waiting = sorted(self.bus.document.parts, key=lambda p: natural_key(p.ref))
+        self.scene.arm_part(waiting[0].id if waiting else None)
+
     def _on_component_placed(self, result: DispatchResult) -> None:
         if result.ok:
             # Placement stays armed: a board needs several parts, and re-picking from the list
@@ -8127,6 +8156,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"{did(result.description)}{note} — {t('Esc to stop placing.')}", 6000
             )
+            if self.scene.armed_part_id is not None:
+                self._hand_the_next_part()
             self._on_placement_armed(self.scene.armed_footprint_id or "")
             self._remember_a_part_was_placed()
         else:
@@ -8249,10 +8280,15 @@ class MainWindow(QMainWindow):
             self.part_list.show_selected(self.scene.selected_component_ids())
 
     def _on_part_list_design_part(self, part_id: str) -> None:
-        """A part still in the design was picked in the Part List. The sheet is the one view
-        that has it, so the sheet comes forward with its symbol selected."""
+        """A part still in the design was picked in the Part List. With the board in front
+        it comes into hand there, to be clicked down; otherwise the sheet, the one view that
+        has it, comes forward with its symbol selected."""
         part = next((p for p in self.bus.document.parts if p.id == part_id), None)
         if part is None:
+            return
+        self.scene.arm_part(part.id)
+        if self.board_is_showing():
+            # With the board in front the part comes into hand there, to be clicked down.
             return
         self.show_schematic()
         self._schematic_ref = part.ref
@@ -9856,8 +9892,9 @@ class MainWindow(QMainWindow):
         ref = self._add_part_to_design(footprint_id)
         if ref is None:
             return
-        # Not armed for the board any more: Properties shows the part just added.
-        self.scene.arm_placement(None)
+        # In hand on the board is the part just added, not its footprint again; Properties
+        # shows it, as a part of the design.
+        self.scene.arm_part(self._id_of(ref))
         self._refresh_schematic_panel()
         self._show_symbol_in_properties(ref)
 
@@ -9952,14 +9989,15 @@ class MainWindow(QMainWindow):
         dropped rather than wherever the layout would have put it, which means the sheet is
         frozen if it was not already -- dropping a part somewhere is saying where it goes.
 
-        Pressing on the row to drag it selected it, which armed the board to place it; left
-        armed, the part came onto the board stuck to the pointer and a click there put down
-        a second one. Put down here, as Enter and a double-click do.
+        Pressing on the row to drag it selected it, which armed the board to place its
+        footprint: on the board a click put down a second part beside the one on the sheet.
+        What is in hand on the board is the part just dropped (``BoardScene.arm_part``), as
+        after Enter and a double-click.
         """
         ref = self._add_part_to_design(footprint_id)
         if ref is None:
             return
-        self.scene.arm_placement(None)
+        self.scene.arm_part(self._id_of(ref))
         self._refresh_schematic_panel()
         self._dispatch_sheet_layout(
             {ref: Point2(x=x, y=y)}, f"Add {ref} to the sheet at ({x:.0f}, {y:.0f})"

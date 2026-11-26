@@ -263,7 +263,18 @@ def test_a_part_selected_on_the_board_is_marked_in_the_list(window) -> None:  # 
     assert window.part_list.selected_ids() == []
 
 
+def test_a_part_still_in_the_design_comes_into_hand_on_the_board(window) -> None:  # type: ignore[no-untyped-def]
+    _bring_forward(window)
+    assert window.board_is_showing()
+    window.part_list.tree.itemClicked.emit(_row(window.part_list, "R2"), 0)
+    r2 = next(p for p in window.bus.document.parts if p.ref == "R2")
+    assert window.scene.armed_part_id == r2.id
+    assert window.board_is_showing() and not window.schematic_is_showing()
+
+
 def test_a_part_still_in_the_design_opens_the_sheet_on_its_symbol(window) -> None:  # type: ignore[no-untyped-def]
+    # With the sheet in front, the sheet is where the part is shown.
+    window.show_schematic()
     _bring_forward(window)
     window.part_list.tree.itemClicked.emit(_row(window.part_list, "R2"), 0)
     assert window.schematic_is_showing()

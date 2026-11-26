@@ -109,8 +109,10 @@ from perfboard_studio.commands import (
     NewConductor,
     NewSolderTraceConductor,
     NewWireConductor,
+    PartPlacement,
     PlaceComponentPayload,
     PlaceOffBoardPayload,
+    PlacePartsPayload,
     SetConductorPathPayload,
     UpdateBoardNotePayload,
     count_noun,
@@ -2050,6 +2052,9 @@ class PlacementGhostItem(QGraphicsItem):
         self.part_mirrored = mirrored
         self.anchor = HoleCoord(0, 0)
         self.blocked = False
+        #: "C2 100nF" over a part from the design, which already has its reference; empty
+        #: for a library part, whose reference is only handed out when it lands.
+        self.label = ""
         self.setZValue(120)
         self.setOpacity(0.62)
 
@@ -2094,6 +2099,18 @@ class PlacementGhostItem(QGraphicsItem):
         for pin in self.fp.pins:
             painter.drawEllipse(
                 QPointF(pin.d_col * self.board.pitch, pin.d_row * self.board.pitch), 0.55, 0.55
+            )
+        if self.label:
+            painter.setPen(QColor("#ffffff"))
+            draw_label(
+                painter,
+                QPointF(rect.center().x(), rect.top()),
+                self.label,
+                12,
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
+                bold=True,
+                offset=QPointF(0, -3),
+                background=QColor(27, 29, 34, 220),
             )
 
 
@@ -6679,6 +6696,9 @@ class BoardScene(QGraphicsScene):
         self._armed_rotation: Rotation = 0
         self._armed_mirrored = False
         self._armed_id: str | None = None
+        #: The design part in hand (``arm_part``): placing it is ``part.place`` for THAT part,
+        #: its reference kept, not a new part of the same footprint.
+        self._armed_part_id: str | None = None
         self._draw_kind: ConductorKind | None = None
         self._draw_path: list[HoleCoord] = []
         #: Whether a solder run goes down the column before along the row (``/`` flips it).
@@ -8729,13 +8749,18 @@ class BoardScene(QGraphicsScene):
             if conductor_id in wanted:
                 item.setSelected(True)
 
-    def arm_placement(self, footprint_id: str | None) -> None:
-        """Arm (or, with None, disarm) placing a footprint on the next board click."""
+    def arm_placement(self, footprint_id: str | None, *, part_id: str | None = None) -> None:
+        """Arm (or, with None, disarm) placing a footprint on the next board click.
+
+        With ``part_id``, the footprint is that design part's and the click places IT
+        (:meth:`arm_part`).
+        """
         if footprint_id is None or footprint_id != self._armed_id:
             self._armed_rotation = 0
             self._armed_mirrored = False
         self._armed_footprint = None if footprint_id is None else self.lookup(footprint_id)
         self._armed_id = footprint_id if self._armed_footprint is not None else None
+        self._armed_part_id = part_id if self._armed_id is not None else None
         self._clear_ghost()
         if self._armed_footprint is not None:
             # The board modes are mutually exclusive, and drawing is one of them: a part
@@ -8754,10 +8779,36 @@ class BoardScene(QGraphicsScene):
                 self._armed_rotation,
                 self._armed_mirrored,
             )
+            self._ghost.label = self._armed_part_label()
             self.addItem(self._ghost)
             if self._last_hole is not None:
                 self._ghost.set_anchor(self._last_hole, self._placement_blocked(self._last_hole))
         self.placementArmed.emit(self._armed_id or "")
+
+    def arm_part(self, part_id: str | None) -> None:
+        """Put a part from the design in hand: the next click on the board places that part.
+
+        A PART DROPPED ON THE SHEET came onto the board as its footprint, and a click put down
+        a second part of the same footprint beside the one on the sheet. In hand it is the
+        sheet's own part, with its reference over the ghost; the click is ``part.place`` for
+        it, one undo step, and the window puts the next part still off the board in hand.
+        """
+        part = next((p for p in self.document.parts if p.id == part_id), None)
+        if part is None:
+            self.arm_placement(None)
+            return
+        self.arm_placement(part.footprint_id, part_id=part.id)
+
+    @property
+    def armed_part_id(self) -> str | None:
+        """The design part in hand, or None for a library part or nothing."""
+        return self._armed_part_id
+
+    def _armed_part_label(self) -> str:
+        part = next((p for p in self.document.parts if p.id == self._armed_part_id), None)
+        if part is None:
+            return ""
+        return f"{part.ref} {part.value}".strip()
 
     @property
     def armed_footprint_id(self) -> str | None:
@@ -8786,6 +8837,7 @@ class BoardScene(QGraphicsScene):
         self._ghost = PlacementGhostItem(
             self._armed_footprint, self.document.board, self.side, rotation, mirrored
         )
+        self._ghost.label = self._armed_part_label()
         self.addItem(self._ghost)
         if self._last_hole is not None:
             self._ghost.set_anchor(self._last_hole, self._placement_blocked(self._last_hole))
@@ -9150,6 +9202,31 @@ class BoardScene(QGraphicsScene):
             return None
         self.last_placement_overlapped = self._placement_blocked(anchor)
         self.last_placement_on_a_dead_hole = self.placement_lands_on_nothing(anchor)
+        if self._armed_part_id is not None:
+            part = next((p for p in self.bus.document.parts if p.id == self._armed_part_id), None)
+            if part is None:
+                # Placed or deleted another way while it was in hand.
+                self.arm_placement(None)
+                return None
+            result = self.bus.dispatch(
+                "part.place",
+                PlacePartsPayload(
+                    placements=(
+                        PartPlacement(
+                            id=part.id,
+                            anchor=anchor,
+                            rotation=self._armed_rotation,
+                            mirrored=(
+                                None if self.placing_face() == "bottom" else self._armed_mirrored
+                            ),
+                            side=self.placing_face(),
+                        ),
+                    ),
+                    label=f"Place {part.ref} at {format_hole(anchor, self.document.board)}",
+                ),
+            )
+            self.componentPlaced.emit(result)
+            return result
         result = self.bus.dispatch(
             "component.place",
             PlaceComponentPayload(

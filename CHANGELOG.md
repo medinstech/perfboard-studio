@@ -33,6 +33,15 @@ closed without a bump.
   ☰ also opens with Settings, the command search and the last boards opened above the menus.
   Show Pin Names and Show Labels on the Board are now remembered between sessions like the
   other Show items.
+- **A part from the sheet is the part in hand on the board.** A part put on the sheet (Enter,
+  a double-click or a drop) and a part still off the board picked in the Part List come onto
+  the board in hand, their reference and value over the ghost; a click places THAT part under
+  its own reference, one undo step, and the next part still off the board comes into hand, by
+  reference in natural order (C1, C2, C10, R1), with the banner counting what is left. R turns
+  it as it turns a Library part, Esc puts it down, and a hole the board refuses leaves it in
+  hand. A dropped part used to arrive as its footprint, and the click put down a second part
+  with a new reference beside the one on the sheet.
+
 - **Female headers and right-angle strips.** `skt-RxC` is a female header (a pin socket),
   `hdr-RxC-ra` and `skt-RxC-ra` the right-angle header and socket, one or two rows, numbered
   as `hdr-RxC` is. A right-angle strip lies flat past its last row as far as KiCad 10's

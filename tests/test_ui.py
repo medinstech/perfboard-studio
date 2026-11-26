@@ -11500,12 +11500,12 @@ def test_a_part_dropped_on_the_sheet_joins_the_design_where_it_landed() -> None:
 
 @pytest.mark.parametrize("way", ["dropped", "double-clicked"])
 @pytest.mark.parametrize("start", ["blank", "ne555-astable"])
-def test_a_part_put_on_the_sheet_is_not_still_in_hand_on_the_board(way: str, start: str) -> None:
+def test_a_part_put_on_the_sheet_is_the_part_in_hand_on_the_board(way: str, start: str) -> None:
     """Pressing on a Library row to drag it selects it, and selecting a row arms the board
-    to place it. A part dropped on the sheet left it armed: on the board it came stuck to
-    the pointer, and a click put down a SECOND part -- a new reference by ``component.place``
-    -- beside the one the sheet already held. The drop now puts it down, as Enter and a
-    double-click always did."""
+    to place its footprint. A part dropped on the sheet came onto the board as that
+    footprint, and a click put down a SECOND part -- a new reference by
+    ``component.place`` -- beside the one the sheet held. In hand now is the sheet's own
+    part, and the click places it under its own reference."""
     window = (
         _blank_window_on_the_sheet() if start == "blank" else _window_on(_example_document(start))
     )
@@ -11519,13 +11519,105 @@ def test_a_part_put_on_the_sheet_is_not_still_in_hand_on_the_board(way: str, sta
             window._on_sheet_footprint_dropped("r-axial-3", 50.8, 25.4)
         else:
             window._on_library_item_activated(window.library_tree.currentItem())
+        added = window.bus.document.parts[-1]
 
         window.show_board()
+        assert window.scene.armed_part_id == added.id
+        assert added.ref in window._mode_text()
+        result = window.scene.place_armed(HoleCoord(0, window.bus.document.board.rows - 1))
+        assert result is not None and result.ok, result
+        document = window.bus.document
+        assert len(document.parts) + len(document.components) == before + 1
+        assert added.ref in {c.ref for c in document.components}
+        assert added.ref not in {p.ref for p in document.parts}
+    finally:
+        _close(window)
+
+
+def _ne555_with_nothing_on_the_board():  # type: ignore[no-untyped-def]
+    """The NE555 example with every part taken off the board: a circuit drawn and not placed."""
+    from perfboard_studio.commands import UnplaceComponentPayload
+
+    window = _window_on(_example_document("ne555-astable"))
+    window.show()
+    for component in list(window.bus.document.components):
+        assert window.bus.dispatch("component.unplace", UnplaceComponentPayload(id=component.id)).ok
+    assert window.bus.document.components == ()
+    window.show_board()
+    return window
+
+
+def test_placing_the_design_by_hand_walks_it_part_by_part() -> None:
+    """A design part's row in the Part List, with the board in front, puts that part in
+    hand; each click places it, one undo step each, and the next part off the board --
+    by reference, in natural order -- comes into hand."""
+    from perfboard_studio.ui.partlist import natural_key
+
+    window = _ne555_with_nothing_on_the_board()
+    try:
+        waiting = sorted(window.bus.document.parts, key=lambda p: natural_key(p.ref))
+        assert len(waiting) > 3
+        history = len(window.bus.history())
+        window._on_part_list_design_part(waiting[0].id)
+        assert window.board_is_showing()
+        for index, hole in enumerate((HoleCoord(1, 1), HoleCoord(9, 1), HoleCoord(17, 1))):
+            assert window.scene.armed_part_id == waiting[index].id
+            result = window.scene.place_armed(hole)
+            assert result is not None and result.ok, result
+        assert [c.ref for c in window.bus.document.components] == [p.ref for p in waiting[:3]]
+        assert len(window.bus.history()) == history + 3
+        assert window.scene.armed_part_id == waiting[3].id
+        assert f"{len(waiting) - 4} more" in window._mode_text()
+
+        for _ in range(3):
+            window.on_undo()
+        assert window.bus.document.components == ()
+        assert len(window.bus.document.parts) == len(waiting)
+    finally:
+        _close(window)
+
+
+def test_esc_puts_the_part_in_hand_down_mid_walk() -> None:
+    window = _ne555_with_nothing_on_the_board()
+    try:
+        first = window.bus.document.parts[0]
+        window.scene.arm_part(first.id)
+        assert window.scene.place_armed(HoleCoord(1, 1)).ok
+        assert window.scene.armed_part_id is not None
+        window.scene.leave_mode()
+        assert window.scene.armed_part_id is None
         assert window.scene.armed_footprint_id is None
+        assert len(window.bus.document.components) == 1
+    finally:
+        _close(window)
+
+
+def test_a_part_in_hand_refused_by_the_board_stays_in_hand() -> None:
+    """Off the board is refused by ``part.place``; the part is still the one in hand, to be
+    put somewhere that fits."""
+    window = _ne555_with_nothing_on_the_board()
+    try:
+        part = window.bus.document.parts[0]
+        window.scene.arm_part(part.id)
         board = window.bus.document.board
-        assert window.scene.place_armed(HoleCoord(board.cols - 2, board.rows - 2)) is None
-        after = len(window.bus.document.parts) + len(window.bus.document.components)
-        assert after == before + 1
+        result = window.scene.place_armed(HoleCoord(board.cols + 5, board.rows + 5))
+        assert result is not None and not result.ok
+        assert window.scene.armed_part_id == part.id
+        assert window.bus.document.components == ()
+    finally:
+        _close(window)
+
+
+def test_r_turns_the_part_in_hand_as_it_turns_a_library_part() -> None:
+    window = _ne555_with_nothing_on_the_board()
+    try:
+        part = next(p for p in window.bus.document.parts if p.footprint_id.startswith("r-axial"))
+        window.scene.arm_part(part.id)
+        window.scene.orient_armed(90, False)
+        assert window.scene.armed_part_id == part.id
+        assert window.scene.place_armed(HoleCoord(5, 1)).ok
+        placed = next(c for c in window.bus.document.components if c.ref == part.ref)
+        assert placed.rotation == 90
     finally:
         _close(window)
 
@@ -12215,7 +12307,8 @@ def test_add_a_part_is_the_library_and_enter_puts_it_on_the_sheet() -> None:
         assert len(window.bus.history()) == before + 2
         assert window.inspector.shown is window.inspector.design_part_editor
         assert window.inspector.design_part_editor.ref.text() == refs[-1]
-        assert window.scene.armed_footprint_id is None
+        # On the board, the part just added is the one in hand -- not its footprint again.
+        assert window.scene.armed_part_id == window.bus.document.parts[-1].id
     finally:
         _close(window)
 

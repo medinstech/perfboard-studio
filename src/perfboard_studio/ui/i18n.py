@@ -602,6 +602,12 @@ TURKISH: Mapping[str, str] = {
     "Nothing to redo": "Yinelenecek bir şey yok",
     "Placing": "Yerleştiriliyor:",
     "click a hole, Esc cancels": "bir deliğe tıklayın, Esc iptal eder",
+    "{ref} in hand · {count} more to place · click a hole, Esc stops": (
+        "{ref} elinizde · {count} parça daha var · bir deliğe tıklayın, Esc bırakır"
+    ),
+    "{ref} in hand, the last one · click a hole, Esc stops": (
+        "{ref} elinizde, son parça · bir deliğe tıklayın, Esc bırakır"
+    ),
     "Drawing": "Çiziliyor:",
     "click both ends or drag from one to the other, Esc cancels": (
         "iki ucu da tıklayın ya da birinden ötekine sürükleyin, Esc iptal eder"
