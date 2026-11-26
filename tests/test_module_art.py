@@ -626,6 +626,25 @@ def test_every_layout_says_what_it_was_measured_on(art) -> None:
         assert "px/mm" in source and "to about" in source and "https://" in source, art.key
 
 
+def test_every_repository_and_photograph_a_layout_names_is_credited() -> None:
+    """A layout measured on someone's board file or photograph says so in its ``source``,
+    and the shipped NOTICE credits it too: three lands named their repositories in the
+    layout alone, and the NOTICE that goes out with the application never mentioned them."""
+    import re
+    from pathlib import Path
+
+    import perfboard_studio.ui.moduleart as moduleart_module
+
+    notice = (Path(moduleart_module.__file__).parent / "models" / "NOTICE.md").read_text(encoding="utf-8")
+    for art in MODULE_ARTS:
+        repositories = re.findall(r"github(?:\.com/| )([\w-]+/[\w.-]+?)[,;:)\s]", art.source + " ")
+        photographs = re.findall(r"File:([^\s,)]+)", art.source)
+        for name in repositories:
+            assert f"github.com/{name}" in notice, (art.key, name)
+        for name in photographs:
+            assert f"File:{name}" in notice, (art.key, name)
+
+
 def test_the_radios_stand_their_header_where_their_drawings_have_it() -> None:
     """The ESP-01's antenna is at the end away from its header and its flash beside its chip;
     the nRF24's antenna at the end away from its header, its crystal along the edge away from

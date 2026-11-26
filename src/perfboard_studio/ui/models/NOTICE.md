@@ -119,6 +119,54 @@ positions, packages and turns, never its artwork -- and nothing of the file is s
   photograph, MIT: <https://github.com/nodemcu/nodemcu-devkit-v1.0>
 - **SparkFun Motor Driver - Dual TB6612FNG v1.1c** -- SparkFun Electronics, Eagle board
   (`SparkFun_Motor_Driver-TB6612FNG_v11c.brd`), credited here as the Pro Mini's is
+- **Adafruit TCA9548A I2C Multiplexer** -- Adafruit Industries, Eagle board, CC BY-SA 3.0:
+  <https://github.com/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB> (`Adafruit TCA9548A.brd`)
+- **Adafruit ADS1115 STEMMA QT** -- Adafruit Industries, Eagle board:
+  <https://github.com/adafruit/ADS1X15-Breakout-Board-PCBs>
+  (`Adafruit ADS1115 ADC STEMMA QT.brd`); the repository states no licence, and only the
+  parts' places, packages and turns were read from it
+- **Adafruit SCD-40 / SCD-41** -- Adafruit Industries, Eagle board, CC BY-SA 3.0:
+  <https://github.com/adafruit/Adafruit-SCD-4x-PCB> (`Adafruit SCD-41.brd`)
+- **Adafruit DRV8871 motor driver** -- Adafruit Industries, Eagle board, CC BY-SA 3.0:
+  <https://github.com/adafruit/Adafruit-DRV8871-Breakout-PCB> (`Adafruit DRV8871.brd`)
+- **Adafruit MAX4466 microphone amplifier** -- Adafruit Industries, Eagle board, CC BY-SA 3.0:
+  <https://github.com/adafruit/Adafruit-MAX4466-Electret-Mic-Amplifier-PCBs>
+  (`Adafruit MAX4466 Mic Amp.brd`)
+- **Adafruit MAX9814 AGC microphone** -- Adafruit Industries, Eagle board, CC BY-SA 3.0:
+  <https://github.com/adafruit/Adafruit-MAX9814-AGC-Microphone-PCB> (`Adafruit MAX9814.brd`)
+- **Adafruit 1.14 inch 240 x 135 TFT** -- Adafruit Industries, Eagle board and product
+  photograph 4383, CC BY-SA 3.0: <https://github.com/adafruit/Adafruit-1.14-inch-240x135-TFT-PCB>
+  (`Adafruit 1.14-inch 240x135 Color TFT.brd`)
+- **Adafruit PCF8574 QT** -- Adafruit Industries, Eagle board and product photograph 5545,
+  CC BY-SA 3.0: <https://github.com/adafruit/Adafruit-PCF8574-PCB> (`Adafruit PCF8574 QT.brd`,
+  `assets/5545.jpg`: the parts' places from the board, the black board, the gold holes and
+  the chip's marking from the photograph)
+- **SparkFun ACS712 current sensor breakout** -- SparkFun Electronics, Eagle board,
+  CC BY-SA 4.0: <https://github.com/sparkfun/Hall-Effect_Current_Sensor_Breakout-ACS712>
+  (`Hardware/SparkFun_ACS712_Breakout_v11.brd`)
+- **SparkFun Soil Moisture Sensor** -- SparkFun Electronics, Eagle board, CC BY-SA 4.0:
+  <https://github.com/sparkfun/Soil_Moisture_Sensor> (`Hardware/SparkFun_Soil_Moisture_Sensor.brd`)
+- **SparkFun Thumb Joystick breakout** -- SparkFun Electronics, Eagle board, CC BY-SA 4.0:
+  <https://github.com/sparkfun/Thumb_Joystick_Breakout> (`Hardware/Joystick-Breakout-v12.brd`)
+- **SparkFun Rotary Encoder Breakout - Illuminated** -- SparkFun Electronics, Eagle board,
+  CC BY-SA 4.0: <https://github.com/sparkfun/Rotary_Encoder_Breakout-Illuminated>
+  (`Hardware/SparkFun_Rotary_Encoder-Illuminated.brd`); the encoder's bracket, bushing and
+  shaft from Top-Up Industry's drawing EC12PSD-062 rev B as SparkFun hosts it for COM-15141:
+  <https://cdn.sparkfun.com/assets/e/1/a/4/7/MD-15141-_Rotary_Encoder_-_Illuminated__RGB_.pdf>
+  (dimensions only)
+
+## Measured on makers' drawings
+
+Where a maker publishes a dimension drawing and no board file, the sizes and places were
+read off the drawing; no part of the drawing is shipped:
+
+- **DFRobot DFPlayer Mini (DFR0299)** -- DFRobot's dimension drawing v1.1
+  <https://dfimg.dfrobot.com/wiki/20532/DFR0299_mp3-player-module_dimension_v1.1.jpg> (the
+  board, the micro SD socket's outline and pads, the 0603s' and the LED's pads, the
+  silkscreen's place) and the pinout picture on <https://wiki.dfrobot.com/DFPlayer_Mini_SKU_DFR0299>
+  (the board's colour, which side the socket's latch is on, which chips are capacitors and
+  which resistors). Neither states a licence -- the wiki says "All rights reserved" -- so
+  only dimensions and those facts were measured, and nothing of either image is copied
 
 ## Measured on photographs
 

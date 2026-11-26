@@ -1179,7 +1179,7 @@ ADAFRUIT_ADS1115_MODULE = ModuleArt(
     ),
     source=(
         "Adafruit ADS1115 STEMMA QT Eagle board, github adafruit/ADS1X15-Breakout-Board-PCBs, "
-        "CC BY-SA (the board, both headers, every top-side part's place, package and turn); TI "
+        "no licence stated (the board, both headers, every top-side part's place, package and turn); TI "
         "ADS1115 datasheet SBAS444, DGS (the chip); KiCad's JST SM04B-SRSS-TB model (the sockets)"
     ),
 )
