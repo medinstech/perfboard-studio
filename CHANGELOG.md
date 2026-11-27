@@ -24,6 +24,9 @@ closed without a bump.
 
 ### Added
 
+- **A Chinese README.** `README.zh-CN.md` translates the landing page, with a 中文 link in
+  the English and Turkish READMEs, and `tests/test_docs.py` now holds all three to the same
+  shape, headings and inline code spans.
 - **Settings.** Every preference of the window in one place, with a search that finds a
   setting by its English or Turkish words, whichever language the window is in ("tema" in
   an English window, "wheel" in a Turkish one): Ctrl+,, or the top of ☰. Five categories --

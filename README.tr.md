@@ -27,6 +27,7 @@
   &nbsp;·&nbsp; <a href="#ya-da-hazır-bir-kart-açın">Örnek kartlar</a>
   &nbsp;·&nbsp; <a href="./CHANGELOG.md">Changelog</a>
   &nbsp;·&nbsp; <a href="./README.md">English</a>
+  &nbsp;·&nbsp; <a href="./README.zh-CN.md">中文</a>
 </p>
 
 ![Pencere, çizilmiş bir NE555 devresinden montaj rehberine: sağ üstteki düğme bir kart seçtiriyor, parçaları yerleştiriyor, kabloluyor ve rehberi açıyor](./docs/images/workflow.tr.gif)

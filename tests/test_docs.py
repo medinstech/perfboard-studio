@@ -1,22 +1,22 @@
-"""The README is written twice, in English and in Turkish, and the two must not drift.
+"""The README is written three times, in English, Turkish and Chinese, and they must not drift.
 
 A translation cannot be checked for meaning, but it can be checked for SHAPE, and drift has
-a shape: a section added to one language and not the other is a heading, a table row, a code
-block and a handful of identifiers that exist on one side only. So the two are held to the
+a shape: a section added to one language and not the others is a heading, a table row, a code
+block and a handful of identifiers that exist on one side only. So the three are held to the
 same headings at the same levels, the same number of code blocks and table rows, and the
 same inline code spans -- every `autoroute`, `version.py` and `.perf` -- counted, because a
 command, a file name or a flag is spelled the same in every language and is exactly what a
 paragraph nobody translated is made of.
 
-Prose is free. A Turkish sentence may be ordered however Turkish grammar needs, split or
-joined; what it may not do is lose, gain or rename the thing it is about.
+Prose is free. A Turkish or Chinese sentence may be ordered however its grammar needs, split
+or joined; what it may not do is lose, gain or rename the thing it is about.
 
 It found two things on its first run. The Turkish README still called the whole project
 Apache-2.0: the licence section had grown a paragraph about the CC-BY-SA meshes in 0.12.0,
 in English only. And its "İki yüz" jump link pointed at an anchor no heading had.
 
-Only the README is in two languages. ``docs/`` is English on purpose -- its readers are
-developers and agents, and three pages kept in two languages cost more than they give -- so
+Only the README is in three languages. ``docs/`` is English on purpose -- its readers are
+developers and agents, and three pages kept in three languages cost more than they give -- so
 there is nothing there to compare, and only its in-page links are checked.
 
 ``CLAUDE.md`` is held to two things more, because every agent session loads it whole and
@@ -39,6 +39,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
 README_TR = REPO_ROOT / "README.tr.md"
+README_ZH = REPO_ROOT / "README.zh-CN.md"
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
 ARCHITECTURE = REPO_ROOT / "docs" / "ARCHITECTURE.md"
 
@@ -84,24 +85,30 @@ def _slug(heading: str) -> str:
     return "".join(kept).replace(" ", "-")
 
 
-def test_the_two_readmes_have_the_same_shape() -> None:
-    en = README.read_text(encoding="utf-8")
-    tr = README_TR.read_text(encoding="utf-8")
-
-    levels = [len(hashes) for hashes, _ in HEADING.findall(_prose(en))]
-    assert levels == [len(hashes) for hashes, _ in HEADING.findall(_prose(tr))], (
-        "the headings differ: a section is in one language and not the other"
-    )
-    assert len(FENCE.findall(en)) == len(FENCE.findall(tr)), "a code block is missing"
-    assert len(TABLE_ROW.findall(_prose(en))) == len(TABLE_ROW.findall(_prose(tr))), (
-        "a table row is missing"
+def _shape(text: str) -> tuple[list[int], int, int, Counter[str]]:
+    """What a translation may not change: heading levels, fences, table rows and spans."""
+    prose = _prose(text)
+    return (
+        [len(hashes) for hashes, _ in HEADING.findall(prose)],
+        len(FENCE.findall(text)),
+        len(TABLE_ROW.findall(prose)),
+        _spans(text),
     )
 
-    en_spans, tr_spans = _spans(en), _spans(tr)
-    assert en_spans == tr_spans, (
-        f"only in {README.name}: {sorted((en_spans - tr_spans).elements())}; "
-        f"only in {README_TR.name}: {sorted((tr_spans - en_spans).elements())}"
-    )
+
+def test_the_readmes_have_the_same_shape() -> None:
+    en = _shape(README.read_text(encoding="utf-8"))
+    for page in (README_TR, README_ZH):
+        translated = _shape(page.read_text(encoding="utf-8"))
+        assert translated[0] == en[0], (
+            f"{page.name} headings differ: a section is in one language and not another"
+        )
+        assert translated[1] == en[1], f"{page.name} is missing a code block"
+        assert translated[2] == en[2], f"{page.name} is missing a table row"
+        assert translated[3] == en[3], (
+            f"only in {README.name}: {sorted((en[3] - translated[3]).elements())}; "
+            f"only in {page.name}: {sorted((translated[3] - en[3]).elements())}"
+        )
 
 
 @pytest.mark.parametrize(
@@ -109,6 +116,7 @@ def test_the_two_readmes_have_the_same_shape() -> None:
     [
         README,
         README_TR,
+        README_ZH,
         *([CLAUDE_MD] if CLAUDE_MD.exists() else []),
         *sorted((REPO_ROOT / "docs").glob("*.md")),
     ],
@@ -155,8 +163,10 @@ def test_the_readmes_count_the_mcp_tools_as_docs_mcp_does() -> None:
     mcp_doc = (REPO_ROOT / "docs" / "MCP.md").read_text(encoding="utf-8")
     stated = re.search(r"^(\d+) tools,", mcp_doc, re.MULTILINE)
     assert stated, "docs/MCP.md no longer states its tool count as 'N tools,'"
-    for page in (README, README_TR):
-        counts = re.findall(r"(\d+) (?:MCP )?tool", page.read_text(encoding="utf-8"))
+    for page in (README, README_TR, README_ZH):
+        counts = re.findall(
+            r"(\d+)\s*(?:个\s*)?(?:MCP\s*)?(?:tool|工具)", page.read_text(encoding="utf-8")
+        )
         assert counts, f"{page.name} no longer counts the MCP tools"
         assert set(counts) == {stated.group(1)}, f"{page.name} says {counts}"
 
