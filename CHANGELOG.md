@@ -26,7 +26,7 @@ closed without a bump.
 
 - **A Chinese README.** `README.zh-CN.md` translates the landing page, with a 中文 link in
   the English and Turkish READMEs, and `tests/test_docs.py` now holds all three to the same
-  shape, headings and inline code spans.
+  shape, headings and inline code spans. (thanks @652436962)
 - **Settings.** Every preference of the window in one place, with a search that finds a
   setting by its English or Turkish words, whichever language the window is in ("tema" in
   an English window, "wheel" in a Turkish one): Ctrl+,, or the top of ☰. Five categories --
@@ -215,10 +215,11 @@ closed without a bump.
   every tooltip, menu, dialog and message in Simplified Chinese — a full catalogue beside
   the Turkish one, translated from the English rather than through it, with the same
   accelerators and the same placeholders. The build guide follows: its steps, checks,
-  orientation notes and cut list are written in Chinese too, with the page and the JSON
-  export tagged `zh`, and the MCP `generate_guide` tool takes `"language": "zh"`. The
-  language menu offers 中文, and the settings search finds a setting by its Chinese words.
-
+  orientation notes and cut list are written in Chinese too, with the page tagged `zh-Hans`
+  and the JSON export `zh`, and the MCP `generate_guide` tool takes `"language": "zh"`. A
+  line of several clauses -- the guide's summary, an engine message said clause by clause --
+  is joined with the Chinese comma. The language menu offers 中文, and the settings search
+  finds a setting by its Chinese words. (thanks @652436962)
 - **The catalogue knows what its pins do, and three more parts.** 89 of its parts now carry
   pin roles (none did in 0.25): the NE555, ATmega328P, Arduino Nano, the relay module, the
   74HC logic, the op-amps, comparators and bus parts, the I2C and SPI boards, the stepper and

@@ -272,7 +272,7 @@ Add Board**（或板上方条带里的 **+ Add Board**）添加第二块板并�
 代码签名**，更新也只从签名的安装包安装。macOS 和 Linux 包还没有签名，所以首次运行会
 警告，发布说明里写了怎么绕过。见 [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md)。
 
-界面会说**英语和土耳其语**（`--lang tr`，或跟随系统区域设置），它写出的搭建指南也是——
+界面会说**英语、土耳其语和简体中文**（`--lang tr`、`--lang zh`，或跟随系统区域设置），它写出的搭建指南也是——
 步骤、检查、切割清单。
 
 ### 从 PyPI 安装
