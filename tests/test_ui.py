@@ -18866,6 +18866,19 @@ def test_a_regulators_three_names_are_called_out_clear_of_each_other(monkeypatch
         for i, (_, one) in enumerate(laid):
             for _, other in laid[i + 1:]:
                 assert not one.intersects(other), texts
+        # Even at the picture widget's minimum height (narrow / small-screen layout), all three
+        # regulator pins stay named and clear of one another.
+        from PySide6.QtCore import QSize
+
+        for small in (QSize(450, 150), QSize(240, 150)):
+            window._bench_picture(bench.items[u1], small, QSize(240, 96))
+            tight_texts = [text for text, _ in laid]
+            assert len(laid) == 3, (small, tight_texts)
+            for name in ("IN", "GND", "OUT"):
+                assert any(text.split(" · ")[0] == name for text in tight_texts), (small, tight_texts)
+            for i, (_, one) in enumerate(laid):
+                for _, other in laid[i + 1:]:
+                    assert not one.intersects(other), (small, tight_texts)
     finally:
         _close(window)
 

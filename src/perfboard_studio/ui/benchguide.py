@@ -656,14 +656,17 @@ def _callouts(
     column = len(ends) > 2 and len({round(p.x()) for p in points}) <= 2
     ring = max(pitch_px * 0.33, 4.0)
 
-    def placed(at: QPointF, text: str, out: int) -> QRectF:
+    def placed(at: QPointF, text: str, out: int, align: int = 0, tier: int = 0) -> QRectF:
         width = metrics.horizontalAdvance(text) + 14
+        offset = ring + 6 + tier * 24
         if column:
-            x = at.x() + out * (ring + 6) - (width if out < 0 else 0)
-            box = QRectF(x, at.y() - 10, width, 20)
+            x = at.x() + out * offset - (width if out < 0 else 0)
+            y = at.y() - 10 if align == 0 else (at.y() - ring if align > 0 else at.y() + ring - 20)
+            box = QRectF(x, y, width, 20)
         else:
-            y = at.y() + out * (ring + 6) - (20 if out < 0 else 0)
-            box = QRectF(at.x() - width / 2, y, width, 20)
+            y = at.y() + out * offset - (20 if out < 0 else 0)
+            x = at.x() - width / 2 if align == 0 else (at.x() - ring if align > 0 else at.x() + ring - width)
+            box = QRectF(x, y, width, 20)
         box.moveLeft(max(target.left() + 2, min(box.left(), target.right() - width - 2)))
         box.moveTop(max(target.top() + 2, min(box.top(), target.bottom() - 22)))
         return box
@@ -675,19 +678,25 @@ def _callouts(
         texts = [f"{name} · {address}", name] if name else [address]
         before = at.x() < cx if column else at.y() <= cy
         natural = -1 if before else 1
+        away = (-1 if at.y() < cy else 1) if column else (-1 if at.x() < cx else 1)
         clear = next(
             (
-                (text, box)
+                (text, box, tier)
+                for tier in (0, 1)
                 for text in texts
+                for align in (0, away, -away)
                 for out in (natural, -natural)
-                for box in [placed(at, text, out)]
+                for box in [placed(at, text, out, align, tier)]
                 if not any(box.adjusted(-3, -3, 3, 3).intersects(other) for _, other in laid)
             ),
             None,
         )
         if clear is not None:
-            text, box = clear
-            laid.append(clear)
+            text, box, tier = clear
+            laid.append((text, box))
+            if tier > 0:
+                painter.setPen(QPen(QColor(tokens.accent), 1.5))
+                painter.drawLine(at, box.center())
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(tokens.accent))
             painter.drawRoundedRect(box, 10, 10)
