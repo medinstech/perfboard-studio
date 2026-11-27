@@ -1460,9 +1460,10 @@ def test_a_stock_board_is_taken_not_cut_and_its_own_holes_are_not_drilled() -> N
     prep = build_guide(doc, REGISTRY).phases[0]
     kinds = [task.kind for task in prep.tasks]
     assert kinds[0] == "stock-board" and "cut-board" not in kinds and "drill" not in kinds
-    assert prep.tasks[0].title == f"Take a 5 x 7 cm board ({preset.cols} × {preset.rows} holes)"
+    # One sign for both sizes: the product's "5 x 7 cm" is said with the hole count's ×.
+    assert prep.tasks[0].title == f"Take a 5 × 7 cm board ({preset.cols} × {preset.rows} holes)"
     assert "already in it" in prep.tasks[0].instruction
-    assert prep.summary.startswith("Take a 5 x 7 cm board")
+    assert prep.summary.startswith("Take a 5 × 7 cm board")
     assert "Cut" not in prep.summary and "rill" not in prep.summary
 
     extra = MountingHole(id="mh-extra", at=hole(10, 8))

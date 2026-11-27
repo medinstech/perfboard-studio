@@ -443,6 +443,7 @@ from .benchguide import (
     bench_phases,
     pin_names,
     step_pictures,
+    task_key,
 )
 from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
@@ -10842,7 +10843,10 @@ class MainWindow(QMainWindow):
         index = 0
         for number, phase in enumerate(guide.phases):
             cuts = guide.track_cuts if number == 0 else ()
-            if phase.is_empty and not cuts:
+            # Preparation's jobs are rows as the bench's are, ticked in the one store under
+            # the bench's keys: the Overview began at the first resistor while the bench
+            # opened on taking the board and finding A1.
+            if phase.is_empty and not cuts and not phase.tasks:
                 # The order is physical, not editorial (guide.py), and a board simply may
                 # not need a phase. An empty heading reads as a step somebody forgot.
                 continue
@@ -10850,6 +10854,15 @@ class MainWindow(QMainWindow):
             head.setData(0, ROLE_PHASE_TITLE, f"{phase.number}. {phase.title}")
             head.setFlags(head.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             tree.addTopLevelItem(head)
+            for task in phase.tasks:
+                focus = task_key(task)
+                job = QTreeWidgetItem([task.title])
+                job.setToolTip(0, task.instruction)
+                job.setData(0, ROLE_STEP_FOCUS, focus)
+                job.setData(0, ROLE_HOLES, task.holes)
+                job.setFlags(job.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                job.setCheckState(0, Qt.CheckState.Checked if focus in done else Qt.CheckState.Unchecked)
+                head.addChild(job)
             if cuts:
                 cut_rows = self._track_cut_rows(guide, done)
                 head.addChild(cut_rows)

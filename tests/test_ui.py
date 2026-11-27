@@ -2376,8 +2376,11 @@ def test_the_guide_panel_says_what_the_guide_says() -> None:
             window.guide_tree.topLevelItem(i).text(0)
             for i in range(window.guide_tree.topLevelItemCount())
         ]
+        # Preparation is a heading for its jobs, though it has no step or check of its own.
         assert [heading.split(" (")[0] for heading in headings] == [
-            f"{phase.number}. {phase.title}" for phase in guide.phases if not phase.is_empty
+            f"{phase.number}. {phase.title}"
+            for phase in guide.phases
+            if not phase.is_empty or phase.tasks
         ]
     finally:
         _close(window)
@@ -5365,17 +5368,20 @@ def test_an_unsaved_boards_ticks_go_with_it_to_its_file(tmp_path) -> None:
 
 def test_next_step_to_do_picks_the_first_step_without_a_tick(tmp_path) -> None:
     """Coming back to the bench: the first step not done, picked -- which shows it on the
-    board, and in 3D when the 3D view is open."""
+    board, and in 3D when the 3D view is open. Preparation's jobs come first, as on the
+    bench."""
     from perfboard_studio.guide import PartStep
 
     window, _path = _guide_window_on_a_file(tmp_path)
-    _tick(window, 0)
-    _tick(window, 1)
+    jobs = len(window.current_guide().phases[0].tasks)
+    assert jobs
+    for number in range(jobs + 2):
+        _tick(window, number)
 
     window.act_next_step.trigger()
 
     rows = window.guide_tree.selectedItems()
-    assert rows == [window._guide_leaves()[2]]
+    assert rows == [window._guide_leaves()[jobs + 2]]
     step = window._assembly_steps()[2]
     if isinstance(step, PartStep):
         assert window.scene.selected_component_ids() == (step.component_id,)
@@ -15989,6 +15995,12 @@ def test_the_guide_panel_says_to_cut_the_tracks_first(monkeypatch, _settings_in_
         check = next(row for row in _guide_rows(window) if "must be open" in row.text(0))
         assert "measure resistance" in check.toolTip(0)
 
+        # Preparation's jobs before the cuts, as on the bench: the board is cut to size
+        # first. With them done, the first cut.
+        window.on_next_step_to_do()
+        assert str(window.guide_tree.currentItem().data(0, ROLE_STEP_FOCUS)).startswith("task:")
+        for job in window._guide_leaves()[: len(guide.phases[0].tasks)]:
+            job.setCheckState(0, Qt.CheckState.Checked)
         window.on_next_step_to_do()
         assert window.guide_tree.currentItem().text(0) == cuts[0].text(0)
 
@@ -18814,6 +18826,70 @@ def test_a_release_dismissed_on_the_bench_stays_dismissed_off_it() -> None:
         settle()
         assert not window._assembly.active
         assert window.update_strip.isHidden(), "the dismissed release came back with the panels"
+    finally:
+        _close(window)
+
+
+def test_a_regulators_three_names_are_called_out_clear_of_each_other(monkeypatch) -> None:
+    """nano-relay's U1, an L7805 on a TO-220: IN, GND and OUT at 2.54 mm. Each name was a
+    label centred on its pin and wider than the pitch, so they ran into one another and the
+    picture read "II GN OUT · R7". Now no label lies over another and each pin is named."""
+    from PySide6.QtTest import QTest
+
+    from perfboard_studio.ui import main as main_module
+
+    laid: list[tuple[str, QRectF]] = []
+    real = main_module.step_pictures
+
+    def recording(*args, **kwargs):  # type: ignore[no-untyped-def]
+        laid.clear()
+        return real(*args, said=laid, **kwargs)
+
+    monkeypatch.setattr(main_module, "step_pictures", recording)
+    window = _window_on(_example_document("nano-relay"))
+    try:
+        window.resize(1500, 950)
+        window.show()
+        bench = _bench(window)
+        u1 = next(
+            i for i, item in enumerate(bench.items)
+            if item.component_id is not None and item.kind != "check"
+            and next(c for c in window.bus.document.components if c.id == item.component_id).ref == "U1"
+        )
+        bench.show_item(u1)
+        QTest.qWait(300)
+        QApplication.processEvents()
+        texts = [text for text, _ in laid]
+        assert len(laid) == 3, texts
+        for name in ("IN", "GND", "OUT"):
+            assert any(text.split(" · ")[0] == name for text in texts), texts
+        for i, (_, one) in enumerate(laid):
+            for _, other in laid[i + 1:]:
+                assert not one.intersects(other), texts
+    finally:
+        _close(window)
+
+
+def test_the_overview_lists_preparation_and_ticks_it_with_the_bench() -> None:
+    """The Overview began at the first resistor while the bench opened on taking the board
+    and finding A1: Preparation's jobs are rows in it, ticked in the bench's store."""
+    from perfboard_studio.ui.benchguide import task_key
+    from perfboard_studio.ui.main import ROLE_STEP_FOCUS
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        guide = window.current_guide()
+        tasks = guide.phases[0].tasks
+        assert tasks
+        head = window.guide_tree.topLevelItem(0)
+        assert head is not None and head.text(0).startswith("0. ")
+        rows = [head.child(i) for i in range(head.childCount())]
+        keys = [row.data(0, ROLE_STEP_FOCUS) for row in rows if row is not None]
+        assert keys[: len(tasks)] == [task_key(task) for task in tasks]
+        first = next(i for i, item in enumerate(bench.items) if item.key == task_key(tasks[0]))
+        window._on_bench_ticked(bench.items[first].key, True)
+        assert rows[0] is not None and rows[0].checkState(0) == Qt.CheckState.Checked
     finally:
         _close(window)
 

@@ -1253,7 +1253,7 @@ def _phase_summary(
         [] if pattern
         else [say("Cut the board")] if stock is None
         else [say("take a {name} board ({cols} × {rows} holes)",
-                  name=stock.name, cols=board.cols, rows=board.rows)]
+                  name=_stock_name(stock), cols=board.cols, rows=board.rows)]
     )
     if drilled:
         count = len(drilled)
@@ -1343,6 +1343,13 @@ def _phase_summary(
     return summary
 
 
+def _stock_name(preset: BoardPreset) -> str:
+    """The product as the guide says it: "5 × 7 cm", with the sign its hole count is said
+    with beside it, where the catalogue's name ("5 x 7 cm", as suppliers list it) put an x
+    and a × in one line."""
+    return preset.name.replace(" x ", " × ")
+
+
 def _board_and_drilling(doc: PerfDocument) -> tuple[BoardPreset | None, tuple[MountingHole, ...]]:
     """The stock board this is, if it is one (``boardfamily.matching_preset``), and the
     mounting holes somebody has to drill: all of them on a board cut from a sheet, and on a
@@ -1391,7 +1398,7 @@ def _preparation_tasks(
         tasks.append(PhaseTask(
             kind="stock-board",
             title=say("Take a {name} board ({cols} × {rows} holes)",
-                      name=stock.name, cols=board.cols, rows=board.rows),
+                      name=_stock_name(stock), cols=board.cols, rows=board.rows),
             instruction=instruction,
             holes=corners,
         ))

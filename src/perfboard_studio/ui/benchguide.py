@@ -276,9 +276,14 @@ def _holes_said(holes: Sequence[HoleCoord], board: Board, most: int = 4) -> str:
     return shown + (" …" if len(holes) > most else "")
 
 
+def task_key(task: PhaseTask) -> str:
+    """What a Preparation job is ticked under, on the bench and in the Overview alike."""
+    return f"task:{task.kind}"
+
+
 def _task_item(task: PhaseTask, phase: GuidePhase, board: Board) -> BenchItem:
     return BenchItem(
-        key=f"task:{task.kind}", phase=phase, title=task.title, step_index=None,
+        key=task_key(task), phase=phase, title=task.title, step_index=None,
         holes=task.holes, solder_side=False, polarity=None, facts=(), notes=(),
         kind="task", said=task.instruction, board=board,
     )
@@ -531,6 +536,7 @@ def crop_around(
 def step_pictures(
     scene: QGraphicsScene, board: Board, item: BenchItem, side: BoardSide, size: QSize,
     mini: QSize, ratio: float = 1.0, names: Mapping[HoleCoord, str] | None = None,
+    said: list[tuple[str, QRectF]] | None = None,
 ) -> tuple[QPixmap, QPixmap]:
     """The step's picture and the whole board beside it, from one scene.
 
@@ -543,7 +549,7 @@ def step_pictures(
     # not off a ruler that would say the grid's.
     rulers = board.labels is None and not has_breadboard_pattern(board)
     picture = _render(scene, board, item, side, size, ratio, rulers=rulers, whole=False,
-                      names=names or {})
+                      names=names or {}, said=said)
     wide = round(mini.height() * (board.cols + 1) / max(1, board.rows + 1))
     small = QSize(max(48, min(mini.width(), wide)), mini.height())
     minimap = _render(scene, board, item, side, small, ratio, rulers=False, whole=True, names={})
@@ -553,6 +559,7 @@ def step_pictures(
 def _render(
     scene: QGraphicsScene, board: Board, item: BenchItem, side: BoardSide, size: QSize,
     ratio: float, *, rulers: bool, whole: bool, names: Mapping[HoleCoord, str],
+    said: list[tuple[str, QRectF]] | None = None,
 ) -> QPixmap:
     tokens = theme.ACTIVE
     pixmap = QPixmap(QSize(max(1, round(size.width() * ratio)), max(1, round(size.height() * ratio))))
@@ -608,7 +615,9 @@ def _render(
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(focus, 10, 10)
     if holes and not whole:
-        _callouts(painter, item, board, to_px, pitch_px, names, target)
+        laid = _callouts(painter, item, board, to_px, pitch_px, names, target)
+        if said is not None:
+            said.extend(laid)
     painter.setClipping(False)
     if rulers:
         _rulers(painter, board, holes, to_px, target, gutter_left, gutter_top)
@@ -619,9 +628,15 @@ def _render(
 def _callouts(
     painter: QPainter, item: BenchItem, board: Board, to_px: Callable[[HoleCoord], QPointF],
     pitch_px: float, names: Mapping[HoleCoord, str], target: QRectF,
-) -> None:
+) -> list[tuple[str, QRectF]]:
     """Each of the step's holes ringed and named: every pin of a small part, pin 1 of a
-    large one, the two ends of anything else."""
+    large one, the two ends of anything else. What each label says and where it went.
+
+    No label is drawn over another. A label wider than the pitch -- "GND · Q7" over a
+    TO-220's 2.54 mm -- ran into its neighbour's, and a regulator's IN and GND were cut to
+    "II GN" under OUT. Each goes to its own side of the pins, else the other, and says its
+    name alone (the rulers light its column and row) where neither has room for the
+    address too; a pin with no room at all keeps its ring and says nothing."""
     holes = list(item.holes)
     if item.component_id is not None:
         ends = holes if len(holes) <= CALLOUT_PINS else holes[:1]
@@ -639,32 +654,50 @@ def _callouts(
     # A column of pins is labelled to its sides; a row, or anything else, above and below.
     column = len(ends) > 2 and len({round(p.x()) for p in points}) <= 2
     ring = max(pitch_px * 0.33, 4.0)
-    for hole, at in zip(ends, points, strict=True):
-        text = format_hole(hole, board)
-        name = names.get(hole)
-        if name:
-            text = f"{name} · {text}"
+
+    def placed(at: QPointF, text: str, out: int) -> QRectF:
         width = metrics.horizontalAdvance(text) + 14
         if column:
-            out = -1 if at.x() < cx else 1
             x = at.x() + out * (ring + 6) - (width if out < 0 else 0)
             box = QRectF(x, at.y() - 10, width, 20)
         else:
-            out = -1 if at.y() <= cy else 1
             y = at.y() + out * (ring + 6) - (20 if out < 0 else 0)
             box = QRectF(at.x() - width / 2, y, width, 20)
         box.moveLeft(max(target.left() + 2, min(box.left(), target.right() - width - 2)))
         box.moveTop(max(target.top() + 2, min(box.top(), target.bottom() - 22)))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(tokens.accent))
-        painter.drawRoundedRect(box, 10, 10)
-        painter.setPen(QColor(tokens.text_on_accent))
-        painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
+        return box
+
+    laid: list[tuple[str, QRectF]] = []
+    for hole, at in zip(ends, points, strict=True):
+        address = format_hole(hole, board)
+        name = names.get(hole)
+        texts = [f"{name} · {address}", name] if name else [address]
+        before = at.x() < cx if column else at.y() <= cy
+        natural = -1 if before else 1
+        clear = next(
+            (
+                (text, box)
+                for text in texts
+                for out in (natural, -natural)
+                for box in [placed(at, text, out)]
+                if not any(box.adjusted(-3, -3, 3, 3).intersects(other) for _, other in laid)
+            ),
+            None,
+        )
+        if clear is not None:
+            text, box = clear
+            laid.append(clear)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(tokens.accent))
+            painter.drawRoundedRect(box, 10, 10)
+            painter.setPen(QColor(tokens.text_on_accent))
+            painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor(tokens.text_on_accent), 2.5))
         painter.drawEllipse(at, ring, ring)
         painter.setPen(QPen(QColor(tokens.accent), 1.5))
         painter.drawEllipse(at, ring + 2, ring + 2)
+    return laid
 
 
 def _rulers(
@@ -1194,7 +1227,8 @@ class BenchView(QWidget):
         self.side.setProperty("flipped", item.solder_side)
         theme.restyle(self.side)
         self.eyebrow.setText(f"{item.phase.number}. {item.phase.title}")
-        self.title.setText(item.heading)
+        # A size wraps as a whole: "(24 ×" over "18 holes)" read as two numbers.
+        self.title.setText(item.heading.replace(" × ", " × "))
         self.subline.setText(item.subline)
         self.subline.setVisible(bool(item.subline))
         self.polarity.setText(item.polarity or "")
