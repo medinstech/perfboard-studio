@@ -1113,6 +1113,23 @@ class UpdatePartPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class RefreshPartsPayload:
+    """Update several placed components and/or unplaced schematic parts as ONE command -- what
+    refreshing an existing design from an updated KiCad netlist does.
+
+    All-or-nothing across every board in the document and the unplaced ``doc.parts`` list:
+    a locked placed component whose footprint would change refuses the lot by name, leaving
+    the document untouched. When a placed component's footprint changes, its lead bends go
+    with the old package (as ``component.update`` removes them) and the rest of the copper
+    stays for DRC and LVS to judge.
+    """
+
+    components: tuple[UpdateComponentPayload, ...] = ()
+    parts: tuple[UpdatePartPayload, ...] = ()
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DeletePartPayload:
     id: ComponentId
 
@@ -2702,6 +2719,63 @@ class _UpdatePart:
     def describe(self, p: UpdatePartPayload, doc: PerfDocument) -> str:
         part = next((x for x in doc.parts if x.id == p.id), None)
         return f"Update {part.ref if part is not None else p.id}"
+
+
+class _RefreshParts:
+    """Update placed components and/or unplaced schematic parts in one undo step."""
+
+    type = "part.refreshMany"
+
+    def apply(
+        self, doc: PerfDocument, p: RefreshPartsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.components and not p.parts:
+            raise CommandError(
+                "nothing-to-do",
+                "part.refreshMany needs at least one part; an empty batch would put a no-op "
+                "on the undo stack.",
+            )
+        seen: set[ComponentId] = set()
+        for member in p.components:
+            if member.id in seen:
+                raise CommandError(
+                    "duplicate-component",
+                    f'Part "{member.id}" appears twice in one part.refreshMany.',
+                )
+            seen.add(member.id)
+        for part_member in p.parts:
+            if part_member.id in seen:
+                raise CommandError(
+                    "duplicate-component",
+                    f'Part "{part_member.id}" appears twice in one part.refreshMany.',
+                )
+            seen.add(part_member.id)
+
+        for comp_upd in p.components:
+            owner = next(
+                (
+                    bid
+                    for bid in board_ids(doc)
+                    if any(c.id == comp_upd.id for c in board_document(doc, bid).components)
+                ),
+                None,
+            )
+            if owner is None:
+                raise CommandError(
+                    "unknown-component", f'No component with id "{comp_upd.id}".'
+                )
+            if owner == FIRST_BOARD:
+                doc = update_component.apply(doc, comp_upd, ctx)
+            else:
+                updated_board = update_component.apply(board_document(doc, owner), comp_upd, ctx)
+                doc = merge_board(doc, owner, updated_board)
+        for part_upd in p.parts:
+            doc = update_part.apply(doc, part_upd, ctx)
+        return doc
+
+    def describe(self, p: RefreshPartsPayload, doc: PerfDocument) -> str:
+        total = len(p.components) + len(p.parts)
+        return p.label or f"Update {count_noun(total, 'part')}"
 
 
 class _DeletePart:
@@ -6141,6 +6215,7 @@ DESIGN_COMMANDS = frozenset(
         "part.add",
         "part.addMany",
         "part.delete",
+        "part.refreshMany",
         "part.renumber",
         "part.update",
         "sheet.align",
@@ -6599,6 +6674,7 @@ unplace_component: CommandDefinition[UnplaceComponentPayload] = _UnplaceComponen
 add_part: CommandDefinition[AddPartPayload] = _AddPart()
 add_parts: CommandDefinition[AddPartsPayload] = _AddParts()
 update_part: CommandDefinition[UpdatePartPayload] = _UpdatePart()
+refresh_parts: CommandDefinition[RefreshPartsPayload] = _RefreshParts()
 delete_part: CommandDefinition[DeletePartPayload] = _DeletePart()
 place_parts: CommandDefinition[PlacePartsPayload] = _PlaceParts()
 move_symbols: CommandDefinition[MoveSymbolsPayload] = _MoveSymbols()
@@ -6688,6 +6764,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_part,
     add_parts,
     update_part,
+    refresh_parts,
     delete_part,
     place_parts,
     move_symbols,

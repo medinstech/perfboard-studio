@@ -20,6 +20,26 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **Update existing parts from a re-imported KiCad netlist.** Re-importing an updated `.net`
+  file now compares every part already on the board or on the schematic against the netlist
+  and opens a checkable preview (*Update Parts from Netlist*) listing each changed value,
+  mapped footprint, pin name/role or symbol. Ticked updates apply in one undo step
+  (`part.refreshMany`) across all boards and unplaced parts; a locked placed part whose
+  package would change stays unchecked and disabled until unlocked, and changing a placed
+  part's package drops only its lead bends while leaving existing wires for DRC and LVS
+  (#16).
+- **Verified functional pin roles for DS1307, MAX485 and DS18B20.** Verified against the
+  Analog Devices (Maxim) datasheets and promoted into the catalog's active `PIN_ROLES`, so
+  all three draw as functional symbols on the schematic sheet.
+
+### Changed
+
+- Updated the draft winget and Scoop manifests to the signed `0.26.0` Windows installer and
+  brought `PLAN.md` and `packaging/README.md` up to date with Windows code signing and
+  Simplified Chinese installer support.
+
 ## [0.26.0] - 2026-11-27
 
 ### Added

@@ -421,3 +421,214 @@ def test_two_pins_of_one_name_in_different_nets_are_not_guessed_at() -> None:
     schematic = (("5", "+"), ("7", "+"))
     assert pin_renumbering(schematic, part, {"5", "7"}, {"5": "a", "7": "b"}) == {}
     assert pin_renumbering(schematic, part, {"5", "7"}, {"5": "a", "7": "a"}) == {"5": "3", "7": "5"}
+
+
+REFRESH_NETLIST = """(export (version "E")
+  (components
+    (comp (ref "R1") (value "4.7k")
+      (footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P15.24mm_Horizontal")
+      (libsource (lib "Device") (part "R")))
+    (comp (ref "R2") (value "10k")
+      (footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
+      (libsource (lib "Device") (part "R")))
+    (comp (ref "R3") (value "330")
+      (footprint "Custom:Unmapped_Resistor")
+      (libsource (lib "Device") (part "R")))
+    (comp (ref "U1") (value "NE555P")
+      (footprint "Package_DIP:DIP-8_W7.62mm")
+      (libsource (lib "Timer") (part "NE555P"))))
+  (nets
+    (net (code "1") (name "GND")
+      (node (ref "R1") (pin "1") (pinfunction "~") (pintype "passive"))
+      (node (ref "R2") (pin "1") (pinfunction "~") (pintype "passive"))
+      (node (ref "R3") (pin "1") (pinfunction "~") (pintype "passive"))
+      (node (ref "U1") (pin "1") (pinfunction "GND") (pintype "power_in")))))
+"""
+
+
+def test_plan_refresh_detects_value_and_footprint_diffs_and_skips_guesses() -> None:
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import (
+        AddPartPayload,
+        PlaceComponentPayload,
+        create_document_id_generator,
+        create_standard_registry,
+    )
+    from perfboard_studio.model import HoleCoord
+    from perfboard_studio.parsers.kicad_parts import plan_refresh
+
+    doc = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    bus = CommandBus(
+        doc,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(doc)),
+    )
+    bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref="R1", footprint_id="r-axial-4", anchor=HoleCoord(2, 2), value="10k"
+        ),
+    )
+    bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref="R2", footprint_id="r-axial-4", anchor=HoleCoord(2, 5), value="10k"
+        ),
+    )
+    bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref="R3", footprint_id="r-axial-5", anchor=HoleCoord(2, 8), value="220"
+        ),
+    )
+    bus.dispatch(
+        "part.add",
+        AddPartPayload(ref="U1", footprint_id="dip-8", value="LM555"),
+    )
+
+    refreshes = {
+        r.ref: r
+        for r in plan_refresh(parse_kicad_netlist(REFRESH_NETLIST), bus.document, LOOKUP)
+    }
+    # R2 is unchanged; omitted.
+    assert "R2" not in refreshes
+    # R1 changed value AND footprint (DIN0207 on 6 holes -> axial-6h-6.5x2.5).
+    assert refreshes["R1"].placed is True
+    assert refreshes["R1"].new_value == "4.7k"
+    assert refreshes["R1"].new_footprint_id == "axial-6h-6.5x2.5"
+    # R3 has an unmapped KiCad footprint (guess) -> value updates, existing footprint stays untouched.
+    assert refreshes["R3"].new_value == "330"
+    assert refreshes["R3"].new_footprint_id is None
+    # U1 is an unplaced schematic part matched in catalog -> value, pin names and roles update.
+    assert refreshes["U1"].placed is False
+    assert refreshes["U1"].new_value == "NE555P"
+    assert refreshes["U1"].new_pin_names is not None and refreshes["U1"].new_pin_roles is not None
+
+
+def test_refresh_parts_command_is_one_undo_step_and_respects_locks() -> None:
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import (
+        AddBoardPayload,
+        AddConductorPayload,
+        AddPartPayload,
+        NewLeadBendConductor,
+        NewWireConductor,
+        OnBoardPayload,
+        PlaceComponentPayload,
+        RefreshPartsPayload,
+        UpdateComponentPayload,
+        UpdatePartPayload,
+        create_document_id_generator,
+        create_standard_registry,
+    )
+    from perfboard_studio.model import HoleCoord
+
+    doc = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    bus = CommandBus(
+        doc,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(doc)),
+    )
+    bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref="R1", footprint_id="r-axial-4", anchor=HoleCoord(2, 2), value="10k"
+        ),
+    )
+    bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref="R2", footprint_id="r-axial-4", anchor=HoleCoord(2, 6), value="1k"
+        ),
+    )
+    bus.dispatch("part.add", AddPartPayload(ref="R3", footprint_id="r-axial-4", value="220"))
+    r1 = next(c for c in bus.document.components if c.ref == "R1")
+    r2 = next(c for c in bus.document.components if c.ref == "R2")
+    r3 = next(p for p in bus.document.parts if p.ref == "R3")
+    bus.dispatch("component.update", UpdateComponentPayload(id=r2.id, locked=True))
+
+    # Give R1 a lead bend (removed when footprint changes) and a wire (kept for DRC/LVS).
+    assert bus.dispatch(
+        "conductor.add",
+        AddConductorPayload(
+            id="lb1",
+            conductor=NewLeadBendConductor(
+                component_id=r1.id,
+                pin_number="1",
+                path=(HoleCoord(2, 2), HoleCoord(2, 3)),
+            ),
+        ),
+    ).ok
+    assert bus.dispatch(
+        "conductor.add",
+        AddConductorPayload(
+            id="w1",
+            conductor=NewWireConductor(
+                kind="insulated-wire",
+                side="bottom",
+                path=(HoleCoord(2, 2), HoleCoord(5, 2)),
+            ),
+        ),
+    ).ok
+
+    # All-or-nothing: a locked component with a footprint change refuses the whole batch.
+    refused = bus.dispatch(
+        "part.refreshMany",
+        RefreshPartsPayload(
+            components=(
+                UpdateComponentPayload(id=r1.id, value="4.7k", footprint_id="axial-6h-6.5x2.5"),
+                UpdateComponentPayload(id=r2.id, footprint_id="r-axial-6"),
+            ),
+            parts=(UpdatePartPayload(id=r3.id, value="330"),),
+        ),
+    )
+    assert not refused.ok and refused.code == "component-locked"
+    assert next(c for c in bus.document.components if c.ref == "R1").value == "10k"
+    assert next(p for p in bus.document.parts if p.ref == "R3").value == "220"
+
+    # Secondary board component is also updated in the same batch.
+    bus.dispatch(
+        "board.add",
+        AddBoardPayload(board=doc.board, name="Aux", id="aux"),
+    )
+    bus.dispatch(
+        "board.on",
+        OnBoardPayload(
+            board="aux",
+            type="component.place",
+            payload=PlaceComponentPayload(
+                ref="R4", footprint_id="r-axial-4", anchor=HoleCoord(1, 1), value="100"
+            ),
+        ),
+    )
+    r4 = next(c for c in bus.document.boards[0].components if c.ref == "R4")
+
+    # Value-only change on locked R2 + footprint change on R1 + unplaced R3 + secondary-board R4.
+    applied = bus.dispatch(
+        "part.refreshMany",
+        RefreshPartsPayload(
+            components=(
+                UpdateComponentPayload(id=r1.id, value="4.7k", footprint_id="axial-6h-6.5x2.5"),
+                UpdateComponentPayload(id=r2.id, value="2.2k"),
+                UpdateComponentPayload(id=r4.id, value="470"),
+            ),
+            parts=(UpdatePartPayload(id=r3.id, value="330"),),
+            label="Update 4 parts from netlist",
+        ),
+    )
+    assert applied.ok
+    r1_after = next(c for c in bus.document.components if c.ref == "R1")
+    assert (r1_after.value, r1_after.footprint_id) == ("4.7k", "axial-6h-6.5x2.5")
+    assert next(c for c in bus.document.components if c.ref == "R2").value == "2.2k"
+    assert next(p for p in bus.document.parts if p.ref == "R3").value == "330"
+    assert next(c for c in bus.document.boards[0].components if c.ref == "R4").value == "470"
+    # Lead bend went with R1's old package; wire stayed.
+    assert [c.id for c in bus.document.conductors] == ["w1"]
+
+    # Single Undo step restores all four parts AND R1's lead bend.
+    bus.undo()
+    assert next(c for c in bus.document.components if c.ref == "R1").value == "10k"
+    assert next(c for c in bus.document.components if c.ref == "R2").value == "1k"
+    assert next(p for p in bus.document.parts if p.ref == "R3").value == "220"
+    assert next(c for c in bus.document.boards[0].components if c.ref == "R4").value == "100"
+    assert sorted(c.id for c in bus.document.conductors) == ["lb1", "w1"]

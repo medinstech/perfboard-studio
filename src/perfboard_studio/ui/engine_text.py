@@ -125,6 +125,10 @@ TEMPLATES: tuple[str, ...] = (
     # -- the design ----------------------------------------------------------------------
     "Add {count} imported part",
     "Add {count} imported parts",
+    "Update {count} part from netlist",
+    "Update {count} parts from netlist",
+    "Update {count} part",
+    "Update {count} parts",
     "Place {count} imported part",
     "Place {count} imported parts",
     "Add {count} part to the schematic",

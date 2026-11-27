@@ -57,6 +57,7 @@ from perfboard_studio.commands import (
     PlaceOffBoardPayload,
     PlacePartsPayload,
     ReconnectSheetWirePayload,
+    RefreshPartsPayload,
     RenameDocumentPayload,
     ReshapeSheetWirePayload,
     RotateComponentPayload,
@@ -326,6 +327,20 @@ def _session() -> list[str]:
         ),
     )
     run("part.update", UpdatePartPayload(id=part("R9").id, value="2k"))
+    run(
+        "part.refreshMany",
+        RefreshPartsPayload(
+            components=(UpdateComponentPayload(id=component("R1").id, value="4.7k"),),
+            parts=(UpdatePartPayload(id=part("R9").id, value="3.3k"),),
+            label="Update 2 parts from netlist",
+        ),
+    )
+    run(
+        "part.refreshMany",
+        RefreshPartsPayload(
+            parts=(UpdatePartPayload(id=part("R9").id, value="2k"),),
+        ),
+    )
     run(
         "net.add",
         AddNetPayload(

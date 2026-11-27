@@ -41,6 +41,7 @@ from typing import Literal
 from ..catalog import CATALOG, CatalogPart
 from ..footprints import AXIAL_RESISTOR_BODIES, axial_resistor_id, standard_footprints
 from ..model import (
+    ComponentId,
     ComponentInstance,
     Footprint,
     Net,
@@ -90,6 +91,39 @@ class NetlistPlan:
     #: Per component, what the user has to know: a renumbering, a surface-mount footprint, a
     #: symbol that does not match the part. One sentence each.
     notes: dict[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class PartRefresh:
+    """What an imported KiCad netlist says differs from a part already in the design.
+
+    Each ``new_*`` field is ``None`` when that attribute is unchanged (or not confidently
+    determined by the netlist, e.g. a guessed footprint never offers to replace a real one).
+    """
+
+    id: ComponentId
+    ref: str
+    placed: bool
+    locked: bool
+    old_value: str
+    new_value: str | None = None
+    old_footprint_id: str = ""
+    new_footprint_id: str | None = None
+    old_pin_names: PinNames = ()
+    new_pin_names: PinNames | None = None
+    old_pin_roles: PinRoles = ()
+    new_pin_roles: PinRoles | None = None
+    old_symbol: PartSymbol | None = None
+    new_symbol: PartSymbol | None = None
+
+    @property
+    def changes_footprint(self) -> bool:
+        return self.new_footprint_id is not None
+
+    @property
+    def blocked_by_lock(self) -> bool:
+        """A locked placed component allows value/label edits but refuses a footprint change."""
+        return self.locked and self.changes_footprint
 
 
 # ---------------------------------------------------------------------------
@@ -813,3 +847,124 @@ def plan_import(
         suggestions=suggestions,
         notes={ref: tuple(lines) for ref, lines in notes.items()},
     )
+
+
+def _natural_ref_key(ref: str) -> tuple[str, int, str]:
+    prefix = re.sub(r"\d+", "", ref)
+    digits = re.sub(r"\D", "", ref)
+    return (prefix, int(digits) if digits else 0, ref)
+
+
+def plan_refresh(
+    imported: KicadNetlistImport,
+    document: PerfDocument,
+    lookup: Callable[[str], Footprint | None],
+) -> tuple[PartRefresh, ...]:
+    """Compare ``imported`` against parts already in ``document`` (on any board or unplaced
+    on the schematic) and report each part whose value, footprint, pin names, pin roles or
+    symbol differs.
+
+    A footprint guessed solely from reference letter and pin count never proposes replacing
+    an existing part's package; only catalog matches and mapped KiCad footprints do.
+    """
+    pins_by_ref: dict[str, set[str]] = {}
+    net_by_ref: dict[str, dict[str, str]] = {}
+    for net in imported.nets:
+        for node in net.nodes:
+            pins_by_ref.setdefault(node.component_ref, set()).add(node.pin)
+            net_by_ref.setdefault(node.component_ref, {})[node.pin] = net.id
+
+    existing_by_ref: dict[str, ComponentInstance | SchematicPart] = {
+        part.ref: part for part in document.parts
+    }
+    for component in document.components:
+        existing_by_ref[component.ref] = component
+    for extra in document.boards:
+        for component in extra.components:
+            existing_by_ref[component.ref] = component
+
+    refreshes: list[PartRefresh] = []
+    for imp in imported.components:
+        existing = existing_by_ref.get(imp.ref)
+        if existing is None:
+            continue
+        pins = pins_by_ref.get(imp.ref, set())
+        suggestion, _said = _suggest(imp, len(pins), lookup)
+
+        new_value: str | None = (
+            suggestion.value if suggestion.value != existing.value else None
+        )
+        new_footprint_id: str | None = (
+            suggestion.footprint_id
+            if suggestion.source != "guess"
+            and suggestion.footprint_id != existing.footprint_id
+            else None
+        )
+
+        # Resolve the target footprint for pin-name comparison (the proposed package if
+        # changing, otherwise the part's current package).
+        target_fp_id = new_footprint_id if new_footprint_id is not None else existing.footprint_id
+        footprint = lookup(target_fp_id)
+        if footprint is not None and suggestion.source != "catalog" and len(footprint.pins) >= 3:
+            schematic = schematic_pin_names(imp)
+            ours = _part_names(footprint, suggestion.pin_names)
+            ours = tuple((number, name) for number, name in ours if name)
+            nets_here = net_by_ref.get(imp.ref, {})
+            move = pin_renumbering(schematic, ours, pins, nets_here)
+            own = {pin.number: pin.name for pin in footprint.pins}
+            names = tuple(
+                (move.get(pin, pin), name)
+                for pin, name in schematic
+                if own.get(move.get(pin, pin)) != name
+            )
+            suggestion = replace(suggestion, pin_names=names)
+
+        new_pin_names: PinNames | None = None
+        if suggestion.pin_names != existing.pin_names and (
+            suggestion.pin_names or (new_footprint_id is not None and existing.pin_names)
+        ):
+            new_pin_names = suggestion.pin_names
+
+        new_pin_roles: PinRoles | None = None
+        if suggestion.pin_roles != existing.pin_roles and (
+            suggestion.pin_roles or (new_footprint_id is not None and existing.pin_roles)
+        ):
+            new_pin_roles = suggestion.pin_roles
+
+        new_symbol: PartSymbol | None = (
+            suggestion.symbol
+            if suggestion.symbol is not None and suggestion.symbol != existing.symbol
+            else None
+        )
+
+        if (
+            new_value is None
+            and new_footprint_id is None
+            and new_pin_names is None
+            and new_pin_roles is None
+            and new_symbol is None
+        ):
+            continue
+
+        placed = isinstance(existing, ComponentInstance)
+        refreshes.append(
+            PartRefresh(
+                id=existing.id,
+                ref=existing.ref,
+                placed=placed,
+                locked=existing.locked if isinstance(existing, ComponentInstance) else False,
+                old_value=existing.value,
+                new_value=new_value,
+                old_footprint_id=existing.footprint_id,
+                new_footprint_id=new_footprint_id,
+                old_pin_names=existing.pin_names,
+                new_pin_names=new_pin_names,
+                old_pin_roles=existing.pin_roles,
+                new_pin_roles=new_pin_roles,
+                old_symbol=existing.symbol,
+                new_symbol=new_symbol,
+            )
+        )
+
+    refreshes.sort(key=lambda r: _natural_ref_key(r.ref))
+    return tuple(refreshes)

@@ -13366,6 +13366,79 @@ def test_an_imported_netlist_puts_real_parts_in_the_design_with_their_values(
         _close(window)
 
 
+def test_reimporting_a_netlist_offers_and_applies_part_refreshes_in_one_undo_step(
+    tmp_path, monkeypatch
+) -> None:
+    """Re-importing an edited KiCad netlist lists existing parts whose value or package
+    changed, keeps locked package changes unchecked and disabled, and applies the ticked
+    updates in one Undo step."""
+    from PySide6.QtWidgets import QDialog
+
+    from perfboard_studio.commands import (
+        AddPartPayload,
+        PlaceComponentPayload,
+        UpdateComponentPayload,
+        create_empty_document,
+    )
+    from perfboard_studio.model import DocumentMeta, HoleCoord
+    from perfboard_studio.ui import main as main_module
+
+    from .test_kicad_parts import REFRESH_NETLIST
+
+    doc = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    window = _window_on(doc)
+    try:
+        window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(
+                ref="R1", footprint_id="r-axial-4", anchor=HoleCoord(2, 2), value="10k"
+            ),
+        )
+        window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(
+                ref="R2", footprint_id="r-axial-6", anchor=HoleCoord(2, 6), value="1k"
+            ),
+        )
+        r2_id = next(c.id for c in window.bus.document.components if c.ref == "R2")
+        window.bus.dispatch("component.update", UpdateComponentPayload(id=r2_id, locked=True))
+        window.bus.dispatch(
+            "part.add",
+            AddPartPayload(ref="R3", footprint_id="r-axial-4", value="220"),
+        )
+        netlist = tmp_path / "rev2.net"
+        netlist.write_text(REFRESH_NETLIST, encoding="utf-8")
+
+        captured: list[main_module._NetlistRefreshDialog] = []
+
+        def auto_accept(self: main_module._NetlistRefreshDialog) -> int:
+            captured.append(self)
+            return int(QDialog.DialogCode.Accepted)
+
+        monkeypatch.setattr(main_module._NetlistRefreshDialog, "exec", auto_accept)
+        window.import_netlist_from(netlist)
+
+        assert len(captured) == 1
+        dialog = captured[0]
+        # R2 is locked and its footprint would change -> unchecked & disabled; R1 & R3 checked.
+        selected_refs = [r.ref for r in dialog.selected_refreshes()]
+        assert selected_refs == ["R1", "R3"]
+
+        r1 = next(c for c in window.bus.document.components if c.ref == "R1")
+        r2 = next(c for c in window.bus.document.components if c.ref == "R2")
+        r3 = next(p for p in window.bus.document.parts if p.ref == "R3")
+        assert (r1.value, r1.footprint_id) == ("4.7k", "axial-6h-6.5x2.5")
+        assert (r2.value, r2.footprint_id) == ("1k", "r-axial-6")
+        assert r3.value == "330"
+
+        # Single undo reverts both R1 and R3 together.
+        window.bus.undo()
+        assert next(c for c in window.bus.document.components if c.ref == "R1").value == "10k"
+        assert next(p for p in window.bus.document.parts if p.ref == "R3").value == "220"
+    finally:
+        _close(window)
+
+
 def test_right_clicking_a_conductor_offers_to_delete_it() -> None:
     """The menu used to offer the bare-board list over a trace, with no way to delete the
     trace from it."""

@@ -6576,6 +6576,10 @@ TURKISH: Mapping[str, str] = {
     "Rearrange {count} parts and rewire": "{count} parçayı yeniden diz ve yeniden kablola",
     "Add {count} imported part": "İçe aktarılan {count} parçayı ekle",
     "Add {count} imported parts": "İçe aktarılan {count} parçayı ekle",
+    "Update {count} part from netlist": "Netlist'ten {count} parçayı güncelle",
+    "Update {count} parts from netlist": "Netlist'ten {count} parçayı güncelle",
+    "Update {count} part": "{count} parçayı güncelle",
+    "Update {count} parts": "{count} parçayı güncelle",
     "Place {count} imported part": "İçe aktarılan {count} parçayı yerleştir",
     "Place {count} imported parts": "İçe aktarılan {count} parçayı yerleştir",
     "Add {count} part to the schematic": "Şemaya {count} parça ekle",
@@ -7279,6 +7283,26 @@ TURKISH: Mapping[str, str] = {
         "Basılı {axis} ekseninin harfleri Z'den sonra yalnızca şu biçimlerden biriyle devam eder: "
         "spreadsheet, doubled; {letters} değil."
     ),
+    "Update Parts from Netlist": "Netlist'ten Parçaları Güncelle",
+    "{name} differs from existing parts in this design. Choose which updates to apply (one Undo step).": (
+        "{name} bu tasarımdaki mevcut parçalarla farklılık gösteriyor. "
+        "Hangi güncellemelerin uygulanacağını seçin (tek Geri Al adımı)."
+    ),
+    "Changes": "Değişiklikler",
+    "On board": "Kartta",
+    "pin names updated": "pin adları güncellendi",
+    "pin roles updated": "pin rolleri güncellendi",
+    "symbol → {symbol}": "sembol → {symbol}",
+    "locked — unlock to change package": "kilitli — paketi değiştirmek için kilidi açın",
+    "Changing a placed part's package removes its lead bends; existing wires stay for DRC and LVS to check.": (
+        "Yerleştirilmiş bir parçanın paketini değiştirmek bacak bükümlerini kaldırır; "
+        "mevcut teller DRC ve LVS kontrolü için yerinde kalır."
+    ),
+    "Select All": "Tümünü Seç",
+    "Select None": "Hiçbirini Seçme",
+    "Skip": "Atla",
+    "Update Selected": "Seçilenleri Güncelle",
+    "Update {count} Selected": "Seçili {count} Parçayı Güncelle",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH, "zh": CHINESE}

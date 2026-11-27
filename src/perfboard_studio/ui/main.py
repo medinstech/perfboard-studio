@@ -183,6 +183,7 @@ from perfboard_studio.catalog import (
 )
 from perfboard_studio.command import CommandContext, CommandError, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
+    KEEP,
     AddBoardNotePayload,
     AddBoardPayload,
     AddCablePayload,
@@ -226,6 +227,7 @@ from perfboard_studio.commands import (
     PlacePartsPayload,
     RearrangePayload,
     ReconnectSheetWirePayload,
+    RefreshPartsPayload,
     RenameDocumentPayload,
     RenumberPartsPayload,
     ReplaceConductorsPayload,
@@ -357,9 +359,11 @@ from perfboard_studio.occupancy import build_occupancy, conductors_touching
 from perfboard_studio.parsers.kicad import infer_net_class, parse_kicad_netlist
 from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footprint_id re-exported
     NetlistPlan,
+    PartRefresh,
     catalog_part_for,
     guess_footprint_id,
     plan_import,
+    plan_refresh,
 )
 from perfboard_studio.phrasebook import GuideLanguage, guide_language, phrasebook
 from perfboard_studio.pinout import PinoutCard
@@ -17856,6 +17860,9 @@ class MainWindow(QMainWindow):
         # called -- and renumbered where the schematic's symbol and the real part number
         # their pins differently. See parsers.kicad_parts.
         plan = plan_import(imported, self.bus.document, self.lookup)
+        # Compare against parts ALREADY in the document before adding brand-new ones, so
+        # newly added parts are never offered as updates.
+        refreshes = plan_refresh(imported, self.bus.document, self.lookup)
         result = self.bus.dispatch("netlist.import", ImportNetlistPayload(nets=plan.nets))
         if not result.ok:
             QMessageBox.critical(
@@ -17886,6 +17893,8 @@ class MainWindow(QMainWindow):
             )
         self.statusBar().showMessage(note, 8000)
         self._add_imported_parts_to_the_design(plan)
+        if refreshes:
+            self._offer_netlist_refresh(refreshes, path.name)
 
     def _add_imported_parts_to_the_design(self, plan: NetlistPlan) -> None:
         """Put the parts the netlist names, and this document lacks, into the DESIGN.
@@ -17953,6 +17962,64 @@ class MainWindow(QMainWindow):
             guess=counts["guess"],
         )
         self.statusBar().showMessage(message, 15000)
+
+    def _offer_netlist_refresh(
+        self, refreshes: Sequence[PartRefresh], source_name: str
+    ) -> None:
+        """Show every existing part that the re-imported netlist disagrees with, with
+        checkboxes, and apply the ticked ones in one undo step."""
+        dialog = _NetlistRefreshDialog(refreshes, source_name, self)
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                chosen = dialog.selected_refreshes()
+                if chosen:
+                    self._apply_netlist_refresh(chosen)
+        finally:
+            dialog.deleteLater()
+
+    def _apply_netlist_refresh(self, selected: Sequence[PartRefresh]) -> bool:
+        """Apply a chosen set of netlist updates as ONE ``part.refreshMany`` command."""
+        if not selected:
+            return False
+        components: list[UpdateComponentPayload] = []
+        parts: list[UpdatePartPayload] = []
+        for refresh in selected:
+            symbol_arg = refresh.new_symbol if refresh.new_symbol is not None else KEEP
+            if refresh.placed:
+                components.append(
+                    UpdateComponentPayload(
+                        id=refresh.id,
+                        value=refresh.new_value,
+                        footprint_id=refresh.new_footprint_id,
+                        pin_names=refresh.new_pin_names,
+                        pin_roles=refresh.new_pin_roles,
+                        symbol=symbol_arg,
+                    )
+                )
+            else:
+                parts.append(
+                    UpdatePartPayload(
+                        id=refresh.id,
+                        value=refresh.new_value,
+                        footprint_id=refresh.new_footprint_id,
+                        pin_names=refresh.new_pin_names,
+                        pin_roles=refresh.new_pin_roles,
+                        symbol=symbol_arg,
+                    )
+                )
+        result = self.bus.dispatch(
+            "part.refreshMany",
+            RefreshPartsPayload(
+                components=tuple(components),
+                parts=tuple(parts),
+                label=f"Update {count_noun(len(selected), 'part')} from netlist",
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 10000)
+            return False
+        self.statusBar().showMessage(did(result.description), 8000)
+        return True
 
     def show_pinout(self, card: PinoutCard) -> None:
         """A part's pinout card, from a right-click in the Library or Parts, or the link in
@@ -19822,6 +19889,143 @@ def _language_argument(argv: list[str]) -> str | None:
         if arg == "--lang" and index + 1 < len(argv):
             return argv[index + 1]
     return None
+
+
+def _describe_part_refresh(refresh: PartRefresh) -> str:
+    """Human-readable summary of what a re-imported netlist changes on one existing part."""
+    pieces: list[str] = []
+    if refresh.new_value is not None:
+        pieces.append(f"{refresh.old_value or '—'} → {refresh.new_value or '—'}")
+    if refresh.new_footprint_id is not None:
+        pieces.append(f"{refresh.old_footprint_id} → {refresh.new_footprint_id}")
+    if refresh.new_pin_names is not None:
+        pieces.append(t("pin names updated"))
+    if refresh.new_pin_roles is not None:
+        pieces.append(t("pin roles updated"))
+    if refresh.new_symbol is not None:
+        pieces.append(t("symbol → {symbol}").format(symbol=refresh.new_symbol))
+    summary = " · ".join(pieces)
+    if refresh.blocked_by_lock:
+        locked_note = t("locked — unlock to change package")
+        return f"{summary} ({locked_note})" if summary else locked_note
+    return summary
+
+
+class _NetlistRefreshDialog(QDialog):
+    """Preview of existing parts that a re-imported KiCad netlist disagrees with.
+
+    Each part can be ticked on or off; a locked placed component whose package would change
+    is shown unchecked and disabled so the batch cannot fail on Apply. Accepting dispatches
+    one ``part.refreshMany`` command for every ticked row.
+    """
+
+    def __init__(
+        self,
+        refreshes: Sequence[PartRefresh],
+        source_name: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._refreshes = tuple(refreshes)
+        self.setWindowTitle(t("Update Parts from Netlist"))
+        self.resize(620, 360)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(theme.SPACE["xl"], theme.SPACE["xl"], theme.SPACE["xl"], theme.SPACE["lg"])
+        layout.setSpacing(theme.SPACE["md"])
+
+        intro = QLabel(
+            t(
+                "{name} differs from existing parts in this design. Choose which updates to "
+                "apply (one Undo step)."
+            ).format(name=source_name)
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        self.tree = QTreeWidget(self)
+        self.tree.setRootIsDecorated(False)
+        self.tree.setUniformRowHeights(True)
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setHeaderLabels([t("Part"), t("Where"), t("Changes")])
+        self._rows: list[tuple[QTreeWidgetItem, PartRefresh]] = []
+        for refresh in self._refreshes:
+            row = QTreeWidgetItem(
+                [
+                    refresh.ref,
+                    t("On board") if refresh.placed else t("Schematic"),
+                    _describe_part_refresh(refresh),
+                ]
+            )
+            if refresh.blocked_by_lock:
+                row.setFlags(row.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+                row.setCheckState(0, Qt.CheckState.Unchecked)
+            else:
+                row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                row.setCheckState(0, Qt.CheckState.Checked)
+            self.tree.addTopLevelItem(row)
+            self._rows.append((row, refresh))
+        self.tree.resizeColumnToContents(0)
+        self.tree.resizeColumnToContents(1)
+        self.tree.itemChanged.connect(lambda _item, _col: self._sync_buttons())
+        layout.addWidget(self.tree, 1)
+
+        if any(r.placed and r.changes_footprint for r in self._refreshes):
+            note = QLabel(
+                t(
+                    "Changing a placed part's package removes its lead bends; existing wires "
+                    "stay for DRC and LVS to check."
+                )
+            )
+            note.setWordWrap(True)
+            theme.tone(note, "secondary")
+            layout.addWidget(note)
+
+        buttons = QHBoxLayout()
+        checkable = sum(1 for r in self._refreshes if not r.blocked_by_lock)
+        if checkable > 1:
+            btn_all = QPushButton(t("Select All"), self)
+            btn_none = QPushButton(t("Select None"), self)
+            btn_all.clicked.connect(lambda: self._set_all(True))
+            btn_none.clicked.connect(lambda: self._set_all(False))
+            buttons.addWidget(btn_all)
+            buttons.addWidget(btn_none)
+        buttons.addStretch(1)
+        self.btn_skip = QPushButton(t("Skip"), self)
+        self.btn_apply = QPushButton(t("Update Selected"), self)
+        theme.variant(self.btn_apply, "primary")
+        self.btn_skip.clicked.connect(self.reject)
+        self.btn_apply.clicked.connect(self.accept)
+        buttons.addWidget(self.btn_skip)
+        buttons.addWidget(self.btn_apply)
+        layout.addLayout(buttons)
+        self._sync_buttons()
+
+    def _set_all(self, checked: bool) -> None:
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        self.tree.blockSignals(True)
+        try:
+            for row, refresh in self._rows:
+                if not refresh.blocked_by_lock:
+                    row.setCheckState(0, state)
+        finally:
+            self.tree.blockSignals(False)
+        self._sync_buttons()
+
+    def _sync_buttons(self) -> None:
+        count = len(self.selected_refreshes())
+        self.btn_apply.setEnabled(count > 0)
+        if count > 0:
+            self.btn_apply.setText(t("Update {count} Selected").format(count=count))
+        else:
+            self.btn_apply.setText(t("Update Selected"))
+
+    def selected_refreshes(self) -> tuple[PartRefresh, ...]:
+        return tuple(
+            refresh
+            for row, refresh in self._rows
+            if not refresh.blocked_by_lock and row.checkState(0) == Qt.CheckState.Checked
+        )
 
 
 def _document_arguments(argv: list[str]) -> list[str]:
