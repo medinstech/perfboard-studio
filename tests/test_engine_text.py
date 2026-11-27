@@ -84,7 +84,7 @@ from perfboard_studio.model import (
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.ui.engine_text import TEMPLATES, say
-from perfboard_studio.ui.i18n import TURKISH, language, set_language
+from perfboard_studio.ui.i18n import CATALOGUES, language, set_language
 
 #: A realistic board to run the session on. Any example with an R1 does; this one because
 #: its stock board (4 x 6 cm) has a border a finger can reach its hole across -- the NE555
@@ -103,6 +103,18 @@ def turkish() -> Iterator[None]:
         set_language(before)
 
 
+@pytest.fixture(params=sorted(CATALOGUES))
+def translated(request: pytest.FixtureRequest) -> Iterator[str]:
+    """Each language the window can be in besides English, for a test that holds the engine's
+    words to being said and asserts no word of any one language."""
+    before = language()
+    set_language(request.param)
+    try:
+        yield request.param
+    finally:
+        set_language(before)
+
+
 def _fields(template: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", template))
 
@@ -111,8 +123,9 @@ def test_every_template_is_in_the_catalogue_with_the_same_fields() -> None:
     """A template without a translation is a sentence that stays English; one whose
     translation dropped a field is a sentence that raises when it is shown."""
     for template in TEMPLATES:
-        assert template in TURKISH, f"no Turkish for {template!r}"
-        assert _fields(TURKISH[template]) == _fields(template), template
+        for code, catalogue in CATALOGUES.items():
+            assert template in catalogue, f"no {code} for {template!r}"
+            assert _fields(catalogue[template]) == _fields(template), (code, template)
 
 
 def test_no_two_templates_are_the_same() -> None:
@@ -182,6 +195,18 @@ def test_a_summary_is_translated_clause_by_clause(turkish: None) -> None:
     assert said == "7/7 nette 14 bağlantı kablolandı, 2 tanesi izoleli tel ya da jumper istedi"
     # ...and a clause nobody has a template for stays as it came, beside the ones that do.
     assert say("3 parts placed, something new") == "3 parça yerleşti, something new"
+
+
+def test_chinese_joins_its_clauses_with_its_own_comma() -> None:
+    """A line said clause by clause is joined the way its language joins clauses: "，" in
+    Chinese, where ", " left an English comma between two Chinese clauses."""
+    before = language()
+    set_language("zh")
+    try:
+        said = say("14 connections wired across 7/7 nets, 2 needed an insulated wire or jumper")
+    finally:
+        set_language(before)
+    assert "，" in said and ", " not in said, said
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +457,7 @@ def _session() -> list[str]:
     return said
 
 
-def test_everything_a_session_says_comes_out_in_turkish(turkish: None) -> None:
+def test_everything_a_session_says_comes_out_translated(translated: str) -> None:
     said = _session()
     assert len(said) >= 40, "the session stopped short of what it is here to exercise"
     untranslated = [
@@ -506,7 +531,7 @@ def _explanations() -> list[str]:
     return [line for line in said if line]
 
 
-def test_what_the_planners_could_not_do_comes_out_in_turkish(turkish: None) -> None:
+def test_what_the_planners_could_not_do_comes_out_translated(translated: str) -> None:
     said = _explanations()
     assert len(said) >= 5, said
     untranslated = [line for line in said if say(line) == line]
@@ -514,7 +539,7 @@ def test_what_the_planners_could_not_do_comes_out_in_turkish(turkish: None) -> N
 
 
 
-def test_the_refusals_a_person_meets_are_said_in_turkish(turkish: None) -> None:
+def test_the_refusals_a_person_meets_are_translated(translated: str) -> None:
     """A refusal reached the status bar as "[two-nets] U1.8 is on N1 ..." -- English in a
     Turkish window, behind a code nobody reading it has a use for. Each refusal here is
     produced by the real command, so a sentence reworded in the engine shows up as one that
@@ -582,14 +607,16 @@ def test_every_finding_template_is_in_the_catalogue_with_the_same_fields() -> No
 
     assert len(set(FINDING_TEMPLATES)) == len(FINDING_TEMPLATES)
     for template in FINDING_TEMPLATES:
-        assert template in TURKISH, f"no Turkish for {template!r}"
-        assert _fields(TURKISH[template]) == _fields(template), template
+        for code, catalogue in CATALOGUES.items():
+            assert template in catalogue, f"no {code} for {template!r}"
+            assert _fields(catalogue[template]) == _fields(template), (code, template)
 
 
-def test_every_finding_on_every_board_is_said_in_turkish(turkish: None) -> None:
+def test_every_finding_on_every_board_is_translated(translated: str) -> None:
     """Every DRC and LVS finding on every board in the repository, as the panel shows it:
-    with its copper named by its ends, and in Turkish. A rule added, or a message reworded,
-    without its template shows up here as the English it would have shown."""
+    with its copper named by its ends, in each language the window speaks. A rule added, or
+    a message reworded, without its template shows up here as the English it would have
+    shown."""
     from perfboard_studio.drc import run_drc
     from perfboard_studio.lvs import run_lvs
     from perfboard_studio.ui.engine_text import finding_text, names_in
@@ -615,7 +642,7 @@ def test_every_finding_on_every_board_is_said_in_turkish(turkish: None) -> None:
                 shown = finding_text(message, names)
                 set_language("en")
                 english = finding_text(message, names)
-                set_language("tr")
+                set_language(translated)
                 assert not re.search(r"\bcond-\d+|\bcmp-\d+", english), english
                 if shown == english:
                     untranslated.setdefault(rule, english)
@@ -802,7 +829,7 @@ _SENTENCES = (
 )
 
 
-def test_every_finding_of_the_circuit_is_said_in_turkish(turkish: None) -> None:
+def test_every_finding_of_the_circuit_is_translated(translated: str) -> None:
     """The circuit's findings went into the Problems panel and onto the sheet's pin rings as
     the check wrote them, every row English in a Turkish window, while the board's beside
     them were Turkish. One circuit for every rule, and every sentence it says comes out with
@@ -826,7 +853,7 @@ def test_every_finding_of_the_circuit_is_said_in_turkish(turkish: None) -> None:
     assert set(RULES) <= seen, set(RULES) - seen
 
 
-def test_p3_and_p5_sheet_commands_and_free_wire_notes_are_said_in_turkish(turkish: None) -> None:
+def test_p3_and_p5_sheet_commands_and_free_wire_notes_are_translated(translated: str) -> None:
     """Every loose-wire, paste/duplicate, align/distribute, renumber and label-offset
     description, plus the sheet's dangling-wire notes, translates into Turkish."""
     from perfboard_studio.commands import (
