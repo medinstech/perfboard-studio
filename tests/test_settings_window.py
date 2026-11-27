@@ -114,6 +114,7 @@ def test_the_search_finds_the_other_languages_words_in_either_window() -> None:
     every language -- both ways, with no hidden words to help."""
     _app()
     from perfboard_studio.ui.i18n import TURKISH
+    from perfboard_studio.ui.i18n_zh import CHINESE
 
     action = QAction("x")
 
@@ -148,6 +149,20 @@ def test_the_search_finds_the_other_languages_words_in_either_window() -> None:
     # A word of each language in one search is still every word found in one row.
     assert matches(rows, cats, "tema colours") == [theme_row]
     assert matches(rows, cats, "tema wheel") == []
+
+    # Three catalogues, and every one of them is looked in from every window: a Chinese
+    # window finds the English and the Turkish words, and the others find the Chinese.
+    rows, cats = window_in(lambda english: CHINESE[english])
+    wheel, theme_row, motion_row = rows
+    assert matches(rows, cats, "wheel") == [wheel]
+    assert matches(rows, cats, "tekerlek") == [wheel]
+    assert matches(rows, cats, "appearance") == [theme_row, motion_row]
+    for say in (lambda english: english, lambda english: TURKISH[english]):
+        rows, cats = window_in(say)
+        wheel, theme_row, motion_row = rows
+        assert matches(rows, cats, "滚轮") == [wheel]
+        assert matches(rows, cats, "主题") == [theme_row]
+        assert matches(rows, cats, "外观") == [theme_row, motion_row]
 
 
 def test_appearance_is_not_the_view_menus_word() -> None:
