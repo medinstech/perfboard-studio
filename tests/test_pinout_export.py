@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import re
 import xml.etree.ElementTree as ET
 
@@ -17,6 +18,8 @@ from perfboard_studio.pinout_export import (
     PINOUT_DARK,
     PINOUT_LIGHT,
     WARNING_WORDS,
+    _text_width,
+    _wrap,
     pinout_svg,
     shown_functions,
 )
@@ -252,6 +255,39 @@ def test_the_foot_is_wrapped_to_the_card_rather_than_widening_it() -> None:
         svg,
     )
     assert rule is not None and float(rule.group(1)) == pytest.approx(width - MARGIN, abs=1)
+
+
+def test_a_chinese_card_is_measured_and_wrapped_as_chinese() -> None:
+    """A Chinese character is a whole em wide and Chinese has no spaces: the legend's entries
+    were measured at 0.58 of an em a character and drawn over one another, and a note had
+    nowhere to break, so it ran past the card's edge in one line."""
+    assert _text_width("外部中断", 10) == pytest.approx(40)
+    assert _text_width("ADC", 10) == pytest.approx(3 * 5.8)
+    note = "读取这块板时，请注意：标注的引脚编号是板上印的编号，而不是芯片本身的引脚编号。" * 2
+    lines = _wrap(note, 11, 200)
+    assert len(lines) > 1
+    assert "".join(lines) == note
+    assert all(_text_width(line, 11) <= 200 for line in lines)
+    # A closing mark stays on the line of the character before it.
+    assert not any(line[0] in "，。：" for line in lines)
+    # English still breaks between its words, and only there.
+    assert _wrap("one two three four", 10, 50) == ["one two", "three", "four"]
+    # And the card itself: the legend's entries, drawn at their x, do not run into the next.
+    card = _card("arduino-nano")
+    svg = pinout_svg(card, language="zh")
+    legend = [
+        (float(m.group(1)), float(m.group(2)), m.group(3))
+        for m in re.finditer(r'<text x="([-\d.]+)" y="([-\d.]+)"[^>]*font-size="11.5"[^>]*>([^<]+)<', svg)
+    ]
+    rows: dict[float, list[tuple[float, str]]] = {}
+    for x, y, words in legend:
+        rows.setdefault(y, []).append((x, words))
+    assert rows
+    assert not any(", " in words for _, _, words in legend), legend
+    for entries in rows.values():
+        entries.sort()
+        for (x, words), (next_x, _) in itertools.pairwise(entries):
+            assert x + _text_width(words, 11.5) < next_x, (words, x, next_x)
 
 
 def test_a_card_with_no_foot_is_as_narrow_as_its_drawing() -> None:

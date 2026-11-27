@@ -22,11 +22,12 @@ Pure: a card, a language and ink in, a string out.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 from xml.sax.saxutils import escape
 
-from .phrasebook import GuideLanguage, Phrasebook, phrasebook
+from .phrasebook import GuideLanguage, Phrasebook, clause_separator, phrasebook
 from .pinfunctions import Document, DocumentKind, FunctionKind, PinFunction, PinWarning
 from .pinout import PinoutCard, PinoutPin
 
@@ -203,23 +204,60 @@ TAG_H = 14.0
 FOOT_MIN_W = 300.0
 
 
+def _is_wide(character: str) -> bool:
+    """A character set a whole em wide: a Chinese one, and its full-width punctuation."""
+    return unicodedata.east_asian_width(character) in ("W", "F")
+
+
 def _text_width(text: str, size: float) -> float:
     """A label's width, estimated: the engine has no font metrics, and a chip a little too
-    wide reads better than one its text spills out of."""
-    return len(text) * size * 0.58
+    wide reads better than one its text spills out of. A wide character is counted at a
+    whole em, where every character was 0.58 of one: a Chinese legend was measured at
+    little more than half its width, and its entries were drawn over one another."""
+    wide = sum(1 for character in text if _is_wide(character))
+    return (len(text) - wide) * size * 0.58 + wide * size
+
+
+#: Full-width punctuation that never starts a line, and that never ends one.
+_CLOSES = "，。、；：！？）」』》"
+_OPENS = "（「『《"
+
+
+def _pieces(word: str) -> list[str]:
+    """What a line may be broken between inside one space-free run: nothing in a word of a
+    script that puts spaces between its words, and between any two characters in Chinese,
+    which puts none -- except before a closing mark or after an opening one, and inside a
+    run of Latin letters or digits written in it ("ADC", "5 V")."""
+    if not any(_is_wide(character) for character in word):
+        return [word]
+    pieces: list[str] = []
+    for character in word:
+        joined = bool(pieces) and (
+            character in _CLOSES
+            or pieces[-1][-1] in _OPENS
+            or (not _is_wide(character) and not _is_wide(pieces[-1][-1]))
+        )
+        if joined:
+            pieces[-1] += character
+        else:
+            pieces.append(character)
+    return pieces
 
 
 def _wrap(text: str, size: float, limit: float) -> list[str]:
-    """``text`` in lines no wider than ``limit`` (estimated), broken between words."""
+    """``text`` in lines no wider than ``limit`` (estimated), broken between words -- and
+    in Chinese, which has no spaces to break at, between characters (``_pieces``)."""
     lines: list[str] = []
     line = ""
     for word in text.split():
-        tried = f"{line} {word}" if line else word
-        if line and _text_width(tried, size) > limit:
-            lines.append(line)
-            line = word
-        else:
-            line = tried
+        for index, piece in enumerate(_pieces(word)):
+            glue = " " if index == 0 else ""
+            tried = f"{line}{glue}{piece}" if line else piece
+            if line and _text_width(tried, size) > limit:
+                lines.append(line)
+                line = piece
+            else:
+                line = tried
     return [*lines, line] if line else lines
 
 
@@ -595,7 +633,7 @@ def pinout_svg(
     for group in groups:
         if group == "other":
             others = [say(OTHER_WORDS[k]) for k in card.kinds if GROUP_OF[k] == "other"]
-            words = say(GROUP_WORDS["other"], kinds=", ".join(others))
+            words = say(GROUP_WORDS["other"], kinds=clause_separator(language).join(others))
         else:
             words = say(GROUP_WORDS[group])
         colour = ink.kinds.get(group, ink.text)
