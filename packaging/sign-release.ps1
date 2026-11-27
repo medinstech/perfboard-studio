@@ -129,8 +129,11 @@ if (Test-Path $Work) { Remove-Item -Recurse -Force $Work }
 New-Item -ItemType Directory -Force $Work | Out-Null
 
 Step "Is SimplySign logged in"
-$probe = Join-Path $Work "probe.exe"
-Copy-Item (Join-Path $env:WINDIR "System32\whoami.exe") $probe
+# A fresh script rather than a copy of a Windows system binary: a System32 exe carries a
+# Windows catalog signature (IsOSBinary = True), which Get-AuthenticodeSignature returns
+# ahead of the newly embedded signature and makes sign.ps1 reject the thumbprint.
+$probe = Join-Path $Work "probe.ps1"
+Set-Content -Path $probe -Value "# simplysign probe" -Encoding ascii
 Invoke-Signing $probe
 Remove-Item $probe
 
