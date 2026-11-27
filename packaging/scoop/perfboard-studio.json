@@ -7,7 +7,7 @@
         "removed. No file association and no Start menu entry beyond Scoop's own shortcut:",
         "those are the installer's, and Scoop never runs it."
     ],
-    "version": "0.24.0",
+    "version": "0.26.0",
     "description": "Perfboard layout designer: netlist-driven placement and routing, perfboard-specific design rules, layout-vs-schematic verification, and a step-by-step soldering guide with measurement checkpoints.",
     "homepage": "https://github.com/medinstech/perfboard-studio",
     "license": {
@@ -16,8 +16,8 @@
     },
     "architecture": {
         "64bit": {
-            "url": "https://github.com/medinstech/perfboard-studio/releases/download/v0.24.0/PerfboardStudio_v0.24.0_Setup.exe#/dl.7z",
-            "hash": "5e14906f030024398eb0cd47d383a8c64df7409dd559eb42f45cd6895791c874"
+            "url": "https://github.com/medinstech/perfboard-studio/releases/download/v0.26.0/PerfboardStudio_v0.26.0_Setup.exe#/dl.7z",
+            "hash": "2e06166782dbcefa544126c952483ac3814720ba5e7118944d75384984edceea"
         }
     },
     "pre_install": "Remove-Item \"$dir\\`$PLUGINSDIR\" -Recurse -Force -ErrorAction SilentlyContinue",

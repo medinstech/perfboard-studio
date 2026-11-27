@@ -3,7 +3,7 @@
 # DRAFT, not submitted -- see packaging/README.md. The words are the README's and
 # pyproject.toml's own, so the package page cannot promise what the project does not.
 PackageIdentifier: Medinstech.PerfboardStudio
-PackageVersion: 0.24.0
+PackageVersion: 0.26.0
 PackageLocale: en-US
 Publisher: Medinstech
 PublisherUrl: https://medinstech.com
@@ -20,7 +20,7 @@ Description: |-
   on a solderless breadboard first -- let the router work out the connections, prove the
   board matches the schematic, and get a step-by-step build guide with measurement
   checkpoints. Netlist-driven placement and routing, perfboard-specific design rules and
-  layout-vs-schematic verification. English and Turkish.
+  layout-vs-schematic verification. English, Turkish and Chinese (Simplified).
 
   The 3D package models are KiCad's, CC-BY-SA 4.0 with KiCad's design exception; boards
   designed with the application are unaffected.
@@ -38,7 +38,7 @@ Tags:
   - schematic
   - kicad
   - netlist
-ReleaseNotesUrl: https://github.com/medinstech/perfboard-studio/releases/tag/v0.24.0
+ReleaseNotesUrl: https://github.com/medinstech/perfboard-studio/releases/tag/v0.26.0
 Documentations:
   - DocumentLabel: MCP server
     DocumentUrl: https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md

@@ -6,7 +6,7 @@ ritual around it is in [docs/RELEASING.md](../docs/RELEASING.md).
 
 | File | What it is |
 | --- | --- |
-| `perfboard-studio.nsi` | The Windows installer (NSIS, English and Turkish). |
+| `perfboard-studio.nsi` | The Windows installer (NSIS, English, Turkish and Chinese Simplified). |
 | `appimage.sh` | The Linux AppImage. |
 | `macos.sh` | The macOS disk image. |
 | `sign.ps1` | Signs one file with Medinstech's certificate, timestamps it and checks that Windows accepts it. Needs SimplySign Desktop logged in. |
@@ -24,7 +24,7 @@ warning. Neither is published. Submitting puts the project in a public registry 
 identifier people will script against, so whether to do it, and when, is the owner's
 decision. These files are ready for that decision and are not part of a release.
 
-Both describe **0.24.0**, the newest release whose installer and `SHA256SUMS` exist. A
+Both describe **0.26.0**, the newest signed release whose installer and `SHA256SUMS` exist. A
 manifest for a release that does not exist yet cannot be checked against anything.
 
 ### winget

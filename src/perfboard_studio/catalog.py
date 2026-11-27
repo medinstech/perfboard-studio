@@ -4246,6 +4246,17 @@ PIN_ROLES: dict[str, str] = {
     # input), 8 VCC. Both ends of the input LED are "in": on the sheet that means "on the input
     # side", and the two ends of one LED belong together there.
     "6n137": "nc in in nc gnd out in pwr",
+    # Analog Devices (Maxim) DS1307 datasheet (PDIP-8): 1 X1, 2 X2 (32.768 kHz crystal, passive),
+    # 3 VBAT (+3V backup battery supply), 4 GND, 5 SDA (I2C bidirectional data), 6 SCL (I2C clock
+    # input), 7 SQW/OUT (open-drain square-wave output), 8 VCC (+5V primary supply).
+    "ds1307": "pas pas pwr gnd io in out pwr",
+    # Analog Devices (Maxim) MAX1487-MAX491 datasheet (MAX485 PDIP-8): 1 RO (receiver output),
+    # 2 ~RE (receiver output enable input), 3 DE (driver output enable input), 4 DI (driver input),
+    # 5 GND, 6 A and 7 B (half-duplex driver output / receiver input, so "io"), 8 VCC.
+    "max485": "out in in in gnd io io pwr",
+    # Analog Devices (Maxim) DS18B20 datasheet (TO-92): 1 GND, 2 DQ (bidirectional 1-Wire data),
+    # 3 VDD (power supply; tied to GND in parasite-power mode).
+    "ds18b20": "gnd io pwr",
 }
 
 #: Rows drafted and NOT applied: no maker document has been read for them yet, so each part
@@ -4268,20 +4279,6 @@ _ROLES_WAITING: dict[str, str] = {
     # The module's header is the MAX7219's DIN, LOAD (CS) and CLK, all inputs in Maxim's table;
     # that table is on analog.com, which did not load from here.
     "max7219-matrix": "pwr gnd in in in",
-    # TODO before landing: re-read against analog.com's DS1307.pdf (it did not load from here;
-    # this is from distributor copies of the Maxim sheet).
-    # X1/X2 are the two ends of a 32.768 kHz crystal: "passive", where KiCad has two inputs --
-    # the datasheet gives no direction (X1 alone takes an external oscillator, X2 then floats).
-    # SQW/OUT is open drain and needs a pull-up (datasheet; KiCad: open_collector), "out".
-    "ds1307": "pas pas pwr gnd io in out pwr",
-    # TODO before landing: re-read against analog.com's MAX1487-MAX491.pdf (it did not load
-    # from here; this is from distributor copies of Maxim's sheet). MAX485 pin description: RO
-    # receiver output, ~RE receiver output enable and DE driver output enable (both inputs), DI
-    # driver input, A and B the driver outputs and the receiver inputs at once, so "io".
-    "max485": "out in in in gnd io io pwr",
-    # TODO before landing: DQ is the 1-Wire data line, bidirectional; re-read against Maxim's
-    # DS18B20 sheet on analog.com (it did not load from here).
-    "ds18b20": "gnd io pwr",
 }
 
 
