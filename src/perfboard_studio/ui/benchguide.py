@@ -61,6 +61,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QGuiApplication,
+    QHideEvent,
     QKeyEvent,
     QMouseEvent,
     QPainter,
@@ -1275,8 +1276,12 @@ class BenchView(QWidget):
             self._draw_picture()
         self.update()
 
+    def hideEvent(self, event: QHideEvent) -> None:
+        self._redraw.stop()
+        super().hideEvent(event)
+
     def _redraw_soon(self) -> None:
-        if self.items and self.pages.currentWidget() is self.card:
+        if self.isVisible() and self.items and self.pages.currentWidget() is self.card:
             self._redraw.start()
 
     def _draw_picture(self) -> None:

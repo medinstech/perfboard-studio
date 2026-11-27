@@ -4,9 +4,8 @@
 ;   pyinstaller perfboard-studio.spec --noconfirm     (writes dist\perfboard-studio)
 ;   makensis packaging\perfboard-studio.nsi           (writes releases\...Setup.exe)
 ;
-; English and Turkish, because the application is. The interface picks its language from
-; --lang, PERFBOARD_STUDIO_LANG or the system locale; an installer that could only speak
-; English would be the one part of the product that does not.
+; English, Turkish and Simplified Chinese, matching the application's three catalogues. The
+; interface picks its language from --lang, PERFBOARD_STUDIO_LANG or the system locale.
 ; ============================================================================
 
 !define APP_NAME    "Perfboard Studio"
@@ -33,6 +32,16 @@
 ; match, so the format of that line is a contract; tests/test_version.py holds both ends
 ; of it.
 !searchparse /file "${ROOT}\src\perfboard_studio\version.py" `__version__ = "` APP_VERSION `"`
+; Extract numeric major.minor.patch so VIProductVersion stays valid on both releases
+; (0.26.0 -> 0.26.0.0) and development builds (0.27.0.dev0 -> 0.27.0.0).
+!searchparse /noerrors /file "${ROOT}\src\perfboard_studio\version.py" `__version__ = "` APP_VER_MAJOR `.` APP_VER_MINOR `.` APP_VER_PATCH_RAW `"`
+!searchparse /noerrors "${APP_VER_PATCH_RAW}" "" APP_VER_PATCH ".dev"
+!ifndef APP_VER_PATCH
+  !define APP_VER_PATCH "${APP_VER_PATCH_RAW}"
+!else if "${APP_VER_PATCH}" == ""
+  !define /redef APP_VER_PATCH "${APP_VER_PATCH_RAW}"
+!endif
+!define APP_VI_VERSION "${APP_VER_MAJOR}.${APP_VER_MINOR}.${APP_VER_PATCH}.0"
 
 !define SETUP_NAME "PerfboardStudio_v${APP_VERSION}_Setup.exe"
 
@@ -74,10 +83,9 @@ InstallDirRegKey HKLM "Software\${APP_VENDOR}\${APP_NAME}" "Install_Dir"
 RequestExecutionLevel admin
 Unicode true
 
-; VIProductVersion wants exactly four integers and the project version has three, so the
-; build field is a constant zero. The human-readable strings below carry the real
-; version, including any .devN suffix.
-VIProductVersion "0.0.0.0"
+; VIProductVersion wants exactly four integers; the fourth is a constant zero while the
+; human-readable strings below carry the full version, including any .devN suffix.
+VIProductVersion "${APP_VI_VERSION}"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "CompanyName" "${APP_VENDOR}"
 VIAddVersionKey "LegalCopyright" "Copyright 2026 ${APP_VENDOR}. Apache-2.0."
@@ -100,8 +108,9 @@ VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"
+!define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "$(S_RunNow)"
+!define MUI_FINISHPAGE_RUN_FUNCTION RunApp
 !define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\examples"
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "$(S_OpenExamples)"
 !define MUI_FINISHPAGE_SHOWREADME_FUNCTION ShowExamples
@@ -111,53 +120,71 @@ VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 !insertmacro MUI_UNPAGE_INSTFILES
 
 ; MUI_LANGUAGE must follow the pages. English first, so it is the fallback when the
-; machine's locale is neither.
+; machine's locale is none of these.
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "Turkish"
+!insertmacro MUI_LANGUAGE "SimpChinese"
 
 ; -------------------------------------------------------------- strings ----
-LangString S_SecMain      ${LANG_ENGLISH} "Perfboard Studio (required)"
-LangString S_SecMain      ${LANG_TURKISH} "Perfboard Studio (gerekli)"
-LangString S_SecStartMenu ${LANG_ENGLISH} "Start Menu shortcuts"
-LangString S_SecStartMenu ${LANG_TURKISH} "Başlat Menüsü kısayolları"
-LangString S_SecDesktop   ${LANG_ENGLISH} "Desktop shortcut"
-LangString S_SecDesktop   ${LANG_TURKISH} "Masaüstü kısayolu"
-LangString S_SecAssoc     ${LANG_ENGLISH} "Open .perf files with Perfboard Studio"
-LangString S_SecAssoc     ${LANG_TURKISH} ".perf dosyalarını Perfboard Studio ile aç"
+LangString S_SecMain      ${LANG_ENGLISH}     "Perfboard Studio (required)"
+LangString S_SecMain      ${LANG_TURKISH}     "Perfboard Studio (gerekli)"
+LangString S_SecMain      ${LANG_SIMPCHINESE} "Perfboard Studio（必需）"
+LangString S_SecStartMenu ${LANG_ENGLISH}     "Start Menu shortcuts"
+LangString S_SecStartMenu ${LANG_TURKISH}     "Başlat Menüsü kısayolları"
+LangString S_SecStartMenu ${LANG_SIMPCHINESE} "开始菜单快捷方式"
+LangString S_SecDesktop   ${LANG_ENGLISH}     "Desktop shortcut"
+LangString S_SecDesktop   ${LANG_TURKISH}     "Masaüstü kısayolu"
+LangString S_SecDesktop   ${LANG_SIMPCHINESE} "桌面快捷方式"
+LangString S_SecAssoc     ${LANG_ENGLISH}     "Open .perf files with Perfboard Studio"
+LangString S_SecAssoc     ${LANG_TURKISH}     ".perf dosyalarını Perfboard Studio ile aç"
+LangString S_SecAssoc     ${LANG_SIMPCHINESE} "使用 Perfboard Studio 打开 .perf 文件"
 
-LangString S_DescMain      ${LANG_ENGLISH} "The application, the 61 generated footprints, and the example boards."
-LangString S_DescMain      ${LANG_TURKISH} "Uygulama, üretilen 61 footprint ve örnek kartlar."
-LangString S_DescStartMenu ${LANG_ENGLISH} "Add Perfboard Studio to the Start Menu."
-LangString S_DescStartMenu ${LANG_TURKISH} "Perfboard Studio'yu Başlat Menüsüne ekler."
-LangString S_DescDesktop   ${LANG_ENGLISH} "Put a shortcut on the desktop."
-LangString S_DescDesktop   ${LANG_TURKISH} "Masaüstüne bir kısayol koyar."
-LangString S_DescAssoc     ${LANG_ENGLISH} "Double-clicking a board document opens it in Perfboard Studio."
-LangString S_DescAssoc     ${LANG_TURKISH} "Bir kart dosyasına çift tıklamak onu Perfboard Studio'da açar."
+LangString S_DescMain      ${LANG_ENGLISH}     "The application, the built-in part library, and the example boards."
+LangString S_DescMain      ${LANG_TURKISH}     "Uygulama, yerleşik parça kütüphanesi ve örnek kartlar."
+LangString S_DescMain      ${LANG_SIMPCHINESE} "应用程序、内置元件库以及示例电路板。"
+LangString S_DescStartMenu ${LANG_ENGLISH}     "Add Perfboard Studio to the Start Menu."
+LangString S_DescStartMenu ${LANG_TURKISH}     "Perfboard Studio'yu Başlat Menüsüne ekler."
+LangString S_DescStartMenu ${LANG_SIMPCHINESE} "将 Perfboard Studio 添加到开始菜单。"
+LangString S_DescDesktop   ${LANG_ENGLISH}     "Put a shortcut on the desktop."
+LangString S_DescDesktop   ${LANG_TURKISH}     "Masaüstüne bir kısayol koyar."
+LangString S_DescDesktop   ${LANG_SIMPCHINESE} "在桌面上创建快捷方式。"
+LangString S_DescAssoc     ${LANG_ENGLISH}     "Double-clicking a board document opens it in Perfboard Studio."
+LangString S_DescAssoc     ${LANG_TURKISH}     "Bir kart dosyasına çift tıklamak onu Perfboard Studio'da açar."
+LangString S_DescAssoc     ${LANG_SIMPCHINESE} "双击电路板文件时使用 Perfboard Studio 打开。"
 
-LangString S_RunNow       ${LANG_ENGLISH} "Run Perfboard Studio"
-LangString S_RunNow       ${LANG_TURKISH} "Perfboard Studio'yu çalıştır"
-LangString S_OpenExamples ${LANG_ENGLISH} "Open the example boards"
-LangString S_OpenExamples ${LANG_TURKISH} "Örnek kartları aç"
+LangString S_RunNow       ${LANG_ENGLISH}     "Run Perfboard Studio"
+LangString S_RunNow       ${LANG_TURKISH}     "Perfboard Studio'yu çalıştır"
+LangString S_RunNow       ${LANG_SIMPCHINESE} "运行 Perfboard Studio"
+LangString S_OpenExamples ${LANG_ENGLISH}     "Open the example boards"
+LangString S_OpenExamples ${LANG_TURKISH}     "Örnek kartları aç"
+LangString S_OpenExamples ${LANG_SIMPCHINESE} "打开示例电路板"
 ; The one string here that is deliberately NOT translated, and the same call the
 ; application's own catalogue makes about "Perfboard Studio": this names a document TYPE,
 ; which in a file manager sits beside "PNG image" and "Python Source File" and is read as
 ; part of the product's name rather than as a sentence. "Perfboard Studio kartı" put a
 ; Turkish suffix on an English product noun and read as neither.
-LangString S_FileType     ${LANG_ENGLISH} "Perfboard Studio board"
-LangString S_FileType     ${LANG_TURKISH} "Perfboard Studio board"
+LangString S_FileType     ${LANG_ENGLISH}     "Perfboard Studio board"
+LangString S_FileType     ${LANG_TURKISH}     "Perfboard Studio board"
+LangString S_FileType     ${LANG_SIMPCHINESE} "Perfboard Studio board"
 
-LangString S_RemovingOld  ${LANG_ENGLISH} "Removing the previous version..."
-LangString S_RemovingOld  ${LANG_TURKISH} "Önceki sürüm kaldırılıyor..."
-LangString S_Copying      ${LANG_ENGLISH} "Copying files..."
-LangString S_Copying      ${LANG_TURKISH} "Dosyalar kopyalanıyor..."
-LangString S_StillRunning ${LANG_ENGLISH} "Perfboard Studio appears to be running. Close it and press Retry."
-LangString S_StillRunning ${LANG_TURKISH} "Perfboard Studio çalışıyor görünüyor. Kapatıp Yeniden Dene'ye basın."
-LangString S_WriteError   ${LANG_ENGLISH} "Cannot write to the installation folder. Try installing somewhere else."
-LangString S_WriteError   ${LANG_TURKISH} "Kurulum klasörüne yazılamıyor. Başka bir konum deneyin."
-LangString S_LnkUninstall ${LANG_ENGLISH} "Uninstall Perfboard Studio"
-LangString S_LnkUninstall ${LANG_TURKISH} "Perfboard Studio'yu kaldır"
-LangString S_LnkWebsite   ${LANG_ENGLISH} "Perfboard Studio on GitHub"
-LangString S_LnkWebsite   ${LANG_TURKISH} "GitHub'da Perfboard Studio"
+LangString S_RemovingOld  ${LANG_ENGLISH}     "Removing the previous version..."
+LangString S_RemovingOld  ${LANG_TURKISH}     "Önceki sürüm kaldırılıyor..."
+LangString S_RemovingOld  ${LANG_SIMPCHINESE} "正在移除旧版本..."
+LangString S_Copying      ${LANG_ENGLISH}     "Copying files..."
+LangString S_Copying      ${LANG_TURKISH}     "Dosyalar kopyalanıyor..."
+LangString S_Copying      ${LANG_SIMPCHINESE} "正在复制文件..."
+LangString S_StillRunning ${LANG_ENGLISH}     "Perfboard Studio appears to be running. Close it and press Retry."
+LangString S_StillRunning ${LANG_TURKISH}     "Perfboard Studio çalışıyor görünüyor. Kapatıp Yeniden Dene'ye basın."
+LangString S_StillRunning ${LANG_SIMPCHINESE} "Perfboard Studio 似乎正在运行。请关闭后点击重试。"
+LangString S_WriteError   ${LANG_ENGLISH}     "Cannot write to the installation folder. Try installing somewhere else."
+LangString S_WriteError   ${LANG_TURKISH}     "Kurulum klasörüne yazılamıyor. Başka bir konum deneyin."
+LangString S_WriteError   ${LANG_SIMPCHINESE} "无法写入安装文件夹。请尝试安装到其他位置。"
+LangString S_LnkUninstall ${LANG_ENGLISH}     "Uninstall Perfboard Studio"
+LangString S_LnkUninstall ${LANG_TURKISH}     "Perfboard Studio'yu kaldır"
+LangString S_LnkUninstall ${LANG_SIMPCHINESE} "卸载 Perfboard Studio"
+LangString S_LnkWebsite   ${LANG_ENGLISH}     "Perfboard Studio on GitHub"
+LangString S_LnkWebsite   ${LANG_TURKISH}     "GitHub'da Perfboard Studio"
+LangString S_LnkWebsite   ${LANG_SIMPCHINESE} "GitHub 上的 Perfboard Studio"
 
 ; ----------------------------------------------------------------- funcs ---
 Function .onInit
@@ -184,8 +211,14 @@ Function un.onInit
   !insertmacro MUI_UNGETLANGUAGE
 FunctionEnd
 
+; Launch the app and the examples folder through Explorer so neither inherits this
+; installer's administrator elevation (see .onInstSuccess below).
+Function RunApp
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\${EXE_NAME}"'
+FunctionEnd
+
 Function ShowExamples
-  ExecShell "open" "$INSTDIR\examples"
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\examples"'
 FunctionEnd
 
 ; Installing over a running copy leaves half the old bundle in place, and the symptom is
@@ -429,12 +462,32 @@ SectionEnd
   !insertmacro MUI_DESCRIPTION_TEXT ${SecAssoc} "$(S_DescAssoc)"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
+; Same open-executable check for uninstall: removing a running copy leaves a half-deleted
+; folder behind. Carries /SD IDCANCEL so a quiet uninstall (/S) never blocks on a prompt.
+Function un.AssertExeClosed
+  Pop $R0
+  ${If} ${FileExists} "$R0\${EXE_NAME}"
+    retry:
+      ClearErrors
+      FileOpen $R1 "$R0\${EXE_NAME}" a
+      ${If} ${Errors}
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(S_StillRunning)" /SD IDCANCEL IDRETRY retry
+        Abort
+      ${Else}
+        FileClose $R1
+      ${EndIf}
+  ${EndIf}
+FunctionEnd
+
 ; ------------------------------------------------------------ uninstall ----
 Section "Uninstall"
   ; Matching the install section, and it has to: an uninstaller that reads the other
   ; shell context finds no shortcuts to delete and leaves them pointing at nothing.
   SetShellVarContext all
   SetRegView 64
+
+  Push "$INSTDIR"
+  Call un.AssertExeClosed
 
   Delete "$DESKTOP\${APP_NAME}.lnk"
   RMDir /r "$SMPROGRAMS\${APP_NAME}"
