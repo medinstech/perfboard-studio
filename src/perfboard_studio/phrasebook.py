@@ -1,5 +1,8 @@
 """What the build guide says, in each language it can say it in.
 
+Turkish is the table in this module; Chinese is ``phrasebook_zh.py``, the same shape in
+its own file. Both follow the rules below.
+
 The guide is the one piece of engine output a person follows with an iron in their hand,
 and until this module it existed only in English while the window around it spoke
 Turkish. It is translated HERE, in the engine, rather than by the interface's catalogue
@@ -40,11 +43,13 @@ from collections.abc import Sequence
 from functools import cache
 from typing import Literal, TypeAlias
 
+from .phrasebook_zh import CHINESE
+
 #: The languages a guide can be written in. A ``TypeAlias`` rather than a PEP 695 alias
 #: because it is read at run time by ``get_args`` -- see CLAUDE.md on the others.
-GuideLanguage: TypeAlias = Literal["en", "tr"]  # noqa: UP040
+GuideLanguage: TypeAlias = Literal["en", "tr", "zh"]  # noqa: UP040
 
-GUIDE_LANGUAGES: tuple[GuideLanguage, ...] = ("en", "tr")
+GUIDE_LANGUAGES: tuple[GuideLanguage, ...] = ("en", "tr", "zh")
 
 
 def guide_language(code: str | None) -> GuideLanguage:
@@ -54,6 +59,8 @@ def guide_language(code: str | None) -> GuideLanguage:
     locale (``tr_TR``, ``tr-TR``), and a guide in English is a working guide.
     """
     prefix = (code or "").replace("-", "_").split("_")[0].lower()
+    if prefix == "zh":
+        return "zh"
     return "tr" if prefix == "tr" else "en"
 
 
@@ -69,7 +76,9 @@ class Phrasebook:
 
     def __init__(self, language: GuideLanguage) -> None:
         self.language: GuideLanguage = language
-        self._table: dict[str, str] = TURKISH if language == "tr" else {}
+        self._table: dict[str, str] = (
+            TURKISH if language == "tr" else CHINESE if language == "zh" else {}
+        )
 
     def __call__(self, template: str, /, **fields: object) -> str:
         text = self._table.get(template, template)

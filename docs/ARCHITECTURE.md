@@ -2695,7 +2695,21 @@ over "0.64 mm", in either language. The engine's text cannot change, so the boxe
   English in every Turkish window. `SAME_IN_BOTH` names the exceptions (Net, Jumper).
   A count is said with `i18n.counted`, which picks one of two catalogued forms: "3 part(s)"
   read like a machine, and Turkish's two entries are one wording, since it takes the
-  singular after a number.
+  singular after a number. Chinese has no singular, so both of its entries say the counted
+  noun between the number and the noun's name (`"{count} 个元件"`).
+- **Chinese is a peer catalogue, not a copy of the Turkish one.** `ui/i18n_zh.py` and
+  `phrasebook_zh.py` hold the Simplified Chinese, keyed by the same English strings (and
+  the same guide templates) as the Turkish, so the Turkish can be rewritten without
+  touching it. `CATALOGUES` and the tests loop every language: each has its own stale-key
+  check, its own coverage check with its own `SAME_IN_BOTH` list (Chinese borrows many
+  technical words but still keeps the entry, so the catalogue scan sees the term), and its
+  own same-as-key list (only "3D" and "LED" -- any other entry equal to its English key is
+  an unfinished translation). Accelerators are compared on the letter, not its case
+  (`文件(&F)`), because Qt's `&` marks the key and the label above shows the capital. The
+  guide's `language`
+  argument takes `zh`, the page and JSON export are tagged `zh`, and a test builds the
+  NE555 example in Chinese and asks for a Chinese character in the page, so a catalogue
+  that stopped being reached fails rather than passing silently.
 - **Home replaces the dialog, and imports nothing from the window** (`ui/home.py`). A
   sidebar holds the doors and the places beside a page that scrolls. One primary door --
   "Draw Your First Circuit" on a first start, "New Circuit" after -- with Open… under it and

@@ -333,10 +333,10 @@ engine module and rasterised by Qt, so it works where `render_3d_view` cannot.
 **Nothing writes to disk unless you name a path**, and the three tools that write files
 hold to it in different ways. `generate_guide` without a directory returns the summary
 and the warnings, which is usually the question being asked. It takes a `language` too —
-`"en"` or `"tr"`, the language of whoever will build from it — and refuses one it cannot
-write (`unknown-language`) rather than answering in English. `export_pdf` has no useful
-answer without files, so without a directory it is refused (`no-directory`) rather than
-writing two sheets into whatever directory the server was started in. `export_step` takes
+`"en"`, `"tr"` or `"zh"`, the language of whoever will build from it — and refuses one it
+cannot write (`unknown-language`) rather than answering in English. `export_pdf` has no
+useful answer without files, so without a directory it is refused (`no-directory`) rather
+than writing two sheets into whatever directory the server was started in. `export_step` takes
 a file rather than a directory, adds `.step` if the name has neither `.step` nor `.stp`,
 and is refused without one (`no-path`) for the same reason.
 

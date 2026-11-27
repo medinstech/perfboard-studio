@@ -534,7 +534,7 @@ def test_a_guide_language_nobody_wrote_is_refused_not_guessed(loaded: BoardSessi
     assert result == {
         "ok": False,
         "code": "unknown-language",
-        "message": "A guide can be written in en, tr; 'de' is not one of them.",
+        "message": "A guide can be written in en, tr, zh; 'de' is not one of them.",
     }
 
 

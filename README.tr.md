@@ -323,8 +323,9 @@ kendini yalnızca imzalı bir paketten kuruyor. macOS ve Linux paketleri henüz 
 o yüzden ilk açılışta uyarı veriyorlar ve release notları uyarının nasıl geçileceğini
 yazıyor. Bkz. [docs/RELEASING.md](./docs/RELEASING.md).
 
-Arayüz **İngilizce ve Türkçe** konuşur (`--lang tr`, ya da sistem diline göre otomatik);
-yazdığı montaj rehberi de öyle — adımlar, kontroller, kesim listesi.
+Arayüz **İngilizce, Türkçe ve Basitleştirilmiş Çince** konuşur (`--lang tr`, `--lang zh`, ya
+da sistem diline göre otomatik); yazdığı montaj rehberi de öyle — adımlar, kontroller, kesim
+listesi.
 
 ### PyPI'dan
 
@@ -514,7 +515,7 @@ kütüphanede olmayan parçaların kendi ölçüleriyle tarif edilmesi, karta te
 panel parçaları, lehimsiz breadboard'lar — devre önce onda denenip sonra perfboard'a
 taşınır ya da lehimlenebilir bir breadboard'a delik delik lehimlenir —,
 çökme kurtarma, MCP
-sunucusu, TR/EN yerelleştirme, bir `v*` etiketiyle çalışan üç platformluk paketleme, ve
+sunucusu, TR/EN/ZH yerelleştirme, bir `v*` etiketiyle çalışan üç platformluk paketleme, ve
 yeni sürümü haber verip indiren güncelleme denetimi
 (**Yardım ▸ Güncellemeleri Denetle…**; indirdiğini sürümün `SHA256SUMS` dosyasıyla
 doğrular, Windows'ta da **Kur ve Yeniden Başlat** onu sistemin kendi onay penceresinin

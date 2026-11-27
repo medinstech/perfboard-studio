@@ -7722,6 +7722,7 @@ def test_each_language_is_offered_by_its_own_name() -> None:
     try:
         assert window.act_language["en"].text() == "English"
         assert window.act_language["tr"].text() == "Türkçe"
+        assert window.act_language["zh"].text() == "中文"
     finally:
         _close(window)
 

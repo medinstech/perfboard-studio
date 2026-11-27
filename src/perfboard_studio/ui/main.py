@@ -7077,7 +7077,7 @@ class MainWindow(QMainWindow):
         self.act_language: dict[str, QAction] = {}
         # Each language by its OWN name, not translated: somebody who cannot read the
         # language the window is in has to recognise the one they can.
-        for code, label in (("en", "English"), ("tr", "Türkçe")):
+        for code, label in (("en", "English"), ("tr", "Türkçe"), ("zh", "中文")):
             action = language_menu.addAction(label)
             action.setCheckable(True)
             action.setChecked(code == current_language())
