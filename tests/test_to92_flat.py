@@ -174,3 +174,29 @@ def test_no_borrowed_package_is_drawn_inside_out_when_it_is_mirrored() -> None:
                     continue
                 share = _winding_agrees_with_normals(data)
                 assert share > 0.97, f"{footprint_id} mirrored={mirrored}: {share:.0%} of faces wind outward"
+
+
+def test_staggered_to92_geometry_in_2d_and_3d() -> None:
+    """``to92-s`` steps the middle leg one row back toward the rounded back of the D-shaped
+    case, keeping the exact 5.21 x 4.19 mm body centred over all three legs in 2D and 3D."""
+    from perfboard_studio.ui import view3d
+    from perfboard_studio.ui.view2d import _body_path
+
+    fp = get_footprint("to92-s")
+    assert fp is not None
+    assert fp.id == "to92-s"
+    assert [(p.number, p.d_col, p.d_row) for p in fp.pins] == [
+        ("1", 0, 0),
+        ("2", 1, -1),
+        ("3", 2, 0),
+    ]
+    assert fp.body.archetype == "to92"
+
+    placement = placement_for(fp, DEFAULT_BOARD.pitch)
+    box = _body_path(fp, placement, None).boundingRect()
+    assert box.width() == pytest.approx(5.21, abs=1e-6)
+    assert box.height() == pytest.approx(4.19, abs=1e-6)
+
+    document = _board_with("to92-s", rotation=0, mirrored=False)
+    actors = view3d.build_component(LOOKUP, document.components[0], document.board)
+    assert len(actors) == 2, "D-shaped body actor plus merged leads actor"

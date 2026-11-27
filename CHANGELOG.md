@@ -38,6 +38,10 @@ closed without a bump.
   sheet or named `refs`), renumber references across the whole design in reading order or by
   explicit mapping (`renumber_parts`, one undo step), and frame `render_schematic` on ISO
   `A4`/`A3` paper with an engineering `title_block` (`72` tools total).
+- **Staggered TO-92 (`to92-s`).** Generated TO-92 package with the middle leg stepped one
+  row back (`(0, 0)`, `(1, -1)`, `(2, 0)`), drawn with its D-shaped body in 2D, 3D and STEP.
+  KiCad's `TO-92_HandSolder` and `TO-92_Wide` footprints import as `to92-s` while preserving
+  catalog transistor/sensor/regulator pin names and symbols (#16).
 
 ### Changed
 

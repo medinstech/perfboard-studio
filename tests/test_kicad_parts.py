@@ -632,3 +632,30 @@ def test_refresh_parts_command_is_one_undo_step_and_respects_locks() -> None:
     assert next(p for p in bus.document.parts if p.ref == "R3").value == "220"
     assert next(c for c in bus.document.boards[0].components if c.ref == "R4").value == "100"
     assert sorted(c.id for c in bus.document.conductors) == ["lb1", "w1"]
+
+
+def test_staggered_to92_kicad_mapping_preserves_catalog_pinout() -> None:
+    """KiCad's staggered TO-92 footprints (HandSolder, Wide) map to ``to92-s`` while inline
+    variants stay ``to92``, and a catalog transistor on ``TO-92_HandSolder`` keeps both its
+    staggered footprint and its catalog C/B/E pin names and symbol."""
+    assert kicad_footprint_ids("Package_TO_SOT_THT:TO-92_Inline")[0] == ["to92"]
+    assert kicad_footprint_ids("Package_TO_SOT_THT:TO-92_Inline_Wide")[0] == ["to92"]
+    assert kicad_footprint_ids("Package_TO_SOT_THT:TO-92_HandSolder")[0] == ["to92-s"]
+    assert kicad_footprint_ids("Package_TO_SOT_THT:TO-92_Wide")[0] == ["to92-s"]
+
+    netlist = """(export (version "E")
+      (components
+        (comp (ref "Q1") (value "BC547")
+          (footprint "Package_TO_SOT_THT:TO-92_HandSolder")
+          (libsource (lib "Transistor_BJT") (part "BC547"))))
+      (nets
+        (net (code "1") (name "GND")
+          (node (ref "Q1") (pin "3") (pinfunction "E") (pintype "passive")))))
+    """
+    doc = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    plan = plan_import(parse_kicad_netlist(netlist), doc, LOOKUP)
+    q1 = plan.suggestions["Q1"]
+    assert q1.footprint_id == "to92-s"
+    assert q1.source == "catalog"
+    assert q1.symbol == "npn"
+    assert dict(q1.pin_names) == {"1": "C", "2": "B", "3": "E"}

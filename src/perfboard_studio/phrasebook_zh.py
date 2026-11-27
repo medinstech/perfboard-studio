@@ -414,6 +414,7 @@ CHINESE: dict[str, str] = {
     "{0} on a DIP adapter, rows {1} holes apart": "{0}，装在 DIP 转接板上，两排相距 {1} 个孔",
     "{0} on a DIP adapter": "{0}，装在 DIP 转接板上",
     "TO-92 (inline, on-grid)": "TO-92（一字排开，落在网格上）",
+    "TO-92 (staggered, middle leg back)": "TO-92（错位引脚，中间引脚后移）",
     "RGB LED, {0} mm round, 4 legs": "RGB LED，{0} mm 圆形，4 只引脚",
     "LED, {0} mm round": "LED，{0} mm 圆形",
     "Pin header, {0}": "排针，{0}",

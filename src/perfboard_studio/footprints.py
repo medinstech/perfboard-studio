@@ -740,23 +740,34 @@ TO92_BODY_OFFSET_MM = -0.54
 
 def to92_footprint(
     *,
+    staggered: bool = False,
     lead_diameter_mm: Mm | None = None,
     id: str | None = None,
     name: str | None = None,
 ) -> Footprint:
-    """TO-92 transistor package, inline-on-grid variant: 3 pins in a row, one hole
-    apart. Real TO-92 leads are much closer together at the body and fan out to
-    reach this pitch; the courtyard therefore covers the full fanned-out pin span,
-    not just the (narrower) physical body, since that is what actually needs
-    clearance on the board.
+    """TO-92 transistor package.
+
+    The default (``staggered=False``, id ``to92``) is the inline-on-grid variant: 3 pins
+    in a row, one hole apart. ``staggered=True`` (id ``to92-s``) steps the middle leg
+    one row back toward the rounded back of the D-shaped case (pins at ``(0, 0)``,
+    ``(1, -1)`` and ``(2, 0)``), keeping pins 1-2-3 left to right with the flat face on
+    local +y.
     """
     lead_diameter = 0.45 if lead_diameter_mm is None else lead_diameter_mm
-    pins = (_make_pin("1", 0, 0), _make_pin("2", 1, 0), _make_pin("3", 2, 0))
-    outline = _offset_rect_outline(
-        _to_mm(pins), 5.21, 4.19, 0.0, TO92_BODY_OFFSET_MM, COURTYARD_MARGIN_MM
-    )
-    fp_id = id if id is not None else "to92"
-    fp_name = name if name is not None else "TO-92 (inline, on-grid)"
+    if staggered:
+        pins = (_make_pin("1", 0, 0), _make_pin("2", 1, -1), _make_pin("3", 2, 0))
+        outline = _rect_outline(_to_mm(pins), 5.21, 4.19, COURTYARD_MARGIN_MM)
+        fp_id = id if id is not None else "to92-s"
+        fp_name = name if name is not None else "TO-92 (staggered, middle leg back)"
+        dims: dict[str, float] = {"width": 5.21, "depth": 4.19}
+    else:
+        pins = (_make_pin("1", 0, 0), _make_pin("2", 1, 0), _make_pin("3", 2, 0))
+        outline = _offset_rect_outline(
+            _to_mm(pins), 5.21, 4.19, 0.0, TO92_BODY_OFFSET_MM, COURTYARD_MARGIN_MM
+        )
+        fp_id = id if id is not None else "to92"
+        fp_name = name if name is not None else "TO-92 (inline, on-grid)"
+        dims = {"width": 5.21, "depth": 4.19, "offsetY": TO92_BODY_OFFSET_MM}
     return Footprint(
         id=fp_id,
         name=fp_name,
@@ -765,7 +776,7 @@ def to92_footprint(
         body_height=5.2,
         body=BodySpec(
             archetype="to92",
-            dims={"width": 5.21, "depth": 4.19, "offsetY": TO92_BODY_OFFSET_MM},
+            dims=dims,
         ),
         lead_diameter=lead_diameter,
         polarized=False,
@@ -2547,6 +2558,7 @@ most two decimals and are written without units.
                                                         -ccw numbers two columns as a
                                                         DIP is, down one and up the other
   dip-<pins>[-wide]                                     a DIP of any pin count
+  to92-s                                                staggered TO-92 (middle leg one row back)
   hdr-<rows>x<cols>                                     a pin header
   skt-<rows>x<cols>                                     a female header (pin socket), 1 or
                                                         2 rows, numbered as hdr- is
@@ -2737,6 +2749,10 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
     (
         re.compile(r"^dip-(\d+)(-wide)?$"),
         lambda m: dip_footprint(pin_count=_grid(m[1]), wide=m[2] is not None),
+    ),
+    (
+        re.compile(r"^to92-(s)$"),
+        lambda _m: to92_footprint(staggered=True),
     ),
     (
         re.compile(r"^hdr-(\d+)x(\d+)$"),

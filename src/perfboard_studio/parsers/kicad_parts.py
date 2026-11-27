@@ -362,6 +362,8 @@ _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]]
         _terminal,
     ),
     (re.compile(r"^LED_D(?P<d>3|5|10)\.0mm"), lambda m: [f"led-{m['d']}mm"]),
+    (re.compile(r"^TO-92.*Inline"), lambda m: ["to92"]),
+    (re.compile(r"^TO-92.*(?:HandSolder|Wide|Staggered)"), lambda m: ["to92-s"]),
     (re.compile(r"^TO-92"), lambda m: ["to92"]),
     (re.compile(r"^TO-220-3_Vertical"), lambda m: ["to220"]),
     (re.compile(r"^Crystal_HC49"), lambda m: ["xtal-hc49"]),
@@ -461,6 +463,8 @@ _ADAPTER_PINS = re.compile(r"^adp-[a-z]+-(\d+)")
 
 
 def _same_chip(catalog_footprint: str, adapter: str) -> bool:
+    if catalog_footprint == "to92" and adapter == "to92-s":
+        return True
     dip, adapted = _DIP_ID.match(catalog_footprint), _ADAPTER_PINS.match(adapter)
     return dip is not None and adapted is not None and dip[1] == adapted[1]
 
