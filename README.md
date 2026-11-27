@@ -275,7 +275,7 @@ size beside a 50 mm ruler — print at 100 %, cut each wire to its drawing, mark
 Tip to tip a drawing is exactly the length the cut list gives, because both come from the
 same numbers.
 
-![Board, 3D and the build guide side by side: eight steps ticked off, and the next one, the 7805, picked out in all three](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/guide-and-3d.png)
+![Board, 3D and the build guide side by side: ten steps ticked off, and the next one, the 7805, picked out in all three](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/guide-and-3d.png)
 
 **And it keeps your place at the bench.** The Build Guide panel (`Ctrl+4`) shows one step at
 a time, large enough to read from across the bench: the board as it stands at that step,

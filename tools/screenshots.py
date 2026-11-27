@@ -399,9 +399,10 @@ def _nano_relay_shots(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     return True
 
 
-#: How many of nano-relay's steps are done in the guide shot: every part in the first three
-#: phases, so the bench card is on the regulator, which stands out in 3D.
-STEPS_DONE = 8
+#: How many of nano-relay's bench items are done in the guide shot: Phase 0's two prep
+#: tasks plus the first eight parts, so the bench card is on the regulator (U1 L7805),
+#: which stands out in 3D.
+STEPS_DONE = 10
 
 #: How far the 3D panel's camera is brought in from where it opens, as a scroll of the
 #: wheel would: the opening frame fits the whole board with room to turn it, which in a
@@ -423,16 +424,19 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     window = MainWindow(result.document, NANO_RELAY)
     _open(window, app)
     window.act_ratsnest.setChecked(False)
-    # The sidebar closed, as somebody at the bench would: what this picture is about needs
-    # the width, and the editor shots show the library and the nets already.
-    for dock in (window.dock_library, window.dock_part_list, window.dock_nets):
+    # The editing panels closed, matching assembly mode: what this picture is about is the
+    # board, 3D view and assembly bench side by side, and the editor shots show the sidebar
+    # and Properties already.
+    for dock in (window.dock_library, window.dock_part_list, window.dock_nets, window.dock_drc):
         dock.close()
     # SIDE BY SIDE, which the views are not by default: they are tabs over one canvas. The
     # sheet, the 3D view and the guide leave the group, and the last two are split off
     # Properties, the one panel in the middle row that is in no tab group: split off the
     # board, which still is in one, they went back into it as tabs -- ``splitDockWidget``
     # handed a dock in a group adds to the group (MainWindow's default layout says so too).
-    # Properties then goes to the end of the row: board, 3D, guide, Properties.
+    # Properties is then hidden so the three views -- board, 3D, assembly bench -- share the
+    # window cleanly. HIDDEN, not closed: it has no close button (no dock features at all),
+    # so ``close()`` is refused without a word and the picture kept it.
     for dock in (window.dock_schematic, window.dock_3d, window.dock_guide):
         window.removeDockWidget(dock)
     _settle(app, 5)
@@ -440,7 +444,12 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     window.dock_3d.show()
     window.splitDockWidget(window.dock_3d, window.dock_guide, Qt.Orientation.Horizontal)
     window.dock_guide.show()
-    window.splitDockWidget(window.dock_guide, window.dock_properties, Qt.Orientation.Horizontal)
+    window.dock_properties.hide()
+    window.resizeDocks(
+        [window.dock_board, window.dock_3d, window.dock_guide],
+        [460, 520, 620],
+        Qt.Orientation.Horizontal,
+    )
     _settle(app, 30)
     window.act_show_3d.trigger()
     _settle(app, 30)
@@ -466,6 +475,15 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     for _ in range(STEPS_DONE):
         done_next.click()
         _settle(app, 5)
+    # Advancing steps selects the step's part, which can re-open Properties; keep editing
+    # panels hidden so Board, 3D View and Build Guide fill the window cleanly side by side.
+    window.dock_properties.hide()
+    window.dock_drc.close()
+    window.resizeDocks(
+        [window.dock_board, window.dock_3d, window.dock_guide],
+        [460, 520, 620],
+        Qt.Orientation.Horizontal,
+    )
     _settle(app, 30)
     window.view.fit_board()
     _settle(app, 30)

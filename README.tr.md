@@ -274,7 +274,7 @@ bir de düz hâliyle, her işareti bir uçtan ölçülmüş olarak. Rehber hepsi
 kesin, işaretleyin, bükün. Bir çizimin uçtan uca boyu kesim listesinin verdiği uzunluğun ta
 kendisidir, çünkü ikisi de aynı sayılardan gelir.
 
-![Kart, 3D ve montaj rehberi yan yana: sekiz adım işaretlenmiş, sıradaki — 7805 — üçünde de vurgulanmış](./docs/images/guide-and-3d.png)
+![Kart, 3D ve montaj rehberi yan yana: on adım işaretlenmiş, sıradaki — 7805 — üçünde de vurgulanmış](./docs/images/guide-and-3d.png)
 
 **Ve tezgâhta kaldığınız yeri tutar.** Montaj Rehberi paneli (`Ctrl+4`) adımları teker
 teker, tezgâhın öbür ucundan okunacak büyüklükte gösterir: kartın o adımdaki hâli, adımın

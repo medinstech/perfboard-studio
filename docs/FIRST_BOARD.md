@@ -70,8 +70,8 @@ back, and **Rearrange** (Ctrl+Shift+A) tries another arrangement.
 
 **Auto-wire** lays every connection. A connection on perfboard is not one thing: it can be
 a solder trace, a bare wire, an insulated wire or a jumper over the parts, and the router
-prices them differently. On this board it laid 22 connections across all seven nets: 2
-solder traces and 20 wires, 5 of them insulated. The summary line at the bottom of the
+prices them differently. On this board it laid 21 connections across all seven nets: 1
+solder trace and 20 wires, 5 of them insulated. The summary line at the bottom of the
 window counts them, with the wires' length and bends.
 
 The Problems drawer under the board has the verdict: no problems, and "Matches the circuit:
@@ -152,15 +152,16 @@ A solder run has no such line, since it is soldered to everything it passes.
 
 ## 6. Open the build guide
 
-![The build guide's first step: R1, 10k, from I2 to I5, with the holes and the part's height](images/first-board/6-guide.png)
+![The build guide's first step: take a 5 × 7 cm board (24 × 18 holes), with A1 and X18 marked and the whole board beside it](images/first-board/6-guide.png)
 
-**Open the Build Guide** shows the first step large: the board zoomed onto the step's holes,
-the part that goes in, and which holes it goes in. **Done, next** ticks it and moves to the
-next one.
+**Open the Build Guide** steps the editing panels aside and opens the first step large:
+which board to take (or where to cut and drill), where A1 sits, and then each part and wire
+in soldering order with the holes zoomed in and the whole board beside it. **Done, next**
+ticks it and moves to the next one.
 
-![The guide's overview: eight phases, from the lowest parts to the copper on the solder side](images/first-board/7-overview.png)
+![The guide's overview: from board preparation through the parts to the copper on the solder side](images/first-board/7-overview.png)
 
-**Overview** is the same guide as a list. On this board it is 32 steps across 8 phases,
+**Overview** is the same guide as a list. On this board it is 31 steps across 8 phases,
 with 45 checks and 20 wires to cut. The numbers change with the board you chose. The one
 note is not a fault: the stock board's edge fingers are part of the board, and the guide
 says so rather than giving them a step.
