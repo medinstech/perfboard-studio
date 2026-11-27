@@ -507,6 +507,11 @@ closed without a bump.
   the legend's letters and numbers echoed outside the board, were placed a fixed number of
   millimetres off the outline, so the gap changed with the zoom; they now stand six screen
   pixels clear at every zoom.
+- **The letters said again outside the board make room in a small board panel.** Zoomed
+  out, every letter a part hides was said, one per hole, so a run like M N O P Q ran
+  together, and the letters above a part printed just outside the board touched its
+  reference. They now thin out as the ruler does at that zoom, and a letter gives way to a
+  reference it would touch; at an editing zoom nothing changes.
 - **No two references are printed in one place on the board.** They are settled one at a
   time, the ones over a body first and then by reference: a reference whose place is
   another's moves to another side of its body, clear of the pin names, the notes and the

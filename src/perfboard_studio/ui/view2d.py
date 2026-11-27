@@ -892,6 +892,26 @@ class PadGridItem(QGraphicsItem):
 # --------------------------------------------------------------------- rulers
 
 
+def ruler_label_step(pitch: float, scale: float) -> int:
+    """How many holes the ruler skips between labels at this zoom, so they never collide.
+
+    Derived from the current view scale rather than fixed: zoomed out, one label in five
+    is legible and one per hole is a grey smear; zoomed in, every hole fits. The legend's
+    echo (``LegendEchoItem``) stands in for the ruler and thins by the same step."""
+    px_per_hole = pitch * scale
+    if px_per_hole >= 22:
+        return 1
+    if px_per_hole >= 11:
+        return 2
+    return 5
+
+
+def ruler_skips(index: int, step: int) -> bool:
+    """Whether the ruler leaves the column or row ``index`` (0-based) unlabelled at
+    ``step``: every ``step``-th is labelled, and every fifth, the long mark, always is."""
+    return bool(index % step and (index + 1) % 5)
+
+
 class HoleRulerItem(QGraphicsItem):
     """Column letters along the top and row numbers down the left side.
 
@@ -921,27 +941,13 @@ class HoleRulerItem(QGraphicsItem):
         pad = RULER_MARGIN_MM + 30
         return outline.adjusted(-pad, -pad, pad, pad)
 
-    def _label_step(self, scale: float) -> int:
-        """How many holes to skip between labels, so they never collide.
-
-        Derived from the current view scale rather than fixed: zoomed out, one label in
-        five is legible and one per hole is a grey smear; zoomed in, every hole fits.
-        """
-        px_per_hole = self.board.pitch * scale
-        if px_per_hole >= 22:
-            return 1
-        if px_per_hole >= 11:
-            return 2
-        return 5
-
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         board = self.board
-        scale = painter.transform().m11() or 1.0
-        step = self._label_step(scale)
+        step = ruler_label_step(board.pitch, painter.transform().m11() or 1.0)
 
         outline = _outline_rect(board)
         for col in range(board.cols):
-            if col % step and (col + 1) % 5:
+            if ruler_skips(col, step):
                 continue
             major = (col + 1) % 5 == 0 or col == 0
             painter.setPen(QPen(RULER_TEXT_MAJOR if major else RULER_TEXT))
@@ -959,7 +965,7 @@ class HoleRulerItem(QGraphicsItem):
             )
 
         for row in range(board.rows):
-            if row % step and (row + 1) % 5:
+            if ruler_skips(row, step):
                 continue
             major = (row + 1) % 5 == 0 or row == 0
             painter.setPen(QPen(RULER_TEXT_MAJOR if major else RULER_TEXT))
@@ -985,6 +991,15 @@ class LegendEchoItem(QGraphicsItem):
     at its pixel size, and only that one: the rest the board says itself. Outside the
     outline, so it is on screen and never on the 1:1 print, which renders the outline
     alone. Chosen 2026-11-23 from rendered candidates.
+
+    It thins as the ruler does and gives way to a reference (``shown``), chosen 2026-11-27
+    from rendered candidates. In the small board panel beside the 3D view and the guide
+    every hidden letter was said, one per hole at nine pixels a hole -- MNOPQ, Y ZAA run
+    together -- and the letters above C1 and J1 touched their references, which sit just
+    outside the board there. A reference is the part's only name, and an echoed letter one
+    of a run anybody reads from its neighbours: the rule ``covered_labels`` already keeps
+    for the printed letter under a reference. At an editing zoom neither rule removes
+    anything, and the picture there did not move.
     """
 
     def __init__(self, scene: BoardScene, legend: BoardLegendItem) -> None:
@@ -993,10 +1008,10 @@ class LegendEchoItem(QGraphicsItem):
         self.legend = legend
         self.board = legend.board
         self.side = legend.side
-        #: ``hidden`` at the last zoom it was asked at: a pan repaints every frame, and the
+        #: ``shown`` at the last zoom it was asked at: a pan repaints every frame, and the
         #: answer changes with the zoom alone (a reference's plate holds a pixel size)
         #: until the scene is rebuilt, which makes a new item.
-        self._hidden: tuple[float, list[tuple[QPointF, str, float]]] | None = None
+        self._shown: tuple[float, list[tuple[QPointF, str, Qt.AlignmentFlag, QPointF]]] | None = None
         self.setZValue(80)
 
     def boundingRect(self) -> QRectF:
@@ -1023,40 +1038,55 @@ class LegendEchoItem(QGraphicsItem):
             if index in under_references or any(rect.intersects(cover) for cover in covers)
         ]
 
-    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
-        outline = _outline_rect(self.board)
-        painter.setPen(QPen(RULER_TEXT_MAJOR))
-        transform = painter.worldTransform()
-        if self._hidden is None or self._hidden[0] != transform.m11():
-            self._hidden = (transform.m11(), self.hidden(transform))
-        for centre, text, rotation in self._hidden[1]:
-            if rotation:
-                # A row number, beside the edge it is printed along. ``draw_label`` aligns
-                # inside a box centred on the anchor, so AlignLeft sits left of the anchor
-                # and AlignRight sits right of it (opposite of Qt's usual reading).
+    def shown(self, transform: QTransform) -> list[tuple[QPointF, str, Qt.AlignmentFlag, QPointF]]:
+        """Each echo drawn at this zoom: (scene anchor, text, alignment, device offset), as
+        ``draw_label`` takes them. An address ``hidden`` names, unless the ruler would leave
+        its column or row unlabelled at this zoom (``ruler_skips``) or its plate meets a
+        reference's (``BoardLegendItem.reference_plates``)."""
+        board = self.board
+        outline = _outline_rect(board)
+        step = ruler_label_step(board.pitch, transform.m11() or 1.0)
+        xs = [hole_to_screen(HoleCoord(col, 0), board, self.side).x() for col in range(board.cols)]
+        ys = [hole_to_screen(HoleCoord(0, row), board, self.side).y() for row in range(board.rows)]
+        plates = self.legend.reference_plates(transform)
+        echoes: list[tuple[QPointF, str, Qt.AlignmentFlag, QPointF]] = []
+        for centre, text, rotation in self.hidden(transform):
+            # Which column or row it names: the hole its centre lines up with.
+            line, at = (ys, centre.y()) if rotation else (xs, centre.x())
+            if ruler_skips(min(range(len(line)), key=lambda k: abs(line[k] - at)), step):
+                continue
+            # ``draw_label`` aligns inside a box centred on the anchor, so AlignLeft sits
+            # left of the anchor and AlignTop above it (opposite of Qt's usual reading).
+            if rotation:  # a row number, beside the edge it is printed along
                 left = centre.x() < outline.center().x()
-                draw_label(
-                    painter,
-                    QPointF(outline.left() if left else outline.right(), centre.y()),
-                    text,
-                    RULER_LABEL_PX,
-                    (Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight)
-                    | Qt.AlignmentFlag.AlignVCenter,
-                    bold=True,
-                    offset=QPointF(-RULER_GAP_PX if left else RULER_GAP_PX, 0.0),
-                )
+                anchor = QPointF(outline.left() if left else outline.right(), centre.y())
+                alignment = (
+                    Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight
+                ) | Qt.AlignmentFlag.AlignVCenter
+                offset = QPointF(-RULER_GAP_PX if left else RULER_GAP_PX, 0.0)
             else:
                 top = centre.y() < outline.center().y()
-                draw_label(
-                    painter,
-                    QPointF(centre.x(), outline.top() if top else outline.bottom()),
-                    text,
-                    RULER_LABEL_PX,
-                    Qt.AlignmentFlag.AlignHCenter
-                    | (Qt.AlignmentFlag.AlignTop if top else Qt.AlignmentFlag.AlignBottom),
-                    bold=True,
-                    offset=QPointF(0.0, -RULER_GAP_PX if top else RULER_GAP_PX),
+                anchor = QPointF(centre.x(), outline.top() if top else outline.bottom())
+                alignment = Qt.AlignmentFlag.AlignHCenter | (
+                    Qt.AlignmentFlag.AlignTop if top else Qt.AlignmentFlag.AlignBottom
                 )
+                offset = QPointF(0.0, -RULER_GAP_PX if top else RULER_GAP_PX)
+            if plates:
+                plate = label_plate_rect(
+                    transform.map(anchor), text, RULER_LABEL_PX, alignment, bold=True, offset=offset
+                )
+                if any(plate.intersects(other) for other in plates):
+                    continue
+            echoes.append((anchor, text, alignment, offset))
+        return echoes
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        painter.setPen(QPen(RULER_TEXT_MAJOR))
+        transform = painter.worldTransform()
+        if self._shown is None or self._shown[0] != transform.m11():
+            self._shown = (transform.m11(), self.shown(transform))
+        for anchor, text, alignment, offset in self._shown[1]:
+            draw_label(painter, anchor, text, RULER_LABEL_PX, alignment, bold=True, offset=offset)
 
 
 # ------------------------------------------------- printed legend and board features
@@ -1135,16 +1165,7 @@ class BoardLegendItem(QGraphicsItem):
         neighbours, and U1 is the board's only name for its chip -- hidden, atmega328-relay
         opened without it. So the letter under it gives way at that zoom, and nothing else
         does: a reference yields to a note, and never moves onto a pin name."""
-        scene = self.scene()
-        if scene is None or (transform.m11() or 1.0) < REF_LABEL_MIN_SCALE:
-            return set()
-        plates = []
-        for item in getattr(scene, "component_items", {}).values():
-            if not item.show_reference or not item.isVisible():
-                continue
-            placement = item.reference_placement(transform)
-            if placement is not None:
-                plates.append(item.reference_rect(transform.map(placement[0]), placement[1]))
+        plates = self.reference_plates(transform)
         if not plates:
             return set()
         return {
@@ -1152,6 +1173,22 @@ class BoardLegendItem(QGraphicsItem):
             for index, rect in enumerate(self.label_rects())
             if any(transform.mapRect(rect).intersects(plate) for plate in plates)
         }
+
+    def reference_plates(self, transform: QTransform) -> list[QRectF]:
+        """The plate of every reference printed at this zoom, in device pixels: what the
+        letter under one gives way to here, and an address echoed outside the board in
+        ``LegendEchoItem``. None below the zoom the references are printed at."""
+        scene = self.scene()
+        if scene is None or (transform.m11() or 1.0) < REF_LABEL_MIN_SCALE:
+            return []
+        plates = []
+        for item in getattr(scene, "component_items", {}).values():
+            if not item.show_reference or not item.isVisible():
+                continue
+            placement = item.reference_placement(transform)
+            if placement is not None:
+                plates.append(item.reference_rect(transform.map(placement[0]), placement[1]))
+        return plates
 
     def _printed(self) -> Iterator[tuple[QPointF, str, float, float, float, float]]:
         """Each label this board prints: (centre, text, cap height, widest it may be,

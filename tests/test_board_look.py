@@ -17,7 +17,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import QRectF
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QTransform
 from PySide6.QtWidgets import QApplication
 
@@ -255,10 +255,10 @@ def test_echoed_legend_and_ruler_labels_stay_outside_the_board_at_low_zoom() -> 
     # 1. LegendEchoItem: left and right echoed row numbers stay strictly outside the outline.
     scene = view2d.BoardScene(doc, LOOKUP, side="top")
     assert scene.legend_echo is not None
-    # Pre-populate hidden() while all components are visible, then render only LegendEchoItem.
-    scene.legend_echo._hidden = (
+    # Pre-populate shown() while all components are visible, then render only LegendEchoItem.
+    scene.legend_echo._shown = (
         px_per_mm,
-        scene.legend_echo.hidden(QTransform.fromScale(px_per_mm, px_per_mm)),
+        scene.legend_echo.shown(QTransform.fromScale(px_per_mm, px_per_mm)),
     )
     echo_img = render_only(scene, scene.legend_echo)
     ink = [
@@ -295,6 +295,82 @@ def test_echoed_legend_and_ruler_labels_stay_outside_the_board_at_low_zoom() -> 
         if left_edge - 2 <= x <= right_edge + 2 and top_edge - 2 <= y <= bottom_edge + 2
     ]
     assert ruler_inside == [], f"ruler ink overlapped board edge/interior: {ruler_inside[:10]}"
+
+
+#: The small board panel beside the 3D view and the guide (docs/images/guide-and-3d.png),
+#: and a board being edited, in pixels per millimetre.
+PANEL_ZOOM, EDITING_ZOOM = 3.4, 11.6
+
+
+def test_an_echo_gives_way_to_a_reference_in_the_small_board_panel(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Chosen 2026-11-27 from rendered candidates. In the small panel nano-relay's C1 and J1
+    print their references just above the board, where the letters their bodies hide are
+    said again -- J and O touched C1 and J1. A reference is the part's only name and a
+    letter one of a run, so the letter gives way, as the printed one under a reference does
+    (``covered_labels``); the echoes that meet nothing stay.
+
+    Which letters meet which reference depends on how wide the font draws them, and Qt's
+    offscreen plugin on Windows has none (see test_ui's skipif guards), so the rule is held
+    on whatever plates there are, and the giving way on a plate put over one echo."""
+    scene = view2d.BoardScene(_example("nano-relay"), LOOKUP, side="top")
+    echo, legend = scene.legend_echo, scene.legend_item
+    assert echo is not None and legend is not None
+
+    def plate(transform: QTransform, anchor, text, alignment, offset) -> QRectF:  # type: ignore[no-untyped-def]
+        return view2d.label_plate_rect(
+            transform.map(anchor), text, view2d.RULER_LABEL_PX, alignment, bold=True, offset=offset
+        )
+
+    panel = QTransform.fromScale(PANEL_ZOOM, PANEL_ZOOM)
+    plates = legend.reference_plates(panel)
+    assert plates, "the references are printed at this zoom"
+    shown = echo.shown(panel)
+    assert shown, "an echo that meets nothing stays"
+    met = [echo[1] for echo in shown if any(plate(panel, *echo).intersects(p) for p in plates)]
+    assert met == [], met
+
+    # A reference over one echo: that one gives way, with any neighbour its plate reaches,
+    # and nothing else does.
+    first = shown[0]
+    over = plate(panel, *first)
+    monkeypatch.setattr(view2d.BoardLegendItem, "reference_plates", lambda _self, _t: [*plates, over])
+    after = echo.shown(panel)
+    assert first not in after
+    assert after == [kept for kept in shown if not plate(panel, *kept).intersects(over)]
+    # Below the zoom the references are printed at there is nothing to give way to.
+    monkeypatch.undo()
+    assert legend.reference_plates(QTransform.fromScale(2.0, 2.0)) == []
+
+
+def test_an_echo_thins_as_the_ruler_does_and_an_editing_zoom_keeps_them_all() -> None:
+    """The echo stands in for the ruler, so it thins by the ruler's step: in the small panel
+    (under 11 px a hole) one column or row in five and the long marks, where every hidden
+    letter was said and MNOPQ ran together. At an editing zoom the ruler labels every hole
+    and no echo meets a reference, so every hidden address is still said there."""
+    doc = _example("nano-relay")
+    scene = view2d.BoardScene(doc, LOOKUP, side="top")
+    echo = scene.legend_echo
+    assert echo is not None
+    pitch = doc.board.pitch
+    xs = [view2d.hole_to_screen(view2d.HoleCoord(col, 0), doc.board, "top").x() for col in range(doc.board.cols)]
+    panel = QTransform.fromScale(PANEL_ZOOM, PANEL_ZOOM)
+    step = view2d.ruler_label_step(pitch, PANEL_ZOOM)
+    assert step == 5
+    columns = [
+        min(range(len(xs)), key=lambda k: abs(xs[k] - anchor.x()))
+        for anchor, _text, alignment, _offset in echo.shown(panel)
+        if alignment & Qt.AlignmentFlag.AlignHCenter
+    ]
+    assert columns and not [col for col in columns if view2d.ruler_skips(col, step)], columns
+    hidden = {text for _centre, text, _rotation in echo.hidden(panel)}
+    assert {"M", "N", "P", "Q"} <= hidden, "hidden under J1, and thinned out"
+    assert not {"M", "N", "P", "Q"} & {text for _a, text, _al, _o in echo.shown(panel)}
+
+    editing = QTransform.fromScale(EDITING_ZOOM, EDITING_ZOOM)
+    assert view2d.ruler_label_step(pitch, EDITING_ZOOM) == 1
+    assert sorted(text for _a, text, _al, _o in echo.shown(editing)) == sorted(
+        text for _c, text, _r in echo.hidden(editing)
+    )
 
 
 def test_a_name_with_nowhere_else_to_go_still_crosses_the_legend() -> None:
