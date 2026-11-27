@@ -27,6 +27,7 @@
   &nbsp;·&nbsp; <a href="#or-open-one-that-is-already-built">Example boards</a>
   &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md">Changelog</a>
   &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/README.tr.md">Türkçe</a>
+  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/README.zh-CN.md">中文</a>
 </p>
 
 ![The window, from a drawn NE555 circuit to its build guide: the button at the top right chooses a board, places the parts, wires them and opens the guide](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/workflow.gif)
