@@ -203,8 +203,9 @@ def test_the_catalogue_names_no_string_the_interface_no_longer_has() -> None:
     """The load-bearing test. A key for a string that has been reworded or removed is a
     translation that will never appear, and nothing else would ever say so."""
     literals = translated_literals()
-    stale = sorted(set(TURKISH) - literals - loop_built_labels())
-    assert stale == [], f"catalogue keys the interface no longer uses: {stale}"
+    for code, catalogue in CATALOGUES.items():
+        stale = sorted(set(catalogue) - literals - loop_built_labels())
+        assert stale == [], f"{code}: catalogue keys the interface no longer uses: {stale}"
 
 
 def test_the_drawing_tool_labels_are_still_the_ones_the_catalogue_expects() -> None:
@@ -215,12 +216,17 @@ def test_the_drawing_tool_labels_are_still_the_ones_the_catalogue_expects() -> N
         assert f'"{label}"' in source, label
 
 
-#: The strings that read the same in both languages, and so have no entry on purpose: a
+#: The strings that read the same in a language, and so have no entry on purpose: a
 #: column heading and a tool Turkish borrows as they are, and the product's name.
-SAME_IN_BOTH = frozenset({"Net", "Jumper"})
+SAME_IN_BOTH: dict[str, frozenset[str]] = {
+    "tr": frozenset({"Net", "Jumper"}),
+    # Chinese keeps the entry even when the word is unchanged, so a technical term is
+    # visible to the catalogue scan rather than silently absent.
+    "zh": frozenset(),
+}
 
 
-def test_every_translated_string_has_a_turkish_entry(capsys) -> None:
+def test_every_translated_string_has_an_entry(capsys) -> None:
     """A missing translation falls through to English rather than crashing, which is the
     right failure at run time and the wrong one to leave unnoticed.
 
@@ -230,11 +236,12 @@ def test_every_translated_string_has_a_turkish_entry(capsys) -> None:
     slack is now named instead of measured.
     """
     literals = translated_literals()
-    covered = literals & set(TURKISH)
-    missing = sorted(literals - covered - SAME_IN_BOTH)
-    print(f"\nTurkish covers {len(covered)}/{len(literals)} translated strings")
-    assert missing == [], f"strings the Turkish window shows in English: {missing}"
-    assert literals >= SAME_IN_BOTH, "a string named as the same in both is no longer used"
+    for code, catalogue in CATALOGUES.items():
+        covered = literals & set(catalogue)
+        missing = sorted(literals - covered - SAME_IN_BOTH.get(code, frozenset()))
+        print(f"\n{code} covers {len(covered)}/{len(literals)} translated strings")
+        assert missing == [], f"strings the {code} window shows in English: {missing}"
+    assert literals >= SAME_IN_BOTH["tr"], "a string named as the same in both is no longer used"
 
 
 #: A user-facing string handed straight to a widget, with no ``t()`` around it.
@@ -340,24 +347,31 @@ def test_no_tooltip_or_placeholder_is_left_out_of_the_catalogue() -> None:
 
 def test_every_catalogue_translates_to_something_different() -> None:
     """A key mapped to itself is a translation somebody forgot to finish."""
-    for code, catalogue in CATALOGUES.items():
-        same = sorted(key for key, value in catalogue.items() if key == value)
-        # Acronyms, and the same in both languages. The list stays short on purpose:
-        # everything else that comes out identical is a translation somebody started and
-        # did not finish, which is the whole thing this catches.
-        # "3D" was "3B" on the toolbar alone while every menu, dialog and the README said
-        # "3D" -- one view, two names. "1 net" is "1 net" in Turkish too. "ERC / DRC / LVS" was
-        # here until the panel was called Problems. File ▸ Export ▸ "3D Model (STEP)" is
-        # the same words in Turkish under a submenu that already says "Dışa Aktar". "1
-        # jumper" is "1 jumper" too, now that the planners count instead of saying "(s)",
-        # and "1 pin" is "1 pin", as the wire's Properties counts the pins it lies over.
-        # "Via" stays "via", as the build guide says it: one word per concept.
-        assert same == [
+    #: Acronyms, and the same in both languages. The list stays short on purpose:
+    #: everything else that comes out identical is a translation somebody started and
+    #: did not finish, which is the whole thing this catches.
+    #:
+    #: Turkish: "3D" was "3B" on the toolbar alone while every menu, dialog and the README
+    #: said "3D" -- one view, two names. "1 net" is "1 net" in Turkish too. "ERC / DRC /
+    #: LVS" was here until the panel was called Problems. File ▸ Export ▸ "3D Model
+    #: (STEP)" is the same words in Turkish under a submenu that already says "Dışa
+    #: Aktar". "1 jumper" is "1 jumper" too, now that the planners count instead of saying
+    #: "(s)", and "1 pin" is "1 pin", as the wire's Properties counts the pins it lies
+    #: over. "Via" stays "via", as the build guide says it: one word per concept.
+    #:
+    #: Chinese borrows technical vocabulary more freely still -- a menu that says "LED" or
+    #: "3D" is saying the right thing -- and its list holds only those two, because every
+    #: other entry equal to its English is a translation not yet made.
+    same_on_purpose = {
+        "tr": [
             "3D", "3D &Model (STEP)…", "LED", "Via", "{count} jumper", "{count} net",
             "{count} pin", "{count} via",
-        ], (
-            f"{code} has untranslated entries: {same}"
-        )
+        ],
+        "zh": ["3D", "LED"],
+    }
+    for code, catalogue in CATALOGUES.items():
+        same = sorted(key for key, value in catalogue.items() if key == value)
+        assert same == same_on_purpose[code], f"{code} has untranslated entries: {same}"
 
 
 def test_accelerators_survive_translation() -> None:
@@ -497,6 +511,12 @@ def test_turkish_translates() -> None:
     assert t("Mounting holes") == "Montaj delikleri"
 
 
+def test_chinese_translates() -> None:
+    set_language("zh")
+    assert t("&File") == "文件(&F)"
+    assert t("Mounting holes") == "安装孔"
+
+
 def test_an_untranslated_string_falls_through_to_english() -> None:
     set_language("tr")
     assert t("a string nobody has translated") == "a string nobody has translated"
@@ -511,11 +531,13 @@ def test_an_unknown_language_falls_back_rather_than_failing() -> None:
 def test_a_regional_code_selects_its_base_language() -> None:
     assert set_language("tr_TR") == "tr"
     assert set_language("tr-TR.UTF-8") == "tr"
+    assert set_language("zh_CN") == "zh"
+    assert set_language("zh-CN.UTF-8") == "zh"
 
 
 def test_the_environment_variable_is_consulted(monkeypatch) -> None:
-    monkeypatch.setenv("PERFBOARD_STUDIO_LANG", "tr")
-    assert set_language(None) == "tr"
+    monkeypatch.setenv("PERFBOARD_STUDIO_LANG", "zh")
+    assert set_language(None) == "zh"
 
 
 def test_an_explicit_choice_beats_the_environment(monkeypatch) -> None:

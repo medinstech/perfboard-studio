@@ -211,6 +211,13 @@ closed without a bump.
   footprint under its own pin names. `get_component`, `list_parts` and `list_catalog` show
   them. `add_part`'s description names every symbol and pin role the model has, written
   from the model's own types: it had listed 6 of the 18 symbols.
+- **The interface speaks Chinese.** `--lang zh`, or a `zh_CN` locale, opens the window and
+  every tooltip, menu, dialog and message in Simplified Chinese — a full catalogue beside
+  the Turkish one, translated from the English rather than through it, with the same
+  accelerators and the same placeholders. The build guide follows: its steps, checks,
+  orientation notes and cut list are written in Chinese too, with the page and the JSON
+  export tagged `zh`, and the MCP `generate_guide` tool takes `"language": "zh"`. The
+  language menu offers 中文, and the settings search finds a setting by its Chinese words.
 
 - **The catalogue knows what its pins do, and three more parts.** 89 of its parts now carry
   pin roles (none did in 0.25): the NE555, ATmega328P, Arduino Nano, the relay module, the

@@ -39,6 +39,7 @@ from perfboard_studio.guide import (
 )
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
 from perfboard_studio.phrasebook import (
+    CHINESE,
     ENGLISH,
     NAME_TEMPLATES,
     TURKISH,
@@ -138,9 +139,19 @@ def test_everything_the_guide_says_has_its_turkish() -> None:
     assert missing == [], f"the guide says these and has no Turkish for them: {missing}"
 
 
+def test_everything_the_guide_says_has_its_chinese() -> None:
+    missing = sorted(said() - set(CHINESE))
+    assert missing == [], f"the guide says these and has no Chinese for them: {missing}"
+
+
 def test_the_turkish_names_nothing_the_guide_no_longer_says() -> None:
     stale = sorted(set(TURKISH) - said())
     assert stale == [], f"Turkish for templates the guide no longer says: {stale}"
+
+
+def test_the_chinese_names_nothing_the_guide_no_longer_says() -> None:
+    stale = sorted(set(CHINESE) - said())
+    assert stale == [], f"Chinese for templates the guide no longer says: {stale}"
 
 
 def _fields(template: str) -> set[tuple[str, str]]:
@@ -154,20 +165,22 @@ def test_every_translation_fills_the_same_fields() -> None:
     """A field the Turkish drops is a hole address the reader never sees; one it invents
     is a KeyError at the bench. Same names AND the same format -- a milliohm printed to
     one place in English and to twelve in Turkish is a different measurement."""
-    wrong = {
-        key: (sorted(_fields(key)), sorted(_fields(value)))
-        for key, value in TURKISH.items()
-        if _fields(key) != _fields(value)
-    }
-    assert wrong == {}
+    for code, catalogue in (("tr", TURKISH), ("zh", CHINESE)):
+        wrong = {
+            key: (sorted(_fields(key)), sorted(_fields(value)))
+            for key, value in catalogue.items()
+            if _fields(key) != _fields(value)
+        }
+        assert wrong == {}, f"{code}: {wrong}"
 
 
 def test_no_template_carries_markup() -> None:
     """The exporter puts a template's static words straight into HTML text and escapes
     only what it fills them with. So neither language may carry a character HTML reads as
     markup -- the hole spans and the A1 marker go in as fields, not as template text."""
-    offending = [text for pair in TURKISH.items() for text in pair if set(text) & set("<>&")]
-    assert offending == []
+    for code, catalogue in (("tr", TURKISH), ("zh", CHINESE)):
+        offending = [text for pair in catalogue.items() for text in pair if set(text) & set("<>&")]
+        assert offending == [], f"{code}: {offending}"
 
 
 #: The second person singular, as a word of its own: the pronoun in every case and its
@@ -196,6 +209,7 @@ def test_english_is_the_key_itself() -> None:
 @pytest.mark.parametrize(
     ("code", "language"),
     [("tr", "tr"), ("tr_TR", "tr"), ("tr-TR", "tr"), ("TR", "tr"), ("en", "en"),
+     ("zh", "zh"), ("zh_CN", "zh"), ("zh-CN", "zh"), ("ZH", "zh"),
      ("en_US", "en"), ("de_DE", "en"), ("", "en"), (None, "en")],
 )
 def test_a_window_language_picks_a_guide_language(code: str | None, language: str) -> None:
@@ -368,3 +382,23 @@ def test_the_exports_say_which_language_they_are_in() -> None:
     # English writes no language at all -- every English guide is still what it was.
     assert '"language"' not in guide_to_json(english)
     assert cut_list_to_csv(turkish).splitlines()[0].startswith("tür,net,nereden")
+
+
+def test_a_chinese_guide_is_the_same_build_in_chinese() -> None:
+    """The language changes the words and nothing else: same steps, same checks, same
+    cuts, same parts. And the exports name the language, so a reader knows which guide
+    they are holding."""
+    doc = _load(ROOT / "examples" / "ne555-astable.perf")
+    english = build_guide(doc, footprint_lookup())
+    chinese = build_guide(doc, footprint_lookup(), GuideOptions(language="zh"))
+    assert chinese.language == "zh"
+    assert [step_focus(s) for s in all_steps(english)] == [step_focus(s) for s in all_steps(chinese)]
+    assert [len(p.checkpoints) for p in english.phases] == [len(p.checkpoints) for p in chinese.phases]
+    assert english.cut_list == chinese.cut_list
+    assert sorted((line.ref_designators, line.quantity) for line in english.bom) == sorted(
+        (line.ref_designators, line.quantity) for line in chinese.bom
+    )
+    page = guide_to_html(chinese)
+    assert '<html lang="zh">' in page
+    assert '"language": "zh"' in guide_to_json(chinese)
+    assert re.search(r"[\u4e00-\u9fff]", page)

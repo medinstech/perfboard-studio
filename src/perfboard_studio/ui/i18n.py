@@ -1,5 +1,9 @@
 """Translating the interface (PLAN.md milestone M7).
 
+The Turkish catalogue lives here; the Chinese one lives in ``ui/i18n_zh.py``, because a
+second full catalogue would double this file and neither table needs the other's keys to
+be read. Both are the same shape, and the rules below hold for both.
+
 WHY NOT Qt LINGUIST. Qt's own mechanism -- ``tr()``, ``.ts`` files, ``lrelease`` -- is
 the obvious answer for a Qt application and is the wrong one here. It needs a build step
 producing binary ``.qm`` files, which this project has no build step to hang off; the
@@ -31,8 +35,10 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
+from .i18n_zh import CHINESE
+
 #: Languages with a catalogue. English is the source language and needs none.
-AVAILABLE = ("en", "tr")
+AVAILABLE = ("en", "tr", "zh")
 
 TURKISH: Mapping[str, str] = {
     # -- menus ---------------------------------------------------------------
@@ -7274,7 +7280,7 @@ TURKISH: Mapping[str, str] = {
     ),
 }
 
-CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}
+CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH, "zh": CHINESE}
 
 _language = "en"
 
@@ -7339,4 +7345,4 @@ def t(text: str) -> str:
     return catalogue.get(text, text)
 
 
-__all__ = ["AVAILABLE", "CATALOGUES", "TURKISH", "language", "set_language", "t"]
+__all__ = ["AVAILABLE", "CATALOGUES", "CHINESE", "TURKISH", "language", "set_language", "t"]

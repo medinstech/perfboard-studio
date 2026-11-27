@@ -325,8 +325,9 @@ installer is code-signed by Medinstech**, and an update installs itself only fro
 one. The macOS and Linux bundles are not signed yet, so they warn on first run and the
 release notes say how to get past it. See [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md).
 
-The interface speaks **English and Turkish** (`--lang tr`, or follow the system locale),
-and so does the build guide it writes — the steps, the checks, the cut list.
+The interface speaks **English, Turkish and Simplified Chinese** (`--lang tr`, `--lang zh`, or
+follow the system locale), and so does the build guide it writes — the steps, the checks,
+the cut list.
 
 ### From PyPI
 
@@ -511,7 +512,7 @@ the board, modules on header strips drawn as what is on them, labels written on 
 KiCad netlists read part by part, parts described by their own measurements when the
 library does not have them, parts on the panel wired to the board, solderless breadboards —
 the circuit tried on one and then taken to perfboard, or soldered hole for hole on a
-solderable one —, crash recovery, the MCP server, TR/EN localisation, the
+solderable one —, crash recovery, the MCP server, English/Turkish/Chinese localisation, the
 three-platform packaging that a `v*` tag runs, and the update check that tells you a release exists and fetches it (**Help ▸ Check
 for Updates…**; it verifies the download against the release's `SHA256SUMS`, and on
 Windows **Install and Restart** puts it in place behind the system's own prompt — nothing
