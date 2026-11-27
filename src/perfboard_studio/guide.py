@@ -119,7 +119,7 @@ from .model import (
     pin_name_of,
 )
 from .occupancy import build_occupancy, stacking_layers
-from .phrasebook import ENGLISH, GuideLanguage, Phrasebook, phrasebook
+from .phrasebook import ENGLISH, GuideLanguage, Phrasebook, clause_separator, phrasebook
 from .stripboard import is_stripboard, strip_axis
 
 # The wire-colour convention lives under LVS now (``wirecolour``), which names a cable's wire
@@ -3589,7 +3589,7 @@ def describe(guide: Guide) -> str:
             say("{count} note", count=notes) if notes == 1
             else say("{count} notes", count=notes)
         )
-    return ", ".join(parts)
+    return clause_separator(guide.language).join(parts)
 
 
 #: What each conductor kind is called where a person reads it: ``model.CONDUCTOR_WORDS``,

@@ -110,6 +110,21 @@ def phrasebook(language: GuideLanguage) -> Phrasebook:
     return ENGLISH if language == "en" else Phrasebook(language)
 
 
+#: What goes between the clauses of a line made of several ("33 steps, 17 checks") and
+#: between two sentences said one after the other, where a language does not use the
+#: English comma and space: Chinese has its own comma, and its full stop needs no space.
+_CLAUSE_SEPARATORS: dict[str, str] = {"zh": "，"}
+_SENTENCE_SEPARATORS: dict[str, str] = {"zh": ""}
+
+
+def clause_separator(language: GuideLanguage) -> str:
+    return _CLAUSE_SEPARATORS.get(language, ", ")
+
+
+def sentence_separator(language: GuideLanguage) -> str:
+    return _SENTENCE_SEPARATORS.get(language, " ")
+
+
 # ---------------------------------------------------------------------------
 # Footprint names
 # ---------------------------------------------------------------------------
@@ -1357,7 +1372,9 @@ __all__ = [
     "TURKISH",
     "GuideLanguage",
     "Phrasebook",
+    "clause_separator",
     "guide_language",
     "matching_template",
     "phrasebook",
+    "sentence_separator",
 ]

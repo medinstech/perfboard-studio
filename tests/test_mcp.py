@@ -527,6 +527,17 @@ def test_an_agent_can_ask_for_the_guide_in_turkish(loaded: BoardSession) -> None
     assert all("net" in w["message"] for w in result["warnings"] if w["code"] == "lvs-open")
 
 
+def test_an_agent_can_ask_for_the_guide_in_chinese(loaded: BoardSession) -> None:
+    """The same, in Chinese: the codes stay codes, the words are Chinese, and the summary's
+    counts are joined with Chinese commas rather than ", "."""
+    result = loaded.generate_guide(language="zh")
+    assert result["ok"]
+    assert "个步骤" in result["summary"]
+    assert "，" in result["summary"] and ", " not in result["summary"], result["summary"]
+    assert result["phases"][0]["title"] == "最矮的元件"
+    assert any(w["code"] == "lvs-open" for w in result["warnings"])
+
+
 def test_a_guide_language_nobody_wrote_is_refused_not_guessed(loaded: BoardSession) -> None:
     """An agent that asked for German and got English without a word would pass it on as
     German."""

@@ -39,7 +39,7 @@ from functools import cache
 from perfboard_studio.geometry import format_hole
 from perfboard_studio.guide import conductor_word
 from perfboard_studio.model import CONDUCTOR_WORDS, PerfDocument
-from perfboard_studio.phrasebook import guide_language
+from perfboard_studio.phrasebook import clause_separator, guide_language, sentence_separator
 
 from .i18n import language, t
 from .partnames import footprint_label
@@ -991,11 +991,15 @@ def say(text: str) -> str:
         sentences = [part + "." for part in parts[:-1]] + [parts[-1]]
         each = [_one(sentence) for sentence in sentences]
         if all(each):
-            return " ".join(_capitalised(s) for s in each if s is not None)
+            return sentence_separator(guide_language(language())).join(
+                _capitalised(s) for s in each if s is not None
+            )
     if ", " not in text:
         return text
     clauses = text.split(", ")
     said = [_one(clause) for clause in clauses]
     if not any(said):
         return text
-    return ", ".join(s if s is not None else c for s, c in zip(said, clauses, strict=True))
+    return clause_separator(guide_language(language())).join(
+        s if s is not None else c for s, c in zip(said, clauses, strict=True)
+    )

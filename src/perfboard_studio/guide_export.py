@@ -433,6 +433,12 @@ _SCRIPT = """
 """
 
 
+#: The page's ``lang`` where the guide's language code alone does not pick the script: "zh"
+#: lets a browser draw the page in Traditional glyphs on a system set up for them, and the
+#: guide is written in Simplified Chinese.
+_HTML_LANG: Mapping[str, str] = {"zh": "zh-Hans"}
+
+
 def guide_to_html(guide: Guide, step_images: Mapping[str, bytes] | None = None) -> str:
     """One self-contained HTML file: no network, no assets, no build step.
 
@@ -451,7 +457,7 @@ def guide_to_html(guide: Guide, step_images: Mapping[str, bytes] | None = None) 
     say = phrasebook(guide.language)
     parts: list[str] = [
         "<!doctype html>",
-        f'<html lang="{guide.language}"><head><meta charset="utf-8">',
+        f'<html lang="{_HTML_LANG.get(guide.language, guide.language)}"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         "<title>"
         + say("{name} — build guide", name=escape(guide.document_name))

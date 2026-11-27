@@ -399,6 +399,6 @@ def test_a_chinese_guide_is_the_same_build_in_chinese() -> None:
         (line.ref_designators, line.quantity) for line in chinese.bom
     )
     page = guide_to_html(chinese)
-    assert '<html lang="zh">' in page
+    assert '<html lang="zh-Hans">' in page
     assert '"language": "zh"' in guide_to_json(chinese)
     assert re.search(r"[\u4e00-\u9fff]", page)

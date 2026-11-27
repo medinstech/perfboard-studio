@@ -1002,8 +1002,8 @@ def generate_guide(directory: str | None = None, language: str = "en") -> dict[s
     guide.html (self-contained, offline), guide.json, cut_list.csv and bom.csv.
 
     language is the language the guide is written in, for whoever builds from it: "en"
-    (the default) or "tr". Hole addresses, net names and part references are the same in
-    both.
+    (the default), "tr" or "zh". Hole addresses, net names and part references are the
+    same in all of them.
     """
     return session.generate_guide(directory, language)
 
