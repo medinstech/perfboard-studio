@@ -20,6 +20,8 @@ closed without a bump.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-27
+
 ### Added
 
 - **Settings.** Every preference of the window in one place, with a search that finds a
@@ -35,14 +37,13 @@ closed without a bump.
   Show Pin Names and Show Labels on the Board are now remembered between sessions like the
   other Show items.
 - **A part from the sheet is the part in hand on the board.** A part put on the sheet (Enter,
-  a double-click or a drop) and a part still off the board picked in the Part List with the board in front come onto
-  the board in hand, their reference and value over the ghost; a click places THAT part under
-  its own reference, one undo step, and the next part still off the board comes into hand, by
-  reference in natural order (C1, C2, C10, R1), with the banner counting what is left. R turns
-  it as it turns a Library part, Esc puts it down, and a hole the board refuses leaves it in
-  hand. A dropped part used to arrive as its footprint, and the click put down a second part
-  with a new reference beside the one on the sheet.
-
+  a double-click or a drop) and a part still off the board picked in the Part List with the
+  board in front come onto the board in hand, their reference and value over the ghost; a
+  click places THAT part under its own reference, one undo step, and the next part still off
+  the board comes into hand, by reference in natural order (C1, C2, C10, R1), with the banner
+  counting what is left. R turns it as it turns a Library part, Esc puts it down, and a hole
+  the board refuses leaves it in hand. A dropped part used to arrive as its footprint, and the
+  click put down a second part with a new reference beside the one on the sheet.
 - **A pinout card for every part the catalogue knows the pins of.** Right-click a part in
   the Library or the Parts panel and choose Show Pinout, or follow the link under its package
   in Properties: every pin is drawn where its pad is, seen from above, with its name, its port
@@ -71,11 +72,9 @@ closed without a bump.
 - **A printed legend can go on past Z in doubled letters.** `AxisLegend.letters = "doubled"`
   prints A..Z, then AA, BB, .. ZZ, as some boards do, where the default carries on AA, AB, ..
   as the addresses do. Left out of a board file and a saved board family at its default, so
-  every board and family keeps its bytes;
-  the guide and the MCP server's board info say it (#16).
-  as the addresses do. Left out of the file at its default, so every board keeps its bytes;
-  the Board Designer now offers an "after Z" choice (AA, AB, AC… / AA, BB, CC…) and a
-  Letters across / Numbers across switch, and the guide and MCP server's board info say it (#16).
+  every board and family keeps its bytes; the Board Designer now offers an "after Z" choice
+  (AA, AB, AC… / AA, BB, CC…) and a Letters across / Numbers across switch, and the guide
+  and the MCP server's board info say it (#16).
 - **A custom board takes the border you ask for.** `boardfamily.size_for_grid` and
   `size_for_mm` take a border (across, down), and `FIT_TO_GRID` cuts the board flush, half a
   pitch past its outermost holes. Typed in millimetres with a border, the board is cut to the
@@ -84,15 +83,15 @@ closed without a bump.
 - **An LED's colour is read from its value.** "green", "LED 5mm yellow", "warm white" or
   "kırmızı": `ledcolour.led_colour` names the colour a part's value gives, by whole words in
   English and Turkish, so "infrared" is not red, and a value naming two colours names none.
-  It is a name, not a shade, for the views and exports to draw the dome in (#16).
+  It is a name, not a shade: the 2D view, the 3D view, the part icons and the STEP export
+  draw a round LED dome in that colour, and keep an explicit body colour (an RGB LED's milky
+  dome) as it is (#16).
 - **A chip on the sheet is drawn by what its pins do.** A part whose pins declare their roles
   -- the NE555, a regulator, a module from the catalogue -- is drawn as its functional
   symbol: inputs on the left, outputs on the right, the supply on top and ground underneath,
   unused pins left off. The roles were stored and never reached the sheet, so every such part
   was still a box of numbered pins. Connectors keep the room their reference and value are
   printed in, so a value no longer sits on the rail below it.
-  The 2D view, 3D view, part icons and STEP export now draw round LED domes in that colour,
-  keeping explicit body colours (such as an RGB LED's milky dome) intact (#16).
 - **What a part off the board is, drawn beside it.** A battery on its clip, a pot or a
   button on the panel, an e-stop, a motor, a display or a relay module down a cable: the
   board holds only the pads their wires land in, and the 2D view now draws each one as the
@@ -108,7 +107,6 @@ closed without a bump.
   Clicking a thing selects its part. View > Show on the Board > Parts Off the Board turns
   them off. The screen only: prints, PDFs, the headless run and the guide still show the
   board alone, and no rule, route or guide step reads where a thing is drawn.
-
 - **A part can say what each of its pins does.** Each pin can carry a role: a supply in or
   out, ground, an input, an output, both ways, passive, or not connected. Roles are kept in
   the file as `pinRoles` and left out when a part has none, so every board saved before
@@ -211,6 +209,31 @@ closed without a bump.
   them. `add_part`'s description names every symbol and pin role the model has, written
   from the model's own types: it had listed 6 of the 18 symbols.
 
+- **The catalogue knows what its pins do, and three more parts.** 89 of its parts now carry
+  pin roles (none did in 0.25): the NE555, ATmega328P, Arduino Nano, the relay module, the
+  74HC logic, the op-amps, comparators and bus parts, the I2C and SPI boards, the stepper and
+  motor drivers and the dev boards. Each role set was read from the maker's own document, and
+  a part with no document read keeps its numbered box and waits in a drafts table rather than
+  being guessed. A catalogue part placed on the board or added to the sheet brings its roles on
+  its own package only, as it brings its pin names, and renaming a pin in Properties leaves
+  them alone. Every three-pin linear regulator (78xx, 7905, LM317T and LM337T, 78L05, MCP1700,
+  LD1117V33, AMS1117-3.3) declares the regulator symbol. New parts: the Adafruit PCF8574 GPIO
+  expander (STEMMA QT), the SparkFun Rotary Encoder Breakout - Illuminated (RGB), whose
+  pin tables were read off their makers' Eagle boards, and the 2N5088.
+- **Modules with two headers of different lengths.** `mod2-` is a module with a longer header
+  on one edge and a shorter one on the opposite edge, the shorter centred along the longer,
+  numbered row by row, with a pin only where the module has one. The two modules above sit on
+  it, and it is drawn and measured like every other module footprint.
+- **The Build Guide is an assembly bench.** With the guide in front, the editing panels step
+  aside and come back as they were when you leave it. It now walks the build from the bare
+  board to the power-up: before the first part, the jobs of the board itself (take a stock
+  board or cut one, drill only the holes it was not sold with, mark or find A1) are tasks and
+  checks, and at the end each IC is fitted on its own named pin 1. The measurements before
+  power are one item with a row to tick for each, and every step says how in numbered lines
+  over a picture that names its pins, with the whole board beside it. The same tasks are in
+  the guide's exports and in the Turkish guide. The window names a stock board by
+  the rule the guide uses.
+
 ### Changed
 
 - **Modules and chips in 2D look like the parts.** A recognised module's chips are moulded
@@ -236,7 +259,10 @@ closed without a bump.
   group with the best match first. Each row has its icon on a tile, its menu path quieter
   beside the name and its key drawn as keycaps, and a footer says which keys move, run and
   close. The arrows step over the headers. Holding Ctrl+K no longer flips it open and shut.
-
+  It closes like a palette: a click outside it (which still lands), Escape or Ctrl+K again, the
+  window losing the foreground, and it stays over a dock tab bar made after it opened. Inside a
+  rank a command comes before an example or a recent file, so "r" is Rotate and Redo before
+  relay-and-supply.
 - **Toolbar icons and floating canvas bars are redrawn and aligned.** Seventeen ambiguous
   toolbar icons (`rotate`, `flip`, `mirror`, `supply`, `clear`, `exploded`, `sch-place`,
   `float`, `import`, `export`, `autoplace`, `new-net`, `label`, `shape`, `show`,
@@ -295,6 +321,28 @@ closed without a bump.
   pixels into place as its shadow deepens, with the keyboard in the field from the first frame;
   the Problems drawer slides open from its bar and back down to it, the list in view the whole
   way. Both are still under Settings ▸ Reduce Motion, and closing the palette is never animated.
+- **Feedback arrives as a toast, and its Undo takes back only what it names.** Saved, wired,
+  arranged, a setting changed: up to three cards stack at the bottom right of the window, with
+  no dialog to dismiss, slide in and out, and stay up longer while the pointer rests on one.
+  The same words go to the status bar. The Undo on a toast used to take back whatever was last
+  by the time it was pressed: a part nudged after Auto-wire was undone by the button
+  under "Wired 12 links", and after a Ctrl+Z it took back a second command. It now takes back
+  the command the toast reports, says what it undid, and when a later change or a Ctrl+Z has
+  moved past it says so and changes nothing.
+- **The step bar moves with the work.** The line between two steps fills as the first is
+  done, a pill slides to the step you are on instead of jumping, and a step completed brightens
+  for a moment. Under Reduce Motion each is simply in its final state.
+- **The 2D view flies to where it is sent.** Fit the Sheet, going to a problem or a hole,
+  and selecting a part in the Parts list carry the board's and the sheet's view to the
+  target in a quarter of a second, zooming at an even rate, where they used to cut; a soft ring
+  then pulses once on the target. Neither runs with Reduce Motion on, and the ring is never in
+  a print, a PDF or an image export.
+- **The examples are wired again by today's router.** `arduino-io-shield`, `atmega328-relay`,
+  `nano-relay` and `relay-and-supply` had not been rebuilt over the router's last changes;
+  every example carries its parts' pin roles and regulator symbol, `ne555-astable`'s RESET is
+  tied to VCC instead of left unconnected, and `build_examples --check` compares every file
+  with what the script builds, byte for byte, and runs in CI, so a placer or router change
+  that moves an example says so the day it does.
 - **The panels are cards.** Every panel stands on the window's gutter as a card with round
   corners instead of a region ruled off by hairlines, and the gutter between two panels is
   what is dragged to resize them. A group's tabs (Library, Parts, Nets; Board, Schematic,
@@ -404,9 +452,8 @@ closed without a bump.
   picks the holes: `footprints.axial_resistor_id(span, body)` spells any of 0204, 0207 and
   0309 on any span it lies flat in, as the library's own resistor where that is exactly the
   body. A size longer than its span is not believed, and reads as the library's resistor
-  for the span, as it did before (#16).
-  body, and Properties now offers Body (1/8 W, 1/4 W, 1/2 W) and Span controls for axial
-  resistors (#16).
+  for the span, as it did before. Properties now offers Body (1/8 W, 1/4 W, 1/2 W) and Span
+  controls for axial resistors (#16).
 - **The sheet drawn for you puts a dot on every join again.** It lays each connection
   pin to pin and lets one net's wires share a line, and a dot went only where three wire
   ENDS met, so a wire leaving a shared line was a join with no dot, drawn like a crossing:
@@ -442,6 +489,22 @@ closed without a bump.
   that a solder bridge and named the net's first hole, which could be nowhere near it. Now
   it names the hole or holes whose plating joins the nets, and says to take one of the two
   out of that hole and measure again before applying power.
+- **Column letters and row numbers keep clear of the board's edge.** The ruler's labels, and
+  the legend's letters and numbers echoed outside the board, were placed a fixed number of
+  millimetres off the outline, so the gap changed with the zoom; they now stand six screen
+  pixels clear at every zoom.
+- **No two references are printed in one place on the board.** They are settled one at a
+  time, the ones over a body first and then by reference: a reference whose place is
+  another's moves to another side of its body, clear of the pin names, the notes and the
+  legend, and nothing else moves.
+- **A fit shows the whole sheet, and zooming out from it never zooms in.** A sheet too small
+  for the zoom-out limit was fitted with its edge cut off; it is now fitted whole. Zooming out
+  from a fit that was already below the limit did nothing but zoom in; it now does nothing, and
+  zooming in from there still works.
+- **A group of one in the Library says "1 part".** The Add a Part dialog draws its tree the
+  way the Library does.
+- **A Board Designer nobody closed no longer crashes the run at exit.** Its axes buttons
+  were lambdas holding it, so it outlived the application.
 
 ## [0.25.0] - 2026-11-18
 
@@ -6814,7 +6877,8 @@ was introduced during 0.4.0 development, so they are accurate but were not writt
 release time. Their compare links point at commits rather than tags for the same reason;
 from v0.4.0 onwards every release is tagged.
 
-[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/medinstech/perfboard-studio/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/medinstech/perfboard-studio/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/medinstech/perfboard-studio/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/medinstech/perfboard-studio/compare/v0.22.0...v0.23.0

@@ -147,7 +147,7 @@ conductor at a time.
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 | **Several boards** | `select_board` · `add_board` · `rename_board` · `remove_board` · `move_to_board` · `add_cable` · `remove_cable` · `get_system_info` |
 
-70 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+70 tools, against the original plan's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
