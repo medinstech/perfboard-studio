@@ -13439,6 +13439,83 @@ def test_reimporting_a_netlist_offers_and_applies_part_refreshes_in_one_undo_ste
         _close(window)
 
 
+def test_inspector_toggles_to92_leads_and_axial_standing_in_one_undo_step() -> None:
+    """Properties offers Leads (Inline / Staggered) on TO-92 parts and Mount (Flat / Standing)
+    on axial resistors and diodes, for placed and unplaced parts, disabled when locked."""
+    from perfboard_studio.commands import (
+        AddPartPayload,
+        PlaceComponentPayload,
+        UpdateComponentPayload,
+        create_empty_document,
+    )
+    from perfboard_studio.model import DocumentMeta, HoleCoord
+
+    doc = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    window = _window_on(doc)
+    try:
+        window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(
+                ref="Q1", footprint_id="to92", anchor=HoleCoord(2, 2), value="BC547"
+            ),
+        )
+        window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(
+                ref="D1", footprint_id="d-do35", anchor=HoleCoord(6, 2), value="1N4148"
+            ),
+        )
+        window.bus.dispatch(
+            "part.add",
+            AddPartPayload(ref="Q2", footprint_id="to92", value="2N2222"),
+        )
+        q1 = next(c for c in window.bus.document.components if c.ref == "Q1")
+        d1 = next(c for c in window.bus.document.components if c.ref == "D1")
+        q2 = next(p for p in window.bus.document.parts if p.ref == "Q2")
+
+        window._fill_properties()
+        part_ed = window.inspector.part_editor
+        design_ed = window.inspector.design_part_editor
+
+        part_ed.load(window.bus.document, q1)
+        assert part_ed.to92_leads.widget.isVisibleTo(part_ed)
+        assert not part_ed.axial_mount.widget.isVisibleTo(part_ed)
+        part_ed.to92_leads.buttons[True].click()
+        assert next(c for c in window.bus.document.components if c.id == q1.id).footprint_id == "to92-s"
+        window.bus.undo()
+        assert next(c for c in window.bus.document.components if c.id == q1.id).footprint_id == "to92"
+
+        # Locked placed TO-92 disables the toggle.
+        window.bus.dispatch("component.update", UpdateComponentPayload(id=q1.id, locked=True))
+        part_ed.load(
+            window.bus.document, next(c for c in window.bus.document.components if c.id == q1.id)
+        )
+        assert not part_ed.to92_leads.buttons[True].isEnabled()
+
+        # Placed axial diode toggles Flat <-> Standing.
+        part_ed.load(window.bus.document, d1)
+        assert part_ed.axial_mount.widget.isVisibleTo(part_ed)
+        assert not part_ed.to92_leads.widget.isVisibleTo(part_ed)
+        part_ed.axial_mount.buttons[True].click()
+        assert (
+            next(c for c in window.bus.document.components if c.id == d1.id).footprint_id
+            == "axial-1h-4x2-pol-v"
+        )
+        part_ed.load(
+            window.bus.document, next(c for c in window.bus.document.components if c.id == d1.id)
+        )
+        part_ed.axial_mount.buttons[False].click()
+        assert next(c for c in window.bus.document.components if c.id == d1.id).footprint_id == "d-do35"
+
+        # Unplaced schematic TO-92 toggles Inline <-> Staggered too.
+        design_ed.load(q2)
+        assert design_ed.to92_leads.widget.isVisibleTo(design_ed)
+        design_ed.to92_leads.buttons[True].click()
+        assert next(p for p in window.bus.document.parts if p.id == q2.id).footprint_id == "to92-s"
+    finally:
+        _close(window)
+
+
 def test_right_clicking_a_conductor_offers_to_delete_it() -> None:
     """The menu used to offer the bare-board list over a trace, with no way to delete the
     trace from it."""

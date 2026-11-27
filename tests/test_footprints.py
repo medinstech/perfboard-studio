@@ -875,3 +875,24 @@ def test_a_footprint_that_is_no_known_resistor_body_has_none(footprint_id: str) 
     from perfboard_studio.footprints import axial_resistor_body
 
     assert axial_resistor_body(footprint_id) is None
+
+
+def test_toggle_axial_standing_round_trips_resistors_and_diodes() -> None:
+    from perfboard_studio.footprints import axial_standing_state, toggle_axial_standing
+
+    assert axial_standing_state("r-axial-4") is False
+    standing_r = toggle_axial_standing("r-axial-4", True)
+    assert standing_r == "axial-1h-6.5x2.5-v"
+    assert axial_standing_state(standing_r) is True
+    assert toggle_axial_standing(standing_r, False) == "r-axial-3"
+
+    standing_d = toggle_axial_standing("d-do35", True)
+    assert standing_d == "axial-1h-4x2-pol-v"
+    assert toggle_axial_standing(standing_d, False) == "d-do35"
+
+    standing_d41 = toggle_axial_standing("d-do41", True)
+    assert standing_d41 == "axial-1h-5.2x2.7-pol-v"
+    assert toggle_axial_standing(standing_d41, False) == "d-do41"
+
+    assert axial_standing_state("dip-8") is None
+    assert toggle_axial_standing("dip-8", True) is None

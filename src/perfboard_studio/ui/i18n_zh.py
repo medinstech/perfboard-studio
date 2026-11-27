@@ -3072,6 +3072,14 @@ CHINESE: Mapping[str, str] = {
     "Skip": "跳过",
     "Update Selected": "更新所选",
     "Update {count} Selected": "更新所选 {count} 项",
+    "Mount": "安装方式",
+    "Flat": "卧式",
+    "Standing": "立式",
+    "Lie the body flat across its holes, or stand it upright over one hole to save board space.": "将元件卧放跨越焊孔，或立在单个焊孔上方以节省板面空间。",
+    "Leads": "引脚排布",
+    "Inline": "一字排开",
+    "Staggered": "错位",
+    "TO-92 lead layout: all three legs in one row, or middle leg one row back.": "TO-92 引脚排布：三只引脚排成一行，或中间引脚后移一行。",
 }
 
 __all__ = ['CHINESE']

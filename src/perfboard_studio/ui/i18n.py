@@ -7303,6 +7303,18 @@ TURKISH: Mapping[str, str] = {
     "Skip": "Atla",
     "Update Selected": "Seçilenleri Güncelle",
     "Update {count} Selected": "Seçili {count} Parçayı Güncelle",
+    "Mount": "Montaj",
+    "Flat": "Yatık",
+    "Standing": "Dik",
+    "Lie the body flat across its holes, or stand it upright over one hole to save board space.": (
+        "Gövdeyi delikler boyunca yatık yerleştirin veya kartta yer kazanmak için tek delik üstünde dik oturtun."
+    ),
+    "Leads": "Bacaklar",
+    "Inline": "Sıralı",
+    "Staggered": "Çapraz",
+    "TO-92 lead layout: all three legs in one row, or middle leg one row back.": (
+        "TO-92 bacak düzeni: üç bacak tek sırada veya orta bacak bir satır geride."
+    ),
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH, "zh": CHINESE}

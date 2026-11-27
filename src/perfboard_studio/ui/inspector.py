@@ -87,6 +87,8 @@ from perfboard_studio.footprints import (
     axial_resistor_body,
     axial_resistor_id,
     axial_resistor_spans,
+    axial_standing_state,
+    toggle_axial_standing,
 )
 from perfboard_studio.geometry import format_hole, parse_hole
 from perfboard_studio.guide import CABLED_MODULE, plugs_in_on_a_cable
@@ -1238,6 +1240,101 @@ class _ResistorSizeControls:
             self._apply(holes, self._current_body)
 
 
+class _SegmentedPackageToggle:
+    """Two-button segmented switch in Properties for switching a package variant in one step
+    (e.g. TO-92 Inline/Staggered, or axial Flat/Standing). Hidden for every other part."""
+
+    def __init__(
+        self,
+        parent: QWidget,
+        form: QFormLayout,
+        label: str,
+        first_text: str,
+        second_text: str,
+        tooltip: str,
+        resolve: Callable[[str], bool | None],
+        target_for: Callable[[str, bool], str | None],
+        commit: Callable[[str], str | None],
+    ) -> None:
+        self._form = form
+        self._resolve = resolve
+        self._target_for = target_for
+        self._commit = commit
+        self._footprint_id = ""
+        self._loading = False
+
+        self.widget = QWidget(parent)
+        row = QHBoxLayout(self.widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        self.group = QButtonGroup(parent)
+        self.group.setExclusive(True)
+        self.buttons: dict[bool, QToolButton] = {}
+        for value, text, btn_id in ((False, first_text, 0), (True, second_text, 1)):
+            button = QToolButton(self.widget)
+            button.setText(text)
+            button.setToolTip(tooltip)
+            button.setCheckable(True)
+            button.setProperty("segment", True)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self.group.addButton(button, btn_id)
+            row.addWidget(button)
+            self.buttons[value] = button
+        self.group.idClicked.connect(self._on_clicked)
+        self.problem = _Problem()
+        self._row = _add_field(form, label, self.widget, self.problem)
+        self._set_visible(False)
+
+    def _set_visible(self, shown: bool) -> None:
+        self._form.setRowVisible(self._row, shown)
+        self.widget.setVisible(shown)
+
+    def load(self, footprint_id: str, *, enabled: bool = True, clear_problem: bool = False) -> bool:
+        if clear_problem:
+            self.problem.show_problem("")
+        state = self._resolve(footprint_id)
+        if state is None:
+            self._footprint_id = ""
+            self._set_visible(False)
+            return False
+        self._footprint_id = footprint_id
+        self._loading = True
+        try:
+            self.buttons[state].setChecked(True)
+            for btn in self.buttons.values():
+                btn.setEnabled(enabled)
+        finally:
+            self._loading = False
+        self._set_visible(True)
+        return True
+
+    def _on_clicked(self, btn_id: int) -> None:
+        if self._loading or not self._footprint_id:
+            return
+        wanted = btn_id == 1
+        target = self._target_for(self._footprint_id, wanted)
+        if not target or target == self._footprint_id:
+            return
+        problem = self._commit(target)
+        self.problem.show_problem(problem or "")
+        if problem:
+            self.load(self._footprint_id, enabled=self.buttons[False].isEnabled())
+
+
+def _to92_staggered_state(footprint_id: str) -> bool | None:
+    if footprint_id == "to92":
+        return False
+    if footprint_id == "to92-s":
+        return True
+    return None
+
+
+def _to92_target(footprint_id: str, staggered: bool) -> str | None:
+    if footprint_id not in ("to92", "to92-s"):
+        return None
+    return "to92-s" if staggered else "to92"
+
+
 class _PartEditor(QWidget):
     """One placed part: what it is called, what it is, where it sits, what its leads are
     called and why it is there. Replaces Part Properties and Rename Part."""
@@ -1328,6 +1425,28 @@ class _PartEditor(QWidget):
         form.addRow("", self.pinout_card)
         self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
         part_title_row.addWidget(self.resistor_size.toggle, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.axial_mount = _SegmentedPackageToggle(
+            self,
+            form,
+            t("Mount"),
+            t("Flat"),
+            t("Standing"),
+            t("Lie the body flat across its holes, or stand it upright over one hole to save board space."),
+            axial_standing_state,
+            toggle_axial_standing,
+            self._commit_resistor_footprint,
+        )
+        self.to92_leads = _SegmentedPackageToggle(
+            self,
+            form,
+            t("Leads"),
+            t("Inline"),
+            t("Staggered"),
+            t("TO-92 lead layout: all three legs in one row, or middle leg one row back."),
+            _to92_staggered_state,
+            _to92_target,
+            self._commit_resistor_footprint,
+        )
 
         self.pin1 = CommitLine(self._commit_pin1)
         self.pin1.setToolTip(t("The hole pin 1 is in. Type another to move the part there."))
@@ -1463,6 +1582,12 @@ class _PartEditor(QWidget):
             name = footprint_label(footprint.name) if footprint is not None else component.footprint_id
             self.package.setText(f"{name}  ({component.footprint_id})")
             self.resistor_size.load(
+                component.footprint_id, enabled=not component.locked, clear_problem=another
+            )
+            self.axial_mount.load(
+                component.footprint_id, enabled=not component.locked, clear_problem=another
+            )
+            self.to92_leads.load(
                 component.footprint_id, enabled=not component.locked, clear_problem=another
             )
             self.change_part.setEnabled(not component.locked)
@@ -1704,6 +1829,28 @@ class _DesignPartEditor(QWidget):
         form.addRow("", self.pinout_card)
         self.resistor_size = _ResistorSizeControls(self, form, self._commit_resistor_footprint)
         design_title_row.addWidget(self.resistor_size.toggle, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.axial_mount = _SegmentedPackageToggle(
+            self,
+            form,
+            t("Mount"),
+            t("Flat"),
+            t("Standing"),
+            t("Lie the body flat across its holes, or stand it upright over one hole to save board space."),
+            axial_standing_state,
+            toggle_axial_standing,
+            self._commit_resistor_footprint,
+        )
+        self.to92_leads = _SegmentedPackageToggle(
+            self,
+            form,
+            t("Leads"),
+            t("Inline"),
+            t("Staggered"),
+            t("TO-92 lead layout: all three legs in one row, or middle leg one row back."),
+            _to92_staggered_state,
+            _to92_target,
+            self._commit_resistor_footprint,
+        )
         layout.addLayout(form)
 
         self.pinout = PinoutEditor()
@@ -1749,6 +1896,8 @@ class _DesignPartEditor(QWidget):
             name = footprint_label(footprint.name) if footprint is not None else part.footprint_id
             self.package.setText(f"{name}  ({part.footprint_id})")
             self.resistor_size.load(part.footprint_id, enabled=True, clear_problem=another)
+            self.axial_mount.load(part.footprint_id, enabled=True, clear_problem=another)
+            self.to92_leads.load(part.footprint_id, enabled=True, clear_problem=another)
             self.pinout_card.setVisible(
                 self._inspector.hooks.pinout_card(part.footprint_id, part.value) is not None
             )

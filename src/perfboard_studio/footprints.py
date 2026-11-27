@@ -370,6 +370,64 @@ def axial_resistor_body(footprint_id: str) -> tuple[int, AxialResistorBody] | No
             continue
     return None
 
+
+def axial_standing_state(footprint_id: str) -> bool | None:
+    """Whether ``footprint_id`` is a standing axial part (True), a flat axial part (False),
+    or not an axial part (None)."""
+    fp = get_footprint(footprint_id)
+    if fp is None:
+        return None
+    if fp.body.archetype == "axial-upright":
+        return True
+    if fp.body.archetype == "axial-cylinder":
+        return False
+    return None
+
+
+def toggle_axial_standing(footprint_id: str, standing: bool) -> str | None:
+    """Return the standing (``-v``, 1-hole span) or flat counterpart of an axial resistor
+    or diode footprint, preserving body dimensions and polarity, or ``None`` if not axial."""
+    fp = get_footprint(footprint_id)
+    if fp is None or fp.body.archetype not in ("axial-cylinder", "axial-upright"):
+        return None
+    if standing:
+        if fp.body.archetype == "axial-upright":
+            return fp.id
+        length = fp.body.dims.get("length")
+        diameter = fp.body.dims.get("diameter")
+        if length is None or diameter is None:
+            return None
+        return axial_footprint(
+            span_holes=1,
+            body_length_mm=length,
+            body_diameter_mm=diameter,
+            polarized=fp.polarized,
+            upright=1,
+        ).id
+    if fp.body.archetype == "axial-cylinder":
+        return fp.id
+    length = fp.body.dims.get("length")
+    diameter = fp.body.dims.get("diameter")
+    if length is None or diameter is None:
+        return None
+    if fp.polarized:
+        if abs(length - 4.0) < 1e-6 and abs(diameter - 2.0) < 1e-6:
+            return "d-do35"
+        if abs(length - 5.2) < 1e-6 and abs(diameter - 2.7) < 1e-6:
+            return "d-do41"
+    else:
+        for body_code, (body_l, body_d) in AXIAL_RESISTOR_BODIES.items():
+            if abs(length - body_l) < 1e-6 and abs(diameter - body_d) < 1e-6:
+                return axial_resistor_id(axial_resistor_spans(body_code)[0], body_code)
+    min_span = max(2, math.ceil(length / STANDARD_PITCH_MM - 1e-9))
+    return axial_footprint(
+        span_holes=min_span,
+        body_length_mm=length,
+        body_diameter_mm=diameter,
+        polarized=fp.polarized,
+    ).id
+
+
 # STOOD ON END. Where a board has no room to lay a resistor down, it is stood up over one
 # of its holes and its far lead is bent back over the top and down into the next: one hole
 # of board instead of four, and a part three or four times as tall. The two are the same
