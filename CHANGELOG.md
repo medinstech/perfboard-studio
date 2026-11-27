@@ -218,9 +218,11 @@ closed without a bump.
   orientation notes and cut list are written in Chinese too, with the page tagged `zh-Hans`
   and the JSON export `zh`, and the MCP `generate_guide` tool takes `"language": "zh"`. A
   line of several clauses -- the guide's summary, an engine message said clause by clause --
-  is joined with the Chinese comma, and a pinout card measures a Chinese label at its
-  width and breaks a Chinese note between characters. The language menu offers 中文, and
-  the settings search finds a setting by its Chinese words. (thanks @652436962)
+  is joined with the Chinese comma, a list with the enumeration comma 、, and a word filled
+  into a sentence takes no space between it and the Chinese beside it; a pinout card
+  measures a Chinese label at its width and breaks a Chinese note between characters. The
+  language menu offers 中文, and the settings search finds a setting by its Chinese words.
+  (thanks @652436962)
 - **The catalogue knows what its pins do, and three more parts.** 89 of its parts now carry
   pin roles (none did in 0.25): the NE555, ATmega328P, Arduino Nano, the relay module, the
   74HC logic, the op-amps, comparators and bus parts, the I2C and SPI boards, the stepper and

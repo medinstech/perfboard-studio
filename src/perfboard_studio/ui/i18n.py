@@ -35,6 +35,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
+from ..phrasebook import fill
 from .i18n_zh import CHINESE
 
 #: Languages with a catalogue. English is the source language and needs none.
@@ -7332,6 +7333,18 @@ def counted(count: int, one: str, many: str, **fields: object) -> str:
     return (one if count == 1 else many).format(count=count, **fields)
 
 
+class _ChineseTemplate(str):
+    """A Chinese string with fields, whose ``format`` is ``phrasebook.fill``: the space
+    beside a field is dropped where the field's value is Chinese and so is the character
+    on the other side of the space. Every call site fills a translated string with
+    ``t(...).format(...)``, so the rule is kept here once rather than at each of them."""
+
+    __slots__ = ()
+
+    def format(self, /, *args: object, **kwargs: object) -> str:
+        return fill(self, *args, **kwargs)
+
+
 def t(text: str) -> str:
     """Translate one interface string, or return it unchanged.
 
@@ -7342,7 +7355,8 @@ def t(text: str) -> str:
     catalogue = CATALOGUES.get(_language)
     if catalogue is None:
         return text
-    return catalogue.get(text, text)
+    said = catalogue.get(text, text)
+    return _ChineseTemplate(said) if catalogue is CHINESE and "{" in said else said
 
 
 __all__ = ["AVAILABLE", "CATALOGUES", "CHINESE", "TURKISH", "language", "set_language", "t"]

@@ -712,7 +712,7 @@ class BomLine:
 
     @property
     def refs(self) -> str:
-        return ", ".join(self.ref_designators)
+        return ", ".join(self.ref_designators)  # ids: a column of the BOM, in every language
 
 
 @dataclass(frozen=True, slots=True)
@@ -1171,7 +1171,7 @@ def _printed_numbering(board: Board, say: Phrasebook) -> str | None:
             else:
                 pieces.append(say("{guide} are printed {printed}", guide=guide_span, printed=printed_span))
             printed_to = high
-        runs = ", ".join(pieces)
+        runs = say.clauses(pieces)
         # The marks belong to the printed runs, so they are said before the holes past them.
         if legend.every > 1:
             runs = say("{runs}, with a mark every {every} holes", runs=runs, every=legend.every)
@@ -1191,7 +1191,7 @@ def _printed_numbering(board: Board, say: Phrasebook) -> str | None:
     return say(
         "This board prints a numbering of its own, and this guide keeps to its own "
         "addresses — {axes}.",
-        axes="; ".join(axes),
+        axes=say.series(axes),
     )
 
 
@@ -1239,7 +1239,7 @@ def _phase_summary(
                 "Then the parts that go on the solder side, lowest first: each over copper "
                 "that is already laid and checked, since it hides what is under it."
             ))
-        return " ".join(said)
+        return say.sentences(said)
     if number != 0:
         return say(PHASE_SUMMARIES[number])
 
@@ -1257,8 +1257,8 @@ def _phase_summary(
     )
     if drilled:
         count = len(drilled)
-        sizes = ", ".join(f"{d:g} mm" for d in sorted({m.diameter for m in drilled}))
-        where = ", ".join(
+        sizes = say.items(f"{d:g} mm" for d in sorted({m.diameter for m in drilled}))
+        where = say.items(
             format_hole(m.at, board)
             for m in sorted(drilled, key=lambda m: (m.at.row, m.at.col))
         )
@@ -1286,7 +1286,7 @@ def _phase_summary(
     parts.append(say("get the iron and the parts ready"))
 
     if len(parts) > 1:
-        summary = say("{items}, and {last}.", items=", ".join(parts[:-1]), last=parts[-1])
+        summary = say("{items}, and {last}.", items=say.clauses(parts[:-1]), last=parts[-1])
     else:
         summary = parts[0] + "."
     summary = summary[0].upper() + summary[1:]
@@ -1295,16 +1295,16 @@ def _phase_summary(
             "Lay the board down with column 1 on the left and row j at the top: every "
             "address in this guide is printed on it, row letter first — e12 is row e, "
             "column 12."
-        ) + " " + summary
+        ) + say.sentence_gap + summary
 
     if not pattern and (numbering := _printed_numbering(board, say)) is not None:
-        summary += " " + numbering
+        summary += say.sentence_gap + numbering
 
     if drilled:
         # Its own sentence, because it is an instruction about ORDER rather than another
         # thing to do: swarf brushes off a bare board and digs out of a finished one, and
         # a board that still has to go in a vice should not have parts on it yet.
-        summary += " " + say(
+        summary += say.sentence_gap + say(
             "Drill before anything is soldered — the board can still go in a vice, and "
             "swarf brushes off a bare board instead of having to be picked out of a built one."
         )
@@ -1313,7 +1313,7 @@ def _phase_summary(
         # Here and not at the part's own step, which is in phase 2: soldering a 1.27 mm
         # pitch chip wants a clear bench and the finest tip, and a bridge between two of
         # its legs can only be seen and fixed while the adapter is still loose in the hand.
-        summary += " " + say(
+        summary += say.sentence_gap + say(
             "Solder the surface-mount chips onto their adapters first: {chips}. Line each "
             "chip's pin-1 dot up with the adapter's pin 1, tack one corner leg, check it "
             "is square, then do the rest with plenty of flux — and look along every leg "
@@ -1329,7 +1329,7 @@ def _phase_summary(
         row, column = say("along a row"), say("down a column")
         along = row if board.pad_axis == "horizontal" else column
         across = column if board.pad_axis == "horizontal" else row
-        summary += " " + say(
+        summary += say.sentence_gap + say(
             "This board's pads are oblong ({length:g} × {width:g} mm), so neighbouring pads "
             "{along} nearly touch while pads {across} are well clear. Solder flows between "
             "them far more easily in the first direction than the second — which is what "
@@ -1382,9 +1382,9 @@ def _preparation_tasks(
         sold = [m for m in doc.mounting_holes if m not in drilled]
         instruction = say("It is sold at this size, so there is nothing to cut.")
         if sold:
-            instruction += " " + say(
+            instruction += say.sentence_gap + say(
                 "Its screw holes are already in it, at {where}.",
-                where=", ".join(
+                where=say.items(
                     format_hole(m.at, board) for m in sorted(sold, key=lambda m: (m.at.row, m.at.col))
                 ),
             )
@@ -1409,8 +1409,8 @@ def _preparation_tasks(
         ))
     if drilled:
         mounts = sorted(drilled, key=lambda m: (m.at.row, m.at.col))
-        sizes = ", ".join(f"{d:g} mm" for d in sorted({m.diameter for m in mounts}))
-        where = ", ".join(format_hole(m.at, board) for m in mounts)
+        sizes = say.items(f"{d:g} mm" for d in sorted({m.diameter for m in mounts}))
+        where = say.items(format_hole(m.at, board) for m in mounts)
         tasks.append(PhaseTask(
             kind="drill",
             title=(
@@ -1489,13 +1489,13 @@ def _breadboard_phase_summary(
         "column 12. Then get the parts ready."
     )
     if has_rails(doc.board):
-        summary += " " + say(
+        summary += say.sentence_gap + say(
             "On some boards each rail is broken in the middle — a gap in its red or blue "
             "line. If yours is, bridge the two halves of every rail with a short jumper "
             "before anything else."
         )
     if adapters:
-        summary += " " + say(
+        summary += say.sentence_gap + say(
             "Solder the surface-mount chips onto their adapters first: {chips}. Line each "
             "chip's pin-1 dot up with the adapter's pin 1, tack one corner leg, check it "
             "is square, then do the rest with plenty of flux — and look along every leg "
@@ -1903,7 +1903,7 @@ def _cabled_module_notes(
     ]
     return [
         say(CABLED_MODULE, module=component.value.strip()),
-        say("Pin by pin: {pairs}.", pairs="; ".join(pairs)),
+        say("Pin by pin: {pairs}.", pairs=say.series(pairs)),
     ]
 
 
@@ -1948,7 +1948,7 @@ def _flying_lead_notes(
                 net=wire[0],
                 colour=say(wire[1]),
             ))
-    notes.append(say("Wire by wire: {pairs}.", pairs="; ".join(pairs)))
+    notes.append(say("Wire by wire: {pairs}.", pairs=say.series(pairs)))
     length = flying_lead_length_mm(footprint)
     if length is not None:
         notes.append(say(
@@ -2222,7 +2222,7 @@ def _polarity_note(
             else:
                 named.append(say("{lead} in {hole}", lead=lead_said, hole=where))
     if named:
-        return "; ".join(named)
+        return say.series(named)
     if off_board:
         return None
 
@@ -2242,7 +2242,7 @@ def _polarity_note(
             said = f"{name} ({say(meaning)})" if meaning else name
             legs.append(say("{lead} in {hole}", lead=said, hole=format_hole(hole, board)))
         if legs:
-            return say("{legs} — check against the part's datasheet", legs="; ".join(legs))
+            return say("{legs} — check against the part's datasheet", legs=say.series(legs))
 
     if footprint.body.archetype == "dip":
         first = by_number.get("1")
@@ -3160,7 +3160,7 @@ def _closing_checks(
                 instruction=say(
                     "Look at every polarised part once more and compare it against the "
                     "component-side sheet: {parts}.",
-                    parts=", ".join(sorted(polarised)),
+                    parts=say.items(sorted(polarised)),
                 ),
                 expected=say(
                     "Every stripe, band and flat facing the way the sheet shows. A backwards "
@@ -3273,8 +3273,8 @@ def _bom(doc: PerfDocument, lookup: FootprintLookup, say: Phrasebook) -> tuple[B
     return tuple(lines)
 
 
-def _gauges(cuts: list[WireCut]) -> str:
-    return ", ".join(str(awg) for awg in sorted({cut.awg for cut in cuts}))
+def _gauges(cuts: list[WireCut], say: Phrasebook) -> str:
+    return say.items(str(awg) for awg in sorted({cut.awg for cut in cuts}))
 
 
 def _tools(
@@ -3314,10 +3314,10 @@ def _tools(
         # Alphabetical in the language they are READ in, which is how somebody scans a
         # list of colours for the one they are holding. A wire to a part off the board is
         # hookup wire from the same reels, so it is counted here and not on a line of its own.
-        gauges = ", ".join(
+        gauges = say.items(
             str(awg) for awg in sorted({cut.awg for cut in hookup} | {lead.awg for lead in leads})
         )
-        colours = ", ".join(
+        colours = say.items(
             sorted({say(cut.colour) for cut in hookup} | {say(lead.colour) for lead in leads})
         )
         metres = (
@@ -3351,14 +3351,14 @@ def _tools(
     if bare:
         tools.append(say(
             "Bare tinned copper wire, AWG {gauges} — about {metres:.2f} m in total",
-            gauges=_gauges(bare),
+            gauges=_gauges(bare, say),
             metres=sum(cut.cut_mm for cut in bare) / 1000,
         ))
     if hookup or leads:
         tools.append(say("Wire strippers"))
     if doc.mounting_holes:
         diameters = sorted({m.diameter for m in doc.mounting_holes})
-        sizes = ", ".join(f"{d:g} mm" for d in diameters)
+        sizes = say.items(f"{d:g} mm" for d in diameters)
         if len(diameters) > 1:
             tools.append(say(
                 "A drill and {sizes} bits for the mounting holes, plus a deburring tool or a "
@@ -3378,7 +3378,7 @@ def _tools(
             "Tinned copper wire to reinforce the solder traces, {gauges} — about "
             "{length:.0f} mm "
             "(component lead offcuts do the job just as well)",
-            gauges=", ".join(f"{g:g} mm" for g in spine_gauges),
+            gauges=say.items(f"{g:g} mm" for g in spine_gauges),
             length=total_spine,
         ))
     if adapters:
@@ -3408,7 +3408,7 @@ def _warnings(
                 message=say(
                     "No step was written for {parts}: their footprint is not in the library, "
                     "so this guide cannot say which holes they go in.",
-                    parts=", ".join(unknown),
+                    parts=say.items(unknown),
                 ),
             )
         )
@@ -3422,7 +3422,7 @@ def _warnings(
         # are copper the board came with, so they generate no step -- and a builder who
         # never reads that they are there is a builder who solders a connector to the
         # wrong end of the board.
-        runs = ", ".join(
+        runs = say.clauses(
             say(
                 "{count} fingers on the {edge} edge from {hole}",
                 count=connector.count,
@@ -3471,7 +3471,7 @@ def _warnings(
                         "way round, or a pin the part does not have. This guide builds the "
                         "circuit as drawn, those included: fix the circuit first.",
                         count=len(circuit_errors),
-                        parts=", ".join(dict.fromkeys(r for f in circuit_errors for r in f.refs)),
+                        parts=say.items(dict.fromkeys(r for f in circuit_errors for r in f.refs)),
                     ),
                 )
             )

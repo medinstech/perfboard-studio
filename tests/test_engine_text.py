@@ -84,7 +84,7 @@ from perfboard_studio.model import (
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.ui.engine_text import TEMPLATES, say
-from perfboard_studio.ui.i18n import CATALOGUES, language, set_language
+from perfboard_studio.ui.i18n import CATALOGUES, language, set_language, t
 
 #: A realistic board to run the session on. Any example with an R1 does; this one because
 #: its stock board (4 x 6 cm) has a border a finger can reach its hole across -- the NE555
@@ -195,6 +195,24 @@ def test_a_summary_is_translated_clause_by_clause(turkish: None) -> None:
     assert said == "7/7 nette 14 bağlantı kablolandı, 2 tanesi izoleli tel ya da jumper istedi"
     # ...and a clause nobody has a template for stays as it came, beside the ones that do.
     assert say("3 parts placed, something new") == "3 parça yerleşti, something new"
+
+
+def test_the_window_fills_a_chinese_template_without_a_space_between_chinese() -> None:
+    """Every window string with fields is filled as ``t(...).format(...)``; in Chinese that
+    format drops the space beside a field holding Chinese words, as the guide's does."""
+    before = language()
+    set_language("zh")
+    try:
+        assert t("Suggested for {step}").format(step=t("Build")) == "为搭建推荐"
+        assert t("Suggested for {step}").format(step="NE555") == "为 NE555 推荐"
+    finally:
+        set_language(before)
+    # In every other language a translated string is a plain str, filled as it always was.
+    set_language("tr")
+    try:
+        assert type(t("Suggested for {step}")) is str
+    finally:
+        set_language(before)
 
 
 def test_chinese_joins_its_clauses_with_its_own_comma() -> None:

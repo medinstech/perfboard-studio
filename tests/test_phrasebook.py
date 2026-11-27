@@ -43,6 +43,7 @@ from perfboard_studio.phrasebook import (
     ENGLISH,
     NAME_TEMPLATES,
     TURKISH,
+    fill,
     guide_language,
     matching_template,
     phrasebook,
@@ -402,3 +403,72 @@ def test_a_chinese_guide_is_the_same_build_in_chinese() -> None:
     assert '<html lang="zh-Hans">' in page
     assert '"language": "zh"' in guide_to_json(chinese)
     assert re.search(r"[\u4e00-\u9fff]", page)
+
+
+def test_each_language_lists_in_its_own_punctuation() -> None:
+    """A list, the clauses of a sentence, entries with commas inside them and sentences
+    one after another are four joins, and Chinese has a mark of its own for each."""
+    for language in ("en", "tr"):
+        say = phrasebook(language)
+        assert say.items(["R1", "R2"]) == "R1, R2"
+        assert say.clauses(["a", "b"]) == "a, b"
+        assert say.series(["a", "b"]) == "a; b"
+        assert say.sentences(["A.", "B."]) == "A. B."
+        assert say.sentence_gap == " "
+    say = phrasebook("zh")
+    assert say.items(["R1", "R2"]) == "R1、R2"
+    assert say.clauses(["甲", "乙"]) == "甲，乙"
+    assert say.series(["甲", "乙"]) == "甲；乙"
+    assert say.sentences(["甲。", "乙。"]) == "甲。乙。"
+    assert say.sentence_gap == ""
+
+
+#: The modules that write what a builder reads in the guide's language.
+_GUIDE_WRITERS = ("guide.py", "guide_export.py", "harness.py", "pinout_export.py")
+_HAND_JOIN = re.compile(r"""["'](?:, |; )["']\.join\(|["'] ["'] \+ """)
+
+
+def test_the_guide_joins_its_lists_through_the_phrasebook() -> None:
+    """A list joined with a literal ", " is an English comma in a Chinese guide: it took
+    22 of them to put "颜色 橙色, 白色" on the cut list. Every join goes through the
+    phrasebook (``say.items``, ``clauses``, ``series``, ``sentences``, ``sentence_gap``),
+    so the next list cannot forget; ids that are the same in every language say so."""
+    found = [
+        f"{name}:{number}: {line.strip()}"
+        for name in _GUIDE_WRITERS
+        for number, line in enumerate((SRC / name).read_text(encoding="utf-8").splitlines(), 1)
+        if _HAND_JOIN.search(line) and "# ids" not in line
+    ]
+    assert found == []
+
+
+_CJK = "\u3000-\u303f\u3400-\u9fff\uff00-\uffef"
+_LATIN_PUNCTUATION_IN_CHINESE = re.compile(f"[{_CJK}][,;] ?|[,;] [{_CJK}]|[{_CJK}] [{_CJK}]")
+
+
+@pytest.mark.parametrize("path", BOARDS, ids=lambda path: path.stem)
+def test_a_chinese_guide_puts_no_english_comma_or_space_between_chinese(path: Path) -> None:
+    """Between two Chinese characters there is no space, and beside one no English comma
+    or semicolon: what a list joined by hand, or a field holding Chinese words, left."""
+    guide = build_guide(_load(path), footprint_lookup(), GuideOptions(language="zh"))
+    found = sorted({
+        line[max(0, m.start() - 12): m.end() + 12]
+        for line in [*_prose(guide), _visible(guide_to_html(guide)), describe(guide)]
+        for m in _LATIN_PUNCTUATION_IN_CHINESE.finditer(line)
+    })
+    assert found == []
+
+
+def test_a_field_holding_chinese_takes_no_space_beside_chinese() -> None:
+    """The Chinese templates keep a space beside a field, because a field is most often an
+    address, a count or a reference, which Chinese sets off with a space. The space goes
+    where the field's value and its neighbour are both Chinese, and nowhere else."""
+    assert fill("为 {step} 推荐", step="搭建") == "为搭建推荐"
+    assert fill("为 {step} 推荐", step="NE555") == "为 NE555 推荐"
+    assert fill("{lead} 在 {hole}", lead="阳极（长引脚）", hole="T12") == "阳极（长引脚）在 T12"
+    assert fill("相距 {n:.1f} mm", n=2.54) == "相距 2.5 mm"
+    assert fill("{0} 个孔", 3) == "3 个孔"
+    # A space the template itself puts between Chinese words is the template's.
+    assert fill("请用 文件 ▸ 从磁盘重新加载 采用{x}", x="它") == "请用 文件 ▸ 从磁盘重新加载 采用它"
+    say = phrasebook("zh")
+    assert say("{lead} in {hole}", lead="阳极（长引脚）", hole="T12") == "阳极（长引脚）在 T12"

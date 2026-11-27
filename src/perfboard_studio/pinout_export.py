@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 from xml.sax.saxutils import escape
 
-from .phrasebook import GuideLanguage, Phrasebook, clause_separator, phrasebook
+from .phrasebook import GuideLanguage, Phrasebook, phrasebook
 from .pinfunctions import Document, DocumentKind, FunctionKind, PinFunction, PinWarning
 from .pinout import PinoutCard, PinoutPin
 
@@ -612,7 +612,7 @@ def pinout_svg(
             "Every port pin also has a pin-change interrupt (PCINT); the card does not show it."
         ))
     if card.any_pin:
-        kinds = ", ".join(say(GROUP_WORDS[g]) for g in _groups(card.any_pin))
+        kinds = say.items(say(GROUP_WORDS[g]) for g in _groups(card.any_pin))
         notes.append(say(
             "{kinds} can be routed to any GPIO (the GPIO matrix); the card does not show it.",
             kinds=kinds,
@@ -633,7 +633,7 @@ def pinout_svg(
     for group in groups:
         if group == "other":
             others = [say(OTHER_WORDS[k]) for k in card.kinds if GROUP_OF[k] == "other"]
-            words = say(GROUP_WORDS["other"], kinds=clause_separator(language).join(others))
+            words = say(GROUP_WORDS["other"], kinds=say.items(others))
         else:
             words = say(GROUP_WORDS[group])
         colour = ink.kinds.get(group, ink.text)
@@ -660,7 +660,7 @@ def pinout_svg(
         y += 4
     if card.documents:
         y += 6
-        named = "; ".join(document_title(d, say) for d in card.documents)
+        named = say.series(document_title(d, say) for d in card.documents)
         for part in _wrap(say("Read from: {documents}", documents=named), 10, room):
             page.text(MARGIN, y, part, ink.faint, size=10)
             y += 14

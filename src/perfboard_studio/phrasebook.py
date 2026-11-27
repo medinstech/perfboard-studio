@@ -39,7 +39,7 @@ builds a Turkish guide for every board in the repository to look for English lef
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from functools import cache
 from typing import Literal, TypeAlias
 
@@ -82,7 +82,32 @@ class Phrasebook:
 
     def __call__(self, template: str, /, **fields: object) -> str:
         text = self._table.get(template, template)
-        return text.format(**fields) if fields else text
+        if not fields:
+            return text
+        return fill(text, **fields) if self.language == "zh" else text.format(**fields)
+
+    def items(self, items: Iterable[str]) -> str:
+        """A list of things -- parts, holes, sizes, colours -- as this language lists them:
+        "R1, R2" in English, "R1、R2" in Chinese, whose list comma is not its clause comma."""
+        return _ITEM_SEPARATORS.get(self.language, ", ").join(items)
+
+    def clauses(self, items: Iterable[str]) -> str:
+        """Clauses said one after another in one sentence ("33 steps, 17 checks")."""
+        return clause_separator(self.language).join(items)
+
+    def series(self, items: Iterable[str]) -> str:
+        """Entries that may have commas inside them ("pin 1 in A3; pin 2 in A4")."""
+        return _SERIES_SEPARATORS.get(self.language, "; ").join(items)
+
+    def sentences(self, items: Iterable[str]) -> str:
+        """Whole sentences said one after the other."""
+        return sentence_separator(self.language).join(items)
+
+    @property
+    def sentence_gap(self) -> str:
+        """What goes between one sentence and the next one added to it: a space, or in
+        Chinese nothing, its full stop being full width."""
+        return sentence_separator(self.language)
 
     def joined(self, items: Sequence[str]) -> str:
         """``a and b and c``, one ``and`` at a time, as the English always joined them."""
@@ -115,6 +140,49 @@ def phrasebook(language: GuideLanguage) -> Phrasebook:
 #: English comma and space: Chinese has its own comma, and its full stop needs no space.
 _CLAUSE_SEPARATORS: dict[str, str] = {"zh": "，"}
 _SENTENCE_SEPARATORS: dict[str, str] = {"zh": ""}
+#: A list's comma, and the semicolon between entries that hold commas of their own: Chinese
+#: lists with the enumeration comma "、", and its semicolon is full width.
+_ITEM_SEPARATORS: dict[str, str] = {"zh": "、"}
+_SERIES_SEPARATORS: dict[str, str] = {"zh": "；"}
+
+
+#: Chinese as a spacing rule sees it: the ideographs and the full-width punctuation.
+_CJK = "\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef"
+_OPEN, _CLOSE = "\x02", "\x03"
+_SPACE_BEFORE = re.compile(f"(?<=[{_CJK}]) {_OPEN}(?=[{_CJK}])")
+_SPACE_AFTER = re.compile(f"(?<=[{_CJK}]){_CLOSE} (?=[{_CJK}])")
+
+
+class _Marked:
+    """A field's value, formatted as usual and fenced, so the spaces at its two ends can
+    be found after the template is filled."""
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def __format__(self, spec: str) -> str:
+        return f"{_OPEN}{format(self.value, spec)}{_CLOSE}"
+
+
+def fill(template: str, /, *args: object, **fields: object) -> str:
+    """``template.format(...)`` for a Chinese template. A Chinese template keeps an ASCII
+    space beside each field, because most fields are Latin -- an address, a count, a
+    reference, a net ("在 {hole} 处", "{count} 个") -- and Chinese sets Latin and numbers off
+    with a space. A field can as well hold Chinese words (a step's name, a translated part
+    kind, a phrase ending in a full-width bracket), and then the space sat between two
+    Chinese characters: "为 搭建 推荐". The space beside a field is dropped exactly where
+    the characters on both sides of it are Chinese, and nowhere else, so a menu path the
+    template spells with spaces ("文件 ▸ 从磁盘重新加载") is left as written."""
+    # str.format, not template.format: the window's Chinese templates are a str whose
+    # format is this function.
+    marked = str.format(
+        template, *map(_Marked, args), **{k: _Marked(v) for k, v in fields.items()}
+    )
+    marked = _SPACE_BEFORE.sub(_OPEN, marked)
+    marked = _SPACE_AFTER.sub(_CLOSE, marked)
+    return marked.replace(_OPEN, "").replace(_CLOSE, "")
 
 
 def clause_separator(language: GuideLanguage) -> str:
@@ -1373,6 +1441,7 @@ __all__ = [
     "GuideLanguage",
     "Phrasebook",
     "clause_separator",
+    "fill",
     "guide_language",
     "matching_template",
     "phrasebook",
