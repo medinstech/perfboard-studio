@@ -5403,14 +5403,20 @@ class ArtCache:
         # The device's own pixels, asked of the painter rather than worked out: whether the
         # painter's transform already holds the device's pixel ratio depends on how it was
         # opened -- a window grabbed at a 125 % scale had it, and multiplying by the ratio
-        # again drew the art a quarter too big and off its board. ``ratio`` is what is left
-        # between the painter's own units and the device's once its transform is reset, so
-        # an image drawn there at that ratio lands one image pixel to one device pixel.
+        # again drew the art a quarter too big and off its board. ``base`` is what is left
+        # between the painter's own units and the device's once its transform is reset: the
+        # ratio, and for a view inside a window the view's place in it, since the window
+        # paints every widget into one image. The image is put back through it, so it lands
+        # one image pixel to one device pixel and at the pixel it was measured at -- drawn
+        # at the measured pixel over again, the place was counted twice and the art left the
+        # view on any screen once the view was not in the window's top-left corner.
         to_device = painter.deviceTransform()
         painter.save()
         painter.resetTransform()
-        ratio = abs(painter.deviceTransform().m11()) or 1.0
+        base = painter.deviceTransform()
         painter.restore()
+        ratio = abs(base.m11()) or 1.0
+        from_device = base.inverted()[0]
         margin = ART_CACHE_MARGIN_MM
         area = to_device.mapRect(path.boundingRect().adjusted(-margin, -margin, margin, margin))
         width, height = math.ceil(area.width()) + 2, math.ceil(area.height()) + 2
@@ -5434,7 +5440,7 @@ class ArtCache:
         if key == self._key and self._image is not None:
             painter.save()
             painter.resetTransform()
-            painter.drawImage(QPointF(left / ratio, top / ratio), self._image)
+            painter.drawImage(from_device.map(QPointF(left, top)), self._image)
             painter.restore()
             return True
         if key != self._seen:
@@ -5466,7 +5472,7 @@ class ArtCache:
         self._to_local = to_image.inverted()[0]
         painter.save()
         painter.resetTransform()
-        painter.drawImage(QPointF(left / ratio, top / ratio), self._image)
+        painter.drawImage(from_device.map(QPointF(left, top)), self._image)
         painter.restore()
         return True
 

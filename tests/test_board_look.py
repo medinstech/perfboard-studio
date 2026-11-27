@@ -532,6 +532,60 @@ def test_a_modules_cached_art_lands_where_it_does_on_any_screen(ratio: float) ->
         assert all(abs(a - b) <= 3 for a, b in zip(box, plain, strict=True)), (ratio, cached, box, plain)
 
 
+def _window_at(window, ratio: float) -> QImage:  # type: ignore[no-untyped-def]
+    """The whole window painted at ``ratio`` device pixels to one, as it is on a screen of
+    that scale: every widget into one image, each at its place in the window."""
+    image = QImage(round(window.width() * ratio), round(window.height() * ratio),
+                   QImage.Format.Format_ARGB32)
+    image.setDevicePixelRatio(ratio)
+    image.fill(0)
+    window.render(image)
+    return image
+
+
+@pytest.mark.parametrize("ratio", [1.0, 1.25, 2.0])
+def test_a_modules_cached_art_lands_on_its_board_in_the_window(
+    ratio: float, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The board view is not in the window's top-left corner -- the Library and the step
+    bar are -- and the window paints every widget into one image at the widget's place.
+    The painter's device transform holds that place, and the cached image was drawn there
+    over again: the Nano's art left its board, on a 100 % screen as on any other, while the
+    test above, painting the scene alone into an image, saw nothing. Painted from the cache,
+    the window must be the window painted without it."""
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_example("nano-relay"))
+    try:
+        window.setFixedSize(1600, 1000)
+        window.show()
+        QApplication.processEvents()
+        window.view.fit_board()
+        QApplication.processEvents()
+        assert window.view.mapTo(window, window.view.rect().topLeft()).x() > 100
+        module = next(item for item in window.scene.component_items.values() if item.art)
+        for _ in range(3):
+            cached = _window_at(window, ratio)
+        assert module.art_cache._image is not None
+        monkeypatch.setattr(view2d.ArtCache, "paint", lambda *_args: False)
+        direct = _window_at(window, ratio)
+        region = window.view.viewport()
+        corner = region.mapTo(window, region.rect().topLeft())
+        x0, y0 = round(corner.x() * ratio), round(corner.y() * ratio)
+        x1, y1 = x0 + round(region.width() * ratio), y0 + round(region.height() * ratio)
+        differ = total = 0
+        for y in range(y0, y1, 2):
+            for x in range(x0, x1, 2):
+                a, b = cached.pixelColor(x, y), direct.pixelColor(x, y)
+                total += 1
+                if abs(a.red() - b.red()) + abs(a.green() - b.green()) + abs(a.blue() - b.blue()) > 90:
+                    differ += 1
+        assert differ / total < 0.005, (ratio, differ, total)
+    finally:
+        window._saved_document = window.bus.system_document
+        window.close()
+
+
 def test_a_modules_art_is_never_cached_on_paper(tmp_path: Path) -> None:
     """The 1:1 sheet is vectors as it always was: no raster of a module reaches it."""
     doc = _example("nano-relay")
