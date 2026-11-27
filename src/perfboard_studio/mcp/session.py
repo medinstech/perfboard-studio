@@ -76,6 +76,7 @@ from perfboard_studio.commands import (
     AddMountingHolePayload,
     AddNetPayload,
     AddPartPayload,
+    ArrangeSheetPayload,
     ConnectPinsPayload,
     DeleteBoardNotesPayload,
     DeleteBoardPayload,
@@ -101,6 +102,7 @@ from perfboard_studio.commands import (
     PlacePartsPayload,
     RenameBoardPayload,
     RenameDocumentPayload,
+    RenumberPartsPayload,
     RotateComponentPayload,
     SetBoardPayload,
     SetBodyClearancePayload,
@@ -1061,6 +1063,66 @@ class BoardSession:
             "net.merge",
             MergeNetsPayload(id=self._net_id_strict(name), into=self._net_id_strict(into)),
         )
+
+    def arrange_sheet(self, refs: list[str] | None = None) -> dict[str, Any]:
+        """Lay out the schematic sheet by functional blocks (chips as centres, parts on
+        their pins beside them), or only the named ``refs`` when given, as one undo step."""
+        from perfboard_studio.system import circuit_parts
+
+        chosen: tuple[str, ...] = ()
+        if refs is not None:
+            if not refs:
+                raise SessionError("refs must be omitted or list at least one reference.")
+            known = {part.ref for part in circuit_parts(self.system_document)}
+            cleaned: list[str] = []
+            for raw in refs:
+                ref = raw.strip()
+                if ref not in known:
+                    raise SessionError(f'No part or component "{raw}" in this design.')
+                cleaned.append(ref)
+            chosen = tuple(cleaned)
+        result = self._dispatch("sheet.arrange", ArrangeSheetPayload(refs=chosen))
+        if result["ok"]:
+            result["symbols"] = len(self.system_document.sheet)
+        return result
+
+    def renumber_parts(self, mapping: dict[str, str] | None = None) -> dict[str, Any]:
+        """Renumber references across the whole design (placed and unplaced, all boards),
+        carrying nets, sheet wires, ports and loose wires, as one undo step.
+
+        With ``mapping`` omitted, computes reading-order numbering (left to right, top to
+        bottom on the schematic sheet, grouped by prefix). With ``mapping`` given as
+        ``{old_ref: new_ref}``, applies that exact renaming."""
+        from perfboard_studio.schematic import plan_sheet_renumber
+        from perfboard_studio.system import circuit_parts
+
+        all_parts = circuit_parts(self.system_document)
+        by_id = {part.id: part.ref for part in all_parts}
+        by_ref = {part.ref: part.id for part in all_parts}
+
+        if mapping is None:
+            pairs = plan_sheet_renumber(self.system_document, self.lookup)
+        else:
+            if not isinstance(mapping, dict):
+                raise SessionError("mapping must be an object of {old_ref: new_ref}.")
+            resolved: list[tuple[str, str]] = []
+            for raw_old, raw_new in mapping.items():
+                old = str(raw_old).strip()
+                part_id = by_ref.get(old)
+                if part_id is None:
+                    raise SessionError(f'No part or component "{raw_old}" in this design.')
+                resolved.append((part_id, str(raw_new).strip()))
+            pairs = tuple(resolved)
+
+        renamed = {
+            by_id[part_id]: new_ref
+            for part_id, new_ref in pairs
+            if part_id in by_id and by_id[part_id] != new_ref
+        }
+        result = self._dispatch("part.renumber", RenumberPartsPayload(mapping=pairs))
+        if result["ok"]:
+            result["renamed"] = renamed
+        return result
 
     # -- the design, before the board ----------------------------------------
     #
@@ -2525,7 +2587,17 @@ class BoardSession:
             "height_px": image.height(),
         }
 
-    def render_schematic(self, px_per_mm: int = 8) -> tuple[bytes, dict[str, Any]]:
+    def render_schematic(
+        self,
+        px_per_mm: int = 8,
+        *,
+        page_size: str | None = None,
+        title_block: bool = False,
+        title: str | None = None,
+        revision: str = "",
+        date: str = "",
+        sheet: str = "1 / 1",
+    ) -> tuple[bytes, dict[str, Any]]:
         """A PNG of the CIRCUIT rather than of the board. Returns (png_bytes, metadata).
 
         The counterpart of ``render_2d`` for the half of the document a board picture cannot
@@ -2542,17 +2614,47 @@ class BoardSession:
         two or three times the size of the board it becomes, and the text on it is
         millimetres of sheet rather than a fixed pixel size, so it stays legible as the
         picture gets smaller.
+
+        Optional ``page_size`` (``"A4"`` or ``"A3"``) and ``title_block`` frame the sheet
+        on ISO paper with an engineering title block, matching the GUI and ``--headless``.
         """
         from perfboard_studio.schematic import build_schematic
-        from perfboard_studio.schematic_export import drawing_to_svg
+        from perfboard_studio.schematic_export import SheetPageSize, TitleBlock, drawing_to_svg
         from perfboard_studio.ui.export_schematic import svg_to_image
+
+        norm_page: SheetPageSize = "auto"
+        if page_size is not None:
+            cleaned_page = page_size.strip()
+            upper = cleaned_page.upper()
+            if upper == "AUTO":
+                norm_page = "auto"
+            elif upper in ("A4", "A3"):
+                norm_page = cast(SheetPageSize, upper)
+            else:
+                raise SessionError(
+                    f"page_size must be 'A4', 'A3', 'auto', or omitted; got {page_size!r}."
+                )
+
+        block: TitleBlock | None = None
+        if title_block or revision or date:
+            block = TitleBlock(
+                title=title if title is not None else self.document.meta.name,
+                revision=revision,
+                date=date,
+                sheet=sheet,
+            )
 
         _ensure_qt_application()
         # The whole circuit, whichever board is in front -- the window's sheet too. On a
         # board's view a part on another board was drawn as "neither on the board nor in
         # the design".
         drawing = build_schematic(self.system_document, self.lookup)
-        svg = drawing_to_svg(drawing, title=self.document.meta.name)
+        svg = drawing_to_svg(
+            drawing,
+            title=self.document.meta.name,
+            page_size=norm_page,
+            title_block=block,
+        )
         image = svg_to_image(svg, px_per_mm=px_per_mm)
         return _png_bytes(image), {
             "parts": len(drawing.symbols),
@@ -2560,6 +2662,8 @@ class BoardSession:
             "rails": len(drawing.rails),
             "width_px": image.width(),
             "height_px": image.height(),
+            "page_size": None if norm_page == "auto" else norm_page,
+            "title_block": block is not None,
             "notes": list(drawing.notes),
         }
 

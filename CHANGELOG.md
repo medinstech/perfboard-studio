@@ -33,6 +33,11 @@ closed without a bump.
 - **Verified functional pin roles for DS1307, MAX485 and DS18B20.** Verified against the
   Analog Devices (Maxim) datasheets and promoted into the catalog's active `PIN_ROLES`, so
   all three draw as functional symbols on the schematic sheet.
+- **MCP schematic tools (`arrange_sheet`, `renumber_parts`) and paper-frame rendering.**
+  Agents can now lay out the schematic sheet by functional blocks (`arrange_sheet`, whole
+  sheet or named `refs`), renumber references across the whole design in reading order or by
+  explicit mapping (`renumber_parts`, one undo step), and frame `render_schematic` on ISO
+  `A4`/`A3` paper with an engineering `title_block` (`72` tools total).
 
 ### Changed
 

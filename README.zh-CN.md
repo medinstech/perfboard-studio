@@ -353,7 +353,7 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 从 0.22.0 起，安装好的应用本身就是服务器，完全不需要 Python：Windows 上是
 `perfboard-studio-cli.exe --mcp`，各平台的路径在 docs/MCP.md 里。
 
-70 个工具，每个孔都按人们谈论洞洞板的方式寻址（`A1`、`C7`、`AC12`）——或者在面包板上
+72 个工具，每个孔都按人们谈论洞洞板的方式寻址（`A1`、`C7`、`AC12`）——或者在面包板上
 按它印的方式（`e12`、`T+12`）——从不用裸坐标——一直到 `export_step`，把做好的板子交给
 画外壳的 CAD 程序。工具列表、其他客户端需要的 JSON 配置和其余设置见
 [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md)。
@@ -453,7 +453,7 @@ KiCad 网表里的 SOIC、SSOP、TSSOP 和 MSOP 封装都作为同一种到来�
 
 | | |
 |---|---|
-| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | 70 个 MCP 工具，按每个存在的理由分组，以及 Claude Code、Claude Desktop、Cursor 和 Antigravity 的客户端配置 |
+| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | 72 个 MCP 工具，按每个存在的理由分组，以及 Claude Code、Claude Desktop、Cursor 和 Antigravity 的客户端配置 |
 | [docs/FIRST_BOARD.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/FIRST_BOARD.md) | 你的第一块板：从首页到搭建指南的 555 闪烁器，每步一张图 |
 | [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | 每个示例板用来说明什么 |
 | [CHANGELOG.md](https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md) | 每个版本，以及未发布构建正在为下一个版本积累什么 |

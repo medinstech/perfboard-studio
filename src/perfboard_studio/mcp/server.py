@@ -230,7 +230,15 @@ def render_2d_view(side: str = "top", px_per_mm: int = 12) -> Image:
 
 
 @mcp.tool()
-def render_schematic(px_per_mm: int = 8) -> Image:
+def render_schematic(
+    px_per_mm: int = 8,
+    page_size: str | None = None,
+    title_block: bool = False,
+    title: str | None = None,
+    revision: str = "",
+    date: str = "",
+    sheet: str = "1 / 1",
+) -> Image:
     """A picture of the CIRCUIT: symbols, wires, junctions, ground and power glyphs.
 
     What the board is a way of BUILDING, drawn from the nets themselves. Use it after
@@ -241,9 +249,20 @@ def render_schematic(px_per_mm: int = 8) -> Image:
     the application, and either way there is no second answer to what is connected: what a
     hand-drawn wire JOINS is still whichever net holds both of its ends.
 
+    Pass `page_size` ("A4" or "A3") and/or `title_block=True` (with optional `title`,
+    `revision`, `date`, `sheet`) to frame the sheet on ISO paper with a title block.
+
     With several boards it is the whole circuit, whichever board is in front.
     """
-    png, meta = session.render_schematic(px_per_mm=px_per_mm)
+    png, meta = session.render_schematic(
+        px_per_mm=px_per_mm,
+        page_size=page_size,
+        title_block=title_block,
+        title=title,
+        revision=revision,
+        date=date,
+        sheet=sheet,
+    )
     log.info(
         "rendered schematic: %s part(s), %s rail(s), %sx%s",
         meta["parts"], meta["rails"], meta["width_px"], meta["height_px"],
@@ -622,6 +641,24 @@ def merge_nets(name: str, into: str) -> dict[str, Any]:
     `into` but is not moved, so run_lvs reports `into` split until the pieces are wired.
     A supply and its ground are refused (code "two-supplies")."""
     return session.merge_nets(name, into)
+
+
+@mcp.tool()
+def arrange_sheet(refs: list[str] | None = None) -> dict[str, Any]:
+    """Arrange the schematic sheet by functional blocks (chips as centres, parts on their
+    pins beside them), as one undo step. Omit `refs` to arrange the whole sheet, or pass a
+    list of references (e.g. ["R1", "C1"]) to arrange only those symbols while leaving the
+    rest where they sit."""
+    return session.arrange_sheet(refs=refs)
+
+
+@mcp.tool()
+def renumber_parts(mapping: dict[str, str] | None = None) -> dict[str, Any]:
+    """Renumber component references across the whole design (placed and unplaced, all
+    boards) as one undo step, carrying nets, sheet wires, ports and loose wires with them.
+    Omit `mapping` to renumber automatically in schematic reading order (left to right, top
+    to bottom, grouped by prefix), or pass `{old_ref: new_ref}` for explicit renames."""
+    return session.renumber_parts(mapping=mapping)
 
 
 @mcp.tool()

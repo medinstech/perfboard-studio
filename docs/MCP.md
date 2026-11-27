@@ -135,7 +135,7 @@ conductor at a time.
 | | |
 |---|---|
 | **Reading** | `get_status` · `get_board_info` · `list_components` · `get_component` · `list_parts` · `get_nets` · `get_net_connections` · `list_footprints` · `list_catalog` |
-| **The design** | `add_part` · `update_part` · `delete_part` · `place_parts` · `unplace_component` |
+| **The design** | `add_part` · `update_part` · `delete_part` · `place_parts` · `unplace_component` · `arrange_sheet` · `renumber_parts` |
 | **Seeing** | `render_2d_view` · `render_3d_view` · `render_schematic` |
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `merge_nets` · `update_net` · `delete_net` |
@@ -147,7 +147,7 @@ conductor at a time.
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 | **Several boards** | `select_board` · `add_board` · `rename_board` · `remove_board` · `move_to_board` · `add_cable` · `remove_cable` · `get_system_info` |
 
-70 tools, against the original plan's "~25, deliberately narrow". Each is a verb that cannot
+72 tools, against the original plan's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -273,6 +273,16 @@ somebody has drawn on it in the application, and either way there is no second a
 what is connected: what a hand-drawn wire JOINS is still whichever net holds both of its
 ends — and the notes come back beside the picture, because a pin the netlist names that
 the footprint does not have is a hole in the design that a drawing alone would hide.
+`page_size` (`"A4"` or `"A3"`) and `title_block` (`title`, `revision`, `date`, `sheet`)
+frame the picture on ISO paper with an engineering title block, matching `--headless` and
+the window's export dialog.
+
+`arrange_sheet` and `renumber_parts` bring the two whole-sheet design actions to agents as
+one undo step each: `arrange_sheet` lays the circuit out by functional blocks (chips as
+centres, parts on their pins beside them — the whole sheet, or only the `refs` named), and
+`renumber_parts` renumbers references across all boards and unplaced parts in schematic
+reading order (left to right, top to bottom) or by an explicit `{old: new}` mapping,
+carrying every net and sheet wire with it.
 
 `reroute` is `autoroute`'s replacement half. `autoroute` ADDS copper, so calling it again
 after a part has moved grows the board every time: the runs laid for the old position

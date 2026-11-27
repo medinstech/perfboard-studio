@@ -1080,7 +1080,12 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # label between two nets on the sheet. connect_pins refuses a pin another net holds, so
     # an agent could only take pins off one net and put them on the other -- several undo
     # steps, a circuit wrong in between, and what the net declared lost with it.
-    assert len(tools) <= 70, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 72, for arrange_sheet and renumber_parts: sheet.arrange and part.renumber, the
+    # two whole-sheet design operations that cannot be composed from any other MCP tools
+    # (an agent that built a circuit could render it, but could neither arrange it by
+    # functional blocks nor renumber references in reading order as one undo step).
+    assert len(tools) <= 72, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"
@@ -2114,3 +2119,65 @@ def test_the_part_tools_name_every_symbol_and_role_the_model_has() -> None:
         assert "<roles>" not in (tool.description or "")
     for name in ("add_part", "place_component", "update_part"):
         assert "pin_roles" in tools[name].inputSchema["properties"], name
+
+
+def test_arrange_sheet_and_renumber_parts_drive_the_sheet_in_one_undo_step(
+    session: BoardSession,
+) -> None:
+    """``arrange_sheet`` lays out the circuit by functional blocks (whole sheet or subset)
+    and ``renumber_parts`` renumbers references in reading order or by explicit mapping,
+    each in one undo step."""
+    assert session.add_part("U1", "", part="ne555")["ok"]
+    assert session.add_part("R30", "r-axial-4", value="10k")["ok"]
+    assert session.add_part("R10", "r-axial-4", value="4.7k")["ok"]
+    assert session.create_net("VCC")["ok"]
+    assert session.connect_pins("VCC", ["U1.8", "R30.1", "R10.1"])["ok"]
+
+    arranged = session.arrange_sheet()
+    assert arranged["ok"] and arranged["symbols"] == 3
+    assert len(session.system_document.sheet) == 3
+
+    subset = session.arrange_sheet(refs=["R30", "R10"])
+    assert subset["ok"]
+
+    with pytest.raises(SessionError, match="No part or component"):
+        session.arrange_sheet(refs=["NOPE"])
+
+    # Auto reading-order renumber turns R10/R30 into R1/R2 in one undo step.
+    auto = session.renumber_parts()
+    assert auto["ok"]
+    refs_after = {p.ref for p in session.document.parts}
+    assert refs_after == {"U1", "R1", "R2"}
+    assert auto["renamed"]
+
+    # Explicit swap/rename works too and carries nets with it.
+    explicit = session.renumber_parts({"R1": "R101", "R2": "R102"})
+    assert explicit["ok"] and explicit["renamed"] == {"R1": "R101", "R2": "R102"}
+    vcc_refs = {
+        node.component_ref
+        for net in session.document.nets
+        if net.name == "VCC"
+        for node in net.nodes
+    }
+    assert vcc_refs == {"U1", "R101", "R102"}
+
+    # One undo restores R1/R2.
+    assert session.undo()["ok"]
+    assert {p.ref for p in session.document.parts} == {"U1", "R1", "R2"}
+
+
+def test_render_schematic_supports_paper_page_size_and_title_block(
+    loaded: BoardSession,
+) -> None:
+    """``render_schematic`` accepts ISO A4/A3 framing and an engineering title block,
+    refusing unknown page sizes cleanly."""
+    png, meta = loaded.render_schematic(
+        px_per_mm=4, page_size="a4", title_block=True, revision="Rev B", date="2026-11-27"
+    )
+    assert png[:4] == PNG_MAGIC
+    assert meta["page_size"] == "A4"
+    assert meta["title_block"] is True
+    assert meta["width_px"] > 0 and meta["height_px"] > 0
+
+    with pytest.raises(SessionError, match="page_size"):
+        loaded.render_schematic(page_size="Letter")
